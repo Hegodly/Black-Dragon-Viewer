@@ -50,6 +50,9 @@ jobs:
           p.write_text(p.read_text().replace('autobuild build -A 64 -c ReleaseOS', 'autobuild build --no-configure -A 64 -c ReleaseOS'))
           p = Path('indra/cmake/BuildVersion.cmake')
           p.write_text(p.read_text().replace('VIEWER_SHORT_VERSION REGEX', 'VIEWER_SHORT_VERSION LIMIT_COUNT 1 REGEX'))
+      - name: Integrate native FSR and XeSS into viewer source
+        shell: pwsh
+        run: python kombatant/upscale/apply-upscalers.py
       - name: Install Python build tooling
         run: python -m pip install autobuild llsd "cmake<4"
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
