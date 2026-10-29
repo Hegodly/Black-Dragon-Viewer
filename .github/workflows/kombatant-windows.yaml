@@ -1,9 +1,9 @@
-name: Kombatant Windows build
+name: KAMI Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, feature/kami-viewer-branding]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/**, indra/newview/viewer_manifest.py, indra/newview/res/viewerRes.rc]
 permissions:
   contents: read
 jobs:
@@ -53,6 +53,14 @@ jobs:
       - name: Integrate native FSR and XeSS into viewer source
         shell: pwsh
         run: python kombatant/upscale/apply-upscalers.py
+      - name: Stage approved KAMI branding when artwork is present
+        shell: pwsh
+        run: |
+          if (Test-Path 'kami/assets/KAMI_Branding/KAMI_Viewer.ico') {
+            python kami/apply_branding.py
+          } else {
+            Write-Host 'KAMI name and executable metadata applied; official graphical assets not in this checkout yet.'
+          }
       - name: Install Python build tooling
         run: python -m pip install autobuild llsd "cmake<4"
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
