@@ -70,7 +70,7 @@ edit("kombatant/rtx/Start-Without-RTX.cmd","--set KombatantDLSSMode 0","--set Ko
 d=chr(36)
 cmake="kombatant/rtx/CMakeLists.txt"
 old='target_include_directories(KombatantRTX64 PRIVATE "'+d+'{NGX_ROOT}/include")'
-new='target_include_directories(KombatantRTX64 PRIVATE "'+d+'{NGX_ROOT}/include" "'+d+'{FSR_ROOT}/Kits/FidelityFX/api/include" "'+d+'{FSR_ROOT}/Kits/FidelityFX/upscalers/include" "'+d+'{XESS_ROOT}/inc")'
+new='target_include_directories(KombatantRTX64 PRIVATE "'+d+'{NGX_ROOT}/include" "'+d+'{CMAKE_SOURCE_DIR}/../../.fsr-sdk/Kits/FidelityFX/api/include" "'+d+'{CMAKE_SOURCE_DIR}/../../.fsr-sdk/Kits/FidelityFX/upscalers/include" "'+d+'{CMAKE_SOURCE_DIR}/../../.xess-sdk/inc")'
 edit(cmake,old,new)
 edit("kombatant/build-rtx.ps1",'"-DNGX_ROOT=$sdk"',""" "-DNGX_ROOT=$sdk" "-DFSR_ROOT=$(Join-Path $root '.fsr-sdk')" "-DXESS_ROOT=$(Join-Path $root '.xess-sdk')" """.strip())
 edit("kombatant/build-rtx.ps1","    cmake --build \"$root/.rtx-build\" --config Release --parallel 2","    cmake -LA -N \"$root/.rtx-build\" | Select-String \"FSR_ROOT|XESS_ROOT\"\n    cmake --build \"$root/.rtx-build\" --config Release --parallel 2")
