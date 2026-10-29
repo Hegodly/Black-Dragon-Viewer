@@ -1,9 +1,9 @@
-name: Kombatant Windows build
+name: KAMI Viewer Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**]
 permissions:
   contents: read
 jobs:
@@ -54,7 +54,10 @@ jobs:
         shell: pwsh
         run: python kombatant/upscale/apply-upscalers.py
       - name: Install Python build tooling
-        run: python -m pip install autobuild llsd "cmake<4"
+        run: python -m pip install autobuild llsd pillow "cmake<4"
+      - name: Apply KAMI Viewer logo and identity
+        shell: pwsh
+        run: python kami/branding/apply-branding.py
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
@@ -92,6 +95,13 @@ jobs:
       - name: Stage AMD FSR and Intel XeSS runtimes
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1 -StageOnly
+      - name: Stage KAMI Viewer portable executable
+        shell: pwsh
+        run: |
+          $release = 'build-vc170-64/newview/Release'
+          $source = Join-Path $release 'blackdragon-bin.exe'
+          if (-not (Test-Path $source)) { throw 'Viewer executable not found after build' }
+          Copy-Item $source (Join-Path $release 'KAMIViewer.exe') -Force
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5
@@ -102,7 +112,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kombatant-windows-build-log
+          name: kami-viewer-windows-build-log
           path: |
             kombatant-build.log
             build-vc170-64/CMakeFiles/CMakeConfigureLog.yaml
@@ -112,7 +122,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: kombatant-windows-release-output
+          name: kami-viewer-windows-release-output
           path: build-vc170-64/newview/Release/
           if-no-files-found: error
           retention-days: 7
