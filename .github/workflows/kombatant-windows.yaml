@@ -31,6 +31,8 @@ jobs:
               text = urlopen(base + name).read().decode('utf-8')
               text = text.replace('BOOL postBuild()', 'bool postBuild()').replace('BOOL LLFloaterBigPreview::postBuild()', 'bool LLFloaterBigPreview::postBuild()')
               Path(name).write_text(text)
+          p = Path('kombatant/build-windows.sh')
+          p.write_text(p.read_text().replace('autobuild build -A 64 -c ReleaseOS', 'autobuild build --no-configure -A 64 -c ReleaseOS'))
           p = Path('indra/cmake/BuildVersion.cmake')
           p.write_text(p.read_text().replace('VIEWER_SHORT_VERSION REGEX', 'VIEWER_SHORT_VERSION LIMIT_COUNT 1 REGEX'))
       - name: Install Python build tooling
