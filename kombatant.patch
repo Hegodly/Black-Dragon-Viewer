@@ -1192,3 +1192,309 @@ index b041d40..79b7e2e 100644
  
      if (worker)
      {
+diff --git a/indra/newview/llfloaterpreference.cpp b/indra/newview/llfloaterpreference.cpp
+index 1ec7312..57c8586 100644
+--- a/indra/newview/llfloaterpreference.cpp
++++ b/indra/newview/llfloaterpreference.cpp
+@@ -1839,7 +1839,7 @@ void LLFloaterPreference::toggleTabs()
+ 	if (gSavedSettings.getBOOL("PrefsPostVisible"))
+ 		mModifier += (mDisplayTabs[2]->getRect().getHeight() - 5);
+ 
+-	rect.setLeftTopAndSize(rect.mLeft, rect.mTop, rect.getWidth(), 66 + mModifier);
++	rect.setLeftTopAndSize(rect.mLeft, rect.mTop, rect.getWidth(), 66 + getChild<LLPanel>("kombatant_display_quick")->getRect().getHeight() + mModifier);
+ 	getChild<LLPanel>("gfx_scroll_panel")->setRect(rect);
+ 	mGFXStack->translate(0, mModifier);
+ }
+diff --git a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+index e7c9b13..80aac83 100644
+--- a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
++++ b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+@@ -41,7 +41,7 @@ width="510">
+     <panel
+     layout="topleft"
+     follows="left|top|right"
+-    height="66"
++    height="464"
+     name="gfx_scroll_panel"
+     top="0"
+     mouse_opaque="false"
+@@ -49,7 +49,7 @@ width="510">
+     width="495">
+    <layout_stack
+    follows="top|left|right"
+-   height="3500"
++   height="3898"
+    layout="topleft"
+    border_size="-5"
+    left="0"
+@@ -58,6 +58,31 @@ width="510">
+    orientation="vertical"
+    top="0"
+    width="515">
++      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="398" auto_resize="false" width="515">
++       <text name="kd_heading" left="12" top="8" width="465" height="22" font="SansSerifLarge">Kombatant graphics</text>
++       <text name="kd_resolution_label" left="12" top="38" width="465" height="18">Live world render resolution</text>
++       <combo_box name="kd_resolution" control_name="KombatantRenderWidth" left="12" top="60" width="465" height="24">
++        <combo_box.item label="Window resolution / existing scale" value="0" />
++        <combo_box.item label="4K (3840 pixels wide)" value="3840" />
++        <combo_box.item label="8K (7680 pixels wide)" value="7680" />
++        <combo_box.item label="12K (12288 pixels wide)" value="12288" />
++       </combo_box>
++       <text name="kd_resolution_note" left="12" top="90" width="465" height="32" wrap="true">Higher resolutions use more GPU memory. Live resolution resets on restart.</text>
++       <check_box name="kd_grade" label="Enable native color grading" control_name="KombatantNativeFX" left="12" top="126" width="465" height="22" />
++       <slider name="kd_saturation" label="Saturation" control_name="KombatantSaturation" left="12" top="156" width="465" height="20" label_width="160" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
++       <slider name="kd_contrast" label="Contrast" control_name="KombatantContrast" left="12" top="184" width="465" height="20" label_width="160" min_val="0.5" max_val="1.5" increment="0.05" decimal_digits="2" />
++       <slider name="kd_vignette" label="Vignette" control_name="KombatantVignette" left="12" top="212" width="465" height="20" label_width="160" min_val="0" max_val="1" increment="0.05" decimal_digits="2" />
++       <slider name="kd_exposure" label="Exposure" control_name="RenderExposure" left="12" top="240" width="465" height="20" label_width="160" min_val="0.5" max_val="4" increment="0.05" decimal_digits="2" />
++       <slider name="kd_sharpness" label="Sharpening (CAS)" control_name="RenderCASSharpness" left="12" top="268" width="465" height="20" label_width="160" min_val="0" max_val="1" increment="0.05" decimal_digits="2" />
++       <slider name="kd_glow" label="Bloom strength" control_name="RenderGlowStrength" left="12" top="296" width="465" height="20" label_width="160" min_val="0" max_val="0.5" increment="0.01" decimal_digits="2" />
++       <check_box name="kd_friends" label="Show friends only (and yourself)" control_name="RenderAvatarFriendsOnly" left="12" top="326" width="465" height="22" tool_tip="Hide non-friend avatars. Animesh remains visible. Resets on restart." />
++       <button name="kd_effects" label="Effects / GShade presets" left="12" top="360" width="228" height="26">
++        <button.commit_callback function="Floater.Show" parameter="kombatant_effects" />
++       </button>
++       <button name="kd_studio" label="Studio / graphics modes" left="249" top="360" width="228" height="26">
++        <button.commit_callback function="Floater.Show" parameter="kombatant_studio" />
++       </button>
++      </layout_panel>
+       <layout_panel
+ 	  follows="top|left|right"
+ 	  layout="topleft"
+
+diff --git a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+--- a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
++++ b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+@@ -41,7 +41,7 @@
+     <panel
+     layout="topleft"
+     follows="left|top|right"
+-    height="464"
++    height="704"
+     name="gfx_scroll_panel"
+     top="0"
+     mouse_opaque="false"
+@@ -58,7 +58,7 @@
+    orientation="vertical"
+    top="0"
+    width="515">
+-      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="398" auto_resize="false" width="515">
++      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="638" auto_resize="false" width="515">
+        <text name="kd_heading" left="12" top="8" width="465" height="22" font="SansSerifLarge">Kombatant graphics</text>
+        <text name="kd_resolution_label" left="12" top="38" width="465" height="18">Live world render resolution</text>
+        <combo_box name="kd_resolution" control_name="KombatantRenderWidth" left="12" top="60" width="465" height="24">
+@@ -82,6 +82,14 @@
+        <button name="kd_studio" label="Studio / graphics modes" left="249" top="360" width="228" height="26">
+         <button.commit_callback function="Floater.Show" parameter="kombatant_studio" />
+        </button>
++       <check_box name="kd_ssr_enabled" label="Screen-space reflections" control_name="RenderScreenSpaceReflections" left="12" top="398" width="465" height="22" />
++       <check_box name="kd_ao_enabled" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="12" top="426" width="465" height="22" />
++       <check_box name="kd_dof_enabled" label="Depth of field" control_name="RenderDepthOfField" left="12" top="454" width="465" height="22" />
++       <check_box name="kd_bloom_enabled" label="Bloom" control_name="RenderGlow" left="12" top="482" width="465" height="22" />
++       <slider name="kd_chroma" label="Chromatic aberration" control_name="RenderChromaStrength" left="12" top="510" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.01" decimal_digits="2" />
++       <slider name="kd_ao_strength" label="AO strength" control_name="RenderSSAOEffect" left="12" top="538" width="465" height="20" label_width="190" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
++       <slider name="kd_reflection_steps" label="SSR ray iterations" control_name="RenderScreenSpaceReflectionIterations" left="12" top="566" width="465" height="20" label_width="190" min_val="1" max_val="64" increment="1" decimal_digits="0" />
++       <text name="kd_fx_note" left="12" top="594" width="465" height="38" wrap="true">Screen-space reflections use visible scene data. Depth of field blurs out-of-focus areas. Detailed tuning remains below.</text>
+       </layout_panel>
+       <layout_panel
+ 	  follows="top|left|right"
+
+diff --git a/indra/newview/llfloaterpreference.cpp b/indra/newview/llfloaterpreference.cpp
+--- a/indra/newview/llfloaterpreference.cpp
++++ b/indra/newview/llfloaterpreference.cpp
+@@ -1197,6 +1197,28 @@
+ 		registered_change_dialog = true;
+ 	}
+ 	
++    // Presets change real renderer settings; individual controls remain editable.
++    mCommitCallbackRegistrar.add("Pref.KombatantQuality", [](LLUICtrl* ctrl, const LLSD&) {
++        const S32 selected = ctrl->getValue().asInteger();
++        if (selected < 0 || selected > 4) return;
++        const S32 q = selected;
++        const F32 distance[] = {64.f, 96.f, 128.f, 192.f, 256.f};
++        const S32 textures[] = {512, 1024, 2048, 2048, 2048};
++        gSavedSettings.setF32("RenderFarClip", distance[q]);
++        gSavedSettings.setU32("RenderMaxTextureResolution", textures[q]);
++        gSavedSettings.setU32("RenderFSAAType", q == 0 ? 1 : 2);
++        gSavedSettings.setS32("RenderShadowDetail", q == 0 ? 0 : q < 3 ? 1 : 2);
++        gSavedSettings.setBOOL("RenderDeferredSSAO", q >= 2);
++        gSavedSettings.setBOOL("RenderGlow", q >= 1);
++        gSavedSettings.setBOOL("RenderScreenSpaceReflections", q >= 3);
++        gSavedSettings.setS32("RenderReflectionProbeDetail", q >= 3 ? 1 : 0);
++        gSavedSettings.setF32("RenderGlowStrength", q >= 4 ? 0.12f : 0.05f);
++        const F32 object_lod[] = {1.f, 1.5f, 2.f, 3.f, 4.f};
++        gSavedSettings.setF32("RenderVolumeLODFactor", object_lod[q]);
++        gSavedSettings.setF32("RenderTreeLODFactor", object_lod[q]);
++        gSavedSettings.setF32("RenderTerrainLODFactor", object_lod[q]);
++        // Focus blur and motion blur are artistic choices, not quality levels.
++    });
+ 	mCommitCallbackRegistrar.add("Pref.Cancel",					boost::bind(&LLFloaterPreference::onBtnCancel, this));
+ 	mCommitCallbackRegistrar.add("Pref.OK",						boost::bind(&LLFloaterPreference::onBtnOK, this));
+ 	
+diff --git a/indra/newview/pipeline.cpp b/indra/newview/pipeline.cpp
+--- a/indra/newview/pipeline.cpp
++++ b/indra/newview/pipeline.cpp
+@@ -7686,6 +7686,18 @@
+             native_fx() ? llclamp(contrast(), 0.5f, 1.5f) : 1.f,
+             native_fx() ? llclamp(vignette(), 0.f, 1.f) : 0.f);
+ 
++        static LLCachedControl<F32> temperature(gSavedSettings, "KombatantTemperature", 0.f);
++        static LLCachedControl<F32> tint(gSavedSettings, "KombatantTint", 0.f);
++        static LLCachedControl<F32> grain(gSavedSettings, "KombatantGrain", 0.f);
++        static LLCachedControl<F32> radius(gSavedSettings, "KombatantVignetteSize", 0.2f);
++        static LLCachedControl<F32> softness(gSavedSettings, "KombatantVignetteSoftness", 1.2f);
++        static LLStaticHashedString color_params("kombatant_color");
++        static LLStaticHashedString vignette_params("kombatant_vignette_shape");
++        shader.uniform3f(color_params, native_fx() ? llclamp(temperature(), -1.f, 1.f) : 0.f,
++            native_fx() ? llclamp(tint(), -1.f, 1.f) : 0.f,
++            native_fx() ? llclamp(grain(), 0.f, 1.f) : 0.f);
++        shader.uniform2f(vignette_params, llclamp(radius(), 0.f, 1.f), llclamp(softness(), 0.05f, 2.f));
++
+         mScreenTriangleVB->setBuffer();
+         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+ 
+diff --git a/indra/newview/app_settings/settings_blackdragon.xml b/indra/newview/app_settings/settings_blackdragon.xml
+--- a/indra/newview/app_settings/settings_blackdragon.xml
++++ b/indra/newview/app_settings/settings_blackdragon.xml
+@@ -2,6 +2,16 @@
+ <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:noNamespaceSchemaLocation="llsd.xsd">
+ <map>
++  <key>KombatantVignetteSoftness</key><map><key>Comment</key><string>Vignette falloff width.</string><key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>1.2</real></map>
++
++  <key>KombatantVignetteSize</key><map><key>Comment</key><string>Vignette inner radius squared.</string><key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>0.2</real></map>
++
++  <key>KombatantGrain</key><map><key>Comment</key><string>Static screen-space film grain amount (0 to 1).</string><key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>0</real></map>
++
++  <key>KombatantTint</key><map><key>Comment</key><string>Green/magenta color balance (-1 to 1).</string><key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>0</real></map>
++
++  <key>KombatantTemperature</key><map><key>Comment</key><string>Warm/cool color balance (-1 to 1).</string><key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>0</real></map>
++
+   <key>KombatantNativeFX</key>
+   <map><key>Comment</key><string>Enable native color grading.</string><key>Persist</key><integer>1</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>1</integer></map>
+   <key>KombatantSaturation</key>
+diff --git a/indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl b/indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl
+--- a/indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl
++++ b/indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl
+@@ -32,6 +32,8 @@
+ uniform float gamma;
+ uniform vec2 screen_res;
+ uniform vec3 kombatant_fx; // saturation, contrast, vignette
++uniform vec3 kombatant_color; // temperature, tint, grain
++uniform vec2 kombatant_vignette_shape;
+ in vec2 vary_fragcoord;
+ 
+ vec3 linear_to_srgb(vec3 cl);
+@@ -55,12 +57,17 @@
+ #endif
+ 
+     diff.rgb = clamp(diff.rgb, vec3(0.0), vec3(1.0));
++    diff.rgb *= vec3(1.0 + 0.15 * kombatant_color.x + 0.075 * kombatant_color.y,
++                     1.0 - 0.15 * kombatant_color.y,
++                     1.0 - 0.15 * kombatant_color.x + 0.075 * kombatant_color.y);
+     float luma = dot(diff.rgb, vec3(0.2126, 0.7152, 0.0722));
+     diff.rgb = mix(vec3(luma), diff.rgb, kombatant_fx.x);
+     diff.rgb = (diff.rgb - 0.5) * kombatant_fx.y + 0.5;
+     vec2 centered = vary_fragcoord * 2.0 - 1.0;
+-    float edge = smoothstep(0.2, 1.4, dot(centered, centered));
++    float edge = smoothstep(kombatant_vignette_shape.x, kombatant_vignette_shape.x + kombatant_vignette_shape.y, dot(centered, centered));
+     diff.rgb *= 1.0 - kombatant_fx.z * edge;
++    float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
++    diff.rgb += noise * kombatant_color.z * 0.08;
+     frag_color = vec4(clamp(diff.rgb, 0.0, 1.0), diff.a);
+ }
+ 
+diff --git a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+--- a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
++++ b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+@@ -41,7 +41,7 @@
+     <panel
+     layout="topleft"
+     follows="left|top|right"
+-    height="704"
++    height="1290"
+     name="gfx_scroll_panel"
+     top="0"
+     mouse_opaque="false"
+@@ -49,7 +49,7 @@
+     width="495">
+    <layout_stack
+    follows="top|left|right"
+-   height="3898"
++   height="5000"
+    layout="topleft"
+    border_size="-5"
+    left="0"
+@@ -58,7 +58,7 @@
+    orientation="vertical"
+    top="0"
+    width="515">
+-      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="638" auto_resize="false" width="515">
++      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="1224" auto_resize="false" width="515">
+        <text name="kd_heading" left="12" top="8" width="465" height="22" font="SansSerifLarge">Kombatant graphics</text>
+        <text name="kd_resolution_label" left="12" top="38" width="465" height="18">Live world render resolution</text>
+        <combo_box name="kd_resolution" control_name="KombatantRenderWidth" left="12" top="60" width="465" height="24">
+@@ -87,9 +87,63 @@
+        <check_box name="kd_dof_enabled" label="Depth of field" control_name="RenderDepthOfField" left="12" top="454" width="465" height="22" />
+        <check_box name="kd_bloom_enabled" label="Bloom" control_name="RenderGlow" left="12" top="482" width="465" height="22" />
+        <slider name="kd_chroma" label="Chromatic aberration" control_name="RenderChromaStrength" left="12" top="510" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.01" decimal_digits="2" />
+-       <slider name="kd_ao_strength" label="AO strength" control_name="RenderSSAOEffect" left="12" top="538" width="465" height="20" label_width="190" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
+-       <slider name="kd_reflection_steps" label="SSR ray iterations" control_name="RenderScreenSpaceReflectionIterations" left="12" top="566" width="465" height="20" label_width="190" min_val="1" max_val="64" increment="1" decimal_digits="0" />
++       <slider name="kd_ao_strength" label="AO darkening (-1 = more)" control_name="RenderSSAOEffect" left="12" top="538" width="465" height="20" label_width="190" min_val="-1" max_val="0" increment="0.05" decimal_digits="2" />
++       <text name="kd_reflection_steps_note" left="12" top="566" width="465" height="20">SSR ray settings: use the detailed reflection controls below.</text>
+        <text name="kd_fx_note" left="12" top="594" width="465" height="38" wrap="true">Screen-space reflections use visible scene data. Depth of field blurs out-of-focus areas. Detailed tuning remains below.</text>
++       <text name="kd_preset_label" left="12" top="640" width="465" height="20">Graphics preset (changes settings immediately)</text>
++       <combo_box name="kd_quality_preset" left="12" top="666" width="465" height="24" value="-1">
++        <combo_box.item label="Custom / choose a preset" value="-1" />
++        <combo_box.item label="Low" value="0" />
++        <combo_box.item label="Medium" value="1" />
++        <combo_box.item label="High" value="2" />
++        <combo_box.item label="Ultra" value="3" />
++        <combo_box.item label="Cinematic" value="4" />
++        <combo_box.commit_callback function="Pref.KombatantQuality" />
++       </combo_box>
++       <text name="kd_aa_label" left="12" top="704" width="190" height="20">Anti-aliasing</text>
++       <combo_box name="kd_aa" control_name="RenderFSAAType" left="210" top="700" width="267" height="24">
++        <combo_box.item label="Off" value="0" />
++        <combo_box.item label="FXAA" value="1" />
++        <combo_box.item label="SMAA" value="2" />
++       </combo_box>
++       <text name="kd_textures_label" left="12" top="736" width="190" height="20">Texture resolution cap</text>
++       <combo_box name="kd_textures" control_name="RenderMaxTextureResolution" left="210" top="732" width="267" height="24">
++        <combo_box.item label="Low (512)" value="512" />
++        <combo_box.item label="Medium (1024)" value="1024" />
++        <combo_box.item label="High (2048)" value="2048" />
++       </combo_box>
++       <text name="kd_shadows_label" left="12" top="768" width="190" height="20">Shadow quality</text>
++       <combo_box name="kd_shadows" control_name="RenderShadowDetail" left="210" top="764" width="267" height="24">
++        <combo_box.item label="Off" value="0" />
++        <combo_box.item label="Sun / moon" value="1" />
++        <combo_box.item label="Sun / moon and projectors" value="2" />
++       </combo_box>
++       <text name="kd_tone_label" left="12" top="800" width="190" height="20">Tone mapping (PBR)</text>
++       <combo_box name="kd_tone" control_name="RenderTonemapType" left="210" top="796" width="267" height="24">
++        <combo_box.item label="Khronos Neutral" value="0" />
++        <combo_box.item label="ACES" value="1" />
++        <combo_box.item label="Reinhard" value="2" />
++        <combo_box.item label="Uncharted 2" value="3" />
++        <combo_box.item label="Filmic" value="4" />
++       </combo_box>
++       <check_box name="kd_motion" label="Motion blur" control_name="RenderMotionBlur" left="12" top="828" width="465" height="22" />
++       <slider name="kd_motion_strength" label="Motion blur length" control_name="RenderMotionBlurStrength" left="12" top="856" width="465" height="20" label_width="190" min_val="1" max_val="64" increment="1" decimal_digits="0" />
++       <slider name="kd_view_distance" label="View distance (m)" control_name="RenderFarClip" left="12" top="884" width="465" height="20" label_width="190" min_val="32" max_val="512" increment="16" decimal_digits="0" />
++       <slider name="kd_temperature" label="Warm / cool" control_name="KombatantTemperature" left="12" top="912" width="465" height="20" label_width="190" min_val="-1" max_val="1" increment="0.02" decimal_digits="2" />
++       <slider name="kd_tint" label="Green / magenta" control_name="KombatantTint" left="12" top="940" width="465" height="20" label_width="190" min_val="-1" max_val="1" increment="0.02" decimal_digits="2" />
++       <slider name="kd_grain" label="Film grain" control_name="KombatantGrain" left="12" top="968" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.02" decimal_digits="2" />
++       <slider name="kd_vignette_size" label="Vignette inner size" control_name="KombatantVignetteSize" left="12" top="996" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.02" decimal_digits="2" />
++       <slider name="kd_vignette_softness" label="Vignette softness" control_name="KombatantVignetteSoftness" left="12" top="1024" width="465" height="20" label_width="190" min_val="0.05" max_val="2" increment="0.05" decimal_digits="2" />
++       <text name="kd_scale_label" left="12" top="1056" width="190" height="20">Render scale (window mode)</text>
++       <combo_box name="kd_scale" control_name="RenderResolutionDivisor" left="210" top="1052" width="267" height="24" tool_tip="Applies when live rendering is set to window resolution. This is resolution scaling, without DLSS reconstruction.">
++        <combo_box.item label="100%" value="1" />
++        <combo_box.item label="50% (lower GPU load)" value="2" />
++        <combo_box.item label="25% (lowest GPU load)" value="4" />
++       </combo_box>
++       <slider name="kd_object_detail" label="Object detail" control_name="RenderVolumeLODFactor" left="12" top="1086" width="465" height="20" label_width="190" min_val="1" max_val="4" increment="0.25" decimal_digits="2" />
++       <slider name="kd_tree_detail" label="Tree detail" control_name="RenderTreeLODFactor" left="12" top="1114" width="465" height="20" label_width="190" min_val="1" max_val="4" increment="0.25" decimal_digits="2" />
++       <slider name="kd_terrain_detail" label="Terrain detail" control_name="RenderTerrainLODFactor" left="12" top="1142" width="465" height="20" label_width="190" min_val="1" max_val="4" increment="0.25" decimal_digits="2" />
++       <text name="kd_support_note" left="12" top="1170" width="465" height="48" wrap="true">Tone mapping and SSR require advanced PBR rendering. Color balance, grain and vignette use native color grading. Presets do not change live resolution.</text>
+       </layout_panel>
+       <layout_panel
+ 	  follows="top|left|right"
