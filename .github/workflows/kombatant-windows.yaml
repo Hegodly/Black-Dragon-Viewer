@@ -38,6 +38,8 @@ jobs:
               text = urlopen(base + name).read().decode('utf-8')
               text = text.replace('BOOL postBuild()', 'bool postBuild()').replace('BOOL LLFloaterBigPreview::postBuild()', 'bool LLFloaterBigPreview::postBuild()')
               Path(name).write_text(text)
+          p = Path('indra/newview/CMakeLists.txt')
+          p.write_text(p.read_text().replace(chr(34)+'--openal=${USE_OPENAL}'+chr(34), chr(34)+'--fmodstudio=${USE_FMODSTUDIO}'+chr(34)+' '+chr(34)+'--openal=${USE_OPENAL}'+chr(34)))
           p = Path('indra/cmake/Copy3rdPartyLibs.cmake')
           p.write_text(''.join(line for line in p.read_text().splitlines(True) if line.strip() != 'openjpeg.dll'))
           p = Path('indra/newview/viewer_manifest.py')
