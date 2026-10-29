@@ -3,7 +3,7 @@
 # Fetch pinned public FSR 3.1 and Intel XeSS SDKs; retain vendor licensing.
 param([switch]$StageOnly)
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $amd = Join-Path $root '.fsr-sdk'
 $intel = Join-Path $root '.xess-sdk'
 function CheckExit([string]$message) { if ($LASTEXITCODE -ne 0) { throw $message } }
