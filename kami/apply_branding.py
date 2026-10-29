@@ -8,6 +8,8 @@ from pathlib import Path
 import shutil
 import sys
 
+from PIL import Image
+
 root = Path(__file__).resolve().parents[1]
 assets = root / "kami/assets/KAMI_Branding"
 required = ["KAMI_Viewer.ico", "KAMI_Installer_Icon.bmp",
@@ -15,10 +17,22 @@ required = ["KAMI_Viewer.ico", "KAMI_Installer_Icon.bmp",
             "KAMI_Splash_1600x900.png"]
 
 def main():
+    global assets
     missing = [x for x in required if not (assets / x).is_file()]
-    if missing:
-        raise SystemExit("Missing KAMI artwork: " + ", ".join(missing) +
-                         ". Extract the official kit to kami/assets/KAMI_Branding.")
+    full_artwork = not missing
+    if not full_artwork:
+        print("High-resolution KAMI artwork not in repo; using included original-symbol icon preview.")
+        fallback = root / "kami/brand_icon_128.png"
+        if not fallback.is_file():
+            raise SystemExit("Missing both official branding kit and fallback KAMI icon.")
+        assets = root / "kami/generated_branding"
+        assets.mkdir(parents=True, exist_ok=True)
+        src = Image.open(fallback).convert("RGB")
+        src.resize((256, 256), Image.Resampling.LANCZOS).save(
+            assets / "KAMI_Viewer.ico", sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
+        src.resize((256, 256), Image.Resampling.LANCZOS).save(assets / "KAMI_Installer_Icon.bmp")
+        for size in (16, 32, 48, 128, 256, 512):
+            src.resize((size,size), Image.Resampling.LANCZOS).save(assets / f"KAMI_App_Icon_{size}.png")
 
     def put(name, relative):
         src, dst = assets / name, root / relative
@@ -45,6 +59,9 @@ def main():
         if (root / Path(name).parent).is_dir():
             put("KAMI_Installer_Icon.bmp", name)
 
+    if not full_artwork:
+        print("Full logo, banner and splash still need the official branding kit.")
+        return
     for asset, dest in (
         ("KAMI_Official_Logo_Original.png", "kami_logo.png"),
         ("KAMI_Login_Banner_1400x480.png", "kami_login_banner.png"),
