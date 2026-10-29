@@ -43,6 +43,9 @@ block='''       <text name="kd_rtx_heading" left="12" top="1224" width="465" hei
        <text name="kd_rtx_help" left="12" top="1504" width="465" height="110" wrap="true">These SDK upscalers are optional experiments, not a guaranteed FPS boost. OpenGL/DirectX frame copies may cost substantial FPS. Enable the guard to revert automatically after repeated slow frames. 4096px output limit. Ray AO covers nearby opaque world meshes, not avatars or terrain.</text>
 '''
 t=t[:a]+block+t[b:]
+# Use straightforward public-facing choices for users who prioritize frame rate and quality.
+t=t.replace('<combo_box.item label="Low" value="0" />','<combo_box.item label="Performance" value="0" />')
+t=t.replace('<combo_box.item label="Medium" value="1" />','<combo_box.item label="Balanced" value="1" />')
 assert 'height="1558" auto_resize="false" width="515"' in t
 p.write_text(t.replace('height="1558" auto_resize="false" width="515"','height="1620" auto_resize="false" width="515"'),encoding="utf-8")
 edit("indra/newview/llviewercontrol.cpp",'setting_setup_signal_listener(gSavedSettings, "KombatantDLSSMode", handleRenderResolutionDivisorChanged);',
@@ -76,6 +79,8 @@ edit(backend,'uint32_t mode=0, iw=0, ih=0, ow=0, oh=0, geometryRevision=~0u;',
 'uint32_t mode=0, provider=0, iw=0, ih=0, ow=0, oh=0, geometryRevision=~0u;\n    KombatantAdditionalUpscalers additional;')
 edit(backend,'if(desc.VendorId!=0x10de || (desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)) continue;','if(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE) continue;')
 edit(backend,'No NVIDIA D3D12 adapter found','No D3D12 adapter found')
+# DX12 feature level 11 devices can still run vendor-neutral FSR/XeSS; DXR is checked independently.
+edit(backend,'D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0','D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0')
 edit(backend,'if(iw==f.width && ih==f.height && ow==f.target_width && oh==f.target_height && mode==f.dlss_mode) return;',
 'if(iw==f.width && ih==f.height && ow==f.target_width && oh==f.target_height && mode==f.dlss_mode && provider==f.upscaler_provider) return;')
 edit(backend,'iw=f.width;ih=f.height;ow=f.target_width;oh=f.target_height;mode=f.dlss_mode;',
