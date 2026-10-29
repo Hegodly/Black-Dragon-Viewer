@@ -31,7 +31,7 @@ edit(settings, '  <key>KAMIPerformanceMode</key>', defs + '  <key>KAMIPerformanc
 xui = "indra/newview/skins/default/xui/en/floater_kombatant_effects.xml"
 p = R / xui
 s = p.read_text(encoding="utf-8-sig")
-a = ' <text name="native_note" left="24" top="456" width="512" height="70" wrap="true">These effects run inside the viewer\\'s native renderer. No external ReShade or GShade runtime. Performance Mode is in Preferences / Display.</text>'
+a = """ <text name="native_note" left="24" top="456" width="512" height="70" wrap="true">These effects run inside the viewer's native renderer. No external ReShade or GShade runtime. Performance Mode is in Preferences / Display.</text>"""
 if s.count(a) != 1:
     raise RuntimeError("Native effects floater changed; no safe insertion point")
 s = s.replace(a, ''' <text name="native_note" left="24" top="456" width="512" height="70" wrap="true">Native graphics, no external shader injector. Performance Mode is in Preferences / Display. Experimental SSGI and skin SSS are not yet implemented.</text>
