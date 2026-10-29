@@ -10,8 +10,15 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 180
+    env:
+      AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/cache/restore@v5
+        with:
+          path: .autobuild-installables
+          key: kombatant-win-deps-v1-${{ github.run_id }}
+          restore-keys: kombatant-win-deps-v1-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -31,6 +38,8 @@ jobs:
               text = urlopen(base + name).read().decode('utf-8')
               text = text.replace('BOOL postBuild()', 'bool postBuild()').replace('BOOL LLFloaterBigPreview::postBuild()', 'bool LLFloaterBigPreview::postBuild()')
               Path(name).write_text(text)
+          p = Path('indra/newview/kombatantstudio.h')
+          p.write_text(p.read_text().replace('[this]() {', '[this](LLUICtrl*, const LLSD&) {'))
           p = Path('kombatant/build-windows.sh')
           p.write_text(p.read_text().replace('autobuild build -A 64 -c ReleaseOS', 'autobuild build --no-configure -A 64 -c ReleaseOS'))
           p = Path('indra/cmake/BuildVersion.cmake')
@@ -56,6 +65,12 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
           if errorlevel 1 exit /b 1
           "C:\Program Files\Git\bin\bash.exe" --noprofile --norc -c "set -o pipefail; bash kombatant/build-windows.sh 2>&1 | tee kombatant-build.log"
+      - name: Cache downloaded libraries
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: .autobuild-installables
+          key: kombatant-win-deps-v1-${{ github.run_id }}
       - name: Preserve build log
         if: always()
         uses: actions/upload-artifact@v4
