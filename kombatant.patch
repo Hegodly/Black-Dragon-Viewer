@@ -1014,7 +1014,7 @@ new file mode 100644
 index 0000000..d57fd58
 --- /dev/null
 +++ b/kombatant/build-fx.ps1
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,58 @@
 +param([switch]$StageOnly)
 +$ErrorActionPreference = 'Stop'
 +$root = Split-Path $PSScriptRoot -Parent
@@ -1039,6 +1039,23 @@ index 0000000..d57fd58
 +} else {
 +    $output = Join-Path $root 'build-vc170-64/newview/Release'
 +    if (!(Test-Path $output)) { throw 'Viewer output directory missing' }
++    # Unpackaged builds omit runtime resources from viewer_manifest's copy action.
++    foreach ($directory in @('app_settings', 'skins', 'character')) {
++        Copy-Item "$root/indra/newview/$directory" $output -Recurse -Force
++    }
++    $packages = Join-Path $root 'build-vc170-64/packages'
++    if (!(Test-Path "$packages/fonts")) { throw 'Viewer font package missing' }
++    Copy-Item "$packages/fonts" $output -Recurse -Force
++    if (Test-Path "$packages/dictionaries") {
++        Copy-Item "$packages/dictionaries" "$output/app_settings" -Recurse -Force
++    }
++    foreach ($required in @('app_settings/settings.xml', 'app_settings/settings_blackdragon.xml',
++        'app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl',
++        'skins/default/xui/en/floater_kombatant_effects.xml', 'character/avatar_lad.xml')) {
++        if (!(Test-Path (Join-Path $output $required))) { throw "Missing portable resource: $required" }
++    }
++    if (!(Get-ChildItem "$output/fonts/*.ttf")) { throw 'No fonts in portable package' }
++
 +    Copy-Item "$source/bin/x64/Release/ReShade64.dll" "$output/KombatantFX64.dll"
 +    Copy-Item "$source/LICENSE.md" "$output/ReShade-LICENSE.md"
 +    $notices = Join-Path $output 'ReShade-licenses'
