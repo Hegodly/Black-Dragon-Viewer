@@ -113,7 +113,7 @@ index 0000000..d52b23f
 +        if (!runtime) return false;
 +        if (!preset.empty())
 +        {
-+            const auto path = std::filesystem::u8path(preset);
++            const auto path = std::filesystem::path(std::u8string(preset.begin(), preset.end()));
 +            std::error_code ec;
 +            if (path.extension() != L".ini" || !std::filesystem::is_regular_file(path, ec))
 +            {
