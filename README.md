@@ -1,15 +1,17 @@
-Black Dragon Viewer
-====================
-This project manages the source code for the
-[Black Dragon](https://niranv-sl.blogspot.de/) Viewer.
+# KAMI Viewer — Beyond Reality
 
-This source is available as open source; for details on licensing, see
-[the licensing page on the Second Life wiki](https://wiki.secondlife.com/wiki/Linden_Lab_Official:Second_Life_Viewer_Licensing_Program)
+KAMI Viewer is an experimental Second Life viewer based on the open-source [Black Dragon Viewer](https://github.com/NiranV/Black-Dragon-Viewer). The project aims to balance cinematic visuals, controllable post-processing, native rendering performance, and optional GPU upscaling.
 
-For information on how to use and contribute to this, see
-[the open source portal on the wiki](https://wiki.secondlife.com/wiki/Open_Source_Portal).
+**Brand:** KAMI Viewer (神) · **Tagline:** Beyond Reality.
 
-To download the current default version, visit
-[the download page](https://secondlife.com/support/downloads). For
-even newer versions try
-[the Alternate Viewers page](https://wiki.secondlife.com/wiki/Linden_Lab_Official:Alternate_Viewers)
+The Windows build uses KAMI Viewer branding for the application, logo, login, startup screen, About dialog, installer icon, and portable executable name (`KAMIViewer.exe`). Existing internal code and file identifiers may retain their historical names for compatibility.
+
+## Project status
+
+This is a **development build**, not a tested public release. The Windows viewer must compile and pass in-world tests for texture loading, startup, frame pacing, optional upscalers, and GPU compatibility before distribution.
+
+## Original source and notices
+
+Based on the [Black Dragon Viewer](https://github.com/NiranV/Black-Dragon-Viewer) and the [Second Life Viewer open-source codebase](https://wiki.secondlife.com/wiki/Open_Source_Portal). Preserve all existing source licenses, copyright notices, and third-party credits. KAMI Viewer is not affiliated with or endorsed by Linden Lab.
+
+For source licensing, see [LICENSE](LICENSE), [doc/LGPL-license.txt](doc/LGPL-license.txt), and the other original files in [doc](doc).
