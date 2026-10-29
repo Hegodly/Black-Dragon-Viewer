@@ -61,10 +61,13 @@ jobs:
       - name: Remove bundled FX runtime and integrate Performance Mode
         shell: pwsh
         run: python kami/performance/apply-native-performance.py
+      - name: Add native advanced lighting and adaptive resolution
+        shell: pwsh
+        run: python kami/performance/add-advanced-native.py
       - name: Validate native graphics settings and panels
         shell: pwsh
         run: |
-          python -c "from pathlib import Path; import xml.etree.ElementTree as E; E.parse('indra/newview/app_settings/settings_blackdragon.xml'); E.parse('indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'); E.parse('indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'); s=Path('indra/llwindow/llwindowwin32.cpp').read_text(); assert 'KombatantFX::' not in s; assert not Path('indra/llwindow/kombatantfxwin32.h').exists(); print('Native graphics integration verified')"
+          python -c "from pathlib import Path; import xml.etree.ElementTree as E; E.parse('indra/newview/app_settings/settings_blackdragon.xml'); E.parse('indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'); E.parse('indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'); assert 'KAMITargetFPS' in Path('indra/newview/llviewerdisplay.cpp').read_text(); s=Path('indra/llwindow/llwindowwin32.cpp').read_text(); assert 'KombatantFX::' not in s; assert not Path('indra/llwindow/kombatantfxwin32.h').exists(); print('Native graphics integration verified')"
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
