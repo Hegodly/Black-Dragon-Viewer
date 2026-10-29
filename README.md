@@ -4,7 +4,7 @@ KAMI Viewer is a custom Second Life viewer based on [Black Dragon Viewer](https:
 
 ## Brand assets
 
-The approved original artwork and derivative Windows icons, login banner, splash screen and installer icon are distributed in **KAMI Viewer Official Branding Kit**. Keep that artwork intact and use the supplied logo rather than recreating a different typeface. To apply artwork to a checkout, extract the kit's `KAMI_Branding` directory into `kami/assets`, then run `python kami/apply_branding.py` (requires Pillow: `pip install pillow`). Source-based channel, executable, product metadata and splash-dialog text are already renamed in this branch. Until the asset files are placed in this repository, GitHub Actions cannot package the approved graphical logo automatically.
+The approved original artwork and derivative Windows icons, login banner, splash screen and installer icon are distributed in **KAMI Viewer Official Branding Kit**. Keep that artwork intact and use the supplied logo rather than recreating a different typeface. To apply artwork to a checkout, extract the kit's `KAMI_Branding` directory into `kami/assets`, then run `python kami/apply_branding.py`. Source-based channel, executable, product metadata and splash-dialog text are already renamed in this branch. Until the asset files are placed in this repository, GitHub Actions cannot package the approved graphical logo automatically.
 
 ## Development
 
