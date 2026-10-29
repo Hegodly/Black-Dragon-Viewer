@@ -7,7 +7,7 @@ index b554320..331e678 100644
  set(GRID agni CACHE STRING "Target Grid")
  
 -set(VIEWER_CHANNEL "Black Dragon" CACHE STRING "Viewer Channel Name")
-+set(VIEWER_CHANNEL "Kombatant Viewer" CACHE STRING "Viewer Channel Name")
++set(VIEWER_CHANNEL "KAMI Viewer" CACHE STRING "Viewer Channel Name")
  
  set(ENABLE_SIGNING OFF CACHE BOOL "Enable signing the viewer")
  set(SIGNING_IDENTITY "" CACHE STRING "Specifies the signing identity to use, if necessary.")
@@ -20,7 +20,7 @@ index 1bd65eb..0bc1d15 100755
  
  DEFAULT_SRCTREE = os.path.dirname(sys.argv[0])
 -CHANNEL_VENDOR_BASE = 'Second Life'
-+CHANNEL_VENDOR_BASE = 'Kombatant'
++CHANNEL_VENDOR_BASE = 'KAMI'
  RELEASE_CHANNEL = CHANNEL_VENDOR_BASE + ' Release'
  
  BASE_ARGUMENTS=[
