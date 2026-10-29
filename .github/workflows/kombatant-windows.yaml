@@ -53,16 +53,11 @@ jobs:
       - name: Integrate native FSR and XeSS into viewer source
         shell: pwsh
         run: python kombatant/upscale/apply-upscalers.py
-      - name: Stage approved KAMI branding when artwork is present
+      - name: Install Python build tooling and brand icon support
+        run: python -m pip install autobuild llsd pillow "cmake<4"
+      - name: Stage KAMI official icons and approved artwork (when available)
         shell: pwsh
-        run: |
-          if (Test-Path 'kami/assets/KAMI_Branding/KAMI_Viewer.ico') {
-            python kami/apply_branding.py
-          } else {
-            Write-Host 'KAMI name and executable metadata applied; official graphical assets not in this checkout yet.'
-          }
-      - name: Install Python build tooling
-        run: python -m pip install autobuild llsd "cmake<4"
+        run: python kami/apply_branding.py
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
