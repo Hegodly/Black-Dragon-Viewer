@@ -54,7 +54,7 @@ keydefs = '''  <key>KAMIPerformanceMode</key>
   <key>KAMIPerformanceBackup</key>
   <map><key>Comment</key><string>Serialized pre-performance settings, restored when leaving Performance Mode.</string><key>Persist</key><integer>1</integer><key>Type</key><string>String</string><key>Value</key><string></string></map>
 '''
-edit(settings, "<map>\n", "<map>\n"+keydefs,1)
+edit(settings, '  xsi:noNamespaceSchemaLocation="llsd.xsd">\n<map>\n', '  xsi:noNamespaceSchemaLocation="llsd.xsd">\n<map>\n'+keydefs,1)
 
 # Keep native color grading/bloom/DOF. The old effects floater no longer
 # references external FX runtime, preset files, or overlay.
