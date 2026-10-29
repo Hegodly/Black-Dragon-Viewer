@@ -1,15 +1,15 @@
-Black Dragon Viewer
-====================
-This project manages the source code for the
-[Black Dragon](https://niranv-sl.blogspot.de/) Viewer.
+# KAMI Viewer — Beyond Reality
 
-This source is available as open source; for details on licensing, see
-[the licensing page on the Second Life wiki](https://wiki.secondlife.com/wiki/Linden_Lab_Official:Second_Life_Viewer_Licensing_Program)
+KAMI Viewer is a custom Second Life viewer based on [Black Dragon Viewer](https://github.com/NiranV/Black-Dragon-Viewer), focusing on advanced graphics controls, user-selectable visual effects and smooth performance. The application branding uses the approved minimalist silver **神 / KAMI** emblem with a subtle bronze halo on black.
 
-For information on how to use and contribute to this, see
-[the open source portal on the wiki](https://wiki.secondlife.com/wiki/Open_Source_Portal).
+## Brand assets
 
-To download the current default version, visit
-[the download page](https://secondlife.com/support/downloads). For
-even newer versions try
-[the Alternate Viewers page](https://wiki.secondlife.com/wiki/Linden_Lab_Official:Alternate_Viewers)
+The approved original artwork and derivative Windows icons, login banner, splash screen and installer icon are distributed in **KAMI Viewer Official Branding Kit**. Keep that artwork intact and use the supplied logo rather than recreating a different typeface. To apply artwork to a checkout, extract the kit's `KAMI_Branding` directory into `kami/assets`, then run `python kami/apply_branding.py`. Source-based channel, executable, product metadata and splash-dialog text are already renamed in this branch. Until the asset files are placed in this repository, GitHub Actions cannot package the approved graphical logo automatically.
+
+## Development
+
+Graphics integration and Windows builds remain experimental. The source tree contains optional NVIDIA/AMD/Intel upscaler work, subject to hardware support, SDK availability and validation; settings are not a guarantee of a particular FPS. See the Windows CI workflow and existing draft pull requests for build status.
+
+## Attribution and licensing
+
+KAMI is a downstream fork, **not** an official Linden Lab or Black Dragon release. Retain the original Black Dragon and Second Life contributor acknowledgments, license notices, copyright notices, trademarks and applicable third-party notices. See `LICENSE`, `doc/`, and upstream license documentation.

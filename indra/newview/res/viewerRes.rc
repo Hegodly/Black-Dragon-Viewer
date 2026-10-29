@@ -68,7 +68,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_VISIBLE
 FONT 8, "MS Sans Serif"
 BEGIN
     ICON            IDI_LL_ICON,IDC_STATIC,7,7,20,20
-    LTEXT           "Loading Black Dragon...",666,36,13,211,8
+    LTEXT           "Loading KAMI Viewer...",666,36,13,211,8
 END
 
 
@@ -154,12 +154,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", ""
-            VALUE "FileDescription", "Black Dragon"
+            VALUE "FileDescription", "KAMI Viewer"
             VALUE "FileVersion", "${VIEWER_VERSION_MAJOR}.${VIEWER_VERSION_MINOR}.${VIEWER_VERSION_PATCH}.${VIEWER_VERSION_REVISION}"
-            VALUE "InternalName", "Black Dragon"
+            VALUE "InternalName", "KAMI Viewer"
             VALUE "LegalCopyright", "Copyright (c) 2020, Linden Research, Inc."
-            VALUE "OriginalFilename", "BlackDragon.exe"
-            VALUE "ProductName", "Second Life"
+            VALUE "OriginalFilename", "KAMIViewer.exe"
+            VALUE "ProductName", "KAMI Viewer"
             VALUE "ProductVersion", "${VIEWER_VERSION_MAJOR}.${VIEWER_VERSION_MINOR}.${VIEWER_VERSION_PATCH}.${VIEWER_VERSION_REVISION}"
         END
     END
