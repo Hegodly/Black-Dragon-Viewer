@@ -2,7 +2,7 @@ name: Kombatant Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [master, feature/display-graphics-controls]
     paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml]
 permissions:
   contents: read
