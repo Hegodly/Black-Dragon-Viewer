@@ -72,7 +72,8 @@ cmake="kombatant/rtx/CMakeLists.txt"
 old='target_include_directories(KombatantRTX64 PRIVATE "'+d+'{NGX_ROOT}/include")'
 new='target_include_directories(KombatantRTX64 PRIVATE "'+d+'{NGX_ROOT}/include" "'+d+'{FSR_ROOT}/Kits/FidelityFX/api/include" "'+d+'{FSR_ROOT}/Kits/FidelityFX/upscalers/include" "'+d+'{XESS_ROOT}/inc")'
 edit(cmake,old,new)
-edit("kombatant/build-rtx.ps1",'"-DNGX_ROOT=$sdk"','"-DNGX_ROOT=$sdk" "-DFSR_ROOT=$root/.fsr-sdk" "-DXESS_ROOT=$root/.xess-sdk"')
+edit("kombatant/build-rtx.ps1",'"-DNGX_ROOT=$sdk"','"-DNGX_ROOT=$sdk" "-DFSR_ROOT=$(Join-Path $root '.fsr-sdk')" "-DXESS_ROOT=$(Join-Path $root '.xess-sdk')"')
+edit("kombatant/build-rtx.ps1","    cmake --build \"$root/.rtx-build\" --config Release --parallel 2","    cmake -LA -N \"$root/.rtx-build\" | Select-String \"FSR_ROOT|XESS_ROOT\"\n    cmake --build \"$root/.rtx-build\" --config Release --parallel 2")
 backend="kombatant/rtx/rtx_backend.cpp"
 edit(backend,'#include "nvsdk_ngx_helpers.h"','#include "nvsdk_ngx_helpers.h"\n#include "../upscale/additional_upscalers.h"')
 edit(backend,'uint32_t mode=0, iw=0, ih=0, ow=0, oh=0, geometryRevision=~0u;',
