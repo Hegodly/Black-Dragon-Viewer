@@ -123,10 +123,10 @@ index 0000000..4ecbd85
 +        vignette.append(3.0);
 +        put("ExodusRenderVignette", vignette);
 +        getChild<LLButton>("restore")->setEnabled(true);
-+        getChild<LLTextBox>("status")->setText(cinema ?
++        getChild<LLTextBox>("status")->setText(LLStringExplicit(cinema ?
 +            "Cinematic active: shadows, ambient occlusion and subtle bloom." : crowded ?
 +            "Crowded Area active: shorter view and fewer full-detail avatars." :
-+            "Everyday active: balanced lighting and shorter draw distance.");
++            "Everyday active: balanced lighting and shorter draw distance."));
 +    }
 +
 +    void restore()
@@ -138,7 +138,7 @@ index 0000000..4ecbd85
 +        }
 +        mSaved = LLSD();
 +        getChild<LLButton>("restore")->setEnabled(false);
-+        getChild<LLTextBox>("status")->setText("Your previous graphics settings have been restored.");
++        getChild<LLTextBox>("status")->setText(LLStringExplicit("Your previous graphics settings have been restored."));
 +    }
 +};
 +#endif
@@ -358,9 +358,9 @@ new file mode 100644
 index 0000000..ac0f74e
 --- /dev/null
 +++ b/indra/newview/skins/default/xui/en/floater_kombatant_studio.xml
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,32 @@
 +<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-+<floater name="kombatant_studio" title="KOMBATANT / STUDIO" width="460" height="608"
++<floater name="kombatant_studio" title="KOMBATANT / STUDIO" width="460" height="638"
 + layout="topleft" positioning="centered" can_resize="false" save_rect="true">
 + <text name="heading" left="24" top="38" width="412" height="26" font="SansSerifLarge" text_color="White">Your world. Your look.</text>
 + <text name="intro" left="24" top="72" width="412" height="34" wrap="true">Choose a starting point, then fine-tune the details below.</text>
@@ -375,20 +375,21 @@ index 0000000..ac0f74e
 +  <button.commit_callback function="Floater.Show" parameter="preferences" />
 + </button>
 + <button name="restore" label="Restore previous settings" left="24" top="292" width="412" height="30" />
-+ <text name="render_label" left="24" top="334" width="412" height="20">Live world rendering (experimental)</text>
-+ <combo_box name="live_resolution" control_name="KombatantRenderWidth" left="24" top="360" width="412" height="26">
++ <check_box name="friends_only" label="Show friends only (and yourself)" control_name="RenderAvatarFriendsOnly" tool_tip="Hide non-friend avatars. Animesh remains visible. Resets on restart." left="24" top="324" width="412" height="22" />
++ <text name="render_label" left="24" top="364" width="412" height="20">Live world rendering (experimental)</text>
++ <combo_box name="live_resolution" control_name="KombatantRenderWidth" left="24" top="390" width="412" height="26">
 +  <combo_box.item label="Window resolution / existing scale" value="0" />
 +  <combo_box.item label="4K live rendering (3840 pixels wide)" value="3840" />
 +  <combo_box.item label="8K live rendering (7680 pixels wide)" value="7680" />
 +  <combo_box.item label="12K live rendering (12288 pixels wide)" value="12288" />
 + </combo_box>
-+ <text name="live_size" left="24" top="396" width="412" height="20">Actual world buffer: pending</text>
-+ <text name="render_note" left="24" top="424" width="412" height="44" wrap="true">Renders the world above screen resolution, then fits it to your display. 12K needs substantial GPU memory. Resets to normal on restart.</text>
-+ <button name="photos" label="Open snapshots / 12K photos" left="24" top="478" width="412" height="30">
++ <text name="live_size" left="24" top="426" width="412" height="20">Actual world buffer: pending</text>
++ <text name="render_note" left="24" top="454" width="412" height="44" wrap="true">Renders the world above screen resolution, then fits it to your display. 12K needs substantial GPU memory. Resets to normal on restart.</text>
++ <button name="photos" label="Open snapshots / 12K photos" left="24" top="508" width="412" height="30">
 +  <button.commit_callback function="Floater.Show" parameter="snapshot" />
 + </button>
-+ <text name="photo_help" left="24" top="516" width="412" height="34" wrap="true">Save to disk: allow high resolutions, hide UI and HUD, then choose 12K. Use PNG for lossless output.</text>
-+ <text name="note" left="24" top="556" width="412" height="48" wrap="true">Restore is available for mode changes in this session. Modes save on normal exit. Performance depends on the region and your PC.</text>
++ <text name="photo_help" left="24" top="546" width="412" height="34" wrap="true">Save to disk: allow high resolutions, hide UI and HUD, then choose 12K. Use PNG for lossless output.</text>
++ <text name="note" left="24" top="586" width="412" height="48" wrap="true">Restore is available for mode changes in this session. Modes save on normal exit. Performance depends on the region and your PC.</text>
 +</floater>
 diff --git a/indra/newview/skins/default/xui/en/menu_viewer.xml b/indra/newview/skins/default/xui/en/menu_viewer.xml
 index 52fdfdc..a6a50f4 100644
@@ -630,3 +631,4 @@ index 0000000..37a8479
 +    -DPACKAGE:BOOL=OFF
 +# Avoid packaging/signing until the viewer has passed runtime smoke tests.
 +autobuild build -A 64 -c ReleaseOS
+
