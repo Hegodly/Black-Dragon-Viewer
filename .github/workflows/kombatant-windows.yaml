@@ -27,6 +27,7 @@ jobs:
         run: |
           git clone --depth 1 --branch version.1.5.2 https://github.com/uclouvain/openjpeg.git .openjpeg-source
           test "$(git -C .openjpeg-source rev-parse HEAD)" = 9586bc669c4623912ca657328579c878d74164a5
+          python -c "from pathlib import Path; p=Path('.openjpeg-source/libopenjpeg/opj_includes.h'); p.write_text(p.read_text().replace('#if defined(_MSC_VER) || defined(__BORLANDC__)', '#if (defined(_MSC_VER) && _MSC_VER < 1800) || defined(__BORLANDC__)'))"
           cmake -S .openjpeg-source -B .openjpeg-build -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=OFF -DBUILD_CODEC=OFF -DBUILD_TESTING=OFF -DOPENJPEG_INSTALL_INCLUDE_DIR=include/openjpeg -DCMAKE_INSTALL_PREFIX="$PWD/.openjpeg-install"
           cmake --build .openjpeg-build --config Release --parallel 2
           cmake --install .openjpeg-build --config Release
