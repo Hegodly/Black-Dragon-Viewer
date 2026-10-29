@@ -21,7 +21,19 @@ jobs:
           git apply --check kombatant.patch
           git apply kombatant.patch
       - name: Install Python build tooling
-        run: python -m pip install autobuild llsd cmake
+        run: python -m pip install autobuild llsd "cmake<4"
+      - name: Build compatible OpenJPEG from public source
+        shell: bash
+        run: |
+          git clone --depth 1 --branch version.1.5.2 https://github.com/uclouvain/openjpeg.git .openjpeg-source
+          test "$(git -C .openjpeg-source rev-parse HEAD)" = 9586bc669c4623912ca657328579c878d74164a5
+          cmake -S .openjpeg-source -B .openjpeg-build -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=OFF -DBUILD_CODEC=OFF -DBUILD_TESTING=OFF -DOPENJPEG_INSTALL_INCLUDE_DIR=include/openjpeg -DCMAKE_INSTALL_PREFIX="$PWD/.openjpeg-install"
+          cmake --build .openjpeg-build --config Release --parallel 2
+          cmake --install .openjpeg-build --config Release
+          python - <<'PY'
+          from pathlib import Path
+          Path('indra/cmake/OpenJPEG.cmake').write_text('set(OPENJPEG_INCLUDE_DIR "'+str(Path('.openjpeg-install/include/openjpeg').resolve()).replace(chr(92),'/')+'")\nset(OPENJPEG_LIBRARIES "'+str(Path('.openjpeg-install/lib/openjpeg.lib').resolve()).replace(chr(92),'/')+'")\nadd_definitions(-DOPJ_STATIC)\n')
+          PY
       - name: Configure and compile
         shell: cmd
         run: |
