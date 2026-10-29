@@ -1259,3 +1259,40 @@ index e7c9b13..80aac83 100644
        <layout_panel
  	  follows="top|left|right"
  	  layout="topleft"
+
+diff --git a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+--- a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
++++ b/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml
+@@ -41,7 +41,7 @@
+     <panel
+     layout="topleft"
+     follows="left|top|right"
+-    height="464"
++    height="704"
+     name="gfx_scroll_panel"
+     top="0"
+     mouse_opaque="false"
+@@ -58,7 +58,7 @@
+    orientation="vertical"
+    top="0"
+    width="515">
+-      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="398" auto_resize="false" width="515">
++      <layout_panel name="kombatant_display_quick" follows="top|left|right" layout="topleft" height="638" auto_resize="false" width="515">
+        <text name="kd_heading" left="12" top="8" width="465" height="22" font="SansSerifLarge">Kombatant graphics</text>
+        <text name="kd_resolution_label" left="12" top="38" width="465" height="18">Live world render resolution</text>
+        <combo_box name="kd_resolution" control_name="KombatantRenderWidth" left="12" top="60" width="465" height="24">
+@@ -82,6 +82,14 @@
+        <button name="kd_studio" label="Studio / graphics modes" left="249" top="360" width="228" height="26">
+         <button.commit_callback function="Floater.Show" parameter="kombatant_studio" />
+        </button>
++       <check_box name="kd_ssr_enabled" label="Screen-space reflections" control_name="RenderScreenSpaceReflections" left="12" top="398" width="465" height="22" />
++       <check_box name="kd_ao_enabled" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="12" top="426" width="465" height="22" />
++       <check_box name="kd_dof_enabled" label="Depth of field" control_name="RenderDepthOfField" left="12" top="454" width="465" height="22" />
++       <check_box name="kd_bloom_enabled" label="Bloom" control_name="RenderGlow" left="12" top="482" width="465" height="22" />
++       <slider name="kd_chroma" label="Chromatic aberration" control_name="RenderChromaStrength" left="12" top="510" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.01" decimal_digits="2" />
++       <slider name="kd_ao_strength" label="AO strength" control_name="RenderSSAOEffect" left="12" top="538" width="465" height="20" label_width="190" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
++       <slider name="kd_reflection_steps" label="SSR ray iterations" control_name="RenderScreenSpaceReflectionIterations" left="12" top="566" width="465" height="20" label_width="190" min_val="1" max_val="64" increment="1" decimal_digits="0" />
++       <text name="kd_fx_note" left="12" top="594" width="465" height="38" wrap="true">Screen-space reflections use visible scene data. Depth of field blurs out-of-focus areas. Detailed tuning remains below.</text>
+       </layout_panel>
+       <layout_panel
+ 	  follows="top|left|right"
