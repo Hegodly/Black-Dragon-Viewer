@@ -40,6 +40,8 @@ edit("indra/newview/skins/default/xui/en/floater_about.xml", 'title="About [APP_
 src = Image.open(SOURCE).convert("RGB")
 width, height = src.size
 square = src.crop((round(width*.265), round(height*.16), round(width*.735), round(height*.63)))
+# Build all ICO sizes even when the repository JPEG is space-optimized.
+square = square.resize((512, 512), Image.Resampling.LANCZOS)
 for variant in ("release", "beta", "project", "test"):
     directory = ROOT / f"indra/newview/icons/{variant}"
     directory.mkdir(parents=True, exist_ok=True)
