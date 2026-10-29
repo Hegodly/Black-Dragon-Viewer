@@ -1172,3 +1172,23 @@ index 0000000..0adf31c
 +[SCREENSHOT]
 +FileFormat=1
 +SavePath=.\Screenshots
+diff --git a/indra/newview/lltexturefetch.cpp b/indra/newview/lltexturefetch.cpp
+index b041d40..79b7e2e 100644
+--- a/indra/newview/lltexturefetch.cpp
++++ b/indra/newview/lltexturefetch.cpp
+@@ -2579,6 +2579,15 @@ S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const L
+         desired_discard = MAX_DISCARD_LEVEL;
+     }
+ 
++    // OpenJPEG 1.x rejects codestreams truncated to the initial cache/range
++    // request. Fetch the complete compressed stream, but preserve the desired
++    // decode discard level so this does not force full-resolution GPU textures.
++    static const bool needs_complete_j2c =
++        LLImageJ2C::getEngineInfo().find("OpenJPEG") != std::string::npos;
++    if (needs_complete_j2c)
++    {
++        desired_size = MAX_IMAGE_DATA_SIZE;
++    }
+ 
+     if (worker)
+     {
