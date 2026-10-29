@@ -1,0 +1,47 @@
+name: Kombatant Windows build
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Apply Kombatant viewer changes
+        shell: bash
+        run: |
+          git apply --check kombatant.patch
+          git apply kombatant.patch
+      - name: Install Python build tooling
+        run: python -m pip install autobuild llsd cmake
+      - name: Configure and compile
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
+          if errorlevel 1 exit /b 1
+          "C:\Program Files\Git\bin\bash.exe" --noprofile --norc -c "set -o pipefail; bash kombatant/build-windows.sh 2>&1 | tee kombatant-build.log"
+      - name: Preserve build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kombatant-windows-build-log
+          path: |
+            kombatant-build.log
+            build-vc170-64/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: warn
+      - name: Preserve compiled build output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kombatant-windows-release-output
+          path: build-vc170-64/newview/Release/
+          if-no-files-found: error
+          retention-days: 7
