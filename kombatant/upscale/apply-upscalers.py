@@ -21,7 +21,7 @@ ui="indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"
 p=Path(ui)
 t=p.read_text(encoding="utf-8")
 a=t.index('       <text name="kd_rtx_heading"')
-b=t.index('       </layout_panel>',a)
+b=t.rfind('\n',0,t.index('</layout_panel>',a))+1
 block='''       <text name="kd_rtx_heading" left="12" top="1224" width="465" height="24" font="SansSerifLarge">Experimental temporal upscaling and hardware AO</text>
        <combo_box name="kd_upscaler" control_name="KombatantUpscalerProvider" left="12" top="1254" width="465" height="24">
         <combo_box.item label="Native rendering (off by default)" value="0" />
