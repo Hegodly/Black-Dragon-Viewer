@@ -1,0 +1,632 @@
+diff --git a/indra/cmake/Variables.cmake b/indra/cmake/Variables.cmake
+index b554320..331e678 100644
+--- a/indra/cmake/Variables.cmake
++++ b/indra/cmake/Variables.cmake
+@@ -177,7 +177,7 @@ endif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+ # Default deploy grid
+ set(GRID agni CACHE STRING "Target Grid")
+ 
+-set(VIEWER_CHANNEL "Black Dragon" CACHE STRING "Viewer Channel Name")
++set(VIEWER_CHANNEL "Kombatant Viewer" CACHE STRING "Viewer Channel Name")
+ 
+ set(ENABLE_SIGNING OFF CACHE BOOL "Enable signing the viewer")
+ set(SIGNING_IDENTITY "" CACHE STRING "Specifies the signing identity to use, if necessary.")
+diff --git a/indra/lib/python/indra/util/llmanifest.py b/indra/lib/python/indra/util/llmanifest.py
+index 1bd65eb..0bc1d15 100755
+--- a/indra/lib/python/indra/util/llmanifest.py
++++ b/indra/lib/python/indra/util/llmanifest.py
+@@ -91,7 +91,7 @@ def get_default_platform(dummy):
+             }[sys.platform]
+ 
+ DEFAULT_SRCTREE = os.path.dirname(sys.argv[0])
+-CHANNEL_VENDOR_BASE = 'Second Life'
++CHANNEL_VENDOR_BASE = 'Kombatant'
+ RELEASE_CHANNEL = CHANNEL_VENDOR_BASE + ' Release'
+ 
+ BASE_ARGUMENTS=[
+diff --git a/indra/newview/app_settings/settings_blackdragon.xml b/indra/newview/app_settings/settings_blackdragon.xml
+index 17699be..cf00f73 100644
+--- a/indra/newview/app_settings/settings_blackdragon.xml
++++ b/indra/newview/app_settings/settings_blackdragon.xml
+@@ -201,6 +201,14 @@
+     <key>Value</key>
+     <string />
+   </map>
++  <key>KombatantRenderWidth</key>
++  <map>
++    <key>Comment</key>
++    <string>Experimental live main-world render width. 0 uses window scaling; aspect ratio is preserved. Resets on restart.</string>
++    <key>Persist</key><integer>0</integer>
++    <key>Type</key><string>U32</string>
++    <key>Value</key><integer>0</integer>
++  </map>
+   <key>SnapshotResolutionUnlock</key>
+   <map>
+     <key>Comment</key>
+diff --git a/indra/newview/kombatantstudio.h b/indra/newview/kombatantstudio.h
+new file mode 100644
+index 0000000..4ecbd85
+--- /dev/null
++++ b/indra/newview/kombatantstudio.h
+@@ -0,0 +1,93 @@
++/**
++ * Kombatant Viewer Studio. Derived from Black Dragon / Second Life Viewer.
++ * New code Copyright (C) 2026 Kombatant Viewer contributors.
++ * SPDX-License-Identifier: LGPL-2.1-only
++ */
++#ifndef KOMBATANT_STUDIO_H
++#define KOMBATANT_STUDIO_H
++
++#include "llfloater.h"
++#include "llbutton.h"
++#include "lltextbox.h"
++#include "llviewercontrol.h"
++#include "pipeline.h"
++
++// Header implementation is included by llviewerfloaterreg.cpp only.
++class KombatantStudio final : public LLFloater
++{
++public:
++    explicit KombatantStudio(const LLSD& key) : LLFloater(key) {}
++
++    bool postBuild() override
++    {
++        getChild<LLButton>("everyday")->setClickedCallback([this]() { applyMode(0); });
++        getChild<LLButton>("cinematic")->setClickedCallback([this]() { applyMode(1); });
++        getChild<LLButton>("crowded")->setClickedCallback([this]() { applyMode(2); });
++        getChild<LLButton>("restore")->setClickedCallback([this]() { restore(); });
++        getChild<LLButton>("restore")->setEnabled(false);
++        return true;
++    }
++
++    void draw() override
++    {
++        const auto& target = gPipeline.mMainRT.screen;
++        getChild<LLTextBox>("live_size")->setText("Actual world buffer: " +
++            std::to_string(target.getWidth()) + " x " + std::to_string(target.getHeight()));
++        LLFloater::draw();
++    }
++
++private:
++    LLSD mSaved;
++
++    void put(const std::string& name, const LLSD& value)
++    {
++        auto control = gSavedSettings.getControl(name);
++        if (!control) return;
++        // Keep the original value across repeated switches in this session.
++        if (!mSaved.has(name)) mSaved[name] = control->getValue();
++        control->setValue(value);
++    }
++
++    void applyMode(int mode)
++    {
++        const bool cinema = mode == 1;
++        const bool crowded = mode == 2;
++        put("RenderFarClip", LLSD(crowded ? 64.0 : cinema ? 128.0 : 96.0));
++        put("RenderShadowDetail", LLSD(crowded ? 0 : cinema ? 2 : 1));
++        put("RenderShadowResolutionScale", LLSD(cinema ? 1.0 : 0.75));
++        put("RenderDeferredSSAO", LLSD(!crowded));
++        put("RenderReflectionProbeDetail", LLSD(cinema ? 1 : 0));
++        put("RenderAvatarMaxNonImpostors", LLSD(crowded ? 4 : cinema ? 12 : 8));
++        put("RenderAvatarMaxComplexity", LLSD(crowded ? 100000 : cinema ? 250000 : 150000));
++        put("RenderResolutionDivisor", LLSD(1));
++        put("RenderGlow", LLSD(!crowded));
++        put("RenderGlowStrength", LLSD(cinema ? 0.12 : 0.05));
++        put("RenderTonemapType", LLSD(0)); // Existing Khronos Neutral mapper.
++        put("RenderTonemapMix", LLSD(1.0));
++        put("RenderChromaStrength", LLSD(0.0));
++        put("RenderDepthOfField", LLSD(false)); // Focus blur remains opt-in.
++        LLSD vignette = LLSD::emptyArray();
++        vignette.append(cinema ? 0.12 : 0.0);
++        vignette.append(1.0);
++        vignette.append(3.0);
++        put("ExodusRenderVignette", vignette);
++        getChild<LLButton>("restore")->setEnabled(true);
++        getChild<LLTextBox>("status")->setText(cinema ?
++            "Cinematic active: shadows, ambient occlusion and subtle bloom." : crowded ?
++            "Crowded Area active: shorter view and fewer full-detail avatars." :
++            "Everyday active: balanced lighting and shorter draw distance.");
++    }
++
++    void restore()
++    {
++        for (LLSD::map_const_iterator it = mSaved.beginMap(); it != mSaved.endMap(); ++it)
++        {
++            auto control = gSavedSettings.getControl(it->first);
++            if (control) control->setValue(it->second);
++        }
++        mSaved = LLSD();
++        getChild<LLButton>("restore")->setEnabled(false);
++        getChild<LLTextBox>("status")->setText("Your previous graphics settings have been restored.");
++    }
++};
++#endif
+diff --git a/indra/newview/llappviewer.cpp b/indra/newview/llappviewer.cpp
+index 698a5a8..978fbf5 100644
+--- a/indra/newview/llappviewer.cpp
++++ b/indra/newview/llappviewer.cpp
+@@ -390,7 +390,7 @@ const std::string LOGOUT_MARKER_FILE_NAME("BlackDragon.logout_marker");
+ static std::string gLaunchFileOnQuit;
+ 
+ // Used on Win32 for other apps to identify our window (eg, win_setup)
+-const char* const VIEWER_WINDOW_CLASSNAME = "Black Dragon";
++const char* const VIEWER_WINDOW_CLASSNAME = "Kombatant Viewer";
+ 
+ //----------------------------------------------------------------------------
+ 
+@@ -693,7 +693,7 @@ LLAppViewer::LLAppViewer()
+ 
+     // Need to do this initialization before we do anything else, since anything
+     // that touches files should really go through the lldir API
+-    gDirUtilp->initAppDirs("BlackDragon");
++    gDirUtilp->initAppDirs("KombatantViewer");
+     //
+     // IMPORTANT! Do NOT put anything that will write
+     // into the log files during normal startup until AFTER
+diff --git a/indra/newview/llfloatersnapshot.cpp b/indra/newview/llfloatersnapshot.cpp
+index 8c3f602..59d24a0 100644
+--- a/indra/newview/llfloatersnapshot.cpp
++++ b/indra/newview/llfloatersnapshot.cpp
+@@ -582,7 +582,7 @@ void LLFloaterSnapshot::updateControls()
+ 			bool unlock = gSavedSettings.getBOOL("SnapshotResolutionUnlock");
+ 			mSizeComboCtrl->getItemByLabel("6144x3160 (6K)")->setEnabled(unlock);
+ 			mSizeComboCtrl->getItemByLabel("7680x4320 (8K)")->setEnabled(unlock);
+-			mSizeComboCtrl->getItemByLabel("11520x6480 (12K)")->setEnabled(unlock);
++			mSizeComboCtrl->getItemByLabel("12288x6912 (12K)")->setEnabled(unlock);
+ 
+ 			// Clamp snapshot resolution to window size when showing UI or HUD in snapshot.
+ 			if (gSavedSettings.getBOOL("RenderUIInSnapshot") || gSavedSettings.getBOOL("RenderHUDInSnapshot"))
+@@ -606,8 +606,8 @@ void LLFloaterSnapshot::updateControls()
+ 			else
+ 			{
+ 				//BD
+-				mWidthSpinnerCtrl->setMaxValue(unlock ? 11520.0f : 3840.0f);
+-				mHeightSpinnerCtrl->setMaxValue(unlock ? 11520.0f : 3840.0f);
++				mWidthSpinnerCtrl->setMaxValue(unlock ? static_cast<F32>(MAX_SNAPSHOT_IMAGE_SIZE) : 3840.0f);
++				mHeightSpinnerCtrl->setMaxValue(unlock ? static_cast<F32>(MAX_SNAPSHOT_IMAGE_SIZE) : 3840.0f);
+ 			}
+ 		}
+ 
+diff --git a/indra/newview/llviewercontrol.cpp b/indra/newview/llviewercontrol.cpp
+index d913738..70b0286 100644
+--- a/indra/newview/llviewercontrol.cpp
++++ b/indra/newview/llviewercontrol.cpp
+@@ -1316,6 +1316,7 @@ void settings_setup_listeners()
+     setting_setup_signal_listener(gSavedSettings, "RenderDeferredNoise", handleReleaseGLBufferChanged);
+     setting_setup_signal_listener(gSavedSettings, "RenderDebugPipeline", handleRenderDebugPipelineChanged);
+     setting_setup_signal_listener(gSavedSettings, "RenderResolutionDivisor", handleRenderResolutionDivisorChanged);
++    setting_setup_signal_listener(gSavedSettings, "KombatantRenderWidth", handleRenderResolutionDivisorChanged);
+     setting_setup_signal_listener(gSavedSettings, "RenderReflectionProbeLevel", handleReflectionProbeDetailChanged);
+     setting_setup_signal_listener(gSavedSettings, "RenderReflectionProbeDetail", handleReflectionProbeDetailChanged);
+     setting_setup_signal_listener(gSavedSettings, "RenderReflectionProbeCount", handleReflectionProbeCountChanged);
+diff --git a/indra/newview/llviewerfloaterreg.cpp b/indra/newview/llviewerfloaterreg.cpp
+index 3f82734..e84675b 100644
+--- a/indra/newview/llviewerfloaterreg.cpp
++++ b/indra/newview/llviewerfloaterreg.cpp
+@@ -30,6 +30,7 @@
+ 
+ #include "llfloaterreg.h"
+ #include "llviewerfloaterreg.h"
++#include "kombatantstudio.h"
+ 
+ #include "llcommandhandler.h"
+ #include "llcompilequeue.h"
+@@ -453,6 +454,7 @@ void LLViewerFloaterReg::registerFloaters()
+     LLFloaterReg::add("performance", "floater_performance.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPerformance>);
+     LLFloaterReg::add("perms_default", "floater_perms_default.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPermsDefault>);
+     LLFloaterReg::add("places", "floater_places.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSidePanelContainer>);
++    LLFloaterReg::add("kombatant_studio", "floater_kombatant_studio.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<KombatantStudio>);
+     LLFloaterReg::add("preferences", "floater_preferences.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPreference>);
+     LLFloaterReg::add("prefs_proxy", "floater_preferences_proxy.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPreferenceProxy>);
+     LLFloaterReg::add("prefs_spellchecker_import", "floater_spellcheck_import.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSpellCheckerImport>);
+diff --git a/indra/newview/llviewerwindow.h b/indra/newview/llviewerwindow.h
+index 4dfb24b..3e33a92 100644
+--- a/indra/newview/llviewerwindow.h
++++ b/indra/newview/llviewerwindow.h
+@@ -151,7 +151,7 @@ struct MainPanel : public LLPanel
+ {
+ };
+ 
+-static const U32 MAX_SNAPSHOT_IMAGE_SIZE = 12228; // max snapshot image size 12228 * 12228
++static const U32 MAX_SNAPSHOT_IMAGE_SIZE = 12288; // maximum snapshot dimension, including 12K output
+ 
+ class LLViewerWindow : public LLWindowCallbacks
+ {
+diff --git a/indra/newview/pipeline.cpp b/indra/newview/pipeline.cpp
+index 6604cfa..d3aef4c 100644
+--- a/indra/newview/pipeline.cpp
++++ b/indra/newview/pipeline.cpp
+@@ -823,6 +823,50 @@ void LLPipeline::resizeShadowTexture()
+     gResizeShadowTexture = false;
+ }
+ 
++// Resolve the main world target once. Auxiliary probes and explicit snapshot
++// dimensions keep their own sizes. A zero target preserves upstream scaling.
++static void kombatantScreenSize(U32& width, U32& height, bool main_target)
++{
++    const U32 target = gSavedSettings.getU32("KombatantRenderWidth");
++    if (target && main_target && !gCubeSnapshot &&
++        width == gViewerWindow->getWorldViewWidthRaw() &&
++        height == gViewerWindow->getWorldViewHeightRaw() && width && height)
++    {
++        const U32 out_height = llmax(1U, (U32)((F64)target * height / width + 0.5));
++        GLint texture_limit = 0, renderbuffer_limit = 0;
++        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &texture_limit);
++        glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &renderbuffer_limit);
++        GLint viewport_limit[2] = {0, 0};
++        glGetIntegerv(GL_MAX_VIEWPORT_DIMS, viewport_limit);
++        const U32 limit = (U32)llmax(0, llmin(llmin(texture_limit, renderbuffer_limit),
++                                                        gGLManager.mGLMaxTextureSize));
++        if (target <= 12288 && target <= limit && out_height <= limit &&
++            target <= (U32)llmax(0, viewport_limit[0]) &&
++            out_height <= (U32)llmax(0, viewport_limit[1]))
++        {
++            width = target;
++            height = out_height;
++            return;
++        }
++        LL_WARNS() << "Kombatant live render size exceeds GPU limits; using window resolution." << LL_ENDL;
++        gSavedSettings.setU32("KombatantRenderWidth", 0);
++        width = gViewerWindow->getWorldViewWidthRaw();
++        height = gViewerWindow->getWorldViewHeightRaw();
++        return;
++    }
++    const U32 divisor = LLPipeline::RenderResolutionDivisor;
++    if (divisor > 1 && divisor < width && divisor < height)
++    {
++        width /= divisor;
++        height /= divisor;
++    }
++    else if (LLPipeline::RenderResolutionMultiplier != 1.f)
++    {
++        width = llmax(1U, (U32)(width * LLPipeline::RenderResolutionMultiplier));
++        height = llmax(1U, (U32)(height * LLPipeline::RenderResolutionMultiplier));
++    }
++}
++
+ void LLPipeline::resizeScreenTexture()
+ {
+     if (gPipeline.shadersLoaded())
+@@ -830,25 +874,16 @@ void LLPipeline::resizeScreenTexture()
+         GLuint resX = gViewerWindow->getWorldViewWidthRaw();
+         GLuint resY = gViewerWindow->getWorldViewHeightRaw();
+ 
+-// [SL:KB] - Patch: Settings-RenderResolutionMultiplier | Checked: Catznip-5.4
+-		if ( (RenderResolutionDivisor > 1) && (RenderResolutionDivisor < resX) && (RenderResolutionDivisor < resY) )
+-		{
+-			resX /= RenderResolutionDivisor;
+-			resY /= RenderResolutionDivisor;
+-		}
+-		else if (RenderResolutionMultiplier != 1.f)
+-		{
+-			resX = (S32)(resX * RenderResolutionMultiplier);
+-			resY = (S32)(resY * RenderResolutionMultiplier);
+-		}
+-// [/SL:KB]
++        kombatantScreenSize(resX, resY, mRT == &mMainRT);
+ 
+         if (gResizeScreenTexture || (resX != mRT->screen.getWidth()) || (resY != mRT->screen.getHeight()))
+         {
+             releaseScreenBuffers();
+             releaseSunShadowTargets();
+             releaseSpotShadowTargets();
+-            allocateScreenBuffer(resX,resY);
++            // Allocation applies scaling; do not pass already-scaled dimensions.
++            allocateScreenBuffer(gViewerWindow->getWorldViewWidthRaw(),
++                                 gViewerWindow->getWorldViewHeightRaw());
+             gResizeScreenTexture = false;
+         }
+     }
+@@ -859,6 +894,12 @@ bool LLPipeline::allocateScreenBuffer(U32 resX, U32 resY)
+     LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
+     eFBOStatus ret = doAllocateScreenBuffer(resX, resY);
+ 
++    if (ret != FBO_SUCCESS_FULLRES && gSavedSettings.getU32("KombatantRenderWidth"))
++    {
++        // Disable the oversized target so resize does not retry it every frame.
++        gSavedSettings.setU32("KombatantRenderWidth", 0);
++        LL_WARNS() << "Kombatant live render allocation failed; reverting to window size." << LL_ENDL;
++    }
+     return ret == FBO_SUCCESS_FULLRES;
+ }
+ 
+@@ -943,20 +984,7 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
+     mRT->width = resX;
+     mRT->height = resY;
+ 
+-    U32 res_mod = RenderResolutionDivisor;
+-
+-    if (res_mod > 1 && res_mod < resX && res_mod < resY)
+-    {
+-        resX /= res_mod;
+-        resY /= res_mod;
+-    }
+-// [SL:KB] - Patch: Settings-RenderResolutionMultiplier | Checked: Catznip-5.4
+-	else if (RenderResolutionMultiplier != 1.f)
+-	{
+-		resX = (S32)(resX * RenderResolutionMultiplier);
+-		resY = (S32)(resY * RenderResolutionMultiplier);
+-	}
+-// [/SL:KB]
++    kombatantScreenSize(resX, resY, mRT == &mMainRT);
+ 
+     S32 shadow_detail = RenderShadowDetail;
+     bool ssao = RenderDeferredSSAO;
+diff --git a/indra/newview/skins/default/xui/en/floater_kombatant_studio.xml b/indra/newview/skins/default/xui/en/floater_kombatant_studio.xml
+new file mode 100644
+index 0000000..ac0f74e
+--- /dev/null
++++ b/indra/newview/skins/default/xui/en/floater_kombatant_studio.xml
+@@ -0,0 +1,31 @@
++<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
++<floater name="kombatant_studio" title="KOMBATANT / STUDIO" width="460" height="608"
++ layout="topleft" positioning="centered" can_resize="false" save_rect="true">
++ <text name="heading" left="24" top="38" width="412" height="26" font="SansSerifLarge" text_color="White">Your world. Your look.</text>
++ <text name="intro" left="24" top="72" width="412" height="34" wrap="true">Choose a starting point, then fine-tune the details below.</text>
++ <button name="everyday" label="Everyday" left="24" top="116" width="130" height="32" />
++ <button name="cinematic" label="Cinematic" left="164" top="116" width="130" height="32" />
++ <button name="crowded" label="Crowded Area" left="304" top="116" width="132" height="32" />
++ <text name="status" left="24" top="164" width="412" height="40" wrap="true">Your current graphics settings are unchanged.</text>
++ <check_box name="focus_blur" label="Depth of field" control_name="RenderDepthOfField" left="24" top="216" width="190" height="22" />
++ <check_box name="ambient" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="238" top="216" width="198" height="22" />
++ <check_box name="bloom" label="Bloom" control_name="RenderGlow" left="24" top="246" width="190" height="22" />
++ <button name="advanced" label="Full preferences" left="238" top="244" width="198" height="26">
++  <button.commit_callback function="Floater.Show" parameter="preferences" />
++ </button>
++ <button name="restore" label="Restore previous settings" left="24" top="292" width="412" height="30" />
++ <text name="render_label" left="24" top="334" width="412" height="20">Live world rendering (experimental)</text>
++ <combo_box name="live_resolution" control_name="KombatantRenderWidth" left="24" top="360" width="412" height="26">
++  <combo_box.item label="Window resolution / existing scale" value="0" />
++  <combo_box.item label="4K live rendering (3840 pixels wide)" value="3840" />
++  <combo_box.item label="8K live rendering (7680 pixels wide)" value="7680" />
++  <combo_box.item label="12K live rendering (12288 pixels wide)" value="12288" />
++ </combo_box>
++ <text name="live_size" left="24" top="396" width="412" height="20">Actual world buffer: pending</text>
++ <text name="render_note" left="24" top="424" width="412" height="44" wrap="true">Renders the world above screen resolution, then fits it to your display. 12K needs substantial GPU memory. Resets to normal on restart.</text>
++ <button name="photos" label="Open snapshots / 12K photos" left="24" top="478" width="412" height="30">
++  <button.commit_callback function="Floater.Show" parameter="snapshot" />
++ </button>
++ <text name="photo_help" left="24" top="516" width="412" height="34" wrap="true">Save to disk: allow high resolutions, hide UI and HUD, then choose 12K. Use PNG for lossless output.</text>
++ <text name="note" left="24" top="556" width="412" height="48" wrap="true">Restore is available for mode changes in this session. Modes save on normal exit. Performance depends on the region and your PC.</text>
++</floater>
+diff --git a/indra/newview/skins/default/xui/en/menu_viewer.xml b/indra/newview/skins/default/xui/en/menu_viewer.xml
+index 52fdfdc..a6a50f4 100644
+--- a/indra/newview/skins/default/xui/en/menu_viewer.xml
++++ b/indra/newview/skins/default/xui/en/menu_viewer.xml
+@@ -4,10 +4,13 @@
+  follows="left|top|right"
+  name="Main Menu">
+     <menu
+-     label="Dragon"
++     label="Kombatant"
+      name="Me"
+      create_jump_keys="true"
+      tear_off="true">
++        <menu_item_call label="Kombatant Studio" name="Kombatant Studio">
++            <menu_item_call.on_click function="Floater.Show" parameter="kombatant_studio" />
++        </menu_item_call>
+     	<menu
+      	label="File"
+      	name="File"
+diff --git a/indra/newview/skins/default/xui/en/panel_snapshot_local.xml b/indra/newview/skins/default/xui/en/panel_snapshot_local.xml
+index 0df9da2..34a6488 100644
+--- a/indra/newview/skins/default/xui/en/panel_snapshot_local.xml
++++ b/indra/newview/skins/default/xui/en/panel_snapshot_local.xml
+@@ -91,9 +91,9 @@
+          name="7680x4320"
+          value="[i7680,i4320]" />
+         <combo_box.item
+-         label="11520x6480 (12K)"
+-         name="11520x6480"
+-         value="[i11520,i6480]" />
++         label="12288x6912 (12K)"
++         name="12288x6912"
++         value="[i12288,i6912]" />
+         <combo_box.item
+          label="Custom"
+          name="Custom"
+diff --git a/indra/newview/skins/default/xui/en/strings.xml b/indra/newview/skins/default/xui/en/strings.xml
+index 58bf5c0..a26e8e8 100644
+--- a/indra/newview/skins/default/xui/en/strings.xml
++++ b/indra/newview/skins/default/xui/en/strings.xml
+@@ -7,7 +7,7 @@
+ 
+ 	<!-- Default Args - these arguments will be replaced in all strings -->
+ 	<string name="SECOND_LIFE">Second Life</string>
+-	<string name="APP_NAME">Black Dragon</string>
++	<string name="APP_NAME">Kombatant Viewer</string>
+ 	<string name="CAPITALIZED_APP_NAME">BLACK DRAGON</string>
+ 	<string name="SECOND_LIFE_GRID">Second Life Grid</string>
+ 	<string name="SUPPORT_SITE">Second Life Support Portal</string>
+diff --git a/kombatant/README.md b/kombatant/README.md
+new file mode 100644
+index 0000000..81e722e
+--- /dev/null
++++ b/kombatant/README.md
+@@ -0,0 +1,151 @@
++# Kombatant Viewer — source preview 0.3
++
++A native C++ Second Life viewer customization based on NiranV/Black-Dragon-Viewer,
++upstream commit b2ca434b39bcd93aff0e23414999dddd73527e05.
++
++STATUS: Source preview. Not a compiled viewer, installer, or tested release.
++
++## What is implemented
++
++- Kombatant application title, build channel and top-level menu.
++- Separate KombatantViewer user settings directory, preserving the installed
++  Black Dragon profile. Upstream internal executable/project names remain.
++- A native Studio panel at Kombatant > Kombatant Studio, with three modes:
++
++| Setting | Everyday | Cinematic | Crowded Area |
++| --- | --- | --- | --- |
++| Draw distance | 96 m | 128 m | 64 m |
++| Shadows | Sun/moon | Sun/moon + projectors | Off |
++| Ambient occlusion | On | On | Off |
++| Probe detail | Static | Static + dynamic | Static |
++| Full-detail avatar limit | 8 | 12 | 4 |
++| Avatar complexity limit | 150,000 | 250,000 | 100,000 |
++| Bloom strength | 0.05 | 0.12 | 0.05 (bloom off) |
++
++Both picture modes use the existing Khronos Neutral tone mapper. Cinematic adds
++subtle vignette. Chromatic aberration is disabled. Depth of field starts off and
++is available as an optional toggle. Existing region lighting and materials still
++control the scene's appearance. These are renderer settings, not a new renderer.
++
++The panel has Bloom, Ambient Occlusion and Depth of Field toggles, access to full
++Preferences, and a Restore Previous Settings button. Restore captures only the
++settings changed by a mode, immediately before the first mode switch. It remains
++available during this viewer session, not after restarting. Normal viewer
++preferences persistence applies on clean exit. No settings change just by opening
++Studio. To return to the original profile, use Restore before exiting.
++
++This first UI pass adds Studio and branding; the rest of the interface remains
++Black Dragon. Crowded Area can simplify or hide complex avatars. Performance is
++not benchmarked. No DLSS, ray tracing, frame generation or fixed FPS claim.
++
++## Build on Windows 11 x64
++
++Required: Visual Studio 2022 C++ desktop workload and Windows SDK, CMake, Git/Git
++Bash, Python 3.11 with `autobuild` and `llsd`, and access to the upstream binary
++dependency download servers. The bundled autobuild.xml owns library versions.
++Install Python tooling with `python -m pip install autobuild llsd`.
++
++Open an x64 VS developer environment, launch Git Bash inheriting it, and run:
++
++```bash
++bash kombatant/build-windows.sh
++```
++
++The script selects ReleaseOS, OpenAL audio, no KDU, no proprietary build mode,
++no upstream crash-report database, and no installer packaging. This script has
++been shell-syntax checked only. The upstream dependencies and actual Windows
++compile/link still need verification. Media, voice and audio also need runtime
++checks. The existing GitHub build workflow is upstream's workflow and is not a
++validated Kombatant release pipeline.
++
++## Validation completed here
++
++- All changed XUI files parse as XML.
++- All 15 mode setting names resolve in upstream settings definitions, with
++  compatible scalar/vector types.
++- Native floater registration, menu callback, resource inclusion pattern checked.
++- Patch whitespace and build-script shell syntax checked.
++
++Windows build, login, rendering, UI layout, voice, inventory, uploads, snapshots,
++multiple launches and FPS/VRAM measurements are NOT tested. This Linux environment
++has no Windows compiler or graphics session, so no executable was produced.
++
++## Runtime acceptance before release
++
++1. Compile and link ReleaseOS on Windows; confirm the new Studio resource ships.
++2. Launch without touching Black Dragon's settings directory.
++3. Open Studio, switch every mode, close/reopen Studio, and verify Restore.
++4. Compare rendered scenes in the same region with the same camera, environment,
++   avatars and resolution. Record FPS, frame time and VRAM in all three modes.
++5. Check PBR materials, projectors, AO, bloom, vignette and optional depth of field.
++6. Check login, inventory, chat, voice, audio, media, uploads, snapshots and exit.
++7. Review packaging identifiers, icons, installer behavior and third-party viewer
++   distribution requirements before publishing. Preserve upstream attribution.
++
++## Licensing
++
++The upstream LICENSE and source notices are retained. New Studio code is
++LGPL-2.1-only. Retain notices and dependency licenses with any distribution.
++This project is a separate customization and is not an official Black Dragon
++or Linden Lab release.
++
++## 12K photo output (0.2)
++
++The Save to Disk snapshot dropdown now offers 12,288 x 6,912 (16:9),
++84,934,656 pixels. Upstream's 11,520 x 6,480 option labeled 12K is replaced.
++The snapshot dimension cap and unlocked width/height controls are aligned at
++12,288. Studio has a snapshot button and brief instructions.
++
++After building: open Studio > Open snapshots / 12K photos, select Save to Disk,
++enable Allow High Resolutions, disable inclusion of UI and HUD, then choose
++12288x6912 (12K). Select PNG and refresh the snapshot before saving. For this
++16:9 preset, disable Constrain proportions if the window has a different aspect
++ratio. The renderer's existing allocation checks and tiled fallback remain.
++
++12K is saved-image resolution; gameplay rendering stays at window resolution.
++Photo detail remains limited by loaded textures, meshes, lighting and the
++existing renderer. No AI upscaling or texture reconstruction was added. A single
++RGB output buffer is about 243 MiB; render targets, encoding and previews need
++additional memory. Successful capture, exact saved dimensions, seams and visual
++quality still require Windows runtime testing. No 12K runtime image was produced
++in this environment.
++
++## Experimental live 12K rendering (0.3)
++
++Studio now has a Live World Rendering selector: Window / 4K / 8K / 12K.
++This controls main-world offscreen render target width, not snapshot resolution.
++At a 16:9 viewport, 12K requests 12,288 x 6,912 pixels every frame. Other window
++shapes preserve their own aspect ratio. The final world image is sampled to the
++physical window; the monitor does not gain pixels and UI remains window-sized.
++
++The main render allocation and resize comparison share the same size calculation.
++Scaling is applied once, fixing upstream's repeated scaling on resize. Reflection
++probe buffers retain their upstream scale. Explicit snapshot sizes normally bypass
++the live-width override unless they match the world viewport's input dimensions.
++GPU texture, renderbuffer and viewport limits are checked. An unsupported request
++or allocation fallback disables the live override to avoid repeated allocation
++attempts. This does not guarantee protection against driver hangs or every memory
++failure in upstream's renderer. The control resets to Window on application restart.
++The Studio Actual World Buffer readout reports the allocated screen target size,
++rather than repeating the selected label. Existing resolution divisor/multiplier
++settings apply again when the live override is disabled.
++
++12K at 16:9 shades 84,934,656 pixels each frame, about 41 times 1080p. Deferred HDR,
++depth and postprocessing targets can consume several GiB beyond scene textures.
++This is an experimental source implementation, not a validated 12K gameplay build
++or a promise of good FPS on any GPU. No Windows compile or live GPU test was
++possible here. Validate allocation, scene/depth alignment, picking, UI composition,
++resizing, all postprocessing, reflection passes and FPS before using it routinely.
++
++Source validation: changed settings/XUI parse as XML; settings are declared and
++connected to the resize callback; selector widths and aspect calculations checked;
++patch whitespace and Windows helper shell syntax checked. Windows runtime tests
++and exact GPU output remain unverified.
++
++## GitHub Actions compile attempt
++
++The manual `Kombatant Windows build` workflow uses a Windows 2022 runner,
++Visual Studio x64 environment, and the existing ReleaseOS helper. It uploads
++compiler logs even on failure and the Release output directory on success.
++It does not publish a release or installer. These outputs have not been
++validated as a complete portable application. The workflow has not been run.
+diff --git a/kombatant/build-windows.sh b/kombatant/build-windows.sh
+new file mode 100755
+index 0000000..37a8479
+--- /dev/null
++++ b/kombatant/build-windows.sh
+@@ -0,0 +1,28 @@
++#!/usr/bin/env bash
++# Run from Git Bash with the VS 2022 x64 developer environment available.
++set -eo pipefail
++cd "$(dirname "$0")/.."
++if [[ "$OSTYPE" != msys* && "$OSTYPE" != cygwin* ]]; then
++    echo 'This build script requires Windows, Git Bash, and Visual Studio 2022.' >&2
++    exit 1
++fi
++command -v autobuild >/dev/null || { echo 'Install Python autobuild and llsd first.' >&2; exit 1; }
++command -v msbuild.exe >/dev/null || { echo 'Launch from the VS 2022 x64 developer environment.' >&2; exit 1; }
++export AUTOBUILD_ADDRSIZE=64
++export AUTOBUILD_VSVER=170
++export AUTOBUILD_WIN_CMAKE_GEN='Visual Studio 17 2022'
++export AUTOBUILD_WIN_VSPLATFORM=x64
++export AUTOBUILD_VARIABLES_FILE="$(pwd)/variables/variables"
++source variables/convenience Release
++export LL_BUILD
++# Build an unpackaged open-source configuration first; installer is a later gate.
++autobuild configure -A 64 -c ReleaseOS -- \
++    -DVIEWER_CHANNEL:STRING='Kombatant Viewer' \
++    -DINSTALL_PROPRIETARY:BOOL=OFF \
++    -DUSE_KDU:BOOL=OFF \
++    -DUSE_FMODSTUDIO:BOOL=OFF \
++    -DUSE_OPENAL:BOOL=ON \
++    -DBUGSPLAT_DB:STRING= \
++    -DPACKAGE:BOOL=OFF
++# Avoid packaging/signing until the viewer has passed runtime smoke tests.
++autobuild build -A 64 -c ReleaseOS
