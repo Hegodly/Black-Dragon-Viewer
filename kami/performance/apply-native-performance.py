@@ -44,6 +44,18 @@ text=text[:a]+text[b:]
 cpp.write_text(text,encoding="utf-8")
 # Dedicated legacy runtime is not included in the compiled source.
 file("indra/llwindow/kombatantfxwin32.h").unlink()
+# Remove now-obsolete bundled injector source/configuration from build tree.
+for obsolete in (
+    "kombatant/build-fx.ps1",
+    "kombatant/FX-README.md",
+    "kombatant/fx/KombatantColor.fx",
+    "kombatant/fx/KombatantDefault.ini",
+    "kombatant/fx/ReShade.ini",
+):
+    p = file(obsolete)
+    if p.exists():
+        p.unlink()
+
 
 settings="indra/newview/app_settings/settings_blackdragon.xml"
 edit(settings,
