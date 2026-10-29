@@ -2,8 +2,8 @@ name: Kombatant Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**]
 permissions:
   contents: read
 jobs:
@@ -50,8 +50,14 @@ jobs:
           p.write_text(p.read_text().replace('autobuild build -A 64 -c ReleaseOS', 'autobuild build --no-configure -A 64 -c ReleaseOS'))
           p = Path('indra/cmake/BuildVersion.cmake')
           p.write_text(p.read_text().replace('VIEWER_SHORT_VERSION REGEX', 'VIEWER_SHORT_VERSION LIMIT_COUNT 1 REGEX'))
+      - name: Integrate native FSR and XeSS into viewer source
+        shell: pwsh
+        run: python kombatant/upscale/apply-upscalers.py
       - name: Install Python build tooling
         run: python -m pip install autobuild llsd "cmake<4"
+      - name: Fetch pinned AMD FSR and Intel XeSS SDKs
+        shell: pwsh
+        run: ./kombatant/upscale/build-upscalers.ps1
       - name: Build experimental DLSS and DXR module
         shell: pwsh
         run: ./kombatant/build-rtx.ps1
@@ -83,6 +89,9 @@ jobs:
       - name: Stage experimental DLSS and DXR runtime
         shell: pwsh
         run: ./kombatant/build-rtx.ps1 -StageOnly
+      - name: Stage AMD FSR and Intel XeSS runtimes
+        shell: pwsh
+        run: ./kombatant/upscale/build-upscalers.ps1 -StageOnly
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5
