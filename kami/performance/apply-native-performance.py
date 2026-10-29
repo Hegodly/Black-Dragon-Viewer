@@ -147,5 +147,5 @@ assert not (ROOT/"indra/llwindow/kombatantfxwin32.h").exists()
 for path in ["indra/llwindow/llwindowwin32.cpp","indra/newview/kombatanteffects.h",
              "indra/newview/skins/default/xui/en/floater_kombatant_effects.xml"]:
     source=file(path).read_text(encoding="utf-8")
-    assert "KombatantFX::" not in source and "ReShade" not in source and "GShade" not in source or path.endswith("kombatanteffects.h")
+    assert "KombatantFX::" not in source and "configurePostProcessing" not in source and "shader_overlay" not in source, path
 print("KAMI: native graphics only, reversible Performance Mode wired.")
