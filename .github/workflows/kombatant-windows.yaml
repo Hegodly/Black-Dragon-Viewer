@@ -2,7 +2,7 @@ name: Kombatant Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr]
     paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml]
 permissions:
   contents: read
@@ -52,6 +52,9 @@ jobs:
           p.write_text(p.read_text().replace('VIEWER_SHORT_VERSION REGEX', 'VIEWER_SHORT_VERSION LIMIT_COUNT 1 REGEX'))
       - name: Install Python build tooling
         run: python -m pip install autobuild llsd "cmake<4"
+      - name: Build experimental DLSS and DXR module
+        shell: pwsh
+        run: ./kombatant/build-rtx.ps1
       - name: Build compatible OpenJPEG from public source
         shell: bash
         run: |
@@ -77,6 +80,9 @@ jobs:
       - name: Stage bundled shader runtime, sample, and licenses
         shell: pwsh
         run: ./kombatant/build-fx.ps1 -StageOnly
+      - name: Stage experimental DLSS and DXR runtime
+        shell: pwsh
+        run: ./kombatant/build-rtx.ps1 -StageOnly
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5
