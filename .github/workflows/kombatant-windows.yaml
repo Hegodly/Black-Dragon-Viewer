@@ -1,9 +1,9 @@
-name: KAMI Viewer Windows build
+name: KAMI Viewer native Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**]
 permissions:
   contents: read
 jobs:
@@ -58,6 +58,13 @@ jobs:
       - name: Apply KAMI Viewer logo and identity
         shell: pwsh
         run: python kami/branding/apply-branding.py
+      - name: Remove bundled FX runtime and integrate Performance Mode
+        shell: pwsh
+        run: python kami/performance/apply-native-performance.py
+      - name: Validate native graphics settings and panels
+        shell: pwsh
+        run: |
+          python -c "from pathlib import Path; import xml.etree.ElementTree as E; E.parse('indra/newview/app_settings/settings_blackdragon.xml'); E.parse('indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'); E.parse('indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'); s=Path('indra/llwindow/llwindowwin32.cpp').read_text(); assert 'KombatantFX::' not in s; assert not Path('indra/llwindow/kombatantfxwin32.h').exists(); print('Native graphics integration verified')"
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
@@ -77,18 +84,12 @@ jobs:
           from pathlib import Path
           Path('indra/cmake/OpenJPEG.cmake').write_text('set(OPENJPEG_INCLUDE_DIR "'+str(Path('.openjpeg-install/include/openjpeg').resolve()).replace(chr(92),'/')+'")\nset(OPENJPEG_LIBRARIES "'+str(Path('.openjpeg-install/lib/openjpeg.lib').resolve()).replace(chr(92),'/')+'")\nadd_definitions(-DOPJ_STATIC)\n')
           PY
-      - name: Build bundled ReShade runtime and SDK
-        shell: pwsh
-        run: ./kombatant/build-fx.ps1
       - name: Configure and compile
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
           if errorlevel 1 exit /b 1
           "C:\Program Files\Git\bin\bash.exe" --noprofile --norc -c "set -o pipefail; bash kombatant/build-windows.sh 2>&1 | tee kombatant-build.log"
-      - name: Stage bundled shader runtime, sample, and licenses
-        shell: pwsh
-        run: ./kombatant/build-fx.ps1 -StageOnly
       - name: Stage experimental DLSS and DXR runtime
         shell: pwsh
         run: ./kombatant/build-rtx.ps1 -StageOnly
@@ -116,7 +117,6 @@ jobs:
           path: |
             kombatant-build.log
             build-vc170-64/CMakeFiles/CMakeConfigureLog.yaml
-            indra/third_party/reshade/bin/x64/Release/*.log
           if-no-files-found: warn
       - name: Preserve compiled build output
         if: success()
