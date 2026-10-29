@@ -1719,7 +1719,7 @@ diff --git a/indra/newview/kombatantrtx.h b/indra/newview/kombatantrtx.h
 new file mode 100644
 --- /dev/null
 +++ b/indra/newview/kombatantrtx.h
-@@ -0,0 +1,233 @@
+@@ -0,0 +1,235 @@
 +// Copyright (C) 2026 Kombatant Viewer contributors
 +// SPDX-License-Identifier: LGPL-2.1-only
 +#pragma once
@@ -1839,10 +1839,12 @@ new file mode 100644
 +            for(S32 face=0;face<volume->getNumVolumeFaces() && geometry.size()+9<=maxFloats;face++)
 +            {
 +                if(face>=object->mDrawable->getNumFaces()) continue;
++                if(face<object->getNumTEs() && object->getTE((U8)face)->getColor().mV[3]<0.99f) continue;
 +                LLFace* renderFace=object->mDrawable->getFace(face);if(!renderFace) continue;
 +                U32 pool=renderFace->getPoolType();
 +                if(pool==LLDrawPool::POOL_ALPHA || pool==LLDrawPool::POOL_ALPHA_PRE_WATER ||
-+                   pool==LLDrawPool::POOL_ALPHA_POST_WATER || pool==LLDrawPool::POOL_ALPHA_MASK) continue;
++                   pool==LLDrawPool::POOL_ALPHA_POST_WATER || pool==LLDrawPool::POOL_ALPHA_MASK ||
++                   pool==LLDrawPool::POOL_FULLBRIGHT_ALPHA_MASK || pool==LLDrawPool::POOL_GLTF_PBR_ALPHA_MASK) continue;
 +                const LLVolumeFace& vf=volume->getVolumeFace(face);
 +                if(!vf.mPositions || !vf.mIndices) continue;
 +                for(S32 k=0;k+2<vf.mNumIndices && geometry.size()+9<=maxFloats;k+=3)
@@ -1907,8 +1909,8 @@ new file mode 100644
 +                        {vx=(x+0.5f)*2.f/w-1.f-last.x/last.w;vy=1.f-(y+0.5f)*2.f/h-last.y/last.w;}
 +                    }
 +                    // GL velocity is current-minus-previous NDC; NGX expects previous-minus-current pixels, y down.
-+                    velocities[i*2]=reset?0.f:-vx*w*0.5f-(jx-previousJitterX);
-+                    velocities[i*2+1]=reset?0.f:vy*h*0.5f-(jy-previousJitterY);
++                    if(reset) velocities[i*2]=velocities[i*2+1]=0.f;
++                    else KombatantRtxMath::motionPixels(vx,vy,w,h,jx-previousJitterX,jy-previousJitterY,velocities[i*2],velocities[i*2+1]);
 +                }
 +            }
 +            pixels.resize(size_t(targetW)*targetH*4);
@@ -1957,11 +1959,12 @@ diff --git a/indra/newview/kombatantrtxstate.h b/indra/newview/kombatantrtxstate
 new file mode 100644
 --- /dev/null
 +++ b/indra/newview/kombatantrtxstate.h
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,19 @@
 +// Copyright (C) 2026 Kombatant Viewer contributors
 +// SPDX-License-Identifier: LGPL-2.1-only
 +#pragma once
 +#include "llviewercontrol.h"
++#include "../../kombatant/rtx/rtx_math.h"
 +namespace KombatantRTXState
 +{
 +    inline U32 frameIndex=0;
@@ -1973,20 +1976,14 @@ new file mode 100644
 +        return false;
 +#endif
 +    }
-+    inline F32 halton(U32 index,U32 base)
-+    {
-+        F32 fraction=1.f,value=0.f;
-+        while(index) {fraction/=base;value+=fraction*(index%base);index/=base;}
-+        return value;
-+    }
-+    inline F32 jitterX() {return halton(frameIndex%16+1,2)-0.5f;}
-+    inline F32 jitterY() {return halton(frameIndex%16+1,3)-0.5f;}
++    inline F32 jitterX() {return KombatantRtxMath::halton(frameIndex%16+1,2)-0.5f;}
++    inline F32 jitterY() {return KombatantRtxMath::halton(frameIndex%16+1,3)-0.5f;}
 +}
 diff --git a/kombatant/build-rtx.ps1 b/kombatant/build-rtx.ps1
 new file mode 100644
 --- /dev/null
 +++ b/kombatant/build-rtx.ps1
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,50 @@
 +# Build the experimental, isolated D3D12/NGX module and preserve vendor licenses.
 +param([switch]$StageOnly)
 +$ErrorActionPreference = 'Stop'
@@ -2019,6 +2016,8 @@ new file mode 100644
 +    if ($LASTEXITCODE) { throw 'RTX configuration failed' }
 +    cmake --build "$root/.rtx-build" --config Release --parallel 2
 +    if ($LASTEXITCODE) { throw 'RTX module compilation failed' }
++    ctest --test-dir "$root/.rtx-build" -C Release --output-on-failure
++    if ($LASTEXITCODE) { throw 'RTX CPU contract tests failed' }
 +    cmake --install "$root/.rtx-build" --config Release
 +    if ($LASTEXITCODE) { throw 'RTX install failed' }
 +}
@@ -2039,7 +2038,7 @@ diff --git a/kombatant/rtx/CMakeLists.txt b/kombatant/rtx/CMakeLists.txt
 new file mode 100644
 --- /dev/null
 +++ b/kombatant/rtx/CMakeLists.txt
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,34 @@
 +cmake_minimum_required(VERSION 3.20)
 +project(KombatantRTX LANGUAGES CXX)
 +if(NOT WIN32 OR NOT MSVC)
@@ -2063,6 +2062,17 @@ new file mode 100644
 +install(TARGETS KombatantRTX64 RUNTIME DESTINATION .)
 +install(FILES "${CMAKE_CURRENT_BINARY_DIR}/kombatant_rtao.dxil" "${NGX_ROOT}/lib/Windows_x86_64/rel/nvngx_dlss.dll" DESTINATION .)
 +install(FILES "${NGX_ROOT}/LICENSE.txt" DESTINATION licenses RENAME NVIDIA-DLSS-LICENSE.txt)
++
++enable_testing()
++add_executable(rtx_math_test rtx_math_test.cpp)
++target_compile_features(rtx_math_test PRIVATE cxx_std_17)
++target_compile_options(rtx_math_test PRIVATE /UNDEBUG)
++add_test(NAME rtx_frame_and_motion COMMAND rtx_math_test)
++add_executable(rtx_smoke_test rtx_smoke_test.cpp)
++target_compile_features(rtx_smoke_test PRIVATE cxx_std_17)
++target_compile_definitions(rtx_smoke_test PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
++target_compile_options(rtx_smoke_test PRIVATE /UNDEBUG)
++add_test(NAME rtx_dll_failure_fallback COMMAND rtx_smoke_test "$<TARGET_FILE:KombatantRTX64>")
 diff --git a/kombatant/rtx/LICENSE.txt b/kombatant/rtx/LICENSE.txt
 new file mode 100644
 --- /dev/null
@@ -2245,6 +2255,7 @@ new file mode 100644
 +// SPDX-License-Identifier: MIT
 +// Experimental D3D12 compute module. Graphics ownership is confined to this DLL.
 +#include "rtx_api.h"
++#include "rtx_math.h"
 +#include <windows.h>
 +#include <d3d12.h>
 +#include <dxgi1_6.h>
@@ -2403,7 +2414,9 @@ new file mode 100644
 +        for(UINT i=0;;i++)
 +        {
 +            ComPtr<IDXGIAdapter1> adapter;
-+            if(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter))==DXGI_ERROR_NOT_FOUND) break;
++            const HRESULT enumerated=factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter));
++            if(enumerated==DXGI_ERROR_NOT_FOUND) break;
++            check(enumerated,"Enumerate adapter");
 +            DXGI_ADAPTER_DESC1 desc{};adapter->GetDesc1(&desc);
 +            if(desc.VendorId!=0x10de || (desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
 +            if(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device))))
@@ -2593,12 +2606,112 @@ new file mode 100644
 +    // Leak at exit by design: process teardown owns GPU/NGX shutdown ordering.
 +    static Runtime* runtime=new Runtime;
 +    std::string status;int result=0;
-+    if(!frame || frame->abi!=KOMBATANT_RTX_ABI || frame->bytes!=sizeof(KombatantRtxFrame) ||
-+       frame->width<16 || frame->height<16 || frame->target_width<frame->width || frame->target_height<frame->height ||
-+       frame->target_width>4096 || frame->target_height>4096 ||
-+       !frame->color || !frame->depth || !frame->motion || !frame->output || frame->vertex_count>600000 || frame->vertex_count%3 || frame->dlss_mode>3)
++    if(!KombatantRtxMath::validFrame(frame))
 +        status="Invalid RTX frame, dimensions or ABI; experimental output limit is 4096 per axis";
 +    else result=runtime->process(*frame,status);
 +    if(diagnostic && capacity) {size_t n=std::min<size_t>(status.size(),capacity-1);std::memcpy(diagnostic,status.data(),n);diagnostic[n]=0;}
 +    return result;
++}
+diff --git a/kombatant/rtx/rtx_math.h b/kombatant/rtx/rtx_math.h
+new file mode 100644
+--- /dev/null
++++ b/kombatant/rtx/rtx_math.h
+@@ -0,0 +1,28 @@
++// Copyright (C) 2026 Kombatant Viewer contributors
++// SPDX-License-Identifier: MIT
++#pragma once
++#include "rtx_api.h"
++#include <cmath>
++namespace KombatantRtxMath {
++inline float halton(uint32_t index,uint32_t base)
++{
++    float fraction=1.f,value=0.f;
++    while(index) {fraction/=base;value+=fraction*(index%base);index/=base;}
++    return value;
++}
++inline void motionPixels(float currentMinusPreviousNdcX,float currentMinusPreviousNdcY,
++                         uint32_t width,uint32_t height,float jitterDeltaX,float jitterDeltaY,float& x,float& y)
++{
++    x=-currentMinusPreviousNdcX*width*0.5f-jitterDeltaX;
++    y= currentMinusPreviousNdcY*height*0.5f-jitterDeltaY;
++    if(!std::isfinite(x) || !std::isfinite(y)) x=y=0.f;
++}
++inline bool validFrame(const KombatantRtxFrame* f)
++{
++    return f && f->abi==KOMBATANT_RTX_ABI && f->bytes==sizeof(KombatantRtxFrame) &&
++        f->width>=16 && f->height>=16 && f->target_width>=f->width && f->target_height>=f->height &&
++        f->target_width<=4096 && f->target_height<=4096 && f->color && f->depth && f->motion && f->output &&
++        f->vertex_count<=600000 && f->vertex_count%3==0 && (!f->vertex_count || f->vertices) && f->dlss_mode<=3 &&
++        std::isfinite(f->ao_radius) && std::isfinite(f->ao_strength);
++}
++}
+diff --git a/kombatant/rtx/rtx_math_test.cpp b/kombatant/rtx/rtx_math_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/kombatant/rtx/rtx_math_test.cpp
+@@ -0,0 +1,32 @@
++// Copyright (C) 2026 Kombatant Viewer contributors
++// SPDX-License-Identifier: MIT
++#include "rtx_math.h"
++#include <cassert>
++#include <limits>
++#include <cmath>
++int main()
++{
++    using namespace KombatantRtxMath;
++    float x=0,y=0;
++    // A +2 pixel rightward, +3 pixel upward current-frame displacement must reproject left/down.
++    motionPixels(4.f/1920.f,6.f/1080.f,1920,1080,0,0,x,y);
++    assert(std::abs(x+2)<1e-5f && std::abs(y-3)<1e-5f);
++    // A stationary surface rendered with a new jitter has no geometric motion.
++    const float jx=.25f,jy=-.125f;
++    motionPixels(-2*jx/1920,2*jy/1080,1920,1080,jx,jy,x,y);
++    assert(std::abs(x)<1e-5f && std::abs(y)<1e-5f);
++    motionPixels(std::numeric_limits<float>::quiet_NaN(),1,1920,1080,0,0,x,y);
++    assert(x==0 && y==0);
++    for(uint32_t i=1;i<=16;i++) {assert(halton(i,2)>=0 && halton(i,2)<1);assert(halton(i,3)>=0 && halton(i,3)<1);}
++    assert(halton(1,2)==.5f && halton(2,2)==.25f);
++    float dummy=0;KombatantRtxFrame frame{};
++    frame.abi=KOMBATANT_RTX_ABI;frame.bytes=sizeof(frame);frame.width=1280;frame.height=720;
++    frame.target_width=1920;frame.target_height=1080;frame.color=frame.depth=frame.motion=&dummy;frame.output=&dummy;
++    assert(validFrame(&frame));assert(!validFrame(nullptr));
++    frame.target_width=8192;assert(!validFrame(&frame));frame.target_width=1920;
++    frame.vertex_count=3;assert(!validFrame(&frame));frame.vertices=&dummy;assert(validFrame(&frame));
++    frame.vertex_count=4;assert(!validFrame(&frame));frame.vertex_count=600003;assert(!validFrame(&frame));frame.vertex_count=0;
++    frame.dlss_mode=4;assert(!validFrame(&frame));frame.dlss_mode=1;assert(validFrame(&frame));
++    frame.abi=0;assert(!validFrame(&frame));frame.abi=KOMBATANT_RTX_ABI;
++    frame.ao_radius=std::numeric_limits<float>::infinity();assert(!validFrame(&frame));
++}
+diff --git a/kombatant/rtx/rtx_smoke_test.cpp b/kombatant/rtx/rtx_smoke_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/kombatant/rtx/rtx_smoke_test.cpp
+@@ -0,0 +1,28 @@
++// Copyright (C) 2026 Kombatant Viewer contributors
++// SPDX-License-Identifier: MIT
++#include "rtx_api.h"
++#include <windows.h>
++#include <cassert>
++#include <vector>
++#include <iostream>
++int wmain(int argc,wchar_t** argv)
++{
++    assert(argc==2);
++    auto module=LoadLibraryExW(argv[1],nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
++    assert(module);
++    auto process=reinterpret_cast<KombatantRtxProcess>(GetProcAddress(module,"KombatantRtxProcessFrame"));assert(process);
++    char diagnostic[1024]{};
++    assert(process(nullptr,diagnostic,sizeof(diagnostic))==0 && diagnostic[0]);
++    KombatantRtxFrame frame{};assert(process(&frame,diagnostic,sizeof(diagnostic))==0);
++    std::vector<float> color(32*32*4,0.5f),depth(32*32,1.f),motion(32*32*2,0.f),output(64*64*4,0.f);
++    frame.abi=KOMBATANT_RTX_ABI;frame.bytes=sizeof(frame);frame.width=frame.height=32;
++    frame.target_width=frame.target_height=64;frame.dlss_mode=1;frame.reset=1;frame.frame_ms=16.6f;
++    frame.color=color.data();frame.depth=depth.data();frame.motion=motion.data();frame.output=output.data();
++    // Hosted CI has no NVIDIA GPU. A clean diagnostic/fallback is a supported result.
++    int result=process(&frame,diagnostic,sizeof(diagnostic));
++    assert(diagnostic[0]);
++    if(result) assert(frame.executed&1 && frame.output_width==64 && frame.output_height==64);
++    else assert(frame.executed==0);
++    std::cout<<diagnostic<<'\n';
++    // Module intentionally remains loaded until process exit, matching viewer lifetime.
 +}
