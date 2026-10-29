@@ -20,6 +20,19 @@ jobs:
         run: |
           git apply --check kombatant.patch
           git apply kombatant.patch
+      - name: Restore omitted snapshot preview source
+        shell: python
+        run: |
+          from pathlib import Path
+          from urllib.request import urlopen
+          base = 'https://raw.githubusercontent.com/KittyBarnett/rlva/074d3a8dcf875b1837bf946f71a7087ceed33230/'
+          paths = ['indra/newview/llfloaterbigpreview.cpp', 'indra/newview/llfloaterbigpreview.h', 'indra/newview/skins/default/xui/en/floater_big_preview.xml']
+          for name in paths:
+              text = urlopen(base + name).read().decode('utf-8')
+              text = text.replace('BOOL postBuild()', 'bool postBuild()').replace('BOOL LLFloaterBigPreview::postBuild()', 'bool LLFloaterBigPreview::postBuild()')
+              Path(name).write_text(text)
+          p = Path('indra/cmake/BuildVersion.cmake')
+          p.write_text(p.read_text().replace('VIEWER_SHORT_VERSION REGEX', 'VIEWER_SHORT_VERSION LIMIT_COUNT 1 REGEX'))
       - name: Install Python build tooling
         run: python -m pip install autobuild llsd "cmake<4"
       - name: Build compatible OpenJPEG from public source
