@@ -65,12 +65,18 @@ jobs:
           from pathlib import Path
           Path('indra/cmake/OpenJPEG.cmake').write_text('set(OPENJPEG_INCLUDE_DIR "'+str(Path('.openjpeg-install/include/openjpeg').resolve()).replace(chr(92),'/')+'")\nset(OPENJPEG_LIBRARIES "'+str(Path('.openjpeg-install/lib/openjpeg.lib').resolve()).replace(chr(92),'/')+'")\nadd_definitions(-DOPJ_STATIC)\n')
           PY
+      - name: Build bundled ReShade runtime and SDK
+        shell: pwsh
+        run: ./kombatant/build-fx.ps1
       - name: Configure and compile
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
           if errorlevel 1 exit /b 1
           "C:\Program Files\Git\bin\bash.exe" --noprofile --norc -c "set -o pipefail; bash kombatant/build-windows.sh 2>&1 | tee kombatant-build.log"
+      - name: Stage bundled shader runtime, sample, and licenses
+        shell: pwsh
+        run: ./kombatant/build-fx.ps1 -StageOnly
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5
@@ -85,6 +91,7 @@ jobs:
           path: |
             kombatant-build.log
             build-vc170-64/CMakeFiles/CMakeConfigureLog.yaml
+            indra/third_party/reshade/bin/x64/Release/*.log
           if-no-files-found: warn
       - name: Preserve compiled build output
         if: success()
