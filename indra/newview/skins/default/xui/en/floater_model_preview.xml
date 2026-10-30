@@ -9,7 +9,7 @@
  width="980"
  min_width="980"
  name="Model Preview"
- title="UPLOAD MODEL"
+ title="KAMI / ULTRA MESH IMPORT"
  help_topic="upload_model"
  legacy_header_height="25">
 
@@ -1951,5 +1951,15 @@ Analysed:
       max_val="3.0"
       height="20"
       width="150"/>
+    <button
+      follows="top|left"
+      layout="topleft"
+      left="170"
+      top="101"
+      width="165"
+      height="25"
+      label="KAMI Mesh Audit"
+      name="kami_mesh_audit_btn"
+      tool_tip="Inspect the loaded high-detail scene, LODs and mesh-piece limits before calculating SL upload fees."/>
   </panel>
 </floater>
