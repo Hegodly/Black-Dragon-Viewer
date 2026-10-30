@@ -39,7 +39,7 @@ def nonincreasing(a):
 
 for key in ("distance","objectLOD","avatarLOD","shadowScale","textures",
             "impostorLimit","particles","lights","probes","probeDetail",
-            "shadowDetail","glowStrength","ssrSamples"):
+            "shadowDetail","ssrSamples"):
     a=array(key)
     verify(key+" ordered from low-cost to highest-quality",
            nondecreasing(a))
@@ -49,7 +49,7 @@ verify("low renders fewer local lights",array("lights")[0]<array("lights")[2])
 verify("low reduces shadow resolution",array("shadowScale")[0]<array("shadowScale")[3])
 verify("ultra enables reflective screen-space quality", 'set("RenderScreenSpaceReflections", q >= 3)' in h)
 verify("high enables native SSAO", 'set("RenderDeferredSSAO", q >= 2)' in h)
-verify("cinematic uses stronger glow",array("glowStrength")[4]>array("glowStrength")[2])
+verify("broken bloom remains disabled at every quality level", 'set("RenderGlow", false)' in h and 'set("RenderGlowStrength",' not in h)
 verify("broken FXAA avoided", 'set("RenderFSAAType", q >= 2 ? 2 : 0)' in h)
 
 combos=[e for e in ui.iter() if e.get("name")=="kd_quality_preset"]
