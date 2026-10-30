@@ -64,6 +64,7 @@ check("native emergency resets all future permissions and legacy RLV",
 app=text("indra/newview/llappviewer.cpp")
 check("startup after overrides forces fail-closed state",
       app.index('loadSettingsFromDirectory("UserSession");') <
+      app.index('tempSetControl(name, value)') <
       app.index('gSavedSettings.getControl("RestrainedLove")') and
       'gSavedSettings.getControl("KAMIRLVEmergencyBlock")' in app)
 prefsxml=ET.parse(V/"skins/default/xui/en/floater_preferences.xml").getroot()
