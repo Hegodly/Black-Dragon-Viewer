@@ -19,7 +19,6 @@ def edit(path, before, after, count=1):
 setting_path="indra/newview/app_settings/settings_blackdragon.xml"
 entries = [
     ("KAMIAutoTune","Boolean","0","Automatically adapt existing native graphics settings toward target FPS."),
-    ("KAMITargetFPS","S32","60","Desired foreground rendering rate; 30 to 120, not a guarantee."),
     ("KAMIOptimizeAvatars","Boolean","1","Reduce number of distant fully rendered avatars using impostors."),
     ("KAMIProtectMyAvatar","Boolean","1","Keep global avatar LOD untouched, preserving own-avatar quality."),
     ("KAMIThrottleDistantAvatars","Boolean","1","Prefer reduced updates through the existing distant-avatar impostor path."),
@@ -47,17 +46,6 @@ def setting_xml(key, typ, value, comment):
 extra="".join(setting_xml(*entry) for entry in entries)
 root='  xsi:noNamespaceSchemaLocation="llsd.xsd">\n<map>\n'
 edit(setting_path,root,root+extra)
-# Restore target FPS choice across restarts (other modes are already persistent).
-p=ROOT/setting_path
-t=p.read_text(encoding="utf-8")
-t=t.replace(
-    '<key>KAMITargetFPS</key>\n  <map><key>Comment</key>',
-    '<key>KAMITargetFPS</key>\n  <map><key>Comment</key>',1)
-t=t.replace(
-    '<string>Desired foreground rendering rate; 30 to 120, not a guarantee.</string><key>Persist</key><integer>0</integer>',
-    '<string>Desired foreground rendering rate; 30 to 120, not a guarantee.</string><key>Persist</key><integer>1</integer>',1)
-p.write_text(t,encoding="utf-8")
-
 # Copy the native controller into the compiled viewer source location.
 shutil.copy2(ROOT/"kami/performance/kami_smart_engine.h",
              ROOT/"indra/newview/kami_smart_engine.h")
@@ -79,9 +67,9 @@ s=p.read_text(encoding="utf-8-sig")
 start=s.index('<layout_panel name="kombatant_display_quick"')
 end=s.index('</layout_panel>',start)
 area=s[start:end]
-assert 'height="1684" auto_resize="false"' in area
-area=area.replace('height="1684" auto_resize="false"',
-                  'height="2300" auto_resize="false"',1)
+assert 'height="1760" auto_resize="false"' in area
+area=area.replace('height="1760" auto_resize="false"',
+                  'height="2380" auto_resize="false"',1)
 extras='''       <text name="kami_smart_title" left="12" top="1705" width="465" height="24" font="SansSerifLarge">Smart Performance Engine (native)</text>
        <check_box name="kami_auto" label="Auto-adjust graphics toward target FPS" control_name="KAMIAutoTune" left="12" top="1735" width="465" height="22" />
        <combo_box name="kami_target" control_name="KAMITargetFPS" left="12" top="1765" width="465" height="24">
@@ -113,14 +101,18 @@ extras='''       <text name="kami_smart_title" left="12" top="1705" width="465" 
        </combo_box>
        <text name="kami_smart_help" left="12" top="2155" width="465" height="123" wrap="true">Target FPS is advisory, not a guarantee; the viewer may be CPU-, GPU-, or region-limited. Adaptive quality uses 3.5-second sampling and gradual recovery, with no quality changes while unfocused. Distant animation savings come from existing avatar impostors, not a separate animation renderer. Settings restore when all smart modes are disabled. Own-avatar protection avoids lowering global avatar LOD.</text>
 '''
+extras=__import__("re").sub(r'\btop="(\d+)"',lambda m: 'top="'+str(int(m.group(1))+75)+'"',extras)
+area=area.replace('<combo_box.item label="90 FPS" value="90" />','<combo_box.item label="90 FPS" value="90" />\n        <combo_box.item label="100 FPS" value="100" />',1)
 area+=extras
 s=s[:start]+area+s[end:]
-assert 'height="1688"' in s
-s=s.replace('height="1688"','height="2304"',1)
+assert 'height="1764"' in s
+s=s.replace('height="1764"','height="2384"',1)
 p.write_text(s,encoding="utf-8")
 
 # CI fails on invalid XML before downloading SDKs.
-ET.parse(ROOT/setting_path)
+settings_tree=ET.parse(ROOT/setting_path)
+keys=[el.text for el in settings_tree.getroot().find("map").findall("key")]
+assert len(keys)==len(set(keys)), "Duplicate LLSD setting names detected"
 ET.parse(ROOT/panel)
 ET.parse(ROOT/"indra/newview/skins/default/xui/en/floater_kombatant_effects.xml")
 print("KAMI adaptive controls, quality ladder and background FPS limiter installed.")
