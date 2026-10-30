@@ -170,7 +170,9 @@ new='''    // Smart scheduling only when explicitly enabled. This is independent
     // the user's original Enable Avatar Physics and its legacy quality combo.
     const bool smart = gSavedSettings.getBOOL("KAMIPhysicsSmart");
     const bool monitoring = gSavedSettings.getBOOL("KAMIPhysicsMonitor");
-    LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(mCharacter);
+    // Keep the original OFF path lean: no per-avatar dynamic cast needed.
+    LLVOAvatar* avatar = (smart || monitoring) ?
+        dynamic_cast<LLVOAvatar*>(mCharacter) : nullptr;
     const bool own = avatar && (dynamic_cast<LLVOAvatarSelf*>(avatar) != nullptr);
     S32 tier = 0; // 0 near, 1 distant, 2 off-screen
     if (smart && avatar && !own)
@@ -197,7 +199,8 @@ new='''    // Smart scheduling only when explicitly enabled. This is independent
             return true;
         }
     }
-    mLastKAMISimulationTime = time;
+    // Clear throttle history immediately when Smart Mode is turned off.
+    mLastKAMISimulationTime = smart ? time : 0.f;
     KAMIPhysicsStats::Clock::time_point start;
     if (monitoring) start = KAMIPhysicsStats::Clock::now();
     bool update_visuals = false;
