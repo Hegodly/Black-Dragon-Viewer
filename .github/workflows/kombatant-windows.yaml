@@ -168,6 +168,9 @@ jobs:
       - name: Validate bundled KAMI FX, GShade compatibility and actual MXAO integration
         shell: pwsh
         run: python kami/gshade/verify-gshade-fx.py
+      - name: Verify adaptive avatar physics and actual hardware performance telemetry
+        shell: pwsh
+        run: python kami/performance/verify-physics-and-monitor.py
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
