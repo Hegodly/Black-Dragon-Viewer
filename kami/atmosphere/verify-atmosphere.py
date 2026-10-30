@@ -35,8 +35,8 @@ gate("actual local EEP update", 'setEnvironment(LLEnvironment::ENV_LOCAL,sky)' i
 gate("actual sky color controls", all(x in header for x in (
  'setAmbientColor(', 'setSunlightColor(', 'setBlueHorizon(', 'setCloudColor(',
  'setHazeDensity(', 'setCloudShadow(', 'setStarBrightness(', 'setSunRotation(')))
-gate("four distinct moods",all(m in header for m in
- ('Night Studio','Golden Hour','Overcast Cinema','Luxury Interior')))
+gate("five distinct moods",all(m in header for m in
+ ('Night Studio','Golden Hour','Overcast Cinema','Luxury Interior','Dark Cinematic')))
 gate("intensity blends cloned source sky", 's.sourceSky->buildClone()' in header and 'amount()' in header)
 gate("prior personal EEP selection retained",all(x in header for x in
  ('getSelectedEnvironment()','s.previous','s.hadLocal','s.dayLength','s.dayOffset',
@@ -66,7 +66,7 @@ gate("retired Bloom setting is nonpersistent", '<key>KAMIAtmosphereBloom</key>' 
 for name in ("kami_atmo_apply","kami_atmo_restore"):
  gate("functional button "+name,name in names and names[name].tag=="button" and
       f'"{name}"' in prefs)
-gate("4 mood dropdown items",len(names["kami_atmo_mood"].findall("combo_box.item"))==4)
+gate("4 mood dropdown items",len(names["kami_atmo_mood"].findall("combo_box.item"))==5)
 gate("staged real C++ engine equals versioned source",
     header==text("kami/atmosphere/kami_atmosphere.h"))
 gate("packaged engine manifest",
