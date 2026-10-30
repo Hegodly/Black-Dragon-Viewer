@@ -36,10 +36,12 @@ entries = [
     ("KAMISmartBackup","String","","Persistent XML snapshot of manual settings before auto optimization."),
     ("KAMIBenchmarkCapture","Boolean","0","Opt-in 30-second local FPS test of current Second Life scene."),
     ("KAMIBenchmarkResult","String","Not measured.","Local current-scene benchmark result. Never transmitted to the project."),
+    ("KAMIPerformanceBaselineFPS","F32","0","Last median current-scene benchmark FPS with Performance Mode and Smart optimization off; compare with same scene in Performance Mode."),
 ]
 def setting_xml(key, typ, value, comment):
     if typ=="Boolean": raw=f"<integer>{value}</integer>"
     elif typ=="S32": raw=f"<integer>{value}</integer>"
+    elif typ=="F32": raw=f"<real>{value}</real>"
     else: raw=f"<string>{value}</string>"
     return (
         f"  <key>{key}</key>\n"
