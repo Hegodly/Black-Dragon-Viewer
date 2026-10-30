@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install an opt-in, native Dark Cinematic rendering preset.
+"""Install three independent native KAMI Dark Cinematic graphics toggles.
 
 Three independently real components: material-aware PBR roughness shading in
 the existing deferred pass; local directional EEP; live optimized avatar LOD.
@@ -57,9 +57,11 @@ settings=V/"app_settings/settings_blackdragon.xml"
 doc=ET.parse(settings);root=doc.getroot().find("map")
 assert root is not None
 specs=[
-("KAMICinematicMaterials","Boolean","integer","0",0,
+("KAMICinematicMaterials","Boolean","integer","0",1,
  "Opt-in PBR-only roughness tuning in existing deferred lighting; auto bypassed in Potato/Performance."),
-("KAMICinematicStatus","String","string","Off: ready to preview in-world.",0,
+("KAMICinematicLighting","Boolean","integer","0",0,
+ "Enable a reversible local directional cinematic EEP, independent of PBR materials and avatar quality. Off at startup."),
+("KAMICinematicStatus","String","string","Directional cinematic lighting: off.",0,
  "Status for reversible Dark Cinematic local EEP, material and avatar-FPS preview."),
 ]
 for key,typ,tag,val,persist,comment in specs:
@@ -81,7 +83,7 @@ assert len(panels)==1,"Expected KAMI Fire Garden Display quick panel"
 panel=panels[0]
 assert any(x.get("name")=="kami_avatar_quality_toggle" for x in panel), (
     "Dark Cinematic must be added after live Avatar Quality")
-height=int(panel.get("height"));delta=181
+height=int(panel.get("height"));delta=229
 panel.set("height",str(height+delta))
 def widget(tag,name,offset,h,**args):
     data={"name":name,"left":"12","top":str(height+offset),
@@ -89,13 +91,23 @@ def widget(tag,name,offset,h,**args):
     data.update({k:str(v) for k,v in args.items()})
     return ET.SubElement(panel,tag,data)
 widget("text","kami_cine_heading",8,26,font="SansSerifLarge").text=(
-    "KAMI DARK CINEMATIC  |  Three live graphics enhancements")
-widget("text","kami_cine_features",38,54,wrap="true").text=(
-    "PBR materials: refined authored roughness highlights. Lighting: real viewer-local directional EEP. "
-    "Avatar: high self mesh detail + distant impostors for FPS. No extra render pass or temporal blur.")
-widget("button","kami_cine_apply",99,28,label="Apply all three (preview)")
-widget("button","kami_cine_restore",131,28,label="Restore prior graphics")
-widget("text","kami_cine_status",163,18,wrap="true").text="Off: ready to preview in-world."
+    "KAMI CINEMATIC GRAPHICS  |  Independent options")
+widget("text","kami_cine_features",36,37,wrap="true").text=(
+    "Mix and match these live effects. No bundled GShade, temporal blur, new render pass or FPS cap.")
+widget("check_box","kami_cine_materials",80,23,
+       control_name="KAMICinematicMaterials",
+       label="Cinematic PBR materials / refined highlights",
+       tool_tip="Adjust authored glTF roughness in existing deferred lighting. Bypassed in Potato/Performance modes.")
+widget("check_box","kami_cine_lighting",113,23,
+       control_name="KAMICinematicLighting",
+       label="Cinematic directional lighting (local EEP)",
+       tool_tip="Applies Dark Cinematic sky only in your viewer, restoring your previous local EEP when disabled.")
+widget("check_box","kami_cine_avatar",146,23,
+       control_name="KAMIAvatarQualityFPS",
+       label="Avatar quality + FPS (live rendering)",
+       tool_tip="Keep self-avatar mesh detail; reduce distant avatar LOD and native full-render budget. Same setting as Avatar Quality above.")
+widget("text","kami_cine_status",181,41,wrap="true").text=(
+    "Directional cinematic lighting off. Materials and Avatar Quality can be toggled independently.")
 # Expand actual scroll view and the full stack including original BD tabs.
 scroll=[n for n in root.iter("panel") if n.get("name")=="gfx_scroll_panel"]
 stacks=[n for n in root.iter("layout_stack") if n.get("name")=="gfx_stack"]
@@ -116,13 +128,12 @@ s=s.replace(a,a+'\n#include "kami_cinematic.h"',1)
 a='bool LLFloaterPreference::postBuild()\n{'
 assert s.count(a)==1,"Preference postBuild anchor changed"
 s=s.replace(a,a+"""
-    if (auto* btn=findChild<LLButton>("kami_cine_apply"))
-        btn->setClickedCallback([](LLUICtrl*,const LLSD&) {
-            KAMICinematic::apply();
-        });
-    if (auto* btn=findChild<LLButton>("kami_cine_restore"))
-        btn->setClickedCallback([](LLUICtrl*,const LLSD&) {
-            KAMICinematic::restore();
+    // Materials/Avatar Quality are native control_name-bound checkboxes.
+    // Lighting must also own a reversible local EEP preview, so its
+    // checkbox dispatches one commit on user interaction.
+    if (auto* lighting=findChild<LLCheckBoxCtrl>("kami_cine_lighting"))
+        lighting->setCommitCallback([](LLUICtrl* ctrl,const LLSD&) {
+            KAMICinematic::setLighting(ctrl->getValue().asBoolean());
         });
 """,1)
 a='void LLFloaterPreference::draw()\n{'
@@ -144,12 +155,13 @@ prefs.write_text(s,encoding="utf-8")
 
 manifest=V/"skins/default/KAMI-DARK-CINEMATIC.txt"
 manifest.write_text(
-    "KAMI Dark Cinematic: optional preview, user-initiated.\n"
-    "1. Native glTF PBR roughness response only on existing PBR materials.\n"
-    "2. Reversible local EEP Dark Cinematic mood with cool directional sky.\n"
-    "3. Live Avatar Quality/FPS prioritizes self LOD and caps distant avatar rendering.\n"
-    "No new GL pass, downloads, shadow-map increase, post-process blur, ray AO, upscaling or FPS cap.\n"
-    "Toggle OFF restores saved values in the current session. Actual FPS still requires in-world testing.\n",
+    "KAMI Cinematic Graphics: three independent, user-selected native toggles.\\n"
+    "1. PBR Materials: authored glTF roughness response in existing deferred lighting.\\n"
+    "2. Directional Lighting: independently switched, reversible local EEP sky.\\n"
+    "3. Avatar Quality + FPS: native self-avatar LOD and distant-avatar budgets.\\n"
+    "Each option can be toggled ON/OFF separately and in any combination.\\n"
+    "No additional render pass, no shader injector, ray AO, temporal blur or FPS cap.\\n"
+    "Verify visual quality and real FPS in-world before calling them performance gains.\\n",
     encoding="utf-8")
 ET.parse(settings);ET.parse(ui)
-print("Dark Cinematic installed: native PBR highlight response, local EEP directional light and Avatar Quality/FPS.")
+print("Three independent KAMI cinematic graphics toggles installed: PBR, EEP direction, and Avatar Quality/FPS.")
