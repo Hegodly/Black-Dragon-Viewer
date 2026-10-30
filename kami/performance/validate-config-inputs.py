@@ -16,7 +16,7 @@ def require(condition, message):
         raise AssertionError(message)
 
 
-def map_values(node, label):
+def map_values(node, label, allow_duplicate_settings=False):
     require(node.tag == "map", f"{label}: expected LLSD map")
     children = list(node)
     require(len(children) % 2 == 0, f"{label}: truncated LLSD pairs")
@@ -24,7 +24,11 @@ def map_values(node, label):
     for i in range(0, len(children), 2):
         key, value = children[i], children[i + 1]
         require(key.tag == "key" and bool(key.text), f"{label}: invalid key at pair {i // 2}")
-        require(key.text not in values, f"{label}: duplicate key {key.text}")
+        if key.text in values:
+            require(allow_duplicate_settings, f"{label}: duplicate key {key.text}")
+            # Old Black Dragon settings contain historical duplicate names.
+            # Preserve the viewer\'s last-definition-wins behavior and warn.
+            print(f"WARN: {label}: duplicate legacy key {key.text}; last value used")
         values[key.text] = value
     return values
 
@@ -67,7 +71,7 @@ def read_binding_maps(path):
 settings = ET.parse(ROOT / "indra/newview/app_settings/settings_blackdragon.xml").getroot()
 require(settings.tag == "llsd" and len(settings) == 1,
         "Native settings: invalid LLSD root")
-setting_values = map_values(settings[0], "Native settings")
+setting_values = map_values(settings[0], "Native settings", allow_duplicate_settings=True)
 for key, definition in setting_values.items():
     require(definition.tag == "map", f"Native setting {key}: expected map")
     for element in definition.iter("integer"):
