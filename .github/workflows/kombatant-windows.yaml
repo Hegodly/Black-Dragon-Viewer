@@ -159,6 +159,9 @@ jobs:
       - name: Verify all five preset quality levels and native 4K/8K FPS contracts
         shell: pwsh
         run: python kami/performance/verify-preset-contracts.py
+      - name: Validate bundled KAMI FX, GShade compatibility and actual MXAO integration
+        shell: pwsh
+        run: python kami/gshade/verify-gshade-fx.py
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
