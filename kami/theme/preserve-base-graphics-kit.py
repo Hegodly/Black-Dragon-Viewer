@@ -122,9 +122,11 @@ for parent in root.iter():
             removed[key].append(child.tag)
             parent.remove(child)
 for key, label in unresponsive.items():
-    assert sorted(removed[key]) == ["button", "slider"], (
-        "Expected exactly one slider and reset button for", label, removed[key]
-    )
+    # Some KAMI render patches introduce a second Exposure slider; remove
+    # all copies instead of assuming the original Black Dragon UI is unique.
+    assert "slider" in removed[key] and "button" in removed[key] and all(
+        tag in ("slider", "button") for tag in removed[key]
+    ), ("Expected one or more sliders with reset buttons", label, removed[key])
     assert not any(n.get("control_name") == key for n in root.iter()), (
         "Nonfunctional UI control still visible", label
     )
