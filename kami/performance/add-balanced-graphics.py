@@ -113,7 +113,7 @@ extras=''' <text name="kami_budget_heading" left="24" top="852" width="512" heig
  <text name="kami_avatarlight_warning" left="24" top="1283" width="512" height="110" wrap="true">Avatar fill and soft shading are cheap, optional approximations for classic baked avatars. They do not implement physically based skin subsurface scattering or necessarily affect fitted mesh heads. Contact shading uses the real SSAO/HBAO pipeline, which can be expensive on integrated GPUs. Keep volumetrics off and shadows reduced on weak PCs. All advanced features remain optional.</text>
 '''
 import re
-extras = re.sub(r'\\btop="(\\d+)"', lambda m: 'top="'+str(int(m.group(1))+1840)+'"', extras)
+extras = re.sub(r'\btop="(\d+)"', lambda m: 'top="'+str(int(m.group(1))+1840)+'"', extras)
 extras = extras.replace('left="24"','left="12"').replace('width="512"','width="465"')
 extras = extras.replace('left="238"','left="215"').replace('width="295"','width="262"')
 area=area.replace('height="2670" auto_resize="false"', 'height="3300" auto_resize="false"', 1)
