@@ -109,6 +109,35 @@ control("text","kami_recovery_status",206,width=465,height=49,wrap="true",
         text_color="0.75 0.86 0.96 1").text=(
         "OFF by default. After a detected crash, KAMI offers Restore or Keep Current. "
         "Chat, passwords, inventory and server actions are never captured.")
+# FIX: The original Black Dragon gfx_stack was fixed at 6500px.
+# Later sections extend beyond it, hiding legacy settings after Recovery.
+stacks=[n for n in root.iter("layout_stack") if n.get("name")=="gfx_stack"]
+assert len(stacks)==1, "Missing native Black Dragon graphics layout stack"
+stack=stacks[0]
+panels=[n for n in stack if n.tag=="layout_panel"]
+assert p in panels, "KAMI quick panel detached from graphics scroll stack"
+required={"basic_layout_panel","advanced_layout_panel","finetuning_layout_panel"}
+assert required <= {n.get("name") for n in panels}, "Native Black Dragon graphics tabs lost"
+stack_min=sum(int(n.get("height","0")) for n in panels)+96
+assert stack_min>int(p.get("height"))+1000, "Legacy graphics panels not budgeted"
+stack.set("height",str(max(int(stack.get("height","0")),stack_min)))
+# The scroll child must fit the quick panel and legacy section headers.
+# toggleTabs() includes expanded native sections during normal runtime.
+scrollpanels=[n for n in root.iter("panel") if n.get("name")=="gfx_scroll_panel"]
+assert len(scrollpanels)==1,"Native scroll panel missing"
+scroll=scrollpanels[0]
+scroll.set("height",str(int(p.get("height"))+66))
+# Assert no newly added widget, including Recovery status, is beyond its panel.
+bottom=0
+for n in p:
+    if n.get("top") is None or n.get("height") is None:continue
+    try:top,h=int(n.get("top")),int(n.get("height"))
+    except ValueError:continue
+    if top>=0:bottom=max(bottom,top+h)
+assert bottom<=int(p.get("height")), ("KAMI widget clipped",bottom,p.get("height"))
+assert any(n.get("name")=="kami_recovery_status" for n in p)
+assert int(stack.get("height"))>=sum(int(n.get("height","0")) for n in panels)
+
 ET.indent(doc,space=" ")
 doc.write(xml,encoding="utf-8",xml_declaration=True)
 
