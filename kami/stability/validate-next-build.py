@@ -78,7 +78,7 @@ headers = [
     "indra/newview/kami_performance_mode.h",
     "indra/newview/kami_quality_presets.h",
 ]
-bad_control_handle = re.compile(r"(?:auto|LLControlVariable)\\s*\\*\\s*\\w+\\s*=\\s*gSavedSettings\\.getControl\\(")
+bad_control_handle = re.compile(r"(?:auto|LLControlVariable)\s*\*\s*\w+\s*=\s*gSavedSettings\.getControl\(")
 verify("MSVC control handle compatibility", all(not bad_control_handle.search(read(path)) for path in headers))
 verify("camera vector uses LLVector3d indexing", all(part not in read("indra/newview/kami_signature.h") for part in ("p.mV[", "f.mV[")))
 verify("Windows PDH status definitions available", "#include <pdhmsg.h>" in read("indra/newview/kami_hardware_monitor.h"))
