@@ -162,6 +162,9 @@ jobs:
       - name: Add native KAMI Hardware Monitor with Windows usage telemetry
         shell: pwsh
         run: python kami/performance/apply-hardware-monitor.py
+      - name: Verify all six real Smart Avatar Physics optimizations and performance stats
+        shell: pwsh
+        run: python kami/physics/verify-smart-avatar-physics.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
