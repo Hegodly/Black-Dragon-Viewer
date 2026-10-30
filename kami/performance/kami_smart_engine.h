@@ -9,6 +9,8 @@
 #include "lltimer.h"
 #include <sstream>
 #include <algorithm>
+#include <vector>
+#include <iomanip>
 
 namespace KAMISmart
 {
@@ -200,6 +202,68 @@ namespace KAMISmart
         }
     }
 
+    // Measures the *current live scene* rather than claiming a deterministic
+    // GPU benchmark. User-controlled opt-in, no telemetry leaves the viewer.
+    inline void benchmarkFrame(U64 now)
+    {
+        static U64 started = 0;
+        static U64 last = 0;
+        static std::vector<F64> frameMs;
+        if (!gSavedSettings.getBOOL("KAMIBenchmarkCapture"))
+        {
+            started = 0;
+            last = 0;
+            frameMs.clear();
+            return;
+        }
+        const bool focused = gFocusMgr.getAppHasFocus() &&
+            gViewerWindow && gViewerWindow->getWindow() &&
+            gViewerWindow->getWindow()->getVisible();
+        if (!focused)
+        {
+            gSavedSettings.setString("KAMIBenchmarkResult", "Canceled: viewer was not focused.");
+            gSavedSettings.setBOOL("KAMIBenchmarkCapture", false);
+            return;
+        }
+        if (!started)
+        {
+            started = now;
+            last = now;
+            frameMs.clear();
+            frameMs.reserve(9000);
+            gSavedSettings.setString("KAMIBenchmarkResult", "Benchmark running: 30 seconds in the current scene.");
+            LL_INFOS("KAMIBenchmark") << "30-second local scene FPS sample started" << LL_ENDL;
+            return;
+        }
+        if (last && now > last && frameMs.size() < 30000)
+        {
+            const F64 elapsed = static_cast<F64>(now-last) / 1000.0;
+            if (elapsed > 0.01 && elapsed <= 1000.0)
+                frameMs.push_back(elapsed);
+        }
+        last = now;
+        if (now - started < 30000000ULL) return;
+        if (frameMs.size() < 30)
+        {
+            gSavedSettings.setString("KAMIBenchmarkResult", "Too few frames to score.");
+            gSavedSettings.setBOOL("KAMIBenchmarkCapture", false);
+            return;
+        }
+        std::sort(frameMs.begin(), frameMs.end());
+        const size_t n = frameMs.size();
+        const F64 medianMs = frameMs[n/2];
+        const F64 p99Ms = frameMs[static_cast<size_t>((n-1)*0.99)];
+        const F64 medianFPS = 1000.0/medianMs;
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(1)
+            << "Current scene: median " << medianFPS
+            << " FPS; p99 frame " << p99Ms << " ms; "
+            << n << " samples. Scene and cap affect results.";
+        gSavedSettings.setString("KAMIBenchmarkResult", out.str());
+        LL_INFOS("KAMIBenchmark") << out.str() << LL_ENDL;
+        gSavedSettings.setBOOL("KAMIBenchmarkCapture", false);
+    }
+
     inline void tick()
     {
         static U64 previousFrame = 0;
@@ -210,6 +274,7 @@ namespace KAMISmart
         static U32 options = 0;
         static bool wasActive = false;
         const U64 now = LLTimer::getTotalTime();
+        benchmarkFrame(now);
 
         const bool potato = gSavedSettings.getBOOL("KAMIPotatoMode");
         const bool autoTune = gSavedSettings.getBOOL("KAMIAutoTune");
