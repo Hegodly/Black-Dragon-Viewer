@@ -31,7 +31,7 @@ edit(settings,'  <key>KAMIAutoTune</key>',settings_block+'  <key>KAMIAutoTune</k
 avatar="indra/newview/app_settings/shaders/class1/deferred/avatarF.glsl"
 edit(avatar,'uniform float minimum_alpha;\n',
     '''uniform float minimum_alpha;
-// Zero-cost when disabled in the shader via uniform-constant branch.
+// Shader effects are gated when their uniform is zero.
 // Legacy baked avatar surface only; not an all-material skin detector.
 uniform float kami_avatar_fill;
 uniform float kami_avatar_soft_shading;
@@ -42,16 +42,22 @@ edit(avatar,
     vec3 nvn = normalize(vary_normal);
     frag_data[2] = encodeNormal(nvn.xyz, 0, GBUFFER_FLAG_HAS_ATMOS);''',
 '''    vec3 nvn = normalize(vary_normal);
-    // Bounded front-facing fill: at most 6.25 percent diffuse increase.
-    // No secondary textures, blur pass or simulated light bounces.
-    float face = max(dot(nvn, normalize(-vary_position)), 0.0);
-    vec3 albedo = min(diff.rgb * (1.0 + 0.25 * clamp(kami_avatar_fill, 0.0, 0.25) * face), vec3(1.0));
-    // Smooth the classic skin lighting normal subtly, never modify geometry.
-    vec3 soft_n = normalize(mix(nvn, normalize(-vary_position),
+    vec3 albedo = diff.rgb;
+    if (kami_avatar_fill > 0.001)
+    {
+        // Maximum 6.25 percent frontal diffuse increase.
+        float face = max(dot(nvn, normalize(-vary_position)), 0.0);
+        albedo = min(diff.rgb * (1.0 + 0.25 * clamp(kami_avatar_fill, 0.0, 0.25) * face), vec3(1.0));
+    }
+    if (kami_avatar_soft_shading > 0.001)
+    {
+        // Cheap legacy avatar lighting approximation; no secondary passes.
+        nvn = normalize(mix(nvn, normalize(-vary_position),
                        0.12 * clamp(kami_avatar_soft_shading, 0.0, 0.5)));
+    }
     frag_data[0] = vec4(albedo, 0.0);
     frag_data[1] = vec4(0,0,0,0);
-    frag_data[2] = encodeNormal(soft_n.xyz, 0, GBUFFER_FLAG_HAS_ATMOS);''')
+    frag_data[2] = encodeNormal(nvn.xyz, 0, GBUFFER_FLAG_HAS_ATMOS);''')
 
 drawing="indra/newview/lldrawpoolavatar.cpp"
 edit(drawing,
@@ -65,7 +71,7 @@ void LLDrawPoolAvatar::endDeferredSkinned()''',
 '''    sVertexProgram->bind();
     sVertexProgram->setMinimumAlpha(LLDrawPoolAvatar::sMinimumAlpha);
     // Legacy skinned avatar light fill: tiny GPU-only uniform change.
-    // Disable this in Potter/Smart Perf stage to preserve weak GPUs.
+    // Disable this in Potato/Smart Perf stage to preserve weak GPUs.
     static LLStaticHashedString kami_fill("kami_avatar_fill");
     static LLStaticHashedString kami_soft("kami_avatar_soft_shading");
     const bool cheap_mode = gSavedSettings.getBOOL("KAMIPotatoMode");
