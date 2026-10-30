@@ -72,9 +72,9 @@ edit(header,
      '        "RenderFSAAType", "RenderShadowDetail", "RenderShadowResolutionScale",\n'
      '        "RenderShadowBlurSamples", "RenderShadowBlurSize",\n')
 edit(header,
-     '            if (reflection) set("RenderScreenSpaceReflections", false);\n',
-     '            if (reflection) set("RenderScreenSpaceReflections", false);\n'
-     '            if (shadow) atMostU32("RenderShadowBlurSamples", 4);\n')
+     '                set("RenderScreenSpaceReflections", false);\n',
+     '                set("RenderScreenSpaceReflections", false);\n'
+     '                if (shadow) atMostU32("RenderShadowBlurSamples", 4);\n')
 edit(header,
      '                atMostF32("RenderShadowResolutionScale", 0.75f);\n',
      '                atMostF32("RenderShadowResolutionScale", 0.75f);\n'
