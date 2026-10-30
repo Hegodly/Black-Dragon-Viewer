@@ -7,6 +7,12 @@ on:
     branches: ["main", "release/*", "project/*"]
     tags: ["Second_Life*"]
 
+# Cancel superseded CI runs for the same branch / pull request.
+# Fresh commits should not compete with obsolete full Windows builds.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # The whole point of the setup job is that we want to set variables once
   # that will be consumed by multiple subsequent jobs.
@@ -42,8 +48,13 @@ jobs:
   build:
     needs: setup
     strategy:
+      # A failing macOS job must not cancel the Windows build, where Kami ships.
+      fail-fast: false
       matrix:
-        runner: ${{ fromJson((github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/Second_Life')) && '["windows-large","macos-15-xlarge"]' || '["windows-2022","macos-15-xlarge"]') }}
+        # Official Second Life builds remain cross-platform. Community forks of
+        # Kami only publish Windows builds; do not waste macOS runners or cancel
+        # Windows validation on unrelated macOS setup failures.
+        runner: ${{ fromJson(github.repository_owner != 'secondlife' && '["windows-2022"]' || ((github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/Second_Life')) && '["windows-large","macos-15-xlarge"]' || '["windows-2022","macos-15-xlarge"]')) }}
         configuration: ${{ fromJson(needs.setup.outputs.configurations) }}
     runs-on: ${{ matrix.runner }}
     outputs:

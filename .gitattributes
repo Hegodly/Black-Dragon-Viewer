@@ -10,6 +10,7 @@
 *.j2k binary
 *.jpg binary
 *.png binary
+*.PNG binary
 *.tga binary
 *.tif binary
 

@@ -9,7 +9,7 @@
  width="980"
  min_width="980"
  name="Model Preview"
- title="UPLOAD MODEL"
+ title="KAMI / CREATOR STUDIO - MESH"
  help_topic="upload_model"
  legacy_header_height="25">
 
@@ -1603,6 +1603,16 @@
          visible="false"
          width="80"
          tool_tip="Upload to simulator"/>
+       <button
+         follows="top|left"
+         layout="topleft"
+         left="258"
+         top="3"
+         width="95"
+         height="20"
+         label="Mesh Audit"
+         name="kami_mesh_audit_btn"
+         tool_tip="Inspect imported mesh pieces, LOD geometry, and material face limitations before calculating upload fees."/>
        <button
          follows="top|right"
          label="Clear settings &amp; reset form"
