@@ -49,7 +49,13 @@ def outline(canvas, glow=False, selected=False):
 
 def widget(filename, a=obsidian,b=smoke, selected=False, glow=False):
     p=WIN/filename
-    canvas=gradient(128,64 if filename in ("kami_fg_window.png","kami_fg_panel.png","kami_fg_tab.png","kami_fg_tab_selected.png") else 32,a,b,251)
+    if filename in ("kami_fg_window.png","kami_fg_panel.png","kami_fg_tab.png","kami_fg_tab_selected.png"):
+        dimensions=(128,64)
+    elif filename.startswith("kami_fg_text_field"):
+        dimensions=(256,26)
+    else:
+        dimensions=(128,32)
+    canvas=gradient(*dimensions,a,b,251)
     outline(canvas,selected=selected,glow=glow)
     canvas.save(p,optimize=True)
     return p
@@ -74,6 +80,28 @@ assets={
   "SegmentedBtn_Right_Off": "kami_fg_tab.png",
   "TaskPanel_Tab_Off": "kami_fg_tab.png",
   "TaskPanel_Tab_Selected": "kami_fg_tab_selected.png",
+  "TabTop_Left_Off": "kami_fg_tab.png",
+  "TabTop_Middle_Off": "kami_fg_tab.png",
+  "TabTop_Right_Off": "kami_fg_tab.png",
+  "TabTop_Left_Selected": "kami_fg_tab_selected.png",
+  "TabTop_Middle_Selected": "kami_fg_tab_selected.png",
+  "TabTop_Right_Selected": "kami_fg_tab_selected.png",
+  "Toolbar_Left_Off": "kami_fg_toolbar.png",
+  "Toolbar_Right_Off": "kami_fg_toolbar.png",
+  "Toolbar_Left_Over": "kami_fg_toolbar_hover.png",
+  "Toolbar_Right_Over": "kami_fg_toolbar_hover.png",
+  "Toolbar_Left_Selected": "kami_fg_toolbar_selected.png",
+  "Toolbar_Right_Selected": "kami_fg_toolbar_selected.png",
+  "TextField_Off": "kami_fg_text_field.png",
+  "TextField_Active": "kami_fg_text_field_active.png",
+  "TextField_Disabled": "kami_fg_text_field.png",
+  "SliderTrack_Horiz": "kami_fg_slider_track.png",
+  "SliderTrack_Horiz_Progress": "kami_fg_slider_track_progress.png",
+  "SliderThumb_Off": "kami_fg_slider_thumb.png",
+  "SliderThumb_Press": "kami_fg_slider_thumb.png",
+  "Checkbox_Off": "kami_fg_checkbox_off.png",
+  "Checkbox_On": "kami_fg_checkbox_on.png",
+  "Checkbox_On_Press": "kami_fg_checkbox_on.png",
 }
 widget("kami_fg_window.png",(10,15,24),(16,22,32))
 widget("kami_fg_panel.png",(14,20,30),(19,27,40))
@@ -86,6 +114,36 @@ widget("kami_fg_toolbar_hover.png",(20,37,57),(14,25,38),glow=True)
 widget("kami_fg_toolbar_selected.png",(21,48,70),(15,30,48),selected=True)
 widget("kami_fg_tab.png",(18,26,37),(15,22,35))
 widget("kami_fg_tab_selected.png",(19,48,68),(15,31,47),selected=True)
+widget("kami_fg_text_field.png",(16,22,31),(20,28,40))
+widget("kami_fg_text_field_active.png",(22,37,51),(17,29,44),selected=True)
+
+def slider_track(filename,filled):
+    img=Image.new("RGBA",(104,16),(0,0,0,0))
+    draw=ImageDraw.Draw(img)
+    draw.rounded_rectangle((0,5,103,12),radius=4,
+        fill=(15,25,39,235),outline=(66,104,133,195),width=1)
+    if filled:
+        draw.rounded_rectangle((2,6,101,11),radius=3,fill=(53,122,175,240))
+    img.save(WIN/filename,optimize=True)
+slider_track("kami_fg_slider_track.png",False)
+slider_track("kami_fg_slider_track_progress.png",True)
+
+thumb=Image.new("RGBA",(32,32),(0,0,0,0))
+d=ImageDraw.Draw(thumb)
+d.rounded_rectangle((9,6,23,25),radius=5,fill=(29,73,105,245),outline=(108,173,214,255),width=2)
+thumb.save(WIN/"kami_fg_slider_thumb.png",optimize=True)
+
+def checkbox(name,checked):
+    img=Image.new("RGBA",(24,24),(0,0,0,0))
+    draw=ImageDraw.Draw(img)
+    draw.rounded_rectangle((2,2,21,21),radius=4,
+        fill=(25,49,67,255) if checked else (16,25,38,248),
+        outline=(89,159,202,255) if checked else (70,106,133,220),width=2)
+    if checked:
+        draw.line(((6,12),(10,16),(18,7)),fill=(227,243,255,255),width=3,joint="curve")
+    img.save(WIN/name,optimize=True)
+checkbox("kami_fg_checkbox_off.png",False)
+checkbox("kami_fg_checkbox_on.png",True)
 
 # Per-floater preferences artwork. Actual approved Fire Garden, obscured by
 # smoked glass; lower left has the brighter fire highlights, right stays
