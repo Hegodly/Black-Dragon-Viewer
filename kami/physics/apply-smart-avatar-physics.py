@@ -126,7 +126,7 @@ namespace KAMIPhysicsStats
         out << std::fixed << std::setprecision(2)
             << "Avatar physics CPU: " << (seconds > 0 ? current.cpu_ms/seconds : 0.)
             << " ms/s | active avatars: " << current.unique.size()
-            << "\nUpdates/s: " << (seconds > 0 ? (U32)(current.updates/seconds) : 0)
+            << "\\nUpdates/s: " << (seconds > 0 ? (U32)(current.updates/seconds) : 0)
             << " | skipped/s: " << (seconds > 0 ? (U32)(current.skipped/seconds) : 0)
             << " | self/near/far/hidden: "
             << current.self_updates << "/" << current.near_updates << "/"
