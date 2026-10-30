@@ -111,6 +111,24 @@ s=s.replace(anchor,anchor+'''
             KAMIRLVSafety::emergencyRelease();
         });
 ''',1)
+# Status text reflects emergency releases invoked from the top menu as well.
+# Poll only with the existing once-per-second Preferences refresh.
+draw='''void LLFloaterPreference::draw()
+{
+    if (mUpdateTimer.getElapsedTimeF32() > 1.f)
+    {
+        mUpdateTimer.reset();'''
+# Black Dragon's C++ indents this block with tabs, not spaces.
+draw_actual='''void LLFloaterPreference::draw()
+{
+\tif (mUpdateTimer.getElapsedTimeF32() > 1.f)
+\t{
+\t\tmUpdateTimer.reset();'''
+check(s.count(draw_actual)==1,"Preferences status update anchor changed")
+s=s.replace(draw_actual,draw_actual+'''
+        if (auto* rlvStatus=findChild<LLTextBox>("kami_rlv_status"))
+            rlvStatus->setText(LLStringExplicit(
+                gSavedSettings.getString("KAMIRLVStatus")));''',1)
 prefcpp.write_text(s,encoding="utf-8")
 
 # Separate native top-level emergency menu, not buried in the old (commented)
