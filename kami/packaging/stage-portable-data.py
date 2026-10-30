@@ -19,6 +19,13 @@ for name in ('featuretable.txt','cube.dae'):
 shutil.copyfile(source/'licenses-win32.txt',out/'licenses.txt')
 # Keep source attribution available in the portable copy.
 shutil.copyfile(R/'doc/contributions.txt',out/'app_settings/contributors-source.txt')
+# Ship only a local installer, never the copyrighted MP3 recording.
+for installer in ('Install-KAMI-Login-Music.ps1', 'Install-KAMI-Login-Music.cmd'):
+  shutil.copyfile(R/'kami/theme'/installer, out/installer)
+assert (out/'Install-KAMI-Login-Music.ps1').is_file()
+assert (out/'Install-KAMI-Login-Music.cmd').is_file()
+assert not (out/'KAMI-login.mp3').exists(), 'Public portable package must not include copyrighted audio'
+
 required=['app_settings/settings.xml','app_settings/settings_blackdragon.xml','app_settings/shaders/class3/deferred/softenLightF.glsl','character/avatar_skeleton.xml','skins/default/xui/en/panel_login.xml','skins/default/textures/windows/kami_fire_garden.jpg','skins/default/textures/windows/kami_logo.jpg','featuretable.txt','cube.dae']
 for name in required:assert (out/name).is_file(),f'Incomplete portable data: {name}'
 # The approved theme must ship in-world as well as on the login screen.
@@ -71,6 +78,10 @@ assert wallpaper is not None and wallpaper.get('image_name')=='KAMI_FireGarden',
 assert emblem is not None and emblem.get('image_name')=='KAMI_Logo', 'KAMI login emblem missing'
 assert named.get('kami_login_title') is not None and 'K A M I' in (named['kami_login_title'].text or ''), 'KAMI title missing'
 assert named.get('kami_login_subtitle') is not None and 'B E Y O N D' in (named['kami_login_subtitle'].text or ''), 'KAMI tagline missing'
+assert named.get('kami_login_music_controls') is not None, 'Login soundtrack controls missing'
+assert named.get('kami_login_music_status') is not None, 'Music error/status label missing from login'
+assert (out/'Install-KAMI-Login-Music.cmd').read_text(encoding='utf-8').find('Install-KAMI-Login-Music.ps1')>=0, 'MP3 installer command missing'
+
 assert not any(node.tag=='web_browser' for node in login.iter()), 'Legacy remote video/browser still present'
 assert not any(node.get('name') in ('login_stack','login_bg') for node in login.iter()), 'Legacy Black Dragon login layer still present'
 registry={node.get('name'):node.get('file_name') for node in textures.findall('texture')}
