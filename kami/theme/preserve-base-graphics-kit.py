@@ -107,6 +107,30 @@ else:
         "font":"SansSerifLarge","text_color":"0.72 0.85 0.96 1"})
     heading.text="KAMI CORE GRAPHICS"
 
+# The October 30 live test found these three Display sliders ineffective.
+# Remove only their UI widgets (slider and paired default/reset button).
+# Do not delete the native renderer settings, shaders, or other glow options.
+# "Bloom strength" in testing corresponds to native "Glow Strength".
+unresponsive = {
+    "RenderExposure": "Exposure",
+    "RenderCASSharpness": "CAS Sharpness",
+    "RenderGlowStrength": "Glow/Bloom Strength",
+}
+removed = {key: [] for key in unresponsive}
+for parent in root.iter():
+    for child in list(parent):
+        key = child.get("control_name")
+        if key in unresponsive:
+            removed[key].append(child.tag)
+            parent.remove(child)
+for key, label in unresponsive.items():
+    assert sorted(removed[key]) == ["button", "slider"], (
+        "Expected exactly one slider and reset button for", label, removed[key]
+    )
+    assert not any(n.get("control_name") == key for n in root.iter()), (
+        "Nonfunctional UI control still visible", label
+    )
+
 # Existing core toggles inherit the *actual* skinned assets. Explicitly check
 # that our Fire Garden theme was applied to each widget family in textures.xml.
 registry=ET.parse(ROOT/"indra/newview/skins/default/textures/textures.xml")
@@ -133,4 +157,4 @@ manifest.write_text(
     "All switches remain real viewer settings; themed by skin images/colors.\n"
     "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n",
     encoding="utf-8")
-print(f"KAMI Fire Garden native base kit: {len(controls)} existing video-reference graphics controls preserved, all widget families themed.")
+print(f"KAMI Fire Garden native base kit: {len(controls)} reference controls preserved; nonworking Exposure, CAS Sharpness, Glow Strength sliders and their reset buttons removed.")
