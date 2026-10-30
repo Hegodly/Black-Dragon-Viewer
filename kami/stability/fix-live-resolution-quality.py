@@ -48,8 +48,13 @@ new='''            // Do not silently erase a manually chosen 4K/8K buffer or
             // downscale a live scene: unresolved presentation cropping.
             // Instead use fewer light/particle/avatar/shadow samples.
             if (resolution) atMostU32("RenderLocalLightCount", 32);'''
-assert s.count(old)==1,"Smart stage 5 resolution code changed"
-s=s.replace(old,new,1)
+if s.count(old)==1:
+    s=s.replace(old,new,1)
+else:
+    assert "Automatic world pixel scaling is quarantined" in s, (
+        "Smart stage 5 resolution code changed unexpectedly")
+    assert 'set("KombatantRenderWidth", 0);' not in s, (
+        "Smart must preserve manually selected world resolution")
 old='''            // Preserve real selected render pixels, including explicit 3840-wide 4K.
             // Avoid downscaling to 60% when Potato Mode is on.
             if (gSavedSettings.getBOOL("KAMIPotatoMode"))
@@ -68,8 +73,12 @@ new='''            // Respect the exact current resolution (native/4K/8K) and
                 // 100 FPS is advisory only, never a frame limiter.
                 set("KAMITargetFPS", 100);
             }'''
-assert s.count(old)==1,"Smart stage 6 resolution code changed"
-s=s.replace(old,new,1)
+if s.count(old)==1:
+    s=s.replace(old,new,1)
+else:
+    assert "No hidden resolution" in s or "No hidden resolution changes" in s or (
+        "No hidden resolution" in s), "Smart stage 6 resolution code changed unexpectedly"
+    assert 'else if (resolution) atMostF32("RenderResolutionMultiplier", 0.6f);' not in s
 smart.write_text(s,encoding="utf-8")
 # The Smart header has already been copied into compiled viewer by earlier
 # integration steps. Refresh the final header after changing its logic.
