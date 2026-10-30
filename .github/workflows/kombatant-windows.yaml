@@ -7,9 +7,9 @@ concurrency:
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, experimental/kami-diamond-glints]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**, kami/jewelry/**]
 permissions:
   contents: read
 jobs:
@@ -18,11 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install software GL test runtime
-        run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri
+        run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri glslang-tools
       - name: Execute shipped frame-generation shaders on Mesa
         run: python3 kami/framegen/test-shaders.py
       - name: Validate both modern and legacy keyboard LLSD before Windows build
         run: python3 kami/performance/validate-config-inputs.py
+      - name: Compile KAMI native diamond glint shader on Mesa toolchain
+        run: python3 kami/jewelry/test-diamond-glints.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
       - name: Validate every KAMI and Kombatant Python integration script
@@ -196,6 +198,12 @@ jobs:
       - name: Verify all three Dark Cinematic live-render feature paths
         shell: pwsh
         run: python kami/cinematic/verify-dark-cinematic.py
+      - name: Install native experimental Diamond Glint Engine
+        shell: pwsh
+        run: python kami/jewelry/apply-diamond-glints.py
+      - name: Verify native diamond glint wiring and material limits
+        shell: pwsh
+        run: python kami/jewelry/verify-diamond-glints.py
       - name: Install user-controlled RLV emergency safety center (no unsupported engine)
         shell: pwsh
         run: python kami/rlv/apply-rlv-safety.py
