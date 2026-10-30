@@ -251,14 +251,85 @@ back=[n for n in p.iter() if n.get("name")=="vicon"]
 assert len(back)==1
 back[0].set("image_name","KAMI_FireGardenPrefs")
 back[0].set("color","1 1 1 1")
-# Use a compact identity label on the left tab header without shifting controls.
-# It must never intercept clicks or obscure the tab selector.
+# Preserve all original tab text: Black Dragon's 140 px sidebar clips the
+# long labels and visually collides with the content. Grow the entire native
+# window by the same delta, so the actual 510 px graphics panel NEVER shrinks.
 tab=[n for n in p.iter() if n.get("name")=="pref core"]
 assert len(tab)==1
-tab[0].set("tab_width","140")
+sidebar=196
+previous=int(tab[0].get("tab_width"))
+assert 120<=previous<sidebar, ("Unexpected Preferences sidebar width",previous)
+delta=sidebar-previous
+old_outer=int(p.get("width"))
+old_container=int(tab[0].get("width"))
+old_back_left=int(back[0].get("left"))
+assert old_outer>=650 and old_container>=640 and old_back_left>=140
+p.set("width",str(old_outer+delta))
+p.set("min_width",str(old_outer+delta))
+tab[0].set("width",str(old_container+delta))
+tab[0].set("tab_width",str(sidebar))
+tab[0].set("tab_padding_right","9")
+back[0].set("left",str(old_back_left+delta))
+# The search field and OK/Cancel buttons are anchored to the resizable right
+# edge already. Do not reposition them independently or overlap input text.
 ET.indent(pt,space=" ")
 pt.write(prefs,encoding="utf-8",xml_declaration=True)
 ET.parse(prefs)
+
+# Native toolbar alignment: leave drag/drop orders and command IDs alone.
+# Expand the tiny 30 px bottom row (which cropped icon + text) to 42 px and
+# normalize the toolbar width to its parent to avoid horizontal overhang.
+toolbar_view=SKIN/"xui/en/panel_toolbar_view.xml"
+tv=ET.parse(toolbar_view);tvr=tv.getroot()
+bars={x.get("name"):x for x in tvr.iter("toolbar") if x.get("name")}
+for name in ("toolbar_top","toolbar_bottom"):
+    assert name in bars,name
+    panel=next((x for x in tvr.iter("layout_panel")
+                if x.get("name")==("bottom_toolbar_panel" if name=="toolbar_bottom" else "top_toolbar_panel")),None)
+    assert panel is not None
+    bar=bars[name]
+    if name=="toolbar_bottom":
+        panel.set("height","42")
+        bar.set("height","42")
+    bar.set("left","0")
+    bar.set("width",panel.get("width"))
+    bar.set("button_layout_mode","center")
+tv.write(toolbar_view,encoding="utf-8",xml_declaration=True)
+ET.parse(toolbar_view)
+
+# Icon + text button had only 70-140 px and 24 px height. The actual translated
+# toolbar labels may exceed that width, creating visibly crowded/overlapping
+# text. Widen where room exists; preserve ellipsis behavior on small screens.
+toolbar_widgets=SKIN/"xui/en/widgets/toolbar.xml"
+wt=ET.parse(toolbar_widgets);wroot=wt.getroot()
+buttons={x.tag:x for x in wroot}
+for key in ("button_icon_and_text","button_text"):
+    assert key in buttons,key
+buttons["button_icon_and_text"].attrib.update({
+    "button_width.min":"96","button_width.max":"185",
+    "desired_height":"32","imgoverlay_label_space":"12",
+    "pad_left":"12","pad_right":"12","use_ellipses":"true"
+})
+buttons["button_text"].attrib.update({
+    "button_width.min":"80","button_width.max":"185",
+    "desired_height":"32","pad_left":"11","pad_right":"11",
+    "use_ellipses":"true","halign":"center"
+})
+ET.indent(wt,space=" ")
+wt.write(toolbar_widgets,encoding="utf-8",xml_declaration=True)
+ET.parse(toolbar_widgets)
+
+# Keep the top app menu's internal action ID, only change user-facing label.
+# Retain original order and keyboard shortcuts instead of faking a menu image.
+menu=SKIN/"xui/en/menu_viewer.xml"
+mt=ET.parse(menu);mr=mt.getroot()
+me=[x for x in mr if x.tag=="menu" and x.get("name")=="Me"]
+assert len(me)==1
+me[0].set("label","KAMI")
+mr.set("bg_visible","true")
+ET.indent(mt,space=" ")
+mt.write(menu,encoding="utf-8",xml_declaration=True)
+ET.parse(menu)
 
 # The existing graphics page contains hundreds of functional settings; no
 # need to replace its controls or overwrite their listeners to get a new skin.
