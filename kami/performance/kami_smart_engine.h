@@ -289,7 +289,9 @@ namespace KAMISmart
         const F64 p99Ms = frameMs[static_cast<size_t>((n-1)*0.99)];
         const F64 medianFPS = 1000.0/medianMs;
         const bool performance = gSavedSettings.getBOOL("KAMIPerformanceMode");
-        const bool manualBaseline = !performance && !gSavedSettings.getBOOL("KAMIAutoTune") &&
+        const S32 qualityPreset = gSavedSettings.getS32("KAMIQualityPreset");
+        const bool manualBaseline = qualityPreset < 0 && !performance &&
+            !gSavedSettings.getBOOL("KAMIAutoTune") &&
             !gSavedSettings.getBOOL("KAMIPotatoMode") && !gSavedSettings.getBOOL("KAMICrowdMode");
         const F64 baselineFPS = gSavedSettings.getF32("KAMIPerformanceBaselineFPS");
         std::ostringstream out;
@@ -314,7 +316,24 @@ namespace KAMISmart
                 out << "No baseline yet. Turn preset off and benchmark the same scene first. ";
             out << "Scene changes, VSync and FPS cap affect comparison.";
         }
-        else out << "Auto quality active; not a manual baseline. ";
+        else if (qualityPreset >= 0 && qualityPreset <= 4 &&
+                 !gSavedSettings.getBOOL("KAMIAutoTune") &&
+                 !gSavedSettings.getBOOL("KAMIPotatoMode") &&
+                 !gSavedSettings.getBOOL("KAMICrowdMode"))
+        {
+            static const char* const names[] = {"Low", "Medium", "High", "Ultra", "Cinematic"};
+            if (baselineFPS > 1.0)
+            {
+                const F64 change = (medianFPS / baselineFPS - 1.0) * 100.0;
+                out << names[qualityPreset] << " quality vs manual baseline: "
+                    << (change >= 0.0 ? "+" : "") << change
+                    << "% (" << baselineFPS << " FPS baseline). ";
+            }
+            else
+                out << "No manual baseline yet. Select Custom, benchmark, then reapply this preset. ";
+            out << "Keep camera, region, resolution, cap and VSync the same.";
+        }
+        else out << "Smart optimization is active; use Custom/Off for a stable baseline. ";
         gSavedSettings.setString("KAMIBenchmarkResult", out.str());
         LL_INFOS("KAMIBenchmark") << out.str() << LL_ENDL;
         gSavedSettings.setBOOL("KAMIBenchmarkCapture", false);
