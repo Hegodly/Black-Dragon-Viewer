@@ -11,10 +11,14 @@ namespace KAMIPerformance
     // Exclude FPS limit / VSync: the player remains in control of pacing.
     inline const char* const keys[] = {
         "RenderFarClip", "RenderMaxTextureResolution",
-        "RenderFSAAType", "RenderShadowDetail", "RenderDeferredSSAO",
-        "RenderGlow", "RenderScreenSpaceReflections", "RenderReflectionProbeDetail",
+        "RenderFSAAType", "RenderShadowDetail", "RenderShadowResolutionScale",
+        "RenderDeferredSSAO", "RenderDeferredHBAO", "RenderGlow",
+        "RenderScreenSpaceReflections", "RenderScreenSpaceReflectionGlossySamples",
+        "RenderReflectionProbeDetail", "RenderReflectionProbeCount",
         "RenderVolumeLODFactor", "RenderTreeLODFactor", "RenderTerrainLODFactor",
-        "RenderAvatarLODFactor", "RenderDepthOfField", "RenderMotionBlur",
+        "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors",
+        "RenderMaxPartCount", "RenderLocalLightCount",
+        "RenderDepthOfField", "RenderMotionBlur",
         "RenderVolumetricLighting", "RenderResolutionDivisor",
         "RenderResolutionMultiplier", "KombatantRenderWidth",
         "KombatantUpscalerProvider", "KombatantRayAO", "KombatantNativeFX"
@@ -23,7 +27,48 @@ namespace KAMIPerformance
     inline void set(const char* key, const LLSD& value)
     {
         if (LLControlVariable* control = gSavedSettings.getControl(key))
-            control->setValue(value);
+            if (control->getValue() != value)
+                control->setValue(value);
+    }
+
+    inline void atMostF32(const char* key, F32 threshold)
+    {
+        if (auto* control = gSavedSettings.getControl(key))
+            if (control->getValue().asReal() > threshold)
+                control->setValue(threshold);
+    }
+
+    // Performance Mode and Smart/Potato modes are exclusive. The original
+    // implementation let Smart tick immediately turn Performance Mode off,
+    // making its switch appear to have no measurable effect. Restore the
+    // user's pre-Smart settings before taking the Performance baseline.
+    inline void suspendSmartModes()
+    {
+        if (!gSavedSettings.getBOOL("KAMIAutoTune") &&
+            !gSavedSettings.getBOOL("KAMIPotatoMode") &&
+            !gSavedSettings.getBOOL("KAMICrowdMode"))
+            return;
+
+        const std::string backup = gSavedSettings.getString("KAMISmartBackup");
+        if (!backup.empty())
+        {
+            LLSD saved;
+            std::istringstream in(backup);
+            if (LLSDSerialize::fromXML(saved, in) > 0 && saved.isMap())
+            {
+                for (auto it = saved.beginMap(); it != saved.endMap(); ++it)
+                    set(it->first.c_str(), it->second);
+                gSavedSettings.setString("KAMISmartBackup", "");
+            }
+            else
+            {
+                LL_WARNS("KAMIPerformance") << "Invalid Smart backup retained; enable Performance Mode after disabling Smart modes manually." << LL_ENDL;
+                return;
+            }
+        }
+        set("KAMIAutoTune", false);
+        set("KAMIPotatoMode", false);
+        set("KAMICrowdMode", false);
     }
 
     inline bool changed(const LLSD& enabled)
@@ -31,6 +76,7 @@ namespace KAMIPerformance
         const std::string backupKey = "KAMIPerformanceBackup";
         if (enabled.asBoolean())
         {
+            suspendSmartModes();
             // Only snapshot ONCE. Reapplying on startup must not overwrite
             // the original graphics configuration with performance settings.
             if (gSavedSettings.getString(backupKey).empty())
@@ -49,24 +95,36 @@ namespace KAMIPerformance
             // to risk in a high-FPS mode.
             set("KombatantUpscalerProvider", 0);
             set("KombatantRayAO", false);
-            set("KombatantRenderWidth", 0);
+            // Keep the explicit live render width (including native 4K) and
+            // native camera viewport. Scaled render targets crop the view in
+            // the current Windows renderer; keep-resolution patch enforces 1x.
             set("RenderResolutionDivisor", 1);
             set("RenderResolutionMultiplier", 0.75);
-            set("RenderFarClip", 96.0);
+            // Prior preset mostly changed effects and left expensive scene
+            // geometry/lighting untouched. It even raised avatar LOD from
+            // the default .5 to 1.0, increasing the geometry burden.
+            atMostF32("RenderFarClip", 64.f);
             set("RenderMaxTextureResolution", 1024);
-            set("RenderFSAAType", 1); // Lightweight FXAA
+            set("RenderFSAAType", 0); // Avoid known-broken experimental FXAA.
             set("RenderShadowDetail", 0);
+            set("RenderShadowResolutionScale", 0.5f);
             set("RenderDeferredSSAO", false);
+            set("RenderDeferredHBAO", false);
             set("RenderGlow", false);
             set("RenderScreenSpaceReflections", false);
+            set("RenderScreenSpaceReflectionGlossySamples", 1);
             set("RenderReflectionProbeDetail", 0);
+            set("RenderReflectionProbeCount", 16);
+            set("RenderAvatarMaxNonImpostors", 4);
+            set("RenderMaxPartCount", 512);
+            set("RenderLocalLightCount", 16);
             set("RenderDepthOfField", false);
             set("RenderMotionBlur", false);
             set("RenderVolumetricLighting", false);
-            set("RenderVolumeLODFactor", 1.0);
-            set("RenderTreeLODFactor", 1.0);
-            set("RenderTerrainLODFactor", 1.0);
-            set("RenderAvatarLODFactor", 1.0);
+            atMostF32("RenderVolumeLODFactor", 0.75f);
+            atMostF32("RenderTreeLODFactor", 0.8f);
+            atMostF32("RenderTerrainLODFactor", 1.0f);
+            atMostF32("RenderAvatarLODFactor", 0.5f);
             set("KombatantNativeFX", false);
         }
         else
