@@ -49,6 +49,9 @@ jobs:
         run: |
           git apply --check kombatant.patch
           git apply kombatant.patch
+      - name: Preflight native LLSD settings and keyboard records
+        shell: pwsh
+        run: python kami/performance/validate-config-inputs.py
       - name: Restore omitted snapshot preview source
         shell: python
         run: |
