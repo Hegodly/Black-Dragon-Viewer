@@ -110,34 +110,41 @@ edit(renderer,anchor,anchor+'''        static LLCachedControl<F32> kami_temperat
             native_fx() ? llclamp((F32)kami_vibrance, 0.f, 0.5f) : 0.f);
 ''')
 
-# 3) Make cost-aware existing AO, shadows, and volumetric options available in
-# the native Graphics Lab. These ARE real renderer settings, not new RT passes.
-xui="indra/newview/skins/default/xui/en/floater_kombatant_effects.xml"
-p=R/xui
+# 3) Put controls in the scrollable Display panel so low-resolution laptop
+# screens can reach every quality option. The separate Graphics Lab remains
+# unchanged; a 1320px floating dialog would be unusable on smaller screens.
+panel="indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"
+p=R/panel
 s=p.read_text(encoding="utf-8-sig")
-if s.count('height="860"')!=1:
-    raise RuntimeError("Graphics Lab layout changed")
-s=s.replace('height="860"','height="1320"',1)
-if s.count('</floater>')!=1:
-    raise RuntimeError("Unexpected Graphics Lab XML")
-additional=''' <text name="kami_quality_heading" left="24" top="872" width="512" height="24" font="SansSerifLarge">Performance-friendly visual upgrades</text>
- <slider name="kami_soft_avatar" label="Soft avatar lighting (all rigged surfaces)" control_name="KAMIAvatarSoftLighting" left="24" top="907" width="512" height="20" label_width="255" min_val="0" max_val="0.35" increment="0.025" decimal_digits="3" />
- <slider name="kami_rim_scatter" label="Avatar rim translucency (approximate)" control_name="KAMIAvatarRimTranslucency" left="24" top="939" width="512" height="20" label_width="255" min_val="0" max_val="0.2" increment="0.025" decimal_digits="3" />
- <slider name="kami_color_temp" label="Color temperature (neutral at 0)" control_name="KAMIColorTemperature" left="24" top="971" width="512" height="20" label_width="255" min_val="-1" max_val="1" increment="0.05" decimal_digits="2" />
- <slider name="kami_vibrance" label="Color vibrance" control_name="KAMIColorVibrance" left="24" top="1003" width="512" height="20" label_width="255" min_val="0" max_val="0.5" increment="0.05" decimal_digits="2" />
- <text name="kami_contact_label" left="24" top="1039" width="512" height="22" font="SansSerifLarge">Existing ambient contact shading</text>
- <check_box name="kami_ssao_enable" label="Enable contact ambient occlusion" control_name="RenderDeferredSSAO" left="24" top="1069" width="512" height="22" />
- <slider name="kami_ssao_scale" label="AO contact radius" control_name="RenderSSAOScale" left="24" top="1100" width="512" height="20" label_width="255" min_val="100" max_val="800" increment="25" decimal_digits="0" />
- <slider name="kami_shadow_scale" label="Shadow resolution (costs GPU memory)" control_name="RenderShadowResolutionScale" left="24" top="1132" width="512" height="20" label_width="255" min_val="0.25" max_val="1" increment="0.05" decimal_digits="2" />
- <check_box name="kami_fog_enable" label="Volumetric lighting / fog rays" control_name="RenderVolumetricLighting" left="24" top="1164" width="512" height="22" />
- <combo_box name="kami_fog_samples" control_name="RenderVolumetricLightingResolution" left="24" top="1192" width="512" height="24">
-  <combo_box.item label="Fog: Low (8 steps)" value="8" />
-  <combo_box.item label="Fog: Balanced (16 steps)" value="16" />
-  <combo_box.item label="Fog: High (32 steps)" value="32" />
- </combo_box>
- <text name="kami_quality_note" left="24" top="1226" width="512" height="77" wrap="true">Avatar soft lighting and translucent rim shading are cheap approximations on classic skinned avatars, not face-only or physically accurate skin SSS; clothing may be affected. Contact shading uses existing SSAO/HBAO, not ray-traced contact shadows. All new shader effects default to 0. Disable fog and HBAO on weak GPUs.</text>
+start=s.index('<layout_panel name="kombatant_display_quick"')
+end=s.index('</layout_panel>', start)
+area=s[start:end]
+if 'height="2510" auto_resize="false"' not in area:
+    raise RuntimeError("Smart Performance Display panel layout changed")
+area=area.replace('height="2510" auto_resize="false"',
+                  'height="3020" auto_resize="false"',1)
+additional='''       <text name="kami_quality_heading" left="12" top="2530" width="465" height="24" font="SansSerifLarge">KAMI visual quality / low-cost effects</text>
+       <slider name="kami_soft_avatar" label="Soft avatar lighting (all rigged surfaces)" control_name="KAMIAvatarSoftLighting" left="12" top="2564" width="465" height="20" label_width="245" min_val="0" max_val="0.35" increment="0.025" decimal_digits="3" />
+       <slider name="kami_rim_scatter" label="Avatar rim translucency (approximate)" control_name="KAMIAvatarRimTranslucency" left="12" top="2596" width="465" height="20" label_width="245" min_val="0" max_val="0.2" increment="0.025" decimal_digits="3" />
+       <slider name="kami_color_temp" label="Color temperature (neutral at 0)" control_name="KAMIColorTemperature" left="12" top="2628" width="465" height="20" label_width="245" min_val="-1" max_val="1" increment="0.05" decimal_digits="2" />
+       <slider name="kami_vibrance" label="Color vibrance" control_name="KAMIColorVibrance" left="12" top="2660" width="465" height="20" label_width="245" min_val="0" max_val="0.5" increment="0.05" decimal_digits="2" />
+       <text name="kami_contact_label" left="12" top="2700" width="465" height="22" font="SansSerifLarge">Contact shading, shadows and atmosphere</text>
+       <check_box name="kami_ssao_enable" label="Enable contact ambient occlusion" control_name="RenderDeferredSSAO" left="12" top="2730" width="465" height="22" />
+       <slider name="kami_ssao_scale" label="AO contact radius" control_name="RenderSSAOScale" left="12" top="2761" width="465" height="20" label_width="245" min_val="100" max_val="800" increment="25" decimal_digits="0" />
+       <slider name="kami_shadow_scale" label="Shadow resolution (uses more GPU memory)" control_name="RenderShadowResolutionScale" left="12" top="2793" width="465" height="20" label_width="245" min_val="0.25" max_val="1" increment="0.05" decimal_digits="2" />
+       <check_box name="kami_fog_enable" label="Volumetric lighting / fog rays" control_name="RenderVolumetricLighting" left="12" top="2825" width="465" height="22" />
+       <combo_box name="kami_fog_samples" control_name="RenderVolumetricLightingResolution" left="12" top="2853" width="465" height="24">
+        <combo_box.item label="Fog: Low (8 steps)" value="8" />
+        <combo_box.item label="Fog: Balanced (16 steps)" value="16" />
+        <combo_box.item label="Fog: High (32 steps)" value="32" />
+       </combo_box>
+       <text name="kami_quality_note" left="12" top="2890" width="465" height="98" wrap="true">Avatar soft light and rim translucency are lightweight approximations on classic skinned avatars, not face-only or physically accurate skin SSS; clothing may also be affected. Contact shading uses existing SSAO/HBAO, not ray-traced contact shadows. New shader effects default off; turn down fog and ambient occlusion on weaker GPUs.</text>
 '''
-s=s.replace('</floater>',additional+'</floater>',1)
+area+=additional
+s=s[:start]+area+s[end:]
+if s.count('height="2514"')!=1:
+    raise RuntimeError("Scrollable Display panel geometry changed")
+s=s.replace('height="2514"','height="3024"',1)
 p.write_text(s,encoding="utf-8")
 
 # Save additional controls with existing Graphics Lab "Restore" behavior.
@@ -171,7 +178,7 @@ edit(smart,
 
 # Ensure settings, shader integration, and UI XML are genuinely updated.
 ET.parse(R/settings)
-ET.parse(R/xui)
+ET.parse(R/panel)
 assert 'kami_avatar_soft_light' in (R/avatar).read_text(encoding="utf-8")
 assert 'uniform2f(kami_balance' in (R/renderer).read_text(encoding="utf-8")
 assert 'KAMIColorTemperature' in (R/settings).read_text(encoding="utf-8")
