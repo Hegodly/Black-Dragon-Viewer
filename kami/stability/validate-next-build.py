@@ -78,7 +78,7 @@ verify("nonworking tonal sliders and reset buttons removed from Display",
                for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
 verify("upstream exposure, sharpening and glow renderer code retained",
        all(token in read("indra/newview/pipeline.cpp")
-           for token in ("generateExposure(", "applyCAS(", "generateGlow(", "combineGlow("))) )
+           for token in ("generateExposure(", "applyCAS(", "generateGlow(", "combineGlow(")))
 verify("broken DoF / Bloom / Motion Blur controls removed from Display",
        not any(n.get("control_name") in {
            "RenderDepthOfField", "RenderDepthOfFieldAlphas",
