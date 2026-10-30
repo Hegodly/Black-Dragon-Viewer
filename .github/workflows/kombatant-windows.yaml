@@ -105,6 +105,9 @@ jobs:
       - name: Clean KAMI login layout and identity
         shell: pwsh
         run: python kami/theme/clean-login.py
+      - name: Restore approved KAMI Beyond Reality login theme
+        shell: pwsh
+        run: python kami/theme/fix-login-theme.py
       - name: Correct FPS cap units and separate quality target
         shell: pwsh
         run: python kami/performance/fix-fps-controls.py
