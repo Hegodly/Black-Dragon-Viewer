@@ -43,24 +43,24 @@ fire_ui=[
 ]
 for name in fire_ui:
  assert (out/name).is_file(), f'Missing approved in-world Fire Garden skin asset: {name}'
-# Bundle locally authored shader effects, licensed presets and the user's
-# optional import/activation tools, without shipping private MXAO source.
-built_in_fx=[
+# Ship KAMI-authored shader assets and a safe copier for installation
+# through a user's separate, externally installed GShade/ReShade runtime.
+external_fx=[
  'KAMI-FX/Shaders/KAMI-FX.fx',
  'KAMI-FX/FireGarden.ini',
  'KAMI-FX/Cinematic.ini',
  'KAMI-FX/Clean4K.ini',
  'KAMI-FX/FX-LICENSE.txt',
- 'KAMI-GSHADE-FX-README.md',
- 'Import-GShade-Preset.ps1',
- 'Enable-KAMI-FX.ps1',
- 'Install-Private-MXAO.ps1',
- 'KAMIMXAO64.dll',
+ 'KAMI-GSHADE-EXTERNAL-SETUP.md',
+ 'Install-GShade-Assets.ps1',
 ]
-for name in built_in_fx:
- assert (out/name).is_file(), f'Missing KAMI built-in FX or MXAO personal-install component: {name}'
-assert not list(out.rglob('MartysMods_MXAO.fx')), 'Copyright-restricted MXAO source cannot be publicly redistributed'
-assert not list(out.rglob('KAMI_MXAO_PRIVATE.enabled')) and not list(out.rglob('KAMI_EFFECTS_BUNDLED.enabled')), 'Optional FX must remain disabled on first launch'
+for name in external_fx:
+ assert (out/name).is_file(), f'Missing external GShade/ReShade asset: {name}'
+for name in ('KAMIMXAO64.dll', 'Install-Private-MXAO.ps1',
+             'Import-GShade-Preset.ps1','Enable-KAMI-FX.ps1'):
+ assert not (out/name).exists(), f'Legacy embedded shader runtime component shipped: {name}'
+assert not list(out.rglob('MartysMods_MXAO.fx')), 'Private MXAO source must not be redistributed'
+assert not list(out.rglob('KAMI_MXAO_PRIVATE.enabled')) and not list(out.rglob('KAMI_EFFECTS_BUNDLED.enabled')), 'No FX autoload markers allowed'
 pref=ET.parse(out/'skins/default/xui/en/floater_preferences.xml').getroot()
 assert any(x.get('name')=='vicon' and x.get('image_name')=='KAMI_FireGardenPrefs' for x in pref.iter()), 'Preferences still use Black Dragon wallpaper'
 for obsolete in ('floater_kombatant_effects.xml','floater_kombatant_studio.xml'):
