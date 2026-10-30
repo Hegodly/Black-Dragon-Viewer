@@ -195,45 +195,34 @@ assert not any((n.text or "").strip() in
                {"Depth of Field", "Motion Blur", "Post Processing Glow", "Glow Quality:"}
                for n in root.iter("text")), "Orphaned effect heading"
 
-# In-world QA: the optional private MXAO controls are not functional.
-# GShade/KAMI-FX uses the SAME ReShade runtime, so retire only MXAO's own
-# controls. Keep the GShade importer, effect pack and native SSAO/HBAO.
-mxao_widgets = {
+# KAMI ships authored FX assets for a user's external GShade/ReShade.
+# No internal MXAO or GShade compatibility controls belong in Display.
+retired_external_fx_widgets = {
     "kami_mxao_heading", "kami_mxao_enable", "kami_mxao_amount",
     "kami_mxao_radius", "kami_mxao_quality", "kami_mxao_overlay",
     "kami_mxao_status", "kami_mxao_install", "kami_mxao_help",
+    "kami_gshade_heading", "kami_gshade_toggle", "kami_gshade_overlay",
+    "kami_gshade_import", "kami_fx_enable", "kami_gshade_status",
+    "kami_gshade_help",
 }
-quick = next((n for n in root.iter("layout_panel")
-              if n.get("name") == "kombatant_display_quick"), None)
-assert quick is not None, "KAMI Display scroll panel missing"
-removed_mxao = []
+retired_external_fx_settings = {
+    "KAMIMXAO", "KAMIMXAOAmount", "KAMIMXAORadius",
+    "KAMIMXAOQuality", "KAMIMXAOOverlay", "KAMIGShadeCompatibility",
+    "KAMIGShadeOverlay",
+}
 for parent in root.iter():
     for child in list(parent):
-        if child.get("name") in mxao_widgets:
-            removed_mxao.append(child.get("name"))
+        if child.get("name") in retired_external_fx_widgets or (
+                child.get("control_name") in retired_external_fx_settings):
             parent.remove(child)
-assert set(removed_mxao) == mxao_widgets and len(removed_mxao) == len(mxao_widgets), (
-    "Unexpected private MXAO controls; prevent orphaned widgets", removed_mxao)
-
-# Private MXAO originally reserved 400 px between native graphics and
-# GShade FX. Close that gap while preserving all later widgets and their
-# relative placement. This also keeps the Display scroll bounds accurate.
-old_height = int(quick.get("height"))
-for widget in quick:
-    top = widget.get("top")
-    if top is not None:
-        try:
-            value = int(top)
-        except ValueError:
-            continue
-        if value >= 4650:
-            widget.set("top", str(value - 400))
-quick.set("height", str(old_height - 400))
-for ancestor in root.iter():
-    if ancestor is not quick and ancestor.get("height") == str(old_height + 4):
-        ancestor.set("height", str(old_height - 396))
-assert not any(n.get("name") in mxao_widgets for n in root.iter()), (
-    "Nonfunctional private MXAO widget remained")
+assert not any(
+    n.get("name") in retired_external_fx_widgets or
+    n.get("control_name") in retired_external_fx_settings
+    for n in root.iter()
+), "Legacy built-in MXAO/GShade widget remained"
+# Never shrink the Display stack based on offsets from a deleted plugin.
+# Following native physics, world, atmosphere and recovery controls are placed
+# relative to the previous stack height and must keep those coordinates.
 
 # Existing core toggles inherit the *actual* skinned assets. Explicitly check
 # that our Fire Garden theme was applied to each widget family in textures.xml.
@@ -261,6 +250,6 @@ manifest.write_text(
     "All switches remain real viewer settings; themed by skin images/colors.\n"
     "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n"
     "Removed broken DoF, Bloom/Glow and Motion Blur settings and fine-tuning UI.\n"
-    "Retired nonworking private MXAO panel and installer controls; GShade remains.\n",
+    "Retired in-viewer MXAO/GShade controls. FX assets support external installs.\n",
     encoding="utf-8")
-print(f"KAMI graphics base kit: {len(controls)} core controls preserved; removed nonworking Exposure/Sharpening, DoF, Bloom, Motion Blur, and private MXAO UI.")
+print(f"KAMI graphics base kit: {len(controls)} core controls preserved; removed broken DoF/Bloom/Motion Blur/MXAO/GShade controls; external FX asset support retained.")
