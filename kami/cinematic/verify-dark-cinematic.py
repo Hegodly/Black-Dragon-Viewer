@@ -21,9 +21,7 @@ ui=ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xm
 names={n.get("name"):n for n in ui.iter() if n.get("name")}
 keys=[n.text for n in settings if n.tag=="key"]
 
-test("unique opt-in material and status settings",
-     keys.count("KAMICinematicMaterials")==1 and
-     keys.count("KAMICinematicStatus")==1)
+test("separate settings",all(keys.count(k)==1 for k in ("KAMICinematicMaterials","KAMICinematicLighting","KAMIAvatarQualityFPS","KAMICinematicStatus")))
 test("PBR enhancement reads real glTF material roughness",
      "GBUFFER_FLAG_HAS_PBR" in shader and
      "float perceptualRoughness = orm.g;" in shader and
@@ -53,16 +51,13 @@ test("cinematic preview uses EEP clone with restore and takeover protection",
      'KAMIAtmosphere::active()' in cine and
      'ownLocal' in atmos)
 test("avatar live LOD and native crowd FPS are used",
-     'gSavedSettings.setBOOL("KAMIAvatarQualityFPS", true);' in cine and
+     names["kami_cine_avatar"].get("control_name")=="KAMIAvatarQualityFPS" and
      'mAdjustedPixelArea = llmax(mAdjustedPixelArea, 262144.f);' in avatar and
      'sMaxNonImpostors = 8;' in avatar and
      'handleKAMIAvatarQualityChanged' in control)
-test("preview and restoration are real native button actions",
-     all(n in names and names[n].tag=="button" and
-         ('"'+n+'"') in prefs
-         for n in ('kami_cine_apply','kami_cine_restore')) and
-     'KAMICinematic::apply();' in prefs and
-     'KAMICinematic::restore();' in prefs)
+test("three real independent checkboxes",all(names[n].tag=="check_box" and names[n].get("control_name")==c for n,c in (("kami_cine_materials","KAMICinematicMaterials"),("kami_cine_lighting","KAMICinematicLighting"),("kami_cine_avatar","KAMIAvatarQualityFPS"))) and "kami_cine_apply" not in names and "kami_cine_restore" not in names)
+test("lighting has actual on/off callback", 'KAMICinematic::setLighting(ctrl->getValue().asBoolean());' in prefs and 'inline void setLighting(bool enabled)' in cine)
+test("lighting independent of other quality settings", 'gSavedSettings.setBOOL("KAMICinematicMaterials", true)' not in cine and 'gSavedSettings.setBOOL("KAMIAvatarQualityFPS", true)' not in cine)
 quick=names["kombatant_display_quick"]
 stack=names["gfx_stack"]
 scroll=names["gfx_scroll_panel"]
