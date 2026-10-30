@@ -138,6 +138,9 @@ jobs:
       - name: Wire five verified quality presets to actual renderer controls
         shell: pwsh
         run: python kami/performance/verify-and-wire-quality-presets.py
+      - name: Stabilize and expose actual native 4K/8K world buffer resolution
+        shell: pwsh
+        run: python kami/stability/fix-live-resolution-quality.py
       - name: Apply approved Fire Garden theme across all native KAMI windows
         shell: pwsh
         run: python kami/theme/apply-fire-garden-ui.py
