@@ -27,5 +27,19 @@ if (!$StageOnly) {
     }
     Copy-Item "$PSScriptRoot/Install-Private-MXAO.ps1" $output -Force
     Copy-Item "$PSScriptRoot/README.md" "$output/MXAO-PRIVATE-SETUP.md" -Force
-    # Deliberately do not fetch/stage MXAO or enable marker in CI/public artifacts.
+    # Ship our original KAMI effect source and presets. The private author's
+    # MXAO shader is intentionally NOT redistributed, but its setup button is.
+    $fxsource = Join-Path $root 'kami/gshade/effects'
+    $fxout = Join-Path $output 'KAMI-FX'
+    New-Item -ItemType Directory -Path (Join-Path $fxout 'Shaders') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $fxout 'Textures') -Force | Out-Null
+    Copy-Item (Join-Path $fxsource 'KAMI-FX.fx') (Join-Path $fxout 'Shaders/KAMI-FX.fx') -Force
+    foreach ($preset in @('FireGarden.ini', 'Cinematic.ini', 'Clean4K.ini', 'FX-LICENSE.txt')) {
+        Copy-Item (Join-Path $fxsource $preset) (Join-Path $fxout $preset) -Force
+    }
+    Copy-Item (Join-Path $root 'kami/gshade/Enable-KAMI-FX.ps1') $output -Force
+    Copy-Item (Join-Path $root 'kami/gshade/Import-GShade-Preset.ps1') $output -Force
+    Copy-Item (Join-Path $root 'kami/gshade/README.md') (Join-Path $output 'KAMI-GSHADE-FX-README.md') -Force
+    # Deliberately do not fetch/stage the proprietary MXAO or enable any
+    # personal runtime marker in CI/public artifacts.
 }
