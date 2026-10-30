@@ -9,7 +9,7 @@ on:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -188,6 +188,12 @@ jobs:
       - name: Verify reversible avatar-quality live LOD and complete Display scroll
         shell: pwsh
         run: python kami/avatars/verify-avatar-quality.py
+      - name: Add opt-in native Dark Cinematic PBR material, EEP lighting and avatar detail
+        shell: pwsh
+        run: python kami/cinematic/apply-dark-cinematic.py
+      - name: Verify all three Dark Cinematic live-render feature paths
+        shell: pwsh
+        run: python kami/cinematic/verify-dark-cinematic.py
       - name: Verify KAMI four signature feature engines, controls and telemetry
         shell: pwsh
         run: python kami/signature/verify-signature-features.py
