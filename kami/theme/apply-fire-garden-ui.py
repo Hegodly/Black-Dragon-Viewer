@@ -49,7 +49,7 @@ def outline(canvas, glow=False, selected=False):
 
 def widget(filename, a=obsidian,b=smoke, selected=False, glow=False):
     p=WIN/filename
-    canvas=gradient(128,32,a,b,251)
+    canvas=gradient(128,64 if filename in ("kami_fg_window.png","kami_fg_panel.png","kami_fg_tab.png","kami_fg_tab_selected.png") else 32,a,b,251)
     outline(canvas,selected=selected,glow=glow)
     canvas.save(p,optimize=True)
     return p
