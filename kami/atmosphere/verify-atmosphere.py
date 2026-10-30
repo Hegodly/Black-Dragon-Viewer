@@ -29,7 +29,7 @@ gate("mood not automatically applied", "KAMIAtmosphere::apply();" in prefs and
      not "KAMIAtmosphere::apply();" in text("indra/newview/llviewerdisplay.cpp"))
 gate("no parcel / estate mutation",
      all(s not in header for s in ('updateParcel(', 'updateRegion(',
-          'setExperienceEnvironment(', 'setSharedEnvironment(', 'setAgentPosition(', 'sendMessage(')))
+          'setExperienceEnvironment(', 'setSharedEnvironment(', 'setAgentPosition(', 'sendMessage('))
      and 'ENV_PARCEL' not in header and 'ENV_REGION' not in header)
 gate("actual local EEP update", 'setEnvironment(LLEnvironment::ENV_LOCAL,sky)' in header)
 gate("actual sky color controls", all(x in header for x in (
