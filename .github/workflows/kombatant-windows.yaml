@@ -2,11 +2,19 @@ name: KAMI Viewer native Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**]
 permissions:
   contents: read
 jobs:
+  framegen-shaders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install software GL test runtime
+        run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri
+      - name: Execute shipped frame-generation shaders on Mesa
+        run: python3 kami/framegen/test-shaders.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 180
@@ -76,6 +84,9 @@ jobs:
       - name: Integrate shadow filtering, reflections, shader caching and auto optimization
         shell: pwsh
         run: python kami/performance/add-mw-render-controls.py
+      - name: Integrate experimental OpenGL optical-flow frame generation
+        shell: pwsh
+        run: python kami/framegen/apply-framegen.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
