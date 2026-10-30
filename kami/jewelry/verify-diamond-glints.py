@@ -27,7 +27,7 @@ require("no new texture or history buffers", all(word not in glint for word in (
         "sampler2D", "imageStore", "frameIndex", "gl_FragCoord", "atomic")))
 require("light/view/normal driven, not frame-time randomized",
         all(word in glint for word in ("dot(n, h)", "dot(n, l)", "dot(n, v)",
-                                       "pow(nDotH, exponent)", "smoothstep(7.0, 24.0"))))
+                                       "pow(nDotH, exponent)", "smoothstep(7.0, 24.0")))
 require("direct reflection and cube-snapshot suppression",
         "color.rgb += kamiDiamondGlints(" in shader and
         "cube_snapshot == 0" in shader and "!gCubeSnapshot" in pipeline)
