@@ -397,6 +397,9 @@ namespace KAMISmart
         if (!wasActive)
         {
             storeBackup();
+            // The fixed visual quality levels no longer describe these
+            // adaptive budgets. Avoid showing stale 'Ultra' during Potato.
+            set("KAMIQualityPreset", -1);
             stage = -1;
             wasActive = true;
             needsBaselineRestore = true;
