@@ -73,6 +73,9 @@ jobs:
       - name: Add performance-friendly lighting and skin options
         shell: pwsh
         run: python kami/performance/add-balanced-graphics.py
+      - name: Add efficient face lighting, filmic highlights and graphics quality controls
+        shell: pwsh
+        run: python kami/performance/add-efficient-graphics.py
       - name: Validate native graphics settings and panels
         shell: pwsh
         run: |
