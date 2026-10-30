@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**]
 permissions:
   contents: read
 jobs:
@@ -87,9 +87,15 @@ jobs:
       - name: Integrate experimental OpenGL optical-flow frame generation
         shell: pwsh
         run: python kami/framegen/apply-framegen.py
+      - name: Build optional private ReShade FX runtime (no MXAO source)
+        shell: pwsh
+        run: ./kami/mxao/build-runtime.ps1
       - name: Integrate live current-scene graphics preview
         shell: pwsh
         run: python kami/preview/apply-live-preview.py
+      - name: Integrate optional private MXAO adapter
+        shell: pwsh
+        run: python kami/mxao/apply-private-mxao.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
@@ -128,6 +134,9 @@ jobs:
       - name: Stage AMD FSR and Intel XeSS runtimes
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1 -StageOnly
+      - name: Stage private runtime and personal installer (no MXAO source)
+        shell: pwsh
+        run: ./kami/mxao/build-runtime.ps1 -StageOnly
       - name: Stage KAMI Viewer portable executable
         shell: pwsh
         run: |
