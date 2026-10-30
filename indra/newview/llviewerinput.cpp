@@ -1743,7 +1743,7 @@ bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask,
             {
                 mMouseLevel[clicktype] = MOUSE_STATE_CLICK;
             }
-            else 
+            else
             {
                 mMouseLevel[clicktype] = MOUSE_STATE_UP;
             }
