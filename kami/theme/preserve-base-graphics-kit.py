@@ -86,11 +86,26 @@ assert auto.get("enabled_control")=="RenderHDREnabled"
 
 # Brand the existing basic graphics section without moving or replacing ANY
 # of the functional controls. The user explicitly asked to leave toggles.
-headers=[x for x in root.iter() if x.get("name")=="general_label"]
-assert len(headers)==1,"Original core graphics section is missing"
-headers[0].text="KAMI CORE GRAPHICS"
-headers[0].set("tool_tip","Built-in Fire Garden themed viewer graphics. Original functional switches, sliders and menu items remain accessible.")
-headers[0].set("text_color","0.72 0.85 0.96 1")
+headers=[x for x in root.iter("text") if x.get("name")=="general_label"]
+if not headers:
+    # Some themed/compact UI layouts remove the legacy Basic Settings
+    # heading. Preserve those layouts instead of failing the entire build.
+    headers=[x for x in root.iter("text") if (x.text or "").strip().lower() in
+             {"basic settings:","kami graphics","kombatant graphics"}]
+if headers:
+    headers[0].text="KAMI CORE GRAPHICS"
+    headers[0].set("tool_tip","Built-in Fire Garden themed viewer graphics. Original functional switches, sliders and menu items remain accessible.")
+    headers[0].set("text_color","0.72 0.85 0.96 1")
+else:
+    # Preserve all 42 underlying controls. A harmless heading is appended
+    # to the end of the scroll area rather than shifting their positions.
+    stack=[x for x in root.iter() if x.get("name")=="kombatant_display_quick"]
+    assert len(stack)==1, "KAMI graphics scroll area missing"
+    import xml.etree.ElementTree as ET
+    heading=ET.SubElement(stack[0],"text",{"name":"kami_core_graphics_label",
+        "left":"12","top":"8","width":"465","height":"22",
+        "font":"SansSerifLarge","text_color":"0.72 0.85 0.96 1"})
+    heading.text="KAMI CORE GRAPHICS"
 
 # Existing core toggles inherit the *actual* skinned assets. Explicitly check
 # that our Fire Garden theme was applied to each widget family in textures.xml.
