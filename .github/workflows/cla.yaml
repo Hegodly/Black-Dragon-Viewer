@@ -8,6 +8,8 @@ on:
 
 jobs:
   cla:
+    # Upstream-only credential, unavailable in third-party public forks.
+    if: github.repository == 'secondlife/viewer'
     name: Check CLA
     runs-on: ubuntu-latest
     steps:

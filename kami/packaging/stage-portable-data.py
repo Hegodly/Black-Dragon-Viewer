@@ -2,6 +2,7 @@
 """Stage runtime data omitted by the unpackaged CMake dependency-copy target."""
 from pathlib import Path
 import argparse
+import hashlib
 import shutil
 import xml.etree.ElementTree as ET
 R=Path(__file__).resolve().parents[2]
@@ -18,9 +19,85 @@ for name in ('featuretable.txt','cube.dae'):
 shutil.copyfile(source/'licenses-win32.txt',out/'licenses.txt')
 # Keep source attribution available in the portable copy.
 shutil.copyfile(R/'doc/contributions.txt',out/'app_settings/contributors-source.txt')
+# Ship only a local installer, never the copyrighted MP3 recording.
+for installer in ('Install-KAMI-Login-Music.ps1', 'Install-KAMI-Login-Music.cmd'):
+  shutil.copyfile(R/'kami/theme'/installer, out/installer)
+assert (out/'Install-KAMI-Login-Music.ps1').is_file()
+assert (out/'Install-KAMI-Login-Music.cmd').is_file()
+assert not (out/'KAMI-login.mp3').exists(), 'Public portable package must not include copyrighted audio'
+
 required=['app_settings/settings.xml','app_settings/settings_blackdragon.xml','app_settings/shaders/class3/deferred/softenLightF.glsl','character/avatar_skeleton.xml','skins/default/xui/en/panel_login.xml','skins/default/textures/windows/kami_fire_garden.jpg','skins/default/textures/windows/kami_logo.jpg','featuretable.txt','cube.dae']
 for name in required:assert (out/name).is_file(),f'Incomplete portable data: {name}'
+# The approved theme must ship in-world as well as on the login screen.
+fire_ui=[
+ 'skins/default/xui/en/floater_preferences.xml',
+ 'skins/default/KAMI-BASE-GRAPHICS-KIT.txt',
+ 'skins/default/KAMI-SIGNATURE-FEATURES.txt',
+ 'skins/default/KAMI-ATMOSPHERE-ENGINE.txt',
+ 'skins/default/KAMI-SESSION-RECOVERY.txt',
+ 'skins/default/colors.xml',
+ 'skins/default/textures/windows/kami_fg_window.png',
+ 'skins/default/textures/windows/kami_fg_panel.png',
+ 'skins/default/textures/windows/kami_fg_button.png',
+ 'skins/default/textures/windows/kami_fg_preferences.png',
+]
+for name in fire_ui:
+ assert (out/name).is_file(), f'Missing approved in-world Fire Garden skin asset: {name}'
+# Ship KAMI-authored shader assets and a safe copier for installation
+# through a user's separate, externally installed GShade/ReShade runtime.
+external_fx=[
+ 'KAMI-FX/Shaders/KAMI-FX.fx',
+ 'KAMI-FX/FireGarden.ini',
+ 'KAMI-FX/Cinematic.ini',
+ 'KAMI-FX/Clean4K.ini',
+ 'KAMI-FX/FX-LICENSE.txt',
+ 'KAMI-GSHADE-EXTERNAL-SETUP.md',
+ 'Install-GShade-Assets.ps1',
+]
+for name in external_fx:
+ assert (out/name).is_file(), f'Missing external GShade/ReShade asset: {name}'
+for name in ('KAMIMXAO64.dll', 'Install-Private-MXAO.ps1',
+             'Import-GShade-Preset.ps1','Enable-KAMI-FX.ps1'):
+ assert not (out/name).exists(), f'Legacy embedded shader runtime component shipped: {name}'
+assert not list(out.rglob('MartysMods_MXAO.fx')), 'Private MXAO source must not be redistributed'
+assert not list(out.rglob('KAMI_MXAO_PRIVATE.enabled')) and not list(out.rglob('KAMI_EFFECTS_BUNDLED.enabled')), 'No FX autoload markers allowed'
+pref=ET.parse(out/'skins/default/xui/en/floater_preferences.xml').getroot()
+assert any(x.get('name')=='vicon' and x.get('image_name')=='KAMI_FireGardenPrefs' for x in pref.iter()), 'Preferences still use Black Dragon wallpaper'
+for obsolete in ('floater_kombatant_effects.xml','floater_kombatant_studio.xml'):
+ assert not (out/'skins/default/xui/en'/obsolete).exists(), f'Deleted Lab/Studio floater was packaged: {obsolete}'
+
 for name in ('app_settings/settings.xml','app_settings/settings_blackdragon.xml','skins/default/xui/en/panel_login.xml'):ET.parse(out/name)
+# Fail the release before packaging if a login asset silently regresses to the
+# original Black Dragon HTML/video layout or has a missing image texture.
+login=ET.parse(out/'skins/default/xui/en/panel_login.xml').getroot()
+textures=ET.parse(out/'skins/default/textures/textures.xml').getroot()
+named={node.get('name'):node for node in login.iter() if node.get('name')}
+wallpaper=named.get('kami_fire_garden')
+emblem=named.get('kami_header_emblem')
+assert wallpaper is not None and wallpaper.get('image_name')=='KAMI_FireGarden', 'KAMI wallpaper not selected in login'
+assert emblem is not None and emblem.get('image_name')=='KAMI_Logo', 'KAMI login emblem missing'
+assert named.get('kami_login_title') is not None and 'K A M I' in (named['kami_login_title'].text or ''), 'KAMI title missing'
+assert named.get('kami_login_subtitle') is not None and 'B E Y O N D' in (named['kami_login_subtitle'].text or ''), 'KAMI tagline missing'
+assert named.get('kami_login_music_controls') is not None, 'Login soundtrack controls missing'
+assert named.get('kami_login_music_status') is not None, 'Music error/status label missing from login'
+assert (out/'Install-KAMI-Login-Music.cmd').read_text(encoding='utf-8').find('Install-KAMI-Login-Music.ps1')>=0, 'MP3 installer command missing'
+
+assert not any(node.tag=='web_browser' for node in login.iter()), 'Legacy remote video/browser still present'
+assert not any(node.get('name') in ('login_stack','login_bg') for node in login.iter()), 'Legacy Black Dragon login layer still present'
+registry={node.get('name'):node.get('file_name') for node in textures.findall('texture')}
+assert registry.get('KAMI_FireGarden') == 'windows/kami_fire_garden.jpg'
+assert registry.get('KAMI_Logo') == 'windows/kami_logo.jpg'
+wall=out/'skins/default/textures/windows/kami_fire_garden.jpg'
+assert wall.read_bytes()==(R/'kami/theme/assets/fire_garden.jpg').read_bytes(), 'Packaged fire-garden artwork differs from approved source'
+assert (out/'skins/default/textures/windows/kami_logo.jpg').stat().st_size>4096, 'KAMI emblem file missing or truncated'
+assert (out/'skins/default/textures/windows/startup_logo.png').stat().st_size>4096, 'KAMI startup logo missing'
+(out/'KAMI-THEME-MANIFEST.txt').write_text(
+    'KAMI Beyond Reality - static Fire Garden login theme\\n'
+    + 'panel_login.xml SHA256: '+hashlib.sha256((out/'skins/default/xui/en/panel_login.xml').read_bytes()).hexdigest()+'\\n'
+    + 'kami_fire_garden.jpg SHA256: '+hashlib.sha256(wall.read_bytes()).hexdigest()+'\\n'
+    + 'Status: branded login, no Black Dragon video/changelog overlay\\n',
+    encoding='utf-8')
+print('Approved KAMI Beyond Reality login artwork and layout verified in portable release.')
 print(f'Runtime assets staged and validated: {out}')
 
 # Repair overlays can be extracted directly over an existing portable folder.

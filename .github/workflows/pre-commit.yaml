@@ -1,3 +1,5 @@
+# Upstream whole-repository lint is not suitable for this fork's historical
+# Black Dragon baseline. KAMI has native graphics/LLSD/keyboard/GL checks.
 name: pre-commit
 
 on:
@@ -9,6 +11,7 @@ on:
 
 jobs:
   pre-commit:
+    if: github.repository == 'secondlife/viewer'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

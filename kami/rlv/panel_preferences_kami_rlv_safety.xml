@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KAMI wearer-owned RLVa safety center. NO engine or enabling switch. -->
+<panel
+    name="KAMI RLV Safety"
+    follows="all"
+    layout="topleft"
+    left="0"
+    top="45"
+    height="408"
+    width="510"
+    label="RLV Safety"
+    background_visible="true"
+    bg_alpha_image="Panel_Background">
+  <text
+      name="kami_rlv_heading"
+      font="SansSerifLarge"
+      text_color="LabelTextColor"
+      left="16"
+      top="14"
+      width="464"
+      height="30">神  KAMI RLV SAFETY  |  安全</text>
+  <text
+      name="kami_rlv_guard_status"
+      font="SansSerifBold"
+      text_color="LabelTextColor"
+      left="16"
+      top="50"
+      width="468"
+      height="35"
+      word_wrap="true">RLVa engine unavailable. All RLV commands are disabled.</text>
+  <text
+      name="kami_rlv_explanation"
+      font="SansSerif"
+      text_color="LabelTextColor"
+      left="16"
+      top="98"
+      width="472"
+      height="76"
+      word_wrap="true">KAMI has no functional RLVa command processor in this build. The old unsupported switches are intentionally unavailable. No scripted object or relay can enable RLV by toggling a legacy setting.</text>
+  <text
+      name="kami_rlv_policy"
+      font="SansSerif"
+      text_color="LabelTextColor"
+      left="16"
+      top="185"
+      width="472"
+      height="95"
+      word_wrap="true">Future RLVa must require your consent per object and action, refuse unknown commands, deny relay and sensitive commands by default, expire grants, and always permit your emergency exit. RLV must never lock you out of viewer controls.</text>
+  <button
+      name="kami_rlv_emergency_release"
+      left="16"
+      top="300"
+      width="455"
+      height="34"
+      label="EMERGENCY RELEASE - BLOCK RLV"
+      tool_tip="Always available to the wearer. Clears future policy permissions and disables the legacy RLV switch. There is no RLV engine in this build."/>
+  <text
+      name="kami_rlv_status"
+      left="16"
+      top="346"
+      width="467"
+      height="50"
+      font="SansSerif"
+      text_color="LabelTextColor"
+      word_wrap="true">Safety lock ON. No RLVa engine installed. An emergency release disables the legacy RLV flag.</text>
+</panel>

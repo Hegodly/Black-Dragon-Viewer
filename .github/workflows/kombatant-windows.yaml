@@ -1,9 +1,15 @@
 name: KAMI Viewer native Windows build
+
+# Cancel superseded revisions to free scarce Windows CI runners.
+concurrency:
+  group: kami-native-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato]
+    # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -15,6 +21,17 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri
       - name: Execute shipped frame-generation shaders on Mesa
         run: python3 kami/framegen/test-shaders.py
+      - name: Validate Smart Avatar Physics source-patch and test syntax
+        run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
+      - name: Validate every KAMI and Kombatant Python integration script
+        shell: pwsh
+        run: python -m compileall -q kami kombatant
+      - name: Validate KAMI signature build scripts syntax
+        run: python3 -m py_compile kami/signature/apply-signature-features.py kami/signature/verify-signature-features.py
+      - name: Validate Atmosphere Engine build scripts
+        run: python3 -m py_compile kami/atmosphere/apply-atmosphere.py kami/atmosphere/verify-atmosphere.py
+      - name: Validate recovery scripts before Windows compile
+        run: python3 -m py_compile kami/recovery/apply-session-recovery.py kami/recovery/verify-session-recovery.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 180
@@ -35,6 +52,9 @@ jobs:
         run: |
           git apply --check kombatant.patch
           git apply kombatant.patch
+      - name: Preflight native LLSD settings and keyboard records
+        shell: pwsh
+        run: python kami/performance/validate-config-inputs.py
       - name: Restore omitted snapshot preview source
         shell: python
         run: |
@@ -90,21 +110,18 @@ jobs:
       - name: Integrate experimental OpenGL optical-flow frame generation
         shell: pwsh
         run: python kami/framegen/apply-framegen.py
-      - name: Build optional private ReShade FX runtime (no MXAO source)
-        shell: pwsh
-        run: ./kami/mxao/build-runtime.ps1
       - name: Integrate live current-scene graphics preview
         shell: pwsh
         run: python kami/preview/apply-live-preview.py
-      - name: Integrate optional private MXAO adapter
-        shell: pwsh
-        run: python kami/mxao/apply-private-mxao.py
       - name: Integrate fast login without bypassing outfit readiness
         shell: pwsh
         run: python kami/loading/apply-fast-loading.py
       - name: Clean KAMI login layout and identity
         shell: pwsh
         run: python kami/theme/clean-login.py
+      - name: Restore approved KAMI Beyond Reality login theme
+        shell: pwsh
+        run: python kami/theme/fix-login-theme.py
       - name: Correct FPS cap units and separate quality target
         shell: pwsh
         run: python kami/performance/fix-fps-controls.py
@@ -117,13 +134,102 @@ jobs:
       - name: Remove unsupported 12K live rendering
         shell: pwsh
         run: python kami/stability/remove-12k-live.py
+      - name: Remove KAMI native color grading (retain built-in gamma and tone mapping)
+        shell: pwsh
+        run: python kami/stability/remove-native-color-grading.py
+      - name: Fix native AO darkening slider and diffuse occlusion strength
+        shell: pwsh
+        run: python kami/stability/fix-ao-darkening.py
+      - name: Make actual optical-flow frame generation status visible
+        shell: pwsh
+        run: python kami/stability/fix-optical-flow-runtime.py
+      - name: Fix live SSR reflection texture allocation on toggle
+        shell: pwsh
+        run: python kami/stability/fix-ssr-toggle.py
+      - name: Explain actual Performance preset and measured OFF/ON FPS comparison
+        shell: pwsh
+        run: python kami/stability/explain-performance-preset.py
+      - name: Wire five verified quality presets to actual renderer controls
+        shell: pwsh
+        run: python kami/performance/verify-and-wire-quality-presets.py
+      - name: Optimize remote avatar body physics without altering self avatar
+        shell: pwsh
+        run: python kami/performance/apply-adaptive-avatar-physics.py
+      - name: Stabilize and expose actual native 4K/8K world buffer resolution
+        shell: pwsh
+        run: python kami/stability/fix-live-resolution-quality.py
+      - name: Apply approved Fire Garden theme across all native KAMI windows
+        shell: pwsh
+        run: python kami/theme/apply-fire-garden-ui.py
+      - name: Remove obsolete Native Graphics Lab and KAMI Photo Studio UI
+        shell: pwsh
+        run: python kami/stability/remove-native-lab-studio.py
+      - name: Keep all original graphics toggles in Fire Garden base kit
+        shell: pwsh
+        run: python kami/theme/preserve-base-graphics-kit.py
+      - name: Add optional Smart Avatar Physics scheduling and live CPU metrics
+        shell: pwsh
+        run: python kami/physics/apply-smart-avatar-physics.py
+      - name: Add native KAMI Hardware Monitor with Windows usage telemetry
+        shell: pwsh
+        run: python kami/performance/apply-hardware-monitor.py
+      - name: Install KAMI Render Doctor, Smart World, Camera Director and Intelligent Profiles
+        shell: pwsh
+        run: python kami/signature/apply-signature-features.py
+      - name: Install four local EEP atmospheres and reversible Fire Garden mood controls
+        shell: pwsh
+        run: python kami/atmosphere/apply-atmosphere.py
+      - name: Install native KAMI Session Recovery, safe local snapshots and crash prompt
+        shell: pwsh
+        run: python kami/recovery/apply-session-recovery.py
+      - name: Add native live Avatar Quality plus FPS control
+        shell: pwsh
+        run: python kami/avatars/apply-avatar-quality.py
+      - name: Verify reversible avatar-quality live LOD and complete Display scroll
+        shell: pwsh
+        run: python kami/avatars/verify-avatar-quality.py
+      - name: Add opt-in native Dark Cinematic PBR material, EEP lighting and avatar detail
+        shell: pwsh
+        run: python kami/cinematic/apply-dark-cinematic.py
+      - name: Verify all three Dark Cinematic live-render feature paths
+        shell: pwsh
+        run: python kami/cinematic/verify-dark-cinematic.py
+      - name: Install user-controlled RLV emergency safety center (no unsupported engine)
+        shell: pwsh
+        run: python kami/rlv/apply-rlv-safety.py
+      - name: Verify RLV default-deny, real panic menu and no unreviewed RLVa parser
+        shell: pwsh
+        run: python kami/rlv/verify-rlv-safety.py
+      - name: Verify KAMI four signature feature engines, controls and telemetry
+        shell: pwsh
+        run: python kami/signature/verify-signature-features.py
+      - name: Verify real KAMI Atmosphere Engine and Second Life EEP permissions
+        shell: pwsh
+        run: python kami/atmosphere/verify-atmosphere.py
+      - name: Verify safe and private native KAMI Session Recovery
+        shell: pwsh
+        run: python kami/recovery/verify-session-recovery.py
+      - name: Verify all six real Smart Avatar Physics optimizations and performance stats
+        shell: pwsh
+        run: python kami/physics/verify-smart-avatar-physics.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
-      - name: Validate native graphics settings and panels
+      - name: Verify all five preset quality levels and native 4K/8K FPS contracts
         shell: pwsh
-        run: |
-          python -c "from pathlib import Path; import xml.etree.ElementTree as E; E.parse('indra/newview/app_settings/settings_blackdragon.xml'); E.parse('indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'); E.parse('indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'); assert 'KAMITargetFPS' in Path('indra/newview/llviewerdisplay.cpp').read_text(); assert 'kamiNearFieldBounce' in Path('indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl').read_text(); s=Path('indra/llwindow/llwindowwin32.cpp').read_text(); assert 'KombatantFX::' not in s; assert not Path('indra/llwindow/kombatantfxwin32.h').exists(); print('Native graphics integration verified')"
+        run: python kami/performance/verify-preset-contracts.py
+      - name: Validate external-only GShade assets and absence of bundled hooks
+        shell: pwsh
+        run: python kami/gshade/verify-gshade-fx.py
+      - name: Verify adaptive avatar physics and actual hardware performance telemetry
+        shell: pwsh
+        run: python kami/performance/verify-physics-and-monitor.py
+      - name: Validate all KAMI native graphics patches with named assertions
+        shell: pwsh
+        run: python kami/stability/validate-next-build.py
+      - name: Verify native settings and all legacy WASD keybindings
+        shell: pwsh
+        run: python kami/performance/validate-config-inputs.py
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
@@ -158,9 +264,9 @@ jobs:
       - name: Stage AMD FSR and Intel XeSS runtimes
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1 -StageOnly
-      - name: Stage private runtime and personal installer (no MXAO source)
+      - name: Stage optional externally installed GShade shader assets
         shell: pwsh
-        run: ./kami/mxao/build-runtime.ps1 -StageOnly
+        run: ./kami/gshade/stage-external-assets.ps1
       - name: Stage and validate portable runtime assets
         shell: pwsh
         run: python kami/packaging/stage-portable-data.py

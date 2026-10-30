@@ -26,14 +26,30 @@ s=s.replace('timeout.getElapsedTimeF32() / PRECACHING_DELAY;', 'timeout.getElaps
 p.write_text(s,encoding='utf-8')
 assert 'else if (timeout_frac > 10.f)' in s
 assert 'gAgentWearables.areWearablesLoaded()' in s
-p=R/'indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml';s=p.read_text(encoding='utf-8-sig')
-anchor=' <text name="kami_mxao_help"'
-assert s.count(anchor)==1
-# Extend the existing panel after MXAO; this controls login rather than rendering.
-s=s.replace('height="4600"','height="4700"',1).replace('height="4604"','height="4704"',1)
-start=s.index('<layout_panel name="kombatant_display_quick"');end=s.index('</layout_panel>',start)
-s=s[:end]+''' <check_box name="kami_fast_login" control_name="KAMIFastLogin" label="Fast login: shorten fixed precache wait (next login)" left="12" top="4605" width="465" height="22" />
- <text name="kami_fast_login_help" left="12" top="4635" width="465" height="50" wrap="true">World assets continue streaming after entry. Avatar and outfit checks remain active. Disable for the original precache wait.</text>
-'''+s[end:]
-p.write_text(s,encoding='utf-8');ET.parse(p)
+# Fast login is independent of the retired MXAO panel. Attach directly
+# to the existing Display scroll area and compute its actual current height.
+p=R/'indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'
+doc=ET.parse(p)
+root=doc.getroot()
+panels=[n for n in root.iter("layout_panel") if n.get("name")=="kombatant_display_quick"]
+assert len(panels)==1, "KAMI Display quick panel missing"
+panel=panels[0]
+previous=int(panel.get("height"))
+assert previous>=4200, ("Unexpected graphics panel height",previous)
+delta=100
+outer=[n for n in root.iter() if n is not panel and n.get("height")==str(previous+4)]
+assert outer, "Graphics scroll height parent not found"
+for n in outer:n.set("height",str(previous+4+delta))
+panel.set("height",str(previous+delta))
+ET.SubElement(panel,"check_box",{
+    "name":"kami_fast_login","control_name":"KAMIFastLogin",
+    "label":"Fast login: shorten fixed precache wait (next login)",
+    "left":"12","top":str(previous+8),"width":"465","height":"22"})
+note=ET.SubElement(panel,"text",{
+    "name":"kami_fast_login_help","left":"12","top":str(previous+38),
+    "width":"465","height":"50","wrap":"true"})
+note.text="World assets continue streaming after entry. Avatar and outfit checks remain active. Disable for the original precache wait."
+ET.indent(doc,space=" ")
+doc.write(p,encoding="utf-8",xml_declaration=True)
+ET.parse(p)
 print('Fast login integrated: shorter fixed hold, original outfit readiness and recovery guards retained.')

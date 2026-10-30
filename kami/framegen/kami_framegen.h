@@ -4,6 +4,7 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <string>
 namespace KAMIFrameGen {
 using Clock = std::chrono::steady_clock;
 inline const char* vertex = R"GLSL(#version 330 core
@@ -91,7 +92,8 @@ class Generator {
  int width=0,height=0,fw=0,fh=0,current=0;
  bool history=false,failed=false;
  Clock::time_point last={};
- double overhead=0.;
+ std::string status_="Off";
+ unsigned long long presented_=0;
  static GLuint shader(GLenum type,const char* code){
   GLuint s=glCreateShader(type);glShaderSource(s,1,&code,nullptr);glCompileShader(s);
   GLint ok=0;glGetShaderiv(s,GL_COMPILE_STATUS,&ok);
@@ -117,35 +119,51 @@ class Generator {
   for(int i=0;i<3;++i){glActiveTexture(GL_TEXTURE0+i);glBindTexture(GL_TEXTURE_2D,ids[i]);glUniform1i(glGetUniformLocation(p,names[i]),i);}
  }
 public:
+ const std::string& status() const { return status_; }
+ unsigned long long presented() const { return presented_; }
  void release(){
   if(frames[0])glDeleteTextures(2,frames);if(flow)glDeleteTextures(1,&flow);
   if(fbo)glDeleteFramebuffers(1,&fbo);if(vao)glDeleteVertexArrays(1,&vao);
   if(flowProgram)glDeleteProgram(flowProgram);if(outputProgram)glDeleteProgram(outputProgram);
   frames[0]=frames[1]=flow=fbo=vao=flowProgram=outputProgram=0;
-  width=height=0;history=false;last={};overhead=0.;
+  width=height=0;history=false;last={};
  }
  // The caller must flush viewer rendering first. Off means no capture, shaders,
  // memory allocations or additional presentations. Return true if both presented.
  template<class Present> bool present(bool enabled,int w,int h,Present nativePresent){
-  if(!enabled){if(width){State saved;release();}failed=false;return false;}
-  if(failed||w<32||h<32||w>4096||h>4096){history=false;return false;}
+  if(!enabled){if(width){State saved;release();}failed=false;status_="Off";return false;}
+  if(failed){history=false;status_="Unavailable: OpenGL shader or framebuffer initialization failed.";return false;}
+  if(w<32||h<32){history=false;status_="Paused: window dimensions are invalid.";return false;}
+  if(w>4096||h>4096){history=false;status_="Paused: frame generation supports a display up to 4096 px per axis.";return false;}
   State saved;
   if(width!=w||height!=h){
-   release();width=w;height=h;fw=std::min(480,std::max(32,w/4));fh=std::min(270,std::max(32,h/4));
+   release();width=w;height=h;
+   // Coarse GPU flow at ~1/8 dimensions: lower sample cost at 4K.
+   // Composite the generated image at the native display resolution.
+   fw=std::min(320,std::max(32,w/8));fh=std::min(180,std::max(32,h/8));
    flowProgram=program(flowFragment);outputProgram=program(interpolateFragment);
-   if(!flowProgram||!outputProgram){release();failed=true;LL_WARNS("FrameGen")<<"KAMI interpolation shader failed; native presentation retained"<<LL_ENDL;return false;}
+   if(!flowProgram||!outputProgram){release();failed=true;status_="Unavailable: OpenGL optical-flow shaders failed to compile/link.";LL_WARNS("FrameGen")<<"KAMI interpolation shader failed; native presentation retained"<<LL_ENDL;return false;}
    glGenTextures(2,frames);glGenTextures(1,&flow);glGenFramebuffers(1,&fbo);glGenVertexArrays(1,&vao);
    glActiveTexture(GL_TEXTURE0);texture(frames[0],w,h,GL_RGBA8);texture(frames[1],w,h,GL_RGBA8);texture(flow,fw,fh,GL_RGBA16F);
    GLint allocated=0;glBindTexture(GL_TEXTURE_2D,frames[1]);glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_WIDTH,&allocated);
-   if(allocated!=w){release();failed=true;return false;}
+   if(allocated!=w){release();failed=true;status_="Unavailable: GPU cannot allocate frame-generation texture.";return false;}
    glBindFramebuffer(GL_DRAW_FRAMEBUFFER,fbo);glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,flow,0);glDrawBuffer(GL_COLOR_ATTACHMENT0);
-   if(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE){release();failed=true;return false;}
+   if(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE){release();failed=true;status_="Unavailable: flow framebuffer is incomplete.";return false;}
   }
-  auto now=Clock::now();double dt=std::chrono::duration<double>(now-last).count()-overhead;last=now;overhead=0.;
+  auto now=Clock::now();
+  // Do not subtract interpolation/presentation overhead from the elapsed
+  // time since the last *real* frame. That produced negative dt or dt<1/240
+  // and silently disabled optical flow after it first became active.
+  double dt=history?std::chrono::duration<double>(now-last).count():0.;
+  last=now;
   glBindFramebuffer(GL_READ_FRAMEBUFFER,0);glReadBuffer(GL_BACK);
   glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,frames[current]);glCopyTexSubImage2D(GL_TEXTURE_2D,0,0,0,0,0,w,h);
   // Require a usable real-render cadence; skip stalls, minimization and low FPS.
-  if(!history||dt<1./240.||dt>1./30.){history=true;current=1-current;return false;}
+  if(!history){status_="Warming up: collecting the previous real frame.";history=true;current=1-current;return false;}
+  if(dt<1./240.||dt>1./30.){
+   status_="Paused: real frame pacing outside 30-240 FPS (no synthetic frame).";
+   current=1-current;return false;
+  }
   glBindVertexArray(vao);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,fbo);glDrawBuffer(GL_COLOR_ATTACHMENT0);glViewport(0,0,fw,fh);
   bindInputs(flowProgram);glUniform2f(glGetUniformLocation(flowProgram,"pixel"),1.f/w,1.f/h);glDrawArrays(GL_TRIANGLES,0,3);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);glDrawBuffer(GL_BACK);glViewport(0,0,w,h);
@@ -156,7 +174,10 @@ public:
   const auto generatedAt=Clock::now();
   glUniform1i(glGetUniformLocation(outputProgram,"original"),1);glDrawArrays(GL_TRIANGLES,0,3);glFlush();
   std::this_thread::sleep_until(generatedAt+std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(dt*.5)));
-  nativePresent();overhead=std::chrono::duration<double>(Clock::now()-now).count();current=1-current;return true;
+  nativePresent();
+  ++presented_;
+  status_="Active: optical-flow frame displayed; FPS counter shows real rendered frames.";
+  current=1-current;return true;
  }
 };
 inline Generator& generator(){static Generator instance;return instance;}
