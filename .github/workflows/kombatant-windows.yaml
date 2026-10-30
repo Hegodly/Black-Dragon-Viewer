@@ -156,6 +156,9 @@ jobs:
       - name: Keep all original graphics toggles in Fire Garden base kit
         shell: pwsh
         run: python kami/theme/preserve-base-graphics-kit.py
+      - name: Add native KAMI Hardware Monitor with Windows usage telemetry
+        shell: pwsh
+        run: python kami/performance/apply-hardware-monitor.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
