@@ -266,6 +266,8 @@ bool LLFloaterModelPreview::postBuild()
 
     mUploadBtn = getChild<LLButton>("ok_btn");
     mCalculateBtn = getChild<LLButton>("calculate_btn");
+    getChild<LLButton>("kami_mesh_audit_btn")->setClickedCallback(
+        boost::bind(&LLFloaterModelPreview::onKamiMeshAudit, this));
     mUploadLogText = getChild<LLViewerTextEditor>("log_text");
     mTabContainer = getChild<LLTabContainer>("import_tab");
 
@@ -490,8 +492,152 @@ void LLFloaterModelPreview::loadModel(S32 lod, const std::string& file_name, boo
     mModelPreview->loadModel(file_name, lod, force_disable_slm);
 }
 
+
+bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
+{
+    assert_main_thread();
+
+    // This is a client-side preflight only. The simulator remains the authority
+    // for mesh limits, permissions, L$ fees, land impact and upload acceptance.
+    if (!mModelPreview || mModelPreview->mLoading || !mModelPreview->lodsReady())
+    {
+        if (report)
+        {
+            addStringToLog("KAMI Mesh Audit: wait until the scene and all LODs finish loading.", true);
+        }
+        return false;
+    }
+
+    if (mModelPreview->mModel[LLModel::LOD_HIGH].empty())
+    {
+        if (report)
+        {
+            addStringToLog("KAMI Mesh Audit: load a high-detail mesh before checking or uploading.", true);
+        }
+        return false;
+    }
+
+    const U32 max_vertices_per_face = 65534; // Existing DAE parser uses U16 indices.
+    const U32 warning_triangles_per_face = 21844; // Legacy interoperability warning, not a hard reject.
+    const U32 max_faces_per_prim = 8;
+
+    const char* lod_names[LLModel::NUM_LODS] = {"Lowest", "Low", "Medium", "High", "Physics"};
+    U64 scene_triangles = 0;
+    U64 scene_vertices = 0;
+    U64 scene_models = 0;
+    U64 oversized_faces = 0;
+    U64 overfull_prims = 0;
+    U64 legacy_triangle_warnings = 0;
+    U64 non_triangle_index_buffers = 0;
+    bool valid = true;
+
+    std::ostringstream out;
+    out << "KAMI / ULTRA MESH PREFLIGHT\n";
+    out << "Read-only audit: SL server limits and fees still apply.\n";
+
+    for (U32 lod = 0; lod < LLModel::NUM_LODS; ++lod)
+    {
+        U64 lod_triangles = 0, lod_vertices = 0, lod_faces = 0, lod_models = 0;
+        for (U32 idx = 0; idx < mModelPreview->mModel[lod].size(); ++idx)
+        {
+            LLModel* model = mModelPreview->mModel[lod][idx];
+            if (!model)
+            {
+                continue;
+            }
+            ++lod_models;
+            const S32 face_count = model->getNumVolumeFaces();
+            if (face_count < 0 || face_count > static_cast<S32>(max_faces_per_prim))
+            {
+                ++overfull_prims;
+                valid = false;
+            }
+            for (S32 f = 0; f < face_count; ++f)
+            {
+                const LLVolumeFace& face = model->getVolumeFace(f);
+                ++lod_faces;
+                lod_vertices += face.mNumVertices;
+                lod_triangles += face.mNumIndices / 3;
+                if (face.mNumVertices > max_vertices_per_face)
+                {
+                    ++oversized_faces;
+                    valid = false;
+                }
+                if (face.mNumIndices % 3 != 0)
+                {
+                    ++non_triangle_index_buffers;
+                    valid = false;
+                }
+                if (face.mNumIndices / 3 > warning_triangles_per_face)
+                {
+                    ++legacy_triangle_warnings;
+                }
+            }
+        }
+
+        if (lod != LLModel::LOD_PHYSICS)
+        {
+            // Do not sum LODs and present the result as a per-asset or server limit.
+            scene_triangles += (lod == LLModel::LOD_HIGH) ? lod_triangles : 0;
+            scene_vertices += (lod == LLModel::LOD_HIGH) ? lod_vertices : 0;
+            scene_models += (lod == LLModel::LOD_HIGH) ? lod_models : 0;
+        }
+        out << lod_names[lod] << ": " << lod_models << " mesh pieces / "
+            << lod_faces << " material faces / "
+            << lod_vertices << " vertices / " << lod_triangles << " triangles\n";
+    }
+
+    if (report)
+    {
+        out << "High LOD totals: " << scene_models << " pieces, " << scene_vertices
+            << " vertices, " << scene_triangles << " triangles.\n";
+        if (scene_triangles > 1000000)
+        {
+            out << "WARNING: high-density scene; upload costs, memory use and avatar"
+                   " rendering cost may be very high.\n";
+        }
+        if (legacy_triangle_warnings)
+        {
+            out << "WARNING: " << legacy_triangle_warnings
+                << " material faces exceed 21,844 triangles (legacy importer threshold)."
+                   " Review potential splits and missing geometry.\n";
+        }
+        if (oversized_faces || overfull_prims || non_triangle_index_buffers)
+        {
+            out << "ERROR: " << oversized_faces << " oversized vertex buffers, "
+                << overfull_prims << " meshes with more than 8 faces, "
+                << non_triangle_index_buffers << " malformed triangle index buffers.\n"
+                   "Separate or simplify affected pieces before uploading.\n";
+        }
+        out << (valid ? "Preflight complete. Calculate the authoritative SL fee before upload."
+                      : "Preflight failed. No fee calculation or upload should proceed.")
+            << "\n";
+        addStringToLog(out.str(), !valid);
+        if (mTabContainer)
+        {
+            LLPanel* log_panel = mTabContainer->getPanelByName("logs_panel");
+            if (log_panel)
+            {
+                mTabContainer->selectTabPanel(log_panel);
+            }
+        }
+    }
+    return valid;
+}
+
+void LLFloaterModelPreview::onKamiMeshAudit()
+{
+    runKamiMeshAudit(true);
+}
+
 void LLFloaterModelPreview::onClickCalculateBtn()
 {
+    if (!runKamiMeshAudit(false))
+    {
+        addStringToLog("KAMI: Mesh preflight failed. Open Mesh Audit for details.", true);
+        return;
+    }
+
     clearLogTab();
     addStringToLog("Calculating model data.", false);
     mModelPreview->rebuildUploadData();
@@ -1732,6 +1878,12 @@ void LLFloaterModelPreview::onUpload(void* user_data)
 
     LLFloaterModelPreview* mp = (LLFloaterModelPreview*) user_data;
     mp->clearLogTab();
+
+    if (!mp->runKamiMeshAudit(false))
+    {
+        addStringToLog("KAMI: Upload stopped by mesh preflight. Open Mesh Audit for details.", true);
+        return;
+    }
 
     mp->mUploadBtn->setEnabled(false);
 
