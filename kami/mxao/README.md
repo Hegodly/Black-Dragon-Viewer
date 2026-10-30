@@ -14,13 +14,20 @@ return to the native-only startup path.
 
 ## Personal setup on Windows
 
+In the next KAMI Windows build, click **Install MXAO from author (optional)**
+inside Preferences > Display > Private MXAO. A separate PowerShell installer
+starts only after the button is clicked. Close the viewer when prompted,
+then restart after setup. The MXAO shader is not pre-bundled.
+
+Manual command-line installation is still supported:
+
 After a successful compatible Windows build, close the viewer and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Install-Private-MXAO.ps1 -ViewerDirectory 'C:\Path\To\KAMI'
 ```
 
-Git must be installed. The script downloads the author’s official iMMERSE repo
+Git is not required. The script downloads a pinned ZIP from the author’s official iMMERSE repo
 at `f57d3afa1ebe5d1fd6152d4f6fb9a2e75bd1d1cb`, keeps its license, and selects its
 existing pixel-shader fallback to reduce reliance on compute passes. The runtime’s
 OpenGL version requirements still apply and must be checked on each target GPU. It does
