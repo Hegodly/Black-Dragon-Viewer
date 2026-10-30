@@ -108,7 +108,7 @@ namespace KAMISmart
         const bool reflection = gSavedSettings.getBOOL("KAMIAdaptiveReflections");
         const bool particles = gSavedSettings.getBOOL("KAMIAdaptiveParticles");
         const bool distance = gSavedSettings.getBOOL("KAMIAdaptiveDrawDistance");
-        const bool resolution = gSavedSettings.getBOOL("KAMIAdaptiveResolution");
+        // Automatic resolution adjustment remains disabled pending stable viewport synchronization.
         const bool texture = gSavedSettings.getBOOL("KAMISmartTextures");
 
         if (stage >= 1)
@@ -203,12 +203,10 @@ namespace KAMISmart
             if (particles) atMostU32("RenderMaxPartCount", 128);
             if (distance) atMostF32("RenderFarClip", 48.f);
             if (texture) atMostU32("RenderMaxTextureResolution", 512);
-            if (resolution && !gSavedSettings.getBOOL("KAMIPotatoMode"))
-            {
-                set("KombatantRenderWidth", 0);
-                set("RenderResolutionDivisor", 1);
-                atMostF32("RenderResolutionMultiplier", 0.75f);
-            }
+            // Automatic world pixel scaling is quarantined: user QA found
+            // camera crop/shake on mixed framebuffer/viewport dimensions.
+            // The working MANUAL Render Scale is never overridden by Smart.
+            // All other distant-avatar/scene budgets continue adapting.
         }
         if (stage >= 6)
         {
@@ -218,17 +216,9 @@ namespace KAMISmart
                 atMostU32("RenderMaxPartCount", 64);
             }
             if (distance) atMostF32("RenderFarClip", 32.f);
-            // Preserve real selected render pixels, including explicit 3840-wide 4K.
-            // Avoid downscaling to 60% when Potato Mode is on.
-            if (gSavedSettings.getBOOL("KAMIPotatoMode"))
-            {
-                set("RenderResolutionDivisor", 1);
-                set("RenderResolutionMultiplier", 1.f);
-                // 100 FPS is an advisory performance goal only.
-                // Never modify the actual frame limiter here.
-                set("KAMITargetFPS", 100);
-            }
-            else if (resolution) atMostF32("RenderResolutionMultiplier", 0.6f);
+            // Potato retains the explicitly selected live render width,
+            // working Render Scale, and FPS target. No hidden resolution
+            // changes or extra framebuffer recreation at emergency stages.
             if (texture) atMostU32("RenderMaxTextureResolution", 512);
             atMostU32("RenderLocalLightCount", 16);
             set("RenderFSAAType", 0);
