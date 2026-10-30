@@ -74,8 +74,8 @@ void main(uint3 group : SV_GroupID, uint3 local : SV_GroupThreadID)
     // Every lane participates, including out-of-image lanes in partial tiles.
     for(uint i=lane;i<100;i+=64)
     {
-        int2 point=int2(group.xy*8)+int2(i%10,i/10)-1;
-        uint2 pixel=uint2(clamp(point,int2(0,0),int2(width-1,height-1)));
+        int2 tilePixel=int2(group.xy*8)+int2(i%10,i/10)-1;
+        uint2 pixel=uint2(clamp(tilePixel,int2(0,0),int2(width-1,height-1)));
         float3 p,n;float footprint;
         tileAO[i]=occlusionAt(pixel,p,n,footprint);
         tilePosition[i]=p;tileNormal[i]=n;tileFootprint[i]=footprint;
