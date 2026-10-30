@@ -67,6 +67,9 @@ jobs:
       - name: Integrate experimental native PBR near-field indirect lighting
         shell: pwsh
         run: python kami/performance/add-native-bounce.py
+      - name: Install adaptive performance controls and Potato Mode
+        shell: pwsh
+        run: python kami/performance/apply-smart-performance.py
       - name: Validate native graphics settings and panels
         shell: pwsh
         run: |
