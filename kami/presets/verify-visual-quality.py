@@ -12,6 +12,7 @@ shader = read("indra/newview/app_settings/shaders/class3/deferred/softenLightF.g
 pbr = read("kami/presets/pbr-fidelity.glsl")
 pipeline = read("indra/newview/pipeline.cpp")
 presets = read("kami/performance/kami_quality_presets.h")
+compiled_presets = read("indra/newview/kami_quality_presets.h")
 
 def check(name, ok):
     if not ok:
@@ -42,6 +43,7 @@ check("automatic and performance controls bypass material tier",
 check("independent GPU world resolution and FPS remain unchanged",
       all('set("' + k + '"' not in presets for k in (
           "RenderResolutionMultiplier", "KombatantRenderWidth", "FramePerSecondLimit")))
+check("compiled controller matches updated preset source", compiled_presets == presets)
 check("five quality levels and status messages",
       presets.count('"LOW: ') == 1 and
       presets.count('"MEDIUM: ') == 1 and
