@@ -94,6 +94,22 @@ verify("retired effect subheadings removed",
 verify("working render scale still available in the viewer",
        "RenderResolutionMultiplier" in read("indra/newview/pipeline.cpp") and
        "KombatantRenderWidth" in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
+verify("temporal SDKs safely quarantined until motion-vector repair",
+       'return false; // KAMI QA quarantine' in read("indra/newview/kombatantrtxstate.h") and
+       'Temporal upscaling unavailable: unstable history' in read("indra/newview/kombatantrtx.h"))
+verify("hardware ray AO stopped until avatar artifacts are fixed",
+       'Hardware Ray AO unavailable: face artifacts' in read("indra/newview/kombatantrtx.h"))
+ui_quarantine = ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot()
+retired_experiments = {"kd_upscaler", "kd_upscale_quality", "kd_ray_ao", "kd_ray_radius", "kd_ray_strength"}
+experiment_widgets = [n for n in ui_quarantine.iter() if n.get("name") in retired_experiments]
+verify("unsupported experimental SDK controls are explicitly disabled",
+       len(experiment_widgets) == len(retired_experiments) and
+       {n.get("name") for n in experiment_widgets} == retired_experiments and
+       all(n.get("enabled") == "false" for n in experiment_widgets))
+verify("user-tested Render Scale and contact shading remain",
+       "RenderResolutionMultiplier" in read("indra/newview/pipeline.cpp") and
+       any(n.get("control_name") == "KombatantRenderWidth" for n in ui_quarantine.iter()) and
+       any(n.get("control_name") == "RenderDeferredSSAO" for n in ui_quarantine.iter()))
 verify("unsafe adaptive resolution hidden", not any(n.get("name") in ("kami_adaptive_resolution","kami_resolution") and n.get("enabled")!="false" for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
 verify("rendering capability GL query cache", 'static GLint texture_limit = 0, renderbuffer_limit = 0;' in read("indra/newview/pipeline.cpp"))
 # Catch specific C++ compile failures before entering the costly MSVC step.
