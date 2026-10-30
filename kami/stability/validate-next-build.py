@@ -70,4 +70,19 @@ verify("4K manual choice remains", 'value="3840"' in read("indra/newview/skins/d
 verify("8K manual choice remains", 'value="7680"' in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
 verify("unsafe adaptive resolution hidden", not any(n.get("name") in ("kami_adaptive_resolution","kami_resolution") and n.get("enabled")!="false" for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
 verify("rendering capability GL query cache", 'static GLint texture_limit = 0, renderbuffer_limit = 0;' in read("indra/newview/pipeline.cpp"))
+# Catch specific C++ compile failures before entering the costly MSVC step.
+import re
+headers = [
+    "indra/newview/kami_signature.h",
+    "indra/newview/kami_atmosphere.h",
+    "indra/newview/kami_performance_mode.h",
+    "indra/newview/kami_quality_presets.h",
+]
+bad_control_handle = re.compile(r"(?:auto|LLControlVariable)\\s*\\*\\s*\\w+\\s*=\\s*gSavedSettings\\.getControl\\(")
+verify("MSVC control handle compatibility", all(not bad_control_handle.search(read(path)) for path in headers))
+verify("camera vector uses LLVector3d indexing", all(part not in read("indra/newview/kami_signature.h") for part in ("p.mV[", "f.mV[")))
+verify("Windows PDH status definitions available", "#include <pdhmsg.h>" in read("indra/newview/kami_hardware_monitor.h"))
+verify("SSR requests resize on the pipeline instance", "gPipeline.requestResizeScreenTexture();" in read("indra/newview/pipeline.cpp"))
+verify("installer argument quoting doesn't break C++ strings", read("indra/newview/llfloaterpreference.cpp").count("const std::wstring quote(1, wchar_t(34));") >= 3)
+
 print("KAMI next-build integration checks passed.")

@@ -10,7 +10,7 @@ namespace KAMIQuality
 {
     inline void set(const char* name, const LLSD& value)
     {
-        if (auto* control = gSavedSettings.getControl(name))
+        if (auto control = gSavedSettings.getControl(name))
         {
             if (control->getValue() != value)
                 control->setValue(value);
