@@ -5,7 +5,12 @@ $ErrorActionPreference='Stop'
 $base=(Resolve-Path -LiteralPath $ViewerDirectory).Path
 if (!(Test-Path -LiteralPath (Join-Path $base 'KAMIMXAO64.dll') -PathType Leaf)) { throw 'Complete KAMI FX runtime missing. Extract the full portable ZIP.' }
 if (!(Test-Path -LiteralPath (Join-Path $base 'KAMI-FX/Shaders/KAMI-FX.fx') -PathType Leaf)) { throw 'Built-in KAMI shader kit missing. Extract the full portable ZIP.' }
-if (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) { throw 'Close KAMI before enabling bundled effects. Restart afterward.' }
+if (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) {
+    Write-Host 'Close the KAMI Viewer window to activate the built-in FX pack.' -ForegroundColor Yellow
+    while (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) {
+        Start-Sleep -Milliseconds 500
+    }
+}
 if (Test-Path -LiteralPath (Join-Path $base 'opengl32.dll')) { throw 'External GShade/ReShade opengl32.dll detected. Do not stack two graphics hooks.' }
 if (Test-Path -LiteralPath (Join-Path $base 'KAMI_MXAO_PRIVATE.enabled')) { throw 'Private MXAO already has a runtime configuration. Choose a clean KAMI portable folder for the bundled effect kit.' }
 if (Test-Path -LiteralPath (Join-Path $base 'KAMI_GSHADE_USER.enabled')) { throw 'You already imported a GShade-compatible preset. Use the overlay to select effects from that installation.' }
