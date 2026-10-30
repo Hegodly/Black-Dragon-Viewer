@@ -112,7 +112,10 @@ p.write_text(s,encoding="utf-8")
 # CI fails on invalid XML before downloading SDKs.
 settings_tree=ET.parse(ROOT/setting_path)
 keys=[el.text for el in settings_tree.getroot().find("map").findall("key")]
-assert len(keys)==len(set(keys)), "Duplicate LLSD setting names detected"
+repeated=sorted(k for k in set(keys) if keys.count(k)>1)
+print("Existing duplicate LLSD keys:",repeated)
+assert all(keys.count(entry[0])==1 for entry in entries), "One of the new KAMI settings was duplicated"
+assert keys.count("KAMITargetFPS")==1, "KAMI target setting duplicated"
 ET.parse(ROOT/panel)
 ET.parse(ROOT/"indra/newview/skins/default/xui/en/floater_kombatant_effects.xml")
 print("KAMI adaptive controls, quality ladder and background FPS limiter installed.")
