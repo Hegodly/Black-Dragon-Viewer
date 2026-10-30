@@ -65,7 +65,7 @@ verify("obsolete Native Graphics Lab and Studio menu entries removed", not any(n
 verify("obsolete Native Graphics Lab and Studio XUI removed", not (R/"indra/newview/skins/default/xui/en/floater_kombatant_effects.xml").exists() and not (R/"indra/newview/skins/default/xui/en/floater_kombatant_studio.xml").exists())
 verify("Fire Garden core graphics base kit present", (R/"indra/newview/skins/default/KAMI-BASE-GRAPHICS-KIT.txt").is_file())
 verify("KAMI core graphics heading visible", "KAMI CORE GRAPHICS" in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
-verify("all source-video toggles retained", "42 original interactive" in read("indra/newview/skins/default/KAMI-BASE-GRAPHICS-KIT.txt"))
+verify("all remaining source-video toggles retained", "40 original interactive" in read("indra/newview/skins/default/KAMI-BASE-GRAPHICS-KIT.txt"))
 verify("obsolete Native Graphics Lab and Studio C++ registration removed", '"kombatant_effects"' not in read("indra/newview/llviewerfloaterreg.cpp") and '"kombatant_studio"' not in read("indra/newview/llviewerfloaterreg.cpp"))
 verify("all five quality presets use actual render settings", 'KAMIQuality::apply(chosen)' in read("indra/newview/llfloaterpreference.cpp") and 'RenderAvatarMaxNonImpostors' in read("indra/newview/kami_quality_presets.h"))
 verify("quality presets keep selected 4K and uncapped FPS", all(x not in read("indra/newview/kami_quality_presets.h") for x in ('set("FramePerSecondLimit",', 'set("KombatantRenderWidth",', 'set("RenderResolutionMultiplier",')))
@@ -79,6 +79,21 @@ verify("nonworking tonal sliders and reset buttons removed from Display",
 verify("native exposure, sharpening and glow settings retained",
        all(f"<key>{key}</key>" in read("indra/newview/app_settings/settings_blackdragon.xml")
            for key in ("RenderExposure", "RenderCASSharpness", "RenderGlowStrength")))
+verify("broken DoF / Bloom / Motion Blur controls removed from Display",
+       not any(n.get("control_name") in {
+           "RenderDepthOfField", "RenderDepthOfFieldAlphas",
+           "RenderDepthOfFieldHighQuality", "RenderMotionBlur",
+           "RenderMotionBlurStrength", "RenderGlowHDR",
+           "RenderGlowResolutionPow", "RenderGlowIterations",
+           "RenderGlowMinLuminance", "RenderGlowWidth"}
+           for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
+verify("retired effect subheadings removed",
+       not any((n.text or "").strip() in {
+           "Depth of Field", "Motion Blur", "Post Processing Glow", "Glow Quality:"}
+           for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter("text")))
+verify("working render scale still available in the viewer",
+       "RenderResolutionMultiplier" in read("indra/newview/pipeline.cpp") and
+       "KombatantRenderWidth" in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
 verify("unsafe adaptive resolution hidden", not any(n.get("name") in ("kami_adaptive_resolution","kami_resolution") and n.get("enabled")!="false" for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
 verify("rendering capability GL query cache", 'static GLint texture_limit = 0, renderbuffer_limit = 0;' in read("indra/newview/pipeline.cpp"))
 # Catch specific C++ compile failures before entering the costly MSVC step.
