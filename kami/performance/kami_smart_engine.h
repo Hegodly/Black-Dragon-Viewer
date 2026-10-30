@@ -27,7 +27,7 @@ namespace KAMISmart
         "RenderMaxPartCount", "RenderAttachedParticles", "RenderLocalLightCount",
         "RenderDepthOfField", "RenderMotionBlur",
         "KombatantNativeFX", "KAMIAvatarFillStrength", "KAMIAvatarSoftShading",
-        "FramePerSecondLimit", "KAMITargetFPS"
+        "KAMITargetFPS"
     };
 
     inline void set(const char* name, const LLSD& value)
@@ -204,9 +204,8 @@ namespace KAMISmart
             {
                 set("RenderResolutionDivisor", 1);
                 set("RenderResolutionMultiplier", 1.f);
-                // 10,000 microseconds per real frame = 100 FPS cap.
-                // Does not guarantee the hardware can render at 100 FPS.
-                set("FramePerSecondLimit", 10000);
+                // 100 FPS is an advisory performance goal only.
+                // Never modify the actual frame limiter here.
                 set("KAMITargetFPS", 100);
             }
             else if (resolution) atMostF32("RenderResolutionMultiplier", 0.6f);
