@@ -55,6 +55,26 @@ for name,key in (("kami_recovery_enabled","KAMIRecoveryEnabled"),
                  ("kami_recovery_camera","KAMIRecoveryIncludeCamera")):
  check("Fire Garden checkbox "+name, name in ui_by_name and
        ui_by_name[name].get("control_name")==key)
+# Session Recovery is the last KAMI quick section, but native Black Dragon
+# Basic/Advanced/Post graphics panels continue below it. Neither the inner
+# layout stack nor outer scroll view may cut them off.
+quick=ui_by_name.get("kombatant_display_quick")
+stack=ui_by_name.get("gfx_stack")
+scroll=ui_by_name.get("gfx_scroll_panel")
+check("complete native Display scroll hierarchy exists",
+      quick is not None and stack is not None and scroll is not None)
+stack_panels=[n for n in stack if n.tag=="layout_panel"]
+check("original Black Dragon graphics panels retained after Recovery",
+      {"basic_layout_panel","advanced_layout_panel","finetuning_layout_panel"}
+      <= {n.get("name") for n in stack_panels})
+check("full graphics layout can fit all native and KAMI panels",
+      int(stack.get("height"))>=sum(int(n.get("height","0")) for n in stack_panels)+64)
+check("scroll content includes KAMI quick panel and native title bars",
+      int(scroll.get("height"))>=int(quick.get("height"))+66)
+recovery_status=ui_by_name["kami_recovery_status"]
+check("Session Recovery content is not clipped",
+      int(recovery_status.get("top"))+int(recovery_status.get("height"))
+      <= int(quick.get("height")))
 prefs=read("indra/newview/llfloaterpreference.cpp")
 for name,action in (("kami_recovery_save","save"),("kami_recovery_restore","restore"),
                     ("kami_recovery_discard","discard")):
