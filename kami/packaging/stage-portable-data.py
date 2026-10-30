@@ -21,6 +21,22 @@ shutil.copyfile(source/'licenses-win32.txt',out/'licenses.txt')
 shutil.copyfile(R/'doc/contributions.txt',out/'app_settings/contributors-source.txt')
 required=['app_settings/settings.xml','app_settings/settings_blackdragon.xml','app_settings/shaders/class3/deferred/softenLightF.glsl','character/avatar_skeleton.xml','skins/default/xui/en/panel_login.xml','skins/default/textures/windows/kami_fire_garden.jpg','skins/default/textures/windows/kami_logo.jpg','featuretable.txt','cube.dae']
 for name in required:assert (out/name).is_file(),f'Incomplete portable data: {name}'
+# The approved theme must ship in-world as well as on the login screen.
+fire_ui=[
+ 'skins/default/xui/en/floater_preferences.xml',
+ 'skins/default/colors.xml',
+ 'skins/default/textures/windows/kami_fg_window.png',
+ 'skins/default/textures/windows/kami_fg_panel.png',
+ 'skins/default/textures/windows/kami_fg_button.png',
+ 'skins/default/textures/windows/kami_fg_preferences.png',
+]
+for name in fire_ui:
+ assert (out/name).is_file(), f'Missing approved in-world Fire Garden skin asset: {name}'
+pref=ET.parse(out/'skins/default/xui/en/floater_preferences.xml').getroot()
+assert any(x.get('name')=='vicon' and x.get('image_name')=='KAMI_FireGardenPrefs' for x in pref.iter()), 'Preferences still use Black Dragon wallpaper'
+for obsolete in ('floater_kombatant_effects.xml','floater_kombatant_studio.xml'):
+ assert not (out/'skins/default/xui/en'/obsolete).exists(), f'Deleted Lab/Studio floater was packaged: {obsolete}'
+
 for name in ('app_settings/settings.xml','app_settings/settings_blackdragon.xml','skins/default/xui/en/panel_login.xml'):ET.parse(out/name)
 # Fail the release before packaging if a login asset silently regresses to the
 # original Black Dragon HTML/video layout or has a missing image texture.
