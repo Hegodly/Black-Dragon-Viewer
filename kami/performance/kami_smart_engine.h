@@ -26,7 +26,8 @@ namespace KAMISmart
         "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors", "RenderImpostors",
         "RenderMaxPartCount", "RenderAttachedParticles", "RenderLocalLightCount",
         "RenderDepthOfField", "RenderMotionBlur",
-        "KombatantNativeFX", "KAMIAvatarFillStrength", "KAMIAvatarSoftShading"
+        "KombatantNativeFX", "KAMIAvatarFillStrength", "KAMIAvatarSoftShading",
+        "FramePerSecondLimit", "KAMITargetFPS"
     };
 
     inline void set(const char* name, const LLSD& value)
@@ -182,7 +183,7 @@ namespace KAMISmart
             if (particles) atMostU32("RenderMaxPartCount", 128);
             if (distance) atMostF32("RenderFarClip", 48.f);
             if (texture) atMostU32("RenderMaxTextureResolution", 512);
-            if (resolution)
+            if (resolution && !gSavedSettings.getBOOL("KAMIPotatoMode"))
             {
                 set("KombatantRenderWidth", 0);
                 set("RenderResolutionDivisor", 1);
@@ -197,7 +198,18 @@ namespace KAMISmart
                 atMostU32("RenderMaxPartCount", 64);
             }
             if (distance) atMostF32("RenderFarClip", 32.f);
-            if (resolution) atMostF32("RenderResolutionMultiplier", 0.6f);
+            // Preserve real selected render pixels, including explicit 3840-wide 4K.
+            // Avoid downscaling to 60% when Potato Mode is on.
+            if (gSavedSettings.getBOOL("KAMIPotatoMode"))
+            {
+                set("RenderResolutionDivisor", 1);
+                set("RenderResolutionMultiplier", 1.f);
+                // 10,000 microseconds per real frame = 100 FPS cap.
+                // Does not guarantee the hardware can render at 100 FPS.
+                set("FramePerSecondLimit", 10000);
+                set("KAMITargetFPS", 100);
+            }
+            else if (resolution) atMostF32("RenderResolutionMultiplier", 0.6f);
             if (texture) atMostU32("RenderMaxTextureResolution", 512);
             atMostU32("RenderLocalLightCount", 16);
             set("RenderFSAAType", 0);
