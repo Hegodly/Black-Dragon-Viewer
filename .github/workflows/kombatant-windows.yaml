@@ -141,6 +141,9 @@ jobs:
       - name: Stabilize and expose actual native 4K/8K world buffer resolution
         shell: pwsh
         run: python kami/stability/fix-live-resolution-quality.py
+      - name: Add built-in KAMI FX and GShade-compatible shader loading
+        shell: pwsh
+        run: python kami/gshade/apply-gshade-compat.py
       - name: Apply approved Fire Garden theme across all native KAMI windows
         shell: pwsh
         run: python kami/theme/apply-fire-garden-ui.py
