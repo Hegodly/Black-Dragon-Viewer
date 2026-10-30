@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**]
 permissions:
   contents: read
 jobs:
@@ -66,6 +66,9 @@ jobs:
       - name: Apply KAMI Viewer logo and identity
         shell: pwsh
         run: python kami/branding/apply-branding.py
+      - name: Apply static Beyond Reality fire-garden theme
+        shell: pwsh
+        run: python kami/theme/apply-static-theme.py
       - name: Remove bundled FX runtime and integrate Performance Mode
         shell: pwsh
         run: python kami/performance/apply-native-performance.py
