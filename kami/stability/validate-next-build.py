@@ -26,6 +26,11 @@ verify("no mandatory FPS cap in Potato Mode", 'set("FramePerSecondLimit"' not in
 verify("no cropping-prone 75% or 60% scale in Smart optimization", all(x not in read("indra/newview/kami_smart_engine.h") for x in ('atMostF32("RenderResolutionMultiplier", 0.75f)', 'atMostF32("RenderResolutionMultiplier", 0.6f)')))
 verify("4K world render width never erased by Auto Tune", 'set("KombatantRenderWidth", 0)' not in read("indra/newview/kami_smart_engine.h"))
 verify("4K stays native in Performance Mode", 'set("RenderResolutionMultiplier", 1.0)' in read("indra/newview/kami_performance_mode.h"))
+verify("Performance Mode does not bypass explicit 4K/8K target", 
+       'gSavedSettings.getU32("KombatantRenderWidth") == 0) return;' in read("indra/newview/pipeline.cpp") and
+       'if (main_target && gSavedSettings.getBOOL("KAMIPerformanceMode")) return;' not in read("indra/newview/pipeline.cpp"))
+verify("4K resolution allocator still receives manual target",
+       'kombatantScreenSize(resX, resY, mRT == &mMainRT);' in read("indra/newview/pipeline.cpp"))
 verify("no runtime FPS caps by default", '<key>KAMIBackgroundFPS</key>' in read("indra/newview/app_settings/settings_blackdragon.xml") and '("KAMIBackgroundFPS","S32","0"' in read("kami/performance/apply-smart-performance.py"))
 verify("Performance preset offloads distant avatars", 'set("RenderAvatarMaxNonImpostors", 4)' in read("indra/newview/kami_performance_mode.h"))
 verify("Performance preset reduces particle budget", 'set("RenderMaxPartCount", 512)' in read("indra/newview/kami_performance_mode.h"))
