@@ -279,7 +279,7 @@ namespace KAMISmart
         {
             const F64 fps = static_cast<F64>(frames) * 1000000.0 / elapsed;
             const S32 cap = gSavedSettings.getS32("FramePerSecondLimit");
-            const S32 desired = llclamp(gSavedSettings.getS32("KAMITargetFPS"), 30, 120);
+            const S32 desired = llclamp(static_cast<S32>(gSavedSettings.getU32("KAMITargetFPS")), 30, 120);
             // Never punish graphics because of a user-selected FPS cap.
             const S32 target = cap > 0 ? llmin(desired, cap) : desired;
             if (fps < target * 0.90 && chosen < 6)
