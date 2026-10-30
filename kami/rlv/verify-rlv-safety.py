@@ -106,5 +106,6 @@ processors=[p for p in V.iterdir() if p.is_file() and p.suffix in (".h",".cpp")
 check("no unreviewed RLVa command handler added",not processors)
 check("future consent/security design is in-tree",
       (R/"kami/rlv/SECURITY.md").is_file() and
-      "per source" in text("kami/rlv/SECURITY.md").lower().replace("-"," "))
+      all(word in text("kami/rlv/SECURITY.md").lower()
+          for word in ("object uuid","emergency release","relay","consent")))
 print("RLV wearer safety foundation validated. RLVa protocol execution is NOT installed.")
