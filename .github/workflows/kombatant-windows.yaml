@@ -70,6 +70,9 @@ jobs:
       - name: Install adaptive performance controls and Potato Mode
         shell: pwsh
         run: python kami/performance/apply-smart-performance.py
+      - name: Add performance-friendly lighting and skin options
+        shell: pwsh
+        run: python kami/performance/add-balanced-graphics.py
       - name: Validate native graphics settings and panels
         shell: pwsh
         run: |
