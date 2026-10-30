@@ -182,9 +182,9 @@ check(s.count(anchor)==1,"Viewer post-command-line anchor missing")
 s=s.replace(anchor,'''
     // KAMI RLV safe startup: all file, session AND command-line overrides
     // have been applied. Nothing can silently revive the missing RLVa engine.
-    if (auto* legacy=gSavedSettings.getControl("RestrainedLove"))
+    if (auto legacy = gSavedSettings.getControl("RestrainedLove"))
         legacy->setValue(false);
-    if (auto* blocked=gSavedSettings.getControl("KAMIRLVEmergencyBlock"))
+    if (auto blocked = gSavedSettings.getControl("KAMIRLVEmergencyBlock"))
         blocked->setValue(true);
 
 '''+anchor,1)

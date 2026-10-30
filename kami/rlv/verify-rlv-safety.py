@@ -6,6 +6,7 @@ implementation requires separate runtime tests with consent and panic during
 real command execution; tests here are not proof of RLVa compatibility.
 """
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 R=Path(__file__).resolve().parents[2]
@@ -51,6 +52,12 @@ check("core setting does not actually load the legacy RLVa package",
 header=text("indra/newview/kami_rlv_safety.h")
 check("native fail-closed header installed from reviewed source",
       header==text("kami/rlv/kami_rlv_safety.h"))
+# LLControlGroup::getControl returns LLControlVariablePtr, not a raw pointer.
+# MSVC C3535/C2440 arises if future RLV patches reintroduce 'auto*'.
+invalid_control_pointer = re.compile(r"auto\\s*\\*\\s*\\w+\\s*=\\s*gSavedSettings\\.getControl\\s*\\(")
+check("RLV smart-pointer type is preserved across native header and source installer",
+      not invalid_control_pointer.search(header) and
+      not invalid_control_pointer.search(text("kami/rlv/apply-rlv-safety.py")))
 check("command gate unconditionally refuses requests",
       "inline bool allowInboundCommand()" in header and
       "return false;" in header.split("inline bool allowInboundCommand()",1)[1] and
