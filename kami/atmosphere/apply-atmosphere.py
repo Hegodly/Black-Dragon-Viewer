@@ -17,7 +17,7 @@ configs=[
  ("KAMIAtmosphereMood","String","string","Night Studio",1,"Chosen local EEP atmospheric color mood; does not alter the region."),
  ("KAMIAtmosphereStrength","F32","real","0.75",1,"How strongly to apply the KAMI mood to a clone of the current sky."),
  ("KAMIAtmosphereFade","F32","real","3",1,"Seconds to crossfade the viewer-local sky when applying/restoring."),
- ("KAMIAtmosphereBloom","Boolean","integer","0",1,"Explicitly add low-cost native glow to current local preview; false leaves user's glow as-is."),
+ ("KAMIAtmosphereBloom","Boolean","integer","0",0,"Retired nonworking KAMI bloom setting. Permanently inactive; retained for backward-compatible code paths."),
  ("KAMIAtmosphereStatus","String","string","Choose a mood, then Preview. All changes stay viewer-local.",0,"Status of the in-memory, reversible KAMI local sky preview."),
 ]
 for name,ty,vtag,value,persist,comment in configs:
@@ -39,7 +39,7 @@ assert len(panels)==1, "KAMI quick graphics scroll missing"
 panel=panels[0]
 h=int(panel.get("height"))
 assert h>=4500, "Previous Fire Garden sections unexpectedly absent"
-delta=325
+delta=290
 panel.set("height",str(h+delta))
 parents=[n for n in root.iter() if n is not panel and n.get("height")==str(h+4)]
 assert parents,("Missing expanded outer graphics scroll area",h)
@@ -64,17 +64,13 @@ duration=control("combo_box","kami_atmo_fade",110,width=465,height=26,
 for label,value in [("Instant cut","0"),("2-second blend","2"),("3-second blend","3"),
                     ("5-second blend","5"),("10-second blend","10")]:
     ET.SubElement(duration,"combo_box.item",{"label":label,"value":value})
-control("check_box","kami_atmo_bloom",145,width=465,height=23,
-    control_name="KAMIAtmosphereBloom",
-    label="Optional native soft glow (only when preview is applied)",
-    tool_tip="Optional native viewer glow. Automatically restored when the atmosphere preview ends.")
-control("button","kami_atmo_apply",178,width=223,height=29,
+control("button","kami_atmo_apply",145,width=223,height=29,
     label="Preview atmosphere")
-control("button","kami_atmo_restore",211,width=223,height=29,
+control("button","kami_atmo_restore",178,width=223,height=29,
     label="Restore my environment")
-control("text","kami_atmo_status",246,width=465,height=42,wrap="true",
+control("text","kami_atmo_status",213,width=465,height=42,wrap="true",
     text_color="0.8 0.91 1 1").text="Choose a mood and preview it locally; previous local EEP can be restored."
-control("text","kami_atmo_note",286,width=465,height=34,wrap="true",
+control("text","kami_atmo_note",253,width=465,height=34,wrap="true",
     text_color="0.65 0.76 0.86 1").text=("SL-compatible: no estate/parcel edits, "
     "no custom server lighting, no extra GPU render pass or 4K/FPS changes.")
 ET.indent(doc,space=" ")
@@ -117,10 +113,10 @@ prefs.write_text(s,encoding="utf-8")
 SKIN.parent.parent.joinpath("KAMI-ATMOSPHERE-ENGINE.txt").write_text(
     "KAMI Beyond Reality | Atmosphere Engine | viewer-side EEP local preview\n"
     "Night Studio, Golden Hour, Overcast Cinema, Luxury Interior.\n"
-    "User-selected intensity, transition duration and optional native glow.\n"
+    "User-selected EEP intensity and transition duration; broken optional bloom removed.\n"
     "Preview/Restore preserve prior ENV_LOCAL day or fixed sky/water and selection.\n"
     "No parcel/region mutation, asset uploads, FPS cap, 4K changes, or extra passes.\n",
     encoding="utf-8")
 
 ET.parse(settings);ET.parse(ui)
-print("Native KAMI Atmosphere Engine implemented in Fire Garden Display (4 local EEP moods, blend, restore, optional soft bloom).")
+print("Native KAMI Atmosphere Engine implemented in Fire Garden Display (4 local EEP moods, blend, restore; broken bloom control retired).")
