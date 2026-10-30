@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -156,6 +156,9 @@ jobs:
       - name: Keep all original graphics toggles in Fire Garden base kit
         shell: pwsh
         run: python kami/theme/preserve-base-graphics-kit.py
+      - name: Add optional Smart Avatar Physics scheduling and live CPU metrics
+        shell: pwsh
+        run: python kami/physics/apply-smart-avatar-physics.py
       - name: Add native KAMI Hardware Monitor with Windows usage telemetry
         shell: pwsh
         run: python kami/performance/apply-hardware-monitor.py
