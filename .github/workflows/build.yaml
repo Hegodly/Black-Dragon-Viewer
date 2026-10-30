@@ -7,6 +7,12 @@ on:
     branches: ["main", "release/*", "project/*"]
     tags: ["Second_Life*"]
 
+# Cancel superseded CI runs for the same branch / pull request.
+# Fresh commits should not compete with obsolete full Windows builds.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # The whole point of the setup job is that we want to set variables once
   # that will be consumed by multiple subsequent jobs.
