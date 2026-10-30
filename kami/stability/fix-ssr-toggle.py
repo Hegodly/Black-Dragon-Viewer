@@ -14,8 +14,9 @@ new = '''    const bool ssr_was_enabled = RenderScreenSpaceReflections;
     // checked while the renderer still has no SSR target, or the old target
     // allocated after switching SSR off. Rebuild it on either transition.
     if (ssr_was_enabled != RenderScreenSpaceReflections)
-$1gPipeline.requestResizeScreenTexture();'''
+        gPipeline.requestResizeScreenTexture();'''
 s=s.replace(old,new)
+assert '$1gPipeline' not in s and 'gPipeline.requestResizeScreenTexture();' in s
 assert 'if(RenderScreenSpaceReflections)' in s and 'mSceneMap.allocate' in s
 p.write_text(s,encoding="utf-8")
 
