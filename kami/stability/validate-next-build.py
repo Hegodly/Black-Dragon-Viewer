@@ -76,9 +76,9 @@ verify("8K manual choice remains", 'value="7680"' in read("indra/newview/skins/d
 verify("nonworking tonal sliders and reset buttons removed from Display",
        not any(n.get("control_name") in {"RenderExposure", "RenderCASSharpness", "RenderGlowStrength"}
                for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
-verify("native exposure, sharpening and glow settings retained",
-       all(f"<key>{key}</key>" in read("indra/newview/app_settings/settings_blackdragon.xml")
-           for key in ("RenderExposure", "RenderCASSharpness", "RenderGlowStrength")))
+verify("upstream exposure, sharpening and glow renderer code retained",
+       all(token in read("indra/newview/pipeline.cpp")
+           for token in ("generateExposure(", "applyCAS(", "generateGlow(", "combineGlow("))) )
 verify("broken DoF / Bloom / Motion Blur controls removed from Display",
        not any(n.get("control_name") in {
            "RenderDepthOfField", "RenderDepthOfFieldAlphas",
