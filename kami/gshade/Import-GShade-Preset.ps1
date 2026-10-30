@@ -18,7 +18,12 @@ if (Test-Path -LiteralPath (Join-Path $base 'opengl32.dll')) {
     throw 'An external GShade/ReShade opengl32.dll is already installed. Do not stack graphics hooks. Configure that external installation through its own overlay, or use a clean KAMI portable folder.'
 }
 $running=Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue
-if ($running) { throw 'Close KAMI Viewer before importing a shader preset.' }
+if ($running) {
+    Write-Host 'Close KAMI Viewer to continue importing your GShade preset.' -ForegroundColor Yellow
+    while (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) {
+        Start-Sleep -Milliseconds 500
+    }
+}
 
 function ChoosePreset {
     $dlg=New-Object System.Windows.Forms.OpenFileDialog
