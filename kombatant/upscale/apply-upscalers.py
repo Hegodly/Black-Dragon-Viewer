@@ -138,6 +138,60 @@ t=t.replace(needle,needle+'''
             }
             else slowFrameCount=0;''')
 p.write_text(t,encoding="utf-8")
+# Fail-safe while the OpenGL -> CPU -> D3D12 temporal bridge is under repair:
+# in-world testing reported persistent screen shake / smearing for ALL vendors.
+# The jittered camera projection must NEVER run without validated motion
+# vectors, temporal synchronization, and successful SDK presentation.
+# Keep the implementation for a later tested repair, but do not advertise or
+# execute it as a working FPS feature in released KAMI builds.
+state_path=Path(state)
+state_text=state_path.read_text(encoding="utf-8")
+before='return gSavedSettings.getU32("KombatantUpscalerProvider")!=0;'
+assert state_text.count(before)==1, "upscaler jitter control moved"
+state_path.write_text(state_text.replace(before,
+    'return false; // KAMI QA quarantine: no temporal camera jitter until interop is validated.',1),encoding="utf-8")
+
+viewer_path=Path(viewer)
+viewer_text=viewer_path.read_text(encoding="utf-8")
+anchor='const U32 provider=gSavedSettings.getU32("KombatantUpscalerProvider");'
+assert viewer_text.count(anchor)==1, "upscaler render provider control moved"
+viewer_text=viewer_text.replace(anchor,anchor+'''
+        // All three providers showed unstable projection and heavy image blur.
+        // Never feed an unjittered camera into an unsupported temporal SDK
+        // or let an unverified OpenGL/D3D12 bridge overwrite the frame.
+        if (provider)
+        {
+            status("Temporal upscaling unavailable: unstable history and motion-vector integration; native rendering restored.");
+            gSavedSettings.setU32("KombatantUpscalerProvider",0);
+            return source;
+        }
+''',1)
+anchor='const bool ray=gSavedSettings.getBOOL("KombatantRayAO");'
+assert viewer_text.count(anchor)==1, "ray AO render entry point moved"
+viewer_text=viewer_text.replace(anchor,anchor+'''
+        // Tested ray AO darkens/pixelates avatar faces and stalls the frame
+        // on full-frame GPU/CPU readback. Do not dispatch the prototype.
+        if (ray)
+        {
+            status("Hardware Ray AO unavailable: face artifacts and excessive CPU/DX12 transfers; use native SSAO/HBAO.");
+            gSavedSettings.setBOOL("KombatantRayAO",false);
+            return source;
+        }
+''',1)
+viewer_path.write_text(viewer_text,encoding="utf-8")
+
+# Disable unreleasable GUI requests without deleting future SDK code.
+ui_path=Path(ui);t=ui_path.read_text(encoding="utf-8")
+for name in ("kd_upscaler","kd_upscale_quality","kd_ray_ao","kd_ray_radius","kd_ray_strength"):
+    token='name="'+name+'" '
+    assert t.count(token)==1,("missing upscaler/AO control",name,t.count(token))
+    t=t.replace(token,token+'enabled="false" ',1)
+t=t.replace(
+  'These SDK upscalers are optional experiments, not a guaranteed FPS boost. OpenGL/DirectX frame copies may cost substantial FPS. Enable the guard to revert automatically after repeated slow frames. 4096px output limit. Ray AO covers nearby opaque world meshes, not avatars or terrain.',
+  'TEMPORARILY DISABLED after in-world QA: DLSS, FSR and XeSS caused screen shake/blur, while hardware Ray AO produced avatar-face pixelation and about 28 FPS. Native Render Scale and SSAO/HBAO remain available. SDK code is retained for proper temporal/motion-vector/interop repair.'
+)
+ui_path.write_text(t,encoding="utf-8")
+
 for f in (settings,ui,viewer,state,"indra/newview/pipeline.cpp"):
     assert "KombatantDLSSMode" not in Path(f).read_text(encoding="utf-8"),f
 assert "KombatantAdditionalUpscalers additional" in Path(backend).read_text(encoding="utf-8")
