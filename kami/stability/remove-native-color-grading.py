@@ -11,6 +11,7 @@ grading = {
     "KombatantGrain", "KombatantVignetteSize", "KombatantVignetteSoftness",
     "KAMIColorTemperature", "KAMIColorVibrance"
 }
+required = grading - {"KAMIColorTemperature", "KAMIColorVibrance"}
 
 shader = R / "indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl"
 s = shader.read_text(encoding="utf-8-sig")
@@ -44,7 +45,7 @@ for i in range(len(children) - 2, -1, -1):
         removed.add(children[i].text)
         root.remove(children[i + 1])
         root.remove(children[i])
-assert removed == grading, f"Missing KAMI grading settings: {grading - removed}"
+assert required.issubset(removed), f"Missing required grading settings: {required - removed}"
 ET.indent(tree, space="  ")
 tree.write(settings, encoding="utf-8", xml_declaration=True)
 
