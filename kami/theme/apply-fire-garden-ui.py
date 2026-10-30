@@ -253,6 +253,8 @@ ET.parse(prefs)
 # need to replace its controls or overwrite their listeners to get a new skin.
 # The menu and other floaters share the themed colors and standard textures.
 for path in [WIN/"kami_fg_preferences.png",WIN/"kami_fg_button.png",WIN/"kami_fg_window.png"]:
-    assert path.stat().st_size>500,("Missing built Fire Garden UI asset",path)
+    assert path.is_file(),("Missing built Fire Garden UI asset",path)
+    with Image.open(path) as icon:
+        icon.verify()  # Uniform UI textures compress well; a tiny PNG is valid.
 assert all(f'file_name="windows/{name}"' in s for name in assets.values())
 print(f"Installed KAMI Fire Garden skin: {len(assets)} real UI texture keys, {len(applied)} native palette colors, approved Fire Garden Preferences artwork.")
