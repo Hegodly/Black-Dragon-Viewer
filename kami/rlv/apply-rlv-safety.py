@@ -176,17 +176,18 @@ menucpp.write_text(s,encoding="utf-8")
 # has no RLVa dispatch processor, so hard-blocking is safe and explicit.
 app=VIEW/"llappviewer.cpp"
 s=app.read_text(encoding="utf-8-sig")
-anchor='    loadSettingsFromDirectory("UserSession");'
-check(s.count(anchor)==1,"Viewer startup settings anchor missing")
-s=s.replace(anchor,anchor+'''
-
-    // KAMI RLV safe startup: settings loaded from disk must never silently
-    // reactivate an outdated/absent RLV engine or disable wearer safety.
+anchor='''#if AL_VIEWER_EVENT_RECORDER
+    if (clp.hasOption("logevents"))'''
+check(s.count(anchor)==1,"Viewer post-command-line anchor missing")
+s=s.replace(anchor,'''
+    // KAMI RLV safe startup: all file, session AND command-line overrides
+    // have been applied. Nothing can silently revive the missing RLVa engine.
     if (auto* legacy=gSavedSettings.getControl("RestrainedLove"))
         legacy->setValue(false);
     if (auto* blocked=gSavedSettings.getControl("KAMIRLVEmergencyBlock"))
         blocked->setValue(true);
-''',1)
+
+'''+anchor,1)
 app.write_text(s,encoding="utf-8")
 
 for p in (settings,legacy,prefs,menu,panel):ET.parse(p)
