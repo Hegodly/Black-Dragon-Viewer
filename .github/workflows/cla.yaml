@@ -9,6 +9,10 @@ on:
 jobs:
   cla:
     name: Check CLA
+    # Upstream Second Life keeps signatures in a protected organization repo.
+    # Community forks have no access to that private write token, so leave
+    # upstream CLA enforcement to upstream contributions.
+    if: github.repository_owner == 'secondlife'
     runs-on: ubuntu-latest
     steps:
       - name: CLA Assistant
