@@ -1,11 +1,12 @@
 // KAMI Beyond Reality | signature native features
 // SPDX-License-Identifier: LGPL-2.1-only
-// No additional GPU passes. All logic is optional; camera playback is 30Hz
-// max and adaptive settings changes are sampled at most once every 3 sec.
+// No additional GPU passes. Camera keyframes update at display frame rate;
+// adaptive world settings change at most once every 3 seconds.
 #pragma once
 #include "llviewercontrol.h"
 #include "llagent.h"
 #include "llagentcamera.h"
+#include "llvoavatarself.h"
 #include "llviewerregion.h"
 #include "llsdserialize.h"
 #include "llviewerstats.h"
@@ -402,6 +403,8 @@ inline bool playing=false;
 inline Clock::time_point started;
 inline F64 lastFrame=0;
 inline LLVector3d fromPos,fromFocus,toPos,toFocus,originalPos,originalFocus;
+inline LLVector3d subjectAtStart,smoothedSubject;
+inline F64 trackingBlend=0.;
 inline std::string sourceRegion;
 inline LLSD asData(const LLVector3d& p,const LLVector3d& f)
 {
@@ -436,6 +439,7 @@ inline void stop()
 {
     if(!playing)return;
     playing=false;
+    trackingBlend=0.;
     // Restore original manual camera to avoid trapping the user in playback.
     gAgentCamera.setCameraPosAndFocusGlobal(originalPos,originalFocus,LLUUID::null);
     gAgentCamera.stopCameraAnimation();
@@ -456,8 +460,17 @@ inline void play()
     originalPos=gAgentCamera.getCameraPositionGlobal();
     originalFocus=gAgentCamera.getFocusGlobal();
     sourceRegion=region();
+    // The avatar render pose (rather than coarse agent physics position) is
+    // what the viewer actually draws. Anchor the camera rig at playback start.
+    subjectAtStart=isAgentAvatarValid()
+        ? gAgent.getPosGlobalFromAgent(gAgentAvatarp->getRenderPosition())
+        : gAgent.getPositionGlobal();
+    smoothedSubject=subjectAtStart;
+    trackingBlend=0.;
     started=Clock::now();lastFrame=0;playing=true;
-    put("KAMICameraStatus","Cinematic A-to-B camera path playing.");
+    put("KAMICameraStatus",gSavedSettings.getBOOL("KAMICameraTrackSelf")
+        ? "Director playing: camera follows and aims at my avatar."
+        : "Cinematic A-to-B camera path playing.");
 }
 inline void tick()
 {
@@ -465,26 +478,45 @@ inline void tick()
     if(region()!=sourceRegion||gAgentCamera.getCameraMode()==CAMERA_MODE_MOUSELOOK)
     {stop();return;}
     const F64 now=seconds();
-    if(now-lastFrame<1./30.)return;
+    // Do not quantize tracking to 30 Hz: on high-FPS displays a 30 Hz aim
+    // causes visible stepping. Camera state is already updated once per
+    // display frame; the exponential filter is independent of framerate.
+    const F64 dt=lastFrame>0. ? llclamp(now-lastFrame,0.0001,0.1) : 1./60.;
     lastFrame=now;
     const F64 elapsed=std::chrono::duration<F64>(Clock::now()-started).count();
     const F64 duration=llclamp((F64)gSavedSettings.getF32("KAMICameraPathSeconds"),2.,30.);
     const F64 t=llclamp(elapsed/duration,0.,1.);
     const F64 eased=t*t*(3.-2.*t);
-    LLVector3d pos=fromPos+(toPos-fromPos)*eased;
-    LLVector3d focus=fromFocus+(toFocus-fromFocus)*eased;
-    if(gSavedSettings.getBOOL("KAMICameraTrackSelf"))
+    const LLVector3d pathPos=fromPos+(toPos-fromPos)*eased;
+    const LLVector3d pathFocus=fromFocus+(toFocus-fromFocus)*eased;
+
+    const bool track=gSavedSettings.getBOOL("KAMICameraTrackSelf") && isAgentAvatarValid();
+    if(isAgentAvatarValid())
     {
-        // Opt-in actor tracking: aim at user's live global position; never
-        // change their position or movement controls.
-        focus=gAgent.getPositionGlobal()+LLVector3d(0.,0.,1.5);
+        // Use the actual rendered avatar position, not the agent's coarse
+        // simulated coordinates; the mismatch used to make aim drift.
+        const LLVector3d subject=gAgent.getPosGlobalFromAgent(gAgentAvatarp->getRenderPosition());
+        const F64 subjectAlpha=1.-std::exp(-dt/0.10);
+        smoothedSubject+=(subject-smoothedSubject)*subjectAlpha;
     }
+
+    // Switching tracking on or off must not abruptly snap to a new focus.
+    const F64 blendAlpha=1.-std::exp(-dt/0.18);
+    trackingBlend+=(track?1.-trackingBlend:-trackingBlend)*blendAlpha;
+    trackingBlend=llclamp(trackingBlend,0.,1.);
+    if(!track && trackingBlend<0.0001)trackingBlend=0.;
+
+    const LLVector3d followPos=pathPos+(smoothedSubject-subjectAtStart);
+    const LLVector3d followFocus=smoothedSubject+LLVector3d(0.,0.,1.45);
+    const LLVector3d pos=pathPos+(followPos-pathPos)*trackingBlend;
+    const LLVector3d focus=pathFocus+(followFocus-pathFocus)*trackingBlend;
     gAgentCamera.setCameraPosAndFocusGlobal(pos,focus,LLUUID::null);
     gAgentCamera.stopCameraAnimation();
     if(t>=1.)
     {
-        playing=false; // Hold final camera until user moves, without locking.
-        put("KAMICameraStatus","Path completed; manual camera controls available.");
+        playing=false; // Hold the finished shot, without trapping user input.
+        trackingBlend=0.;
+        put("KAMICameraStatus","Path complete. Avatar tracking ended; manual camera available.");
     }
 }
 }
