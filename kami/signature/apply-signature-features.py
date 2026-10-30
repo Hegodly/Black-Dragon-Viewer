@@ -235,16 +235,20 @@ assert s.count(a)==1
 displaystatus=r'''void LLFloaterPreference::draw()
 {
     // Only update when a status actually changes; does not sample the GPU.
-    auto kamiText=[this](const char* node,const char* setting) {
-        if (auto* t=findChild<LLTextBox>(node)) {
-            const std::string value=gSavedSettings.getString(setting);
-            if(t->getText()!=value)t->setText(LLStringExplicit(value));
-        }
-    };
-    kamiText("kami_doctor_status","KAMIDoctorStatus");
-    kamiText("kami_world_status","KAMIWorldStatus");
-    kamiText("kami_cam_status","KAMICameraStatus");
-    kamiText("kami_profile_status","KAMIProfileStatus");
+    static F64 lastKAMIStatusUI=0.;
+    const F64 nowKAMI=KAMISignature::seconds();
+    if(nowKAMI-lastKAMIStatusUI>=1.)
+    {
+        lastKAMIStatusUI=nowKAMI;
+        auto kamiText=[this](const char* node,const char* setting) {
+            if (auto* t=findChild<LLTextBox>(node))
+                t->setText(LLStringExplicit(gSavedSettings.getString(setting)));
+        };
+        kamiText("kami_doctor_status","KAMIDoctorStatus");
+        kamiText("kami_world_status","KAMIWorldStatus");
+        kamiText("kami_cam_status","KAMICameraStatus");
+        kamiText("kami_profile_status","KAMIProfileStatus");
+    }
 '''
 s=s.replace(a,displaystatus,1)
 pref.write_text(s,encoding="utf-8")
