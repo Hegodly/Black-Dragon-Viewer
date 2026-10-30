@@ -26,6 +26,7 @@ fire_ui=[
  'skins/default/xui/en/floater_preferences.xml',
  'skins/default/KAMI-BASE-GRAPHICS-KIT.txt',
  'skins/default/KAMI-SIGNATURE-FEATURES.txt',
+ 'skins/default/KAMI-ATMOSPHERE-ENGINE.txt',
  'skins/default/colors.xml',
  'skins/default/textures/windows/kami_fg_window.png',
  'skins/default/textures/windows/kami_fg_panel.png',
