@@ -91,7 +91,7 @@ s=p.read_text(encoding="utf-8-sig")
 a=s.index('<layout_panel name="kombatant_display_quick"')
 b=s.index('</layout_panel>',a)
 area=s[a:b]
-assert 'height="2510" auto_resize="false"' in area, "Smart Display panel layout changed"
+assert 'height="2670" auto_resize="false"' in area, "Smart Display panel layout changed"
 extras=''' <text name="kami_budget_heading" left="24" top="852" width="512" height="24" font="SansSerifLarge">Performance-friendly graphics</text>
  <check_box name="kami_grade_enable" label="Native color grading" control_name="KombatantNativeFX" left="24" top="880" width="512" height="22" />
  <slider name="kami_color_sat" label="Color saturation" control_name="KombatantSaturation" left="24" top="913" width="512" height="20" label_width="195" min_val="0.7" max_val="1.3" increment="0.025" decimal_digits="2" />
@@ -113,13 +113,13 @@ extras=''' <text name="kami_budget_heading" left="24" top="852" width="512" heig
  <text name="kami_avatarlight_warning" left="24" top="1283" width="512" height="110" wrap="true">Avatar fill and soft shading are cheap, optional approximations for classic baked avatars. They do not implement physically based skin subsurface scattering or necessarily affect fitted mesh heads. Contact shading uses the real SSAO/HBAO pipeline, which can be expensive on integrated GPUs. Keep volumetrics off and shadows reduced on weak PCs. All advanced features remain optional.</text>
 '''
 import re
-extras = re.sub(r'\\btop="(\\d+)"', lambda m: 'top="'+str(int(m.group(1))+1680)+'"', extras)
+extras = re.sub(r'\\btop="(\\d+)"', lambda m: 'top="'+str(int(m.group(1))+1840)+'"', extras)
 extras = extras.replace('left="24"','left="12"').replace('width="512"','width="465"')
 extras = extras.replace('left="238"','left="215"').replace('width="295"','width="262"')
-area=area.replace('height="2510" auto_resize="false"', 'height="3140" auto_resize="false"', 1)
+area=area.replace('height="2670" auto_resize="false"', 'height="3300" auto_resize="false"', 1)
 s=s[:a]+area+extras+s[b:]
-assert s.count('height="2514"')==1
-s=s.replace('height="2514"','height="3144"',1)
+assert s.count('height="2674"')==1
+s=s.replace('height="2674"','height="3304"',1)
 p.write_text(s,encoding="utf-8")
 for file in [settings,panel]:
     ET.parse(ROOT/file)
