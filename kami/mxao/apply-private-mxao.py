@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Optional personal MXAO runtime adapter. Contains no proprietary shader code."""
+from pathlib import Path
+import shutil
+import xml.etree.ElementTree as E
+R=Path(__file__).resolve().parents[2]
+def edit(p,a,b):
+ f=R/p;s=f.read_text(encoding='utf-8-sig')
+ if s.count(a)!=1:raise RuntimeError(f'{p}: anchor count {s.count(a)}: {a[:70]}')
+ f.write_text(s.replace(a,b,1),encoding='utf-8')
+shutil.copyfile(R/'kami/mxao/kami_mxao_win32.h',R/'indra/llwindow/kami_mxao_win32.h')
+edit('indra/llwindow/llwindow.h','\tvirtual void show() = 0;', '''    virtual std::string configurePrivateMXAO(bool, float, float, int, bool) { return "Private MXAO is Windows-only."; }
+\tvirtual void show() = 0;''')
+edit('indra/llwindow/llwindowwin32.h','    void swapBuffers() override;', '''    std::string configurePrivateMXAO(bool enabled, float amount, float radius, int quality, bool overlay) override;
+    void swapBuffers() override;''')
+p='indra/llwindow/llwindowwin32.cpp'
+edit(p,'#include "llwindowwin32.h"','#include "llwindowwin32.h"\n#include "kami_mxao_win32.h"')
+edit(p,'    LoadLibrary(L"opengl32.dll");','    LoadLibrary(L"opengl32.dll");\n    KAMIMXAO::initialize();')
+edit(p,'    if (!switchContext(mFullscreen, windowSize, enable_vsync, &windowPos))','    KAMIMXAO::window = mWindowHandle;\n    if (!switchContext(mFullscreen, windowSize, enable_vsync, &windowPos))')
+edit(p,'void LLWindowWin32::swapBuffers()\n{','''std::string LLWindowWin32::configurePrivateMXAO(bool enabled, float amount, float radius, int quality, bool overlay)
+{
+    KAMIMXAO::window = mWindowHandle;
+    return KAMIMXAO::configure(enabled, amount, radius, quality, overlay);
+}
+
+void LLWindowWin32::swapBuffers()
+{
+    KAMIMXAO::window = mWindowHandle;''')
+settings='indra/newview/app_settings/settings_blackdragon.xml'
+controls=[('KAMIMXAO','Boolean','integer','0',0),('KAMIMXAOAmount','F32','real','1',1),('KAMIMXAORadius','F32','real','2.5',1),('KAMIMXAOQuality','S32','integer','1',1),('KAMIMXAOOverlay','Boolean','integer','0',0),('KAMIMXAOStatus','String','string','Private MXAO not installed.',0)]
+xml=''
+for n,t,tag,v,persist in controls:
+ xml+=f'<key>{n}</key><map><key>Comment</key><string>Optional personal MXAO runtime control; no shader code is bundled.</string><key>Persist</key><integer>{persist}</integer><key>Type</key><string>{t}</string><key>Value</key><{tag}>{v}</{tag}></map>\n'
+edit(settings,'<map>\n  <key>KAMILiveGraphicsPreview</key>','<map>\n'+xml+'  <key>KAMILiveGraphicsPreview</key>')
+p='indra/newview/llviewerdisplay.cpp'
+edit(p,'    if (gDisplaySwapBuffers)\n    {','''    if (gDisplaySwapBuffers)
+    {
+#if LL_WINDOWS
+        const bool mxao = gSavedSettings.getBOOL("KAMIMXAO");
+        const bool blocked = gSavedSettings.getBOOL("RenderDeferredSSAO") ||
+            gSavedSettings.getBOOL("KAMIFrameGeneration") || gSavedSettings.getBOOL("KAMIPerformanceMode");
+        const bool overlay = gSavedSettings.getBOOL("KAMIMXAOOverlay");
+        if (overlay) gSavedSettings.setBOOL("KAMIMXAOOverlay", false);
+        const std::string mxao_status = gViewerWindow->getWindow()->configurePrivateMXAO(
+            mxao && !blocked && !gSnapshot,
+            llclamp(gSavedSettings.getF32("KAMIMXAOAmount"), 0.f, 2.f),
+            llclamp(gSavedSettings.getF32("KAMIMXAORadius"), 0.5f, 10.f),
+            llclamp(gSavedSettings.getS32("KAMIMXAOQuality"), 0, 4), overlay);
+        const std::string next_status = (mxao && blocked)
+            ? "MXAO paused: disable native AO, frame generation and Performance Mode first."
+            : mxao_status;
+        if (gSavedSettings.getString("KAMIMXAOStatus") != next_status)
+            gSavedSettings.setString("KAMIMXAOStatus", next_status);
+#endif''')
+p='indra/newview/llfloaterpreference.cpp'
+edit(p,'void LLFloaterPreference::draw()\n{','''void LLFloaterPreference::draw()
+{
+    if (auto* text = findChild<LLTextBox>("kami_mxao_status"))
+        text->setText(LLStringExplicit(gSavedSettings.getString("KAMIMXAOStatus")));''')
+p='indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'
+f=R/p;s=f.read_text(encoding='utf-8-sig');a=s.index('<layout_panel name="kombatant_display_quick"');b=s.index('</layout_panel>',a)
+area=s[a:b];assert 'height="4250"' in area
+area=area.replace('height="4250"','height="4600"',1)+''' <text name="kami_mxao_heading" left="12" top="4260" width="465" height="24" font="SansSerifLarge">Private MXAO (optional runtime)</text>
+ <check_box name="kami_mxao_enable" control_name="KAMIMXAO" label="Enable actual Marty’s Mods MXAO" left="12" top="4292" width="465" height="22" />
+ <slider name="kami_mxao_amount" control_name="KAMIMXAOAmount" label="MXAO strength" left="12" top="4324" width="465" height="20" label_width="210" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
+ <slider name="kami_mxao_radius" control_name="KAMIMXAORadius" label="MXAO radius" left="12" top="4356" width="465" height="20" label_width="210" min_val="0.5" max_val="10" increment="0.1" decimal_digits="1" />
+ <combo_box name="kami_mxao_quality" control_name="KAMIMXAOQuality" left="12" top="4388" width="465" height="24">
+ <combo_box.item label="MXAO quality: Low" value="0" /><combo_box.item label="MXAO quality: Medium" value="1" /><combo_box.item label="MXAO quality: High" value="2" /><combo_box.item label="MXAO quality: Very high" value="3" /><combo_box.item label="MXAO quality: Ultra" value="4" />
+ </combo_box>
+ <check_box name="kami_mxao_overlay" control_name="KAMIMXAOOverlay" label="Open MXAO / depth diagnostics (Home)" left="12" top="4420" width="465" height="22" />
+ <text name="kami_mxao_status" left="12" top="4452" width="465" height="50" wrap="true">Private MXAO not installed.</text>
+ <text name="kami_mxao_help" left="12" top="4510" width="465" height="80" wrap="true">Personal opt-in install and restart required. Fetches the author’s shader directly; not bundled. Native AO, frame generation and Performance Mode pause MXAO. Correct depth must be verified. May lower FPS. Third-party shader compilation occurs on first use.</text>
+'''
+s=s[:a]+area+s[b:];assert s.count('height="4254"')==1
+s=s.replace('height="4254"','height="4604"',1);f.write_text(s,encoding='utf-8')
+E.parse(f);E.parse(R/settings)
+print('Optional private MXAO runtime adapter applied; shader is separately installed by its user.')

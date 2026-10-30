@@ -25,7 +25,7 @@ namespace KAMISmart
         "RenderVolumeLODFactor", "RenderTreeLODFactor", "RenderTerrainLODFactor",
         "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors", "RenderImpostors",
         "RenderMaxPartCount", "RenderAttachedParticles", "RenderLocalLightCount",
-        "RenderDepthOfField", "RenderMotionBlur", "RenderVolumetricLighting",
+        "RenderDepthOfField", "RenderMotionBlur",
         "KombatantNativeFX", "KAMIAvatarFillStrength", "KAMIAvatarSoftShading"
     };
 
@@ -113,7 +113,10 @@ namespace KAMISmart
             set("RenderMotionBlur", false);
             set("RenderDepthOfField", false);
             if (reflection) set("RenderScreenSpaceReflections", false);
-            set("RenderVolumetricLighting", false);
+            // Volumetrics remain a manual choice during Auto Tune / Crowd Mode.
+            // Only the explicitly selected emergency Potato preset disables them.
+            if (gSavedSettings.getBOOL("KAMIPotatoMode"))
+                set("RenderVolumetricLighting", false);
             // Optional baked-avatar cosmetics yield to FPS-first settings.
             set("KAMIAvatarFillStrength", 0.f);
             set("KAMIAvatarSoftShading", 0.f);
@@ -353,7 +356,7 @@ namespace KAMISmart
             const S32 cap = gSavedSettings.getS32("FramePerSecondLimit");
             const S32 desired = llclamp(static_cast<S32>(gSavedSettings.getU32("KAMITargetFPS")), 30, 120);
             // Never punish graphics because of a user-selected FPS cap.
-            const S32 target = cap > 0 ? llmin(desired, cap) : desired;
+            const F64 target = cap > 0 ? llmin(static_cast<F64>(desired), 1000000.0 / cap) : desired;
             if (fps < target * 0.90 && chosen < 6)
             {
                 ++chosen;

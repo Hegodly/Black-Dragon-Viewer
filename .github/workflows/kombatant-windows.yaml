@@ -2,11 +2,19 @@ name: KAMI Viewer native Windows build
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
+  framegen-shaders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install software GL test runtime
+        run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri
+      - name: Execute shipped frame-generation shaders on Mesa
+        run: python3 kami/framegen/test-shaders.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 180
@@ -58,6 +66,9 @@ jobs:
       - name: Apply KAMI Viewer logo and identity
         shell: pwsh
         run: python kami/branding/apply-branding.py
+      - name: Apply static Beyond Reality fire-garden theme
+        shell: pwsh
+        run: python kami/theme/apply-static-theme.py
       - name: Remove bundled FX runtime and integrate Performance Mode
         shell: pwsh
         run: python kami/performance/apply-native-performance.py
@@ -76,6 +87,36 @@ jobs:
       - name: Integrate shadow filtering, reflections, shader caching and auto optimization
         shell: pwsh
         run: python kami/performance/add-mw-render-controls.py
+      - name: Integrate experimental OpenGL optical-flow frame generation
+        shell: pwsh
+        run: python kami/framegen/apply-framegen.py
+      - name: Build optional private ReShade FX runtime (no MXAO source)
+        shell: pwsh
+        run: ./kami/mxao/build-runtime.ps1
+      - name: Integrate live current-scene graphics preview
+        shell: pwsh
+        run: python kami/preview/apply-live-preview.py
+      - name: Integrate optional private MXAO adapter
+        shell: pwsh
+        run: python kami/mxao/apply-private-mxao.py
+      - name: Integrate fast login without bypassing outfit readiness
+        shell: pwsh
+        run: python kami/loading/apply-fast-loading.py
+      - name: Clean KAMI login layout and identity
+        shell: pwsh
+        run: python kami/theme/clean-login.py
+      - name: Correct FPS cap units and separate quality target
+        shell: pwsh
+        run: python kami/performance/fix-fps-controls.py
+      - name: Wire shadow softening independently of SSAO
+        shell: pwsh
+        run: python kami/shadows/apply-shadow-filter-fix.py
+      - name: Contain Performance Mode scaled-view cropping
+        shell: pwsh
+        run: python kami/stability/keep-performance-native.py
+      - name: Remove unsupported 12K live rendering
+        shell: pwsh
+        run: python kami/stability/remove-12k-live.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
@@ -86,6 +127,9 @@ jobs:
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
+      - name: Install stabilized ray AO shader
+        shell: pwsh
+        run: Copy-Item kami/rtx/ray_ao.hlsl kombatant/rtx/ray_ao.hlsl -Force
       - name: Build experimental DLSS and DXR module
         shell: pwsh
         run: ./kombatant/build-rtx.ps1
@@ -114,6 +158,12 @@ jobs:
       - name: Stage AMD FSR and Intel XeSS runtimes
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1 -StageOnly
+      - name: Stage private runtime and personal installer (no MXAO source)
+        shell: pwsh
+        run: ./kami/mxao/build-runtime.ps1 -StageOnly
+      - name: Stage and validate portable runtime assets
+        shell: pwsh
+        run: python kami/packaging/stage-portable-data.py
       - name: Stage KAMI Viewer portable executable
         shell: pwsh
         run: |
@@ -121,6 +171,7 @@ jobs:
           $source = Join-Path $release 'blackdragon-bin.exe'
           if (-not (Test-Path $source)) { throw 'Viewer executable not found after build' }
           Copy-Item $source (Join-Path $release 'KAMIViewer.exe') -Force
+          Remove-Item $source -Force
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5
