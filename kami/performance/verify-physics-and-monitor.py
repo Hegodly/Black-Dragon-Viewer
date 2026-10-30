@@ -46,20 +46,13 @@ for name,ctrl in (("AvatarPhysics","AvatarPhysics"),
            len(matches)==1 and matches[0].get("control_name")==ctrl)
 expect("existing avatar physics LOD dropdown still present",
        any(x.get("control_name")=="RenderAvatarPhysicsLODFactor" and x.tag=="combo_box" for x in ui.iter()))
-# Visual graphics presets modify render quality, not the viewer's independent
-# wearable/avatar spring physics preference. Previous contract incorrectly
-# required quality presets to overwrite RenderAvatarPhysicsLODFactor, and
-# required Performance Mode to touch it just to call it "reversible".
-# Both modes must preserve the user's native physics LOD and existing
-# emergency/advanced-physics preferences instead.
-quality_source = read("indra/newview/kami_quality_presets.h")
-performance_source = read("indra/newview/kami_performance_mode.h")
-expect("render quality presets preserve user-controlled avatar physics detail",
-       'set("RenderAvatarPhysicsLODFactor"' not in quality_source and
-       'set("AvatarPhysics"' not in quality_source)
-expect("Performance Mode does not silently change wearable/avatar physics",
-       'set("RenderAvatarPhysicsLODFactor"' not in performance_source and
-       'set("AvatarPhysics"' not in performance_source)
+# Existing KAMI quality and Performance Mode physics LOD decisions are
+# installed earlier by apply-adaptive-avatar-physics.py. Keep them through
+# later visual PBR-quality patches; the master AvatarPhysics toggle is separate.
+expect("quality levels manage actual physics detail",
+       'set("RenderAvatarPhysicsLODFactor", physicsLOD[q]);' in read("indra/newview/kami_quality_presets.h"))
+expect("Performance Mode keeps physics settings reversible",
+       '"RenderAvatarPhysicsLODFactor"' in read("indra/newview/kami_performance_mode.h"))
 
 reg=read("indra/newview/llviewerfloaterreg.cpp")
 monitor=read("indra/newview/kami_hardware_monitor.h")

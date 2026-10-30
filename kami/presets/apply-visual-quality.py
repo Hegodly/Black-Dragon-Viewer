@@ -85,12 +85,25 @@ h = once(h, anchor, """        static const char* const visualStatus[] = {
         set("KAMIQualityVisualStatus", LLSD(visualStatus[q]));
 """ + anchor, "quality status update")
 PRESETS.write_text(h, encoding="utf-8")
-# Earlier quality wiring copied the original controller into newview.
-# Keep the compiled header identical to the updated source template.
+# The previous adaptive-physics integration modifies only the COMPILED header.
+# Never overwrite it with the older source template: that would silently erase
+# its physics LOD settings and undo a successfully verified earlier build stage.
 compiled_header = VIEW / "kami_quality_presets.h"
 if not compiled_header.is_file():
     raise AssertionError("Compiled quality preset header is missing")
-compiled_header.write_text(h, encoding="utf-8")
+native = compiled_header.read_text(encoding="utf-8-sig")
+if 'set("RenderAvatarPhysicsLODFactor", physicsLOD[q]);' not in native:
+    raise AssertionError("Native avatar physics patch missing before PBR preset install")
+native = once(native, anchor, """        static const char* const visualStatus[] = {
+            "LOW: softer PBR highlights, reduced reflections; distant detail budget reduced.",
+            "MEDIUM: moderate PBR highlights and reflections; balanced scene detail.",
+            "HIGH: detailed PBR response, native SSAO, higher geometry and lighting budgets.",
+            "ULTRA: near-authored glossy PBR, HBAO, reflections and detailed shadows.",
+            "CINEMATIC: authored PBR finish, richest probe lighting and scene detail."
+        };
+        set("KAMIQualityVisualStatus", LLSD(visualStatus[q]));
+""" + anchor, "compiled native quality status update")
+compiled_header.write_text(native, encoding="utf-8")
 
 tree = ET.parse(SETTINGS)
 root = tree.getroot().find("map")

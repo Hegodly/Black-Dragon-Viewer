@@ -43,7 +43,11 @@ check("automatic and performance controls bypass material tier",
 check("independent GPU world resolution and FPS remain unchanged",
       all('set("' + k + '"' not in presets for k in (
           "RenderResolutionMultiplier", "KombatantRenderWidth", "FramePerSecondLimit")))
-check("compiled controller matches updated preset source", compiled_presets == presets)
+check("native preset controller keeps prior adaptive-physics integration",
+      'set("RenderAvatarPhysicsLODFactor", physicsLOD[q]);' in compiled_presets and
+      'static const F32 physicsLOD[]' in compiled_presets and
+      'set("KAMIQualityVisualStatus", LLSD(visualStatus[q]));' in compiled_presets and
+      'set("KAMIQualityVisualStatus", LLSD(visualStatus[q]));' in presets)
 check("five quality levels and status messages",
       presets.count('"LOW: ') == 1 and
       presets.count('"MEDIUM: ') == 1 and
