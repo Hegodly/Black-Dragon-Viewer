@@ -73,6 +73,12 @@ verify("low to cinematic preset choice saved", '<key>KAMIQualityPreset</key>' in
 verify("actually allocated world buffer readout connected", 'last_world_resolution_status_time' in read("indra/newview/llviewerdisplay.cpp") and '<key>KAMILiveResolutionStatus</key>' in read("indra/newview/app_settings/settings_blackdragon.xml"))
 verify("4K manual choice remains", 'value="3840"' in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
 verify("8K manual choice remains", 'value="7680"' in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
+verify("nonworking tonal sliders and reset buttons removed from Display",
+       not any(n.get("control_name") in {"RenderExposure", "RenderCASSharpness", "RenderGlowStrength"}
+               for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
+verify("native exposure, sharpening and glow settings retained",
+       all(f"<key>{key}</key>" in read("indra/newview/app_settings/settings_blackdragon.xml")
+           for key in ("RenderExposure", "RenderCASSharpness", "RenderGlowStrength")))
 verify("unsafe adaptive resolution hidden", not any(n.get("name") in ("kami_adaptive_resolution","kami_resolution") and n.get("enabled")!="false" for n in ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot().iter()))
 verify("rendering capability GL query cache", 'static GLint texture_limit = 0, renderbuffer_limit = 0;' in read("indra/newview/pipeline.cpp"))
 # Catch specific C++ compile failures before entering the costly MSVC step.
