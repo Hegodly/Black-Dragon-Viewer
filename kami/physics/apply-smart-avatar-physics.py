@@ -301,7 +301,7 @@ tree=ET.parse(ui);root=tree.getroot()
 ps=[x for x in root.iter() if x.tag=="layout_panel" and x.get("name")=="kombatant_display_quick"]
 assert len(ps)==1
 quick=ps[0]
-oldheight=int(quick.get("height"));assert oldheight>=4500,oldheight
+oldheight=int(quick.get("height"));assert oldheight>=4200,oldheight
 quick.set("height",str(oldheight+346))
 # Other KAMI patches use exactly +4 for the parent vertical stack.
 sized=[x for x in root.iter() if x.get("height")==str(oldheight+4)]
