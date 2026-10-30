@@ -6,6 +6,19 @@ Make Kami a reliable *creator-first* Windows Second Life viewer, without attempt
 to evade simulator-side mesh requirements or L$ upload fees. UI styling should
 follow Kami's existing Liquid Glass theme, not bundle an unrelated skin.
 
+## Opening Creator Studio in a Kami build
+
+1. Sign in to Second Life on a mesh-upload-enabled grid.
+2. From the top menu choose **File > Upload > KAMI Creator Studio (Mesh)...**.
+3. Load a supported COLLADA `.dae` model and use **Mesh Audit** before
+   asking the simulator to calculate fees.
+
+The menu item is **not** permanently disabled. Its enable callback keeps it
+inactive while the model preview is loading; the original mesh availability
+check can hide it on an unsupported grid. The server still decides upload
+permission, land impact and L$ price. Older Kami builds containing the
+hard-disabled **Model...** entry need a newly compiled viewer.
+
 ## First increment (this branch)
 
 - Rename the existing mesh upload floater as "KAMI / CREATOR STUDIO - MESH".
