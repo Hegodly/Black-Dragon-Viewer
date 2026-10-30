@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**]
 permissions:
   contents: read
 jobs:
@@ -143,6 +143,9 @@ jobs:
       - name: Stage private runtime and personal installer (no MXAO source)
         shell: pwsh
         run: ./kami/mxao/build-runtime.ps1 -StageOnly
+      - name: Stage and validate portable runtime assets
+        shell: pwsh
+        run: python kami/packaging/stage-portable-data.py
       - name: Stage KAMI Viewer portable executable
         shell: pwsh
         run: |
@@ -150,6 +153,7 @@ jobs:
           $source = Join-Path $release 'blackdragon-bin.exe'
           if (-not (Test-Path $source)) { throw 'Viewer executable not found after build' }
           Copy-Item $source (Join-Path $release 'KAMIViewer.exe') -Force
+          Remove-Item $source -Force
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5

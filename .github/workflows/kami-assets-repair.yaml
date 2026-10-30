@@ -1,0 +1,119 @@
+name: KAMI portable runtime assets repair
+'on':
+  push:
+    branches:
+    - experimental/kami-optical-flow-framegen
+    paths:
+    - .github/workflows/kami-assets-repair.yaml
+    - kami/packaging/**
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  runtime-assets:
+    runs-on: windows-2022
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+    - name: Apply Kombatant viewer changes
+      shell: bash
+      run: 'git apply --check kombatant.patch
+
+        git apply kombatant.patch
+
+        '
+    - name: Restore omitted snapshot preview source
+      shell: python
+      run: "from pathlib import Path\nfrom urllib.request import urlopen\nbase = 'https://raw.githubusercontent.com/KittyBarnett/rlva/074d3a8dcf875b1837bf946f71a7087ceed33230/'\n\
+        paths = ['indra/newview/llfloaterbigpreview.cpp', 'indra/newview/llfloaterbigpreview.h',\
+        \ 'indra/newview/skins/default/xui/en/floater_big_preview.xml']\nfor name\
+        \ in paths:\n    text = urlopen(base + name).read().decode('utf-8')\n    text\
+        \ = text.replace('BOOL postBuild()', 'bool postBuild()').replace('BOOL LLFloaterBigPreview::postBuild()',\
+        \ 'bool LLFloaterBigPreview::postBuild()')\n    Path(name).write_text(text)\n\
+        p = Path('indra/newview/CMakeLists.txt')\np.write_text(p.read_text().replace(chr(34)+'--openal=${USE_OPENAL}'+chr(34),\
+        \ chr(34)+'--fmodstudio=${USE_FMODSTUDIO}'+chr(34)+' '+chr(34)+'--openal=${USE_OPENAL}'+chr(34)))\n\
+        p = Path('indra/cmake/Copy3rdPartyLibs.cmake')\np.write_text(''.join(line\
+        \ for line in p.read_text().splitlines(True) if line.strip() != 'openjpeg.dll'))\n\
+        p = Path('indra/newview/viewer_manifest.py')\np.write_text(''.join(line for\
+        \ line in p.read_text().splitlines(True) if line.strip() != 'self.path(\"\
+        openjpeg.dll\")'))\np = Path('indra/newview/kombatantstudio.h')\np.write_text(p.read_text().replace('[this]()\
+        \ {', '[this](LLUICtrl*, const LLSD&) {'))\np = Path('kombatant/build-windows.sh')\n\
+        p.write_text(p.read_text().replace('autobuild build -A 64 -c ReleaseOS', 'autobuild\
+        \ build --no-configure -A 64 -c ReleaseOS'))\np = Path('indra/cmake/BuildVersion.cmake')\n\
+        p.write_text(p.read_text().replace('VIEWER_SHORT_VERSION REGEX', 'VIEWER_SHORT_VERSION\
+        \ LIMIT_COUNT 1 REGEX'))\n"
+    - name: Integrate native FSR and XeSS into viewer source
+      shell: pwsh
+      run: python kombatant/upscale/apply-upscalers.py
+    - name: Install Python build tooling
+      run: python -m pip install autobuild llsd pillow "cmake<4"
+    - name: Apply KAMI Viewer logo and identity
+      shell: pwsh
+      run: python kami/branding/apply-branding.py
+    - name: Apply static Beyond Reality fire-garden theme
+      shell: pwsh
+      run: python kami/theme/apply-static-theme.py
+    - name: Remove bundled FX runtime and integrate Performance Mode
+      shell: pwsh
+      run: python kami/performance/apply-native-performance.py
+    - name: Add native advanced lighting and adaptive resolution
+      shell: pwsh
+      run: python kami/performance/add-advanced-native.py
+    - name: Integrate experimental native PBR near-field indirect lighting
+      shell: pwsh
+      run: python kami/performance/add-native-bounce.py
+    - name: Install adaptive performance controls and Potato Mode
+      shell: pwsh
+      run: python kami/performance/apply-smart-performance.py
+    - name: Add performance-friendly lighting and skin options
+      shell: pwsh
+      run: python kami/performance/add-balanced-graphics.py
+    - name: Integrate shadow filtering, reflections, shader caching and auto optimization
+      shell: pwsh
+      run: python kami/performance/add-mw-render-controls.py
+    - name: Integrate experimental OpenGL optical-flow frame generation
+      shell: pwsh
+      run: python kami/framegen/apply-framegen.py
+    - name: Integrate live current-scene graphics preview
+      shell: pwsh
+      run: python kami/preview/apply-live-preview.py
+    - name: Integrate optional private MXAO adapter
+      shell: pwsh
+      run: python kami/mxao/apply-private-mxao.py
+    - name: Integrate fast login without bypassing outfit readiness
+      shell: pwsh
+      run: python kami/loading/apply-fast-loading.py
+    - name: Validate KAMI Firestorm-style WASD movement defaults
+      shell: pwsh
+      run: python kami/performance/validate-wasd-controls.py
+    - name: Validate native graphics settings and panels
+      shell: pwsh
+      run: 'python -c "from pathlib import Path; import xml.etree.ElementTree as E;
+        E.parse(''indra/newview/app_settings/settings_blackdragon.xml''); E.parse(''indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'');
+        E.parse(''indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'');
+        assert ''KAMITargetFPS'' in Path(''indra/newview/llviewerdisplay.cpp'').read_text();
+        assert ''kamiNearFieldBounce'' in Path(''indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl'').read_text();
+        s=Path(''indra/llwindow/llwindowwin32.cpp'').read_text(); assert ''KombatantFX::''
+        not in s; assert not Path(''indra/llwindow/kombatantfxwin32.h'').exists();
+        print(''Native graphics integration verified'')"
+
+        '
+    - name: Fetch pinned runtime fonts
+      shell: pwsh
+      run: "python -m pip install pyzstd\n@'\nfrom pathlib import Path\nfrom urllib.request\
+        \ import urlopen\nimport hashlib,tarfile,io,pyzstd\nurl='https://github.com/secondlife/3p-viewer-fonts/releases/download/v1.1.0-r1/viewer_fonts-1.0.0.10204976553-common-10204976553.tar.zst'\n\
+        data=urlopen(url).read()\nassert hashlib.sha1(data).hexdigest()=='e88a7c97a6843d43e0093388f211299ec2892790'\n\
+        with tarfile.open(fileobj=io.BytesIO(pyzstd.decompress(data))) as archive:\n\
+        \    archive.extractall('runtime-fonts',filter='data')\n'@ | python\n"
+    - name: Create runtime assets repair overlay
+      shell: pwsh
+      run: python kami/packaging/stage-portable-data.py --output KAMI-runtime-assets
+        --fonts runtime-fonts/fonts
+    - uses: actions/upload-artifact@v4
+      with:
+        name: KAMI-runtime-assets-repair
+        path: KAMI-runtime-assets/
+        if-no-files-found: error
+        retention-days: 7
