@@ -31,8 +31,6 @@ controls={
     "RenderTreeLODFactor": {"combo_box"},
     "RenderMaxTextureResolution": {"combo_box"},
     # Shading and frame quality.
-    "RenderGlowHDR": {"check_box"},
-    "RenderGlowResolutionPow": {"combo_box"},
     "RenderFSAAType": {"combo_box"},
     "RenderFSAASamples": {"combo_box"},
     # Scene lighting / attachment limits (0:06-0:07).
@@ -107,9 +105,9 @@ else:
         "font":"SansSerifLarge","text_color":"0.72 0.85 0.96 1"})
     heading.text="KAMI CORE GRAPHICS"
 
-# The October 30 live test found these three Display sliders ineffective.
+# October 30 in-world QA identified the following nonworking UI controls.
 # Remove only their UI widgets (slider and paired default/reset button).
-# Do not delete the native renderer settings, shaders, or other glow options.
+# Do not delete native renderer settings or shaders; only retire nonfunctional UI.
 # "Bloom strength" in testing corresponds to native "Glow Strength".
 unresponsive = {
     "RenderExposure": "Exposure",
@@ -130,6 +128,60 @@ for key, label in unresponsive.items():
     assert not any(n.get("control_name") == key for n in root.iter()), (
         "Nonfunctional UI control still visible", label
     )
+
+# Remove entire inactive effect subpanels, not just the master toggles:
+# otherwise DoF/motion-blur sliders and glow fine-tuning become orphaned.
+# Preserve adjacent Tonemapping, SSAO, Volumetric Lighting and Post Effects.
+effect_sections = (
+    ("Depth of Field", "Volumetric Lighting"),
+    ("Motion Blur", "Tone Mapping"),
+    ("Post Processing Glow", "Post Effects"),
+)
+for start_name, end_name in effect_sections:
+    starts = [n for n in root.iter("text") if (n.text or "").strip() == start_name]
+    ends = [n for n in root.iter("text") if (n.text or "").strip() == end_name]
+    assert len(starts) == len(ends) == 1, (start_name, end_name, len(starts), len(ends))
+    first, last = starts[0], ends[0]
+    parents = [p for p in root.iter() if first in list(p) and last in list(p)]
+    assert len(parents) == 1, ("Effect heading layout changed", start_name, end_name)
+    parent = parents[0]
+    siblings = list(parent)
+    begin, finish = siblings.index(first), siblings.index(last)
+    assert begin < finish and finish - begin >= 3, ("Unexpected effect section", start_name)
+    for child in siblings[begin:finish]:
+        parent.remove(child)
+
+# The stock basic page contains additional HDR Glow and Glow Quality controls
+# outside the full Glow fine-tuning section. Remove their widgets too.
+for key, tags in (
+    ("RenderGlowHDR", ("check_box",)),
+    ("RenderGlowResolutionPow", ("combo_box",)),
+    ("GlowResolution", ("text",)),
+):
+    matches = [(p, n) for p in root.iter() for n in list(p)
+               if n.get("control_name") == key or n.get("name") == key]
+    assert len(matches) == 1 and matches[0][1].tag in tags, (key, matches)
+    matches[0][0].remove(matches[0][1])
+
+# Do not leave an enabled DoF, Bloom or Motion Blur widget lurking elsewhere
+# in the Display panel. This does not alter the renderer or saved user settings.
+retired_settings = {
+    "RenderDepthOfField", "RenderDepthOfFieldAlphas",
+    "RenderDepthOfFieldFront", "RenderDepthOfFieldInEditMode",
+    "RenderDepthOfFieldChroma", "RenderDepthOfFieldHighQuality",
+    "CameraFNumber", "CameraFocalLength", "CameraMaxCoF",
+    "CameraFocusTransitionTime", "CameraDoFResScale",
+    "RenderMotionBlur", "RenderMotionBlurStrength",
+    "RenderGlowHDR", "RenderGlowResolutionPow", "RenderGlowIterations",
+    "RenderGlowStrength", "RenderGlowMinLuminance", "RenderGlowWarmthAmount",
+    "RenderGlowWidth", "RenderGlowMaxExtractAlpha", "RenderGlowLumWeights",
+    "RenderGlowWarmthWeights",
+}
+assert not any(n.get("control_name") in retired_settings for n in root.iter()), (
+    "DoF, motion blur or bloom UI remained visible")
+assert not any((n.text or "").strip() in
+               {"Depth of Field", "Motion Blur", "Post Processing Glow", "Glow Quality:"}
+               for n in root.iter("text")), "Orphaned effect heading"
 
 # Existing core toggles inherit the *actual* skinned assets. Explicitly check
 # that our Fire Garden theme was applied to each widget family in textures.xml.
@@ -155,6 +207,6 @@ manifest.write_text(
     f"{len(controls)} original interactive renderer/UI settings kept intact.\n"
     "Includes checked original controls: "+", ".join(controls)+"\n"
     "All switches remain real viewer settings; themed by skin images/colors.\n"
-    "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n",
+    "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n"\n    "Removed broken DoF, Bloom/Glow and Motion Blur settings and fine-tuning UI.\n",
     encoding="utf-8")
-print(f"KAMI Fire Garden native base kit: {len(controls)} reference controls preserved; nonworking Exposure, CAS Sharpness, Glow Strength sliders and their reset buttons removed.")
+print(f"KAMI graphics base kit: {len(controls)} core controls preserved; removed nonworking Exposure/Sharpening, DoF, Bloom and Motion Blur UI.")
