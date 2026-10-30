@@ -19,11 +19,11 @@ note=unique("kami_performance_note")
 note.text="Keeps native 4K and FPS uncapped; lowers scene detail, not image resolution."
 note.set("width","465")
 bench=unique("kami_bench_start")
-bench.set("label","Benchmark FPS (30s) — run once OFF, then ON")
-bench.set("tool_tip","Benchmark in the same location, camera view and display resolution. First run with Performance and all other optimization modes OFF to capture baseline. Then enable Performance and rerun. KAMI reports measured median FPS and percent change. Scene loading, FPS caps and VSync can invalidate a comparison.")
+bench.set("label","Benchmark FPS (30s) — baseline, then preset")
+bench.set("tool_tip","Benchmark the same location, camera and resolution. First set Quality to Custom and turn OFF all smart modes to capture the manual baseline. Then select Low/Medium/High/Ultra/Cinematic or enable Performance and rerun. KAMI measures median FPS and percent change, not a promised result. Scene loading, VSync and manual FPS limits affect comparison.")
 result=unique("kami_bench_result")
 result.set("height","86")
-result.text="For a measured boost: benchmark once with preset OFF; turn it ON, keep the same camera view, and benchmark again. Displays median FPS and percent change."
+result.text="Benchmark Custom + optimizations OFF for a baseline. Then select any quality or Performance preset and rerun in the same view to measure the actual FPS change."
 ET.indent(tree,space=" ")
 tree.write(path,encoding="utf-8",xml_declaration=True)
 ET.parse(path)
