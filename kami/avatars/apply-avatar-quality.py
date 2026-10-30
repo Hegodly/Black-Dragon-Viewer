@@ -49,8 +49,8 @@ cpp.write_text(s,encoding="utf-8")
 
 # Use the native avatar impostor budget for an additional crowd FPS saving.
 # Lower limits chosen elsewhere (Potato/Performance) are never increased.
-budget_anchor='''    // the sLimitNonImpostors flag depends on whether or not sMaxNonImpostors is set to the no-limit value (0)
-    sLimitNonImpostors = (0 != sMaxNonImpostors);'''
+budget_anchor='''\t// the sLimitNonImpostors flag depends on whether or not sMaxNonImpostors is set to the no-limit value (0)
+\tsLimitNonImpostors = (0 != sMaxNonImpostors);'''
 budget_new='''    // KAMI Avatar Quality + FPS: retain the existing native impostor
     // engine; only cap the count of detailed avatars in crowds.
     if (gSavedSettings.getBOOL("KAMIAvatarQualityFPS") &&
@@ -58,8 +58,8 @@ budget_new='''    // KAMI Avatar Quality + FPS: retain the existing native impos
     {
         sMaxNonImpostors = 8;
     }
-    // the sLimitNonImpostors flag depends on whether or not sMaxNonImpostors is set to the no-limit value (0)
-    sLimitNonImpostors = (0 != sMaxNonImpostors);'''
+\t// the sLimitNonImpostors flag depends on whether or not sMaxNonImpostors is set to the no-limit value (0)
+\tsLimitNonImpostors = (0 != sMaxNonImpostors);'''
 avatar_code=cpp.read_text(encoding="utf-8")
 assert avatar_code.count(budget_anchor)==1, "Native impostor budget anchor changed"
 avatar_code=avatar_code.replace(budget_anchor,budget_new,1)
