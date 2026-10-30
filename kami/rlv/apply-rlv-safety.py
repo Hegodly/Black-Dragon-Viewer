@@ -119,9 +119,7 @@ draw='''void LLFloaterPreference::draw()
     {
         mUpdateTimer.reset();'''
 # Black Dragon's C++ indents this block with tabs, not spaces.
-draw_actual='''void LLFloaterPreference::draw()
-{
-\tif (mUpdateTimer.getElapsedTimeF32() > 1.f)
+draw_actual='''\tif (mUpdateTimer.getElapsedTimeF32() > 1.f)
 \t{
 \t\tmUpdateTimer.reset();'''
 check(s.count(draw_actual)==1,"Preferences status update anchor changed")
