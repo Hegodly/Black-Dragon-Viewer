@@ -46,7 +46,10 @@ edit(p,'    if (gDisplaySwapBuffers)\n    {','''    if (gDisplaySwapBuffers)
             llclamp(gSavedSettings.getF32("KAMIMXAOAmount"), 0.f, 2.f),
             llclamp(gSavedSettings.getF32("KAMIMXAORadius"), 0.5f, 10.f),
             llclamp(gSavedSettings.getS32("KAMIMXAOQuality"), 0, 4), overlay);
-        const std::string next_status = (mxao && blocked)
+        const bool missing = mxao_status.find("not installed") != std::string::npos ||
+            mxao_status.find("failed") != std::string::npos ||
+            mxao_status.find("skipped") != std::string::npos;
+        const std::string next_status = (mxao && blocked && !missing)
             ? "MXAO paused: disable native AO, frame generation and Performance Mode first."
             : mxao_status;
         if (gSavedSettings.getString("KAMIMXAOStatus") != next_status)
@@ -60,7 +63,7 @@ edit(p,'void LLFloaterPreference::draw()\n{','''void LLFloaterPreference::draw()
 p='indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'
 f=R/p;s=f.read_text(encoding='utf-8-sig');a=s.index('<layout_panel name="kombatant_display_quick"');b=s.index('</layout_panel>',a)
 area=s[a:b];assert 'height="4250"' in area
-area=area.replace('height="4250"','height="4600"',1)+''' <text name="kami_mxao_heading" left="12" top="4260" width="465" height="24" font="SansSerifLarge">Private MXAO (optional runtime)</text>
+area=area.replace('height="4250"','height="4650"',1)+''' <text name="kami_mxao_heading" left="12" top="4260" width="465" height="24" font="SansSerifLarge">Private MXAO (optional runtime)</text>
  <check_box name="kami_mxao_enable" control_name="KAMIMXAO" label="Enable actual Marty’s Mods MXAO" left="12" top="4292" width="465" height="22" />
  <slider name="kami_mxao_amount" control_name="KAMIMXAOAmount" label="MXAO strength" left="12" top="4324" width="465" height="20" label_width="210" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
  <slider name="kami_mxao_radius" control_name="KAMIMXAORadius" label="MXAO radius" left="12" top="4356" width="465" height="20" label_width="210" min_val="0.5" max_val="10" increment="0.1" decimal_digits="1" />
@@ -68,10 +71,11 @@ area=area.replace('height="4250"','height="4600"',1)+''' <text name="kami_mxao_h
  <combo_box.item label="MXAO quality: Low" value="0" /><combo_box.item label="MXAO quality: Medium" value="1" /><combo_box.item label="MXAO quality: High" value="2" /><combo_box.item label="MXAO quality: Very high" value="3" /><combo_box.item label="MXAO quality: Ultra" value="4" />
  </combo_box>
  <check_box name="kami_mxao_overlay" control_name="KAMIMXAOOverlay" label="Open MXAO / depth diagnostics (Home)" left="12" top="4420" width="465" height="22" />
- <text name="kami_mxao_status" left="12" top="4452" width="465" height="50" wrap="true">Private MXAO not installed.</text>
- <text name="kami_mxao_help" left="12" top="4510" width="465" height="80" wrap="true">Personal opt-in install and restart required. Fetches the author’s shader directly; not bundled. Native AO, frame generation and Performance Mode pause MXAO. Correct depth must be verified. May lower FPS. Third-party shader compilation occurs on first use.</text>
+ <text name="kami_mxao_status" left="12" top="4452" width="465" height="42" wrap="true">MXAO not installed. Click Install MXAO.</text>
+ <button name="kami_mxao_install" label="Install MXAO from author (optional)" left="12" top="4500" width="465" height="28" />
+ <text name="kami_mxao_help" left="12" top="4538" width="465" height="92" wrap="true">Optional personal install downloads the author’s shader directly, without Git. Restart KAMI after installation. Native AO, frame generation and Performance Mode pause MXAO. Depth selection must be verified.</text>
 '''
 s=s[:a]+area+s[b:];assert s.count('height="4254"')==1
-s=s.replace('height="4254"','height="4604"',1);f.write_text(s,encoding='utf-8')
+s=s.replace('height="4254"','height="4654"',1);f.write_text(s,encoding='utf-8')
 E.parse(f);E.parse(R/settings)
 print('Optional private MXAO runtime adapter applied; shader is separately installed by its user.')
