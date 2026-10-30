@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**]
 permissions:
   contents: read
 jobs:
@@ -87,6 +87,9 @@ jobs:
       - name: Integrate experimental OpenGL optical-flow frame generation
         shell: pwsh
         run: python kami/framegen/apply-framegen.py
+      - name: Integrate live current-scene graphics preview
+        shell: pwsh
+        run: python kami/preview/apply-live-preview.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
