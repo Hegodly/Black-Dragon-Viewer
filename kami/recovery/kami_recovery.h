@@ -167,7 +167,9 @@ namespace KAMIRecovery
     }
     inline void tick()
     {
-        if(!gSavedSettings.getBOOL("KAMIRecoveryEnabled"))return;
+        // Check the prior run's opt-in snapshot regardless of current
+        // unsaved settings: a crash may have prevented the opt-in flag from
+        // being flushed to settings.xml at the previous shutdown.
         if(LLStartUp::getStartupState()!=STATE_STARTED)return;
         LLAppViewer* app=LLAppViewer::instance();
         if(!app || app->isSecondInstance())return;
@@ -192,6 +194,7 @@ namespace KAMIRecovery
             }
         }
         if(offerPending)return; // do not overwrite the previous crash snapshot
+        if(!gSavedSettings.getBOOL("KAMIRecoveryEnabled"))return;
         const F64 now=KAMISignature::seconds();
         if(lastSample==0. || now-lastSample>=20.)
         {
