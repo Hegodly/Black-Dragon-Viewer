@@ -67,9 +67,8 @@
 #include "llpanelloginlistener.h"
 #include "llsliderctrl.h"
 
-// KAMI Login Soundtrack: local-only, optional Windows MP3 playback.
-// The copyrighted audio is NEVER embedded in or downloaded by the public viewer.
-// Place a user-provided KAMI-login.mp3 beside KAMIViewer.exe to enable it.
+// KAMI Login Soundtrack: optional, user-supplied Windows MP3.
+// Public builds include an installer but never redistribute the recording.
 #if LL_WINDOWS
 #include <windows.h>
 #include <mmsystem.h>
@@ -80,15 +79,21 @@
 namespace
 {
 bool gKamiMusicOpen = false;
+bool gKamiMusicEnabled = true;
 int gKamiMusicVolume = 35;
+std::string gKamiMusicStatus = "Checking for local soundtrack...";
+std::string gKamiMusicRenderedStatus;
 std::chrono::steady_clock::time_point gKamiMusicNextCheck = std::chrono::steady_clock::now();
 
 void kamiStopLoginMusic()
 {
-    if (!gKamiMusicOpen) return;
-    ::mciSendStringW(L"stop kami_login_audio", nullptr, 0, nullptr);
-    ::mciSendStringW(L"close kami_login_audio", nullptr, 0, nullptr);
-    gKamiMusicOpen = false;
+    if (gKamiMusicOpen)
+    {
+        ::mciSendStringW(L"stop kami_login_audio", nullptr, 0, nullptr);
+        ::mciSendStringW(L"close kami_login_audio", nullptr, 0, nullptr);
+        gKamiMusicOpen = false;
+    }
+    gKamiMusicStatus = "Login soundtrack off";
 }
 void kamiSetLoginMusicVolume(int volume)
 {
@@ -97,50 +102,88 @@ void kamiSetLoginMusicVolume(int volume)
     {
         std::wstring command = L"setaudio kami_login_audio volume to " +
             std::to_wstring(gKamiMusicVolume * 10);
-        ::mciSendStringW(command.c_str(), nullptr, 0, nullptr);
+        MCIERROR err = ::mciSendStringW(command.c_str(), nullptr, 0, nullptr);
+        if (err)
+            LL_WARNS("KAMI Login Audio") << "Windows MCI volume error: " << (U32)err << LL_ENDL;
     }
+}
+void kamiMusicError(const char* action, MCIERROR err)
+{
+    gKamiMusicStatus = std::string("MP3 playback failed (Windows audio error ") +
+                       std::to_string((U32)err) + ").";
+    LL_WARNS("KAMI Login Audio") << action << " failed (MCI error " << (U32)err
+                                  << "). Check KAMI-login.mp3 is a playable MP3."
+                                  << LL_ENDL;
 }
 void kamiStartLoginMusic()
 {
-    if (gKamiMusicOpen) return;
+    if (!gKamiMusicEnabled || gKamiMusicOpen) return;
+    // Retry at most every five seconds if the user adds their MP3 while KAMI
+    // is already on the login screen. Never poll the file on each draw.
+    gKamiMusicNextCheck = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     wchar_t exe[MAX_PATH] = {};
     DWORD count = ::GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    if (!count || count >= MAX_PATH) return;
+    if (!count || count >= MAX_PATH)
+    {
+        gKamiMusicStatus = "Could not locate KAMIViewer.exe for soundtrack.";
+        return;
+    }
     std::filesystem::path file =
         std::filesystem::path(exe).parent_path() / L"KAMI-login.mp3";
     std::error_code ec;
-    if (!std::filesystem::is_regular_file(file, ec)) return;
+    if (!std::filesystem::is_regular_file(file, ec))
+    {
+        gKamiMusicStatus = "Missing KAMI-login.mp3: use Install-KAMI-Login-Music.cmd";
+        return;
+    }
 
     std::wstring command = L"open \"" + file.wstring() +
         L"\" type mpegvideo alias kami_login_audio";
-    if (::mciSendStringW(command.c_str(), nullptr, 0, nullptr) != 0)
+    MCIERROR err = ::mciSendStringW(command.c_str(), nullptr, 0, nullptr);
+    if (err)
     {
-        LL_WARNS("KAMI Login Audio") << "Could not open local login soundtrack" << LL_ENDL;
+        kamiMusicError("Open", err);
         return;
     }
     gKamiMusicOpen = true;
     kamiSetLoginMusicVolume(gKamiMusicVolume);
-    // MPEGVideo MCI drivers differ in support for the repeat flag. The
-    // draw-loop pump below also restarts completed playback when necessary.
-    if (::mciSendStringW(L"play kami_login_audio repeat", nullptr, 0, nullptr) != 0 &&
-        ::mciSendStringW(L"play kami_login_audio", nullptr, 0, nullptr) != 0)
+    // MPEGVideo MCI implementations vary: try repeat, then plain play with
+    // a 2-second end-of-track check to restart when required.
+    err = ::mciSendStringW(L"play kami_login_audio repeat", nullptr, 0, nullptr);
+    if (err)
+        err = ::mciSendStringW(L"play kami_login_audio", nullptr, 0, nullptr);
+    if (err)
     {
-        kamiStopLoginMusic();
+        ::mciSendStringW(L"close kami_login_audio", nullptr, 0, nullptr);
+        gKamiMusicOpen = false;
+        kamiMusicError("Play", err);
         return;
     }
+    gKamiMusicStatus = "Playing KAMI-login.mp3";
     gKamiMusicNextCheck = std::chrono::steady_clock::now() + std::chrono::seconds(2);
 }
 void kamiPumpLoginMusic()
 {
-    if (!gKamiMusicOpen) return;
+    if (!gKamiMusicEnabled) return;
     const auto now = std::chrono::steady_clock::now();
     if (now < gKamiMusicNextCheck) return;
+    if (!gKamiMusicOpen)
+    {
+        kamiStartLoginMusic();
+        return;
+    }
     gKamiMusicNextCheck = now + std::chrono::seconds(2);
     wchar_t mode[64] = {};
     if (::mciSendStringW(L"status kami_login_audio mode", mode, 64, nullptr) == 0 &&
         std::wcscmp(mode, L"stopped") == 0)
     {
-        ::mciSendStringW(L"play kami_login_audio from 0", nullptr, 0, nullptr);
+        MCIERROR err = ::mciSendStringW(L"play kami_login_audio from 0", nullptr, 0, nullptr);
+        if (err)
+        {
+            ::mciSendStringW(L"close kami_login_audio", nullptr, 0, nullptr);
+            gKamiMusicOpen = false;
+            kamiMusicError("Replay", err);
+        }
     }
 }
 } // namespace
@@ -440,7 +483,12 @@ LLPanelLogin::LLPanelLogin(const LLRect &rect,
     LLSliderCtrl* volume = getChild<LLSliderCtrl>("kami_login_music_volume");
     volume->setValue(35);
     volume->setCommitCallback(boost::bind(&LLPanelLogin::onKamiLoginMusicVolume, this));
-    kamiStartLoginMusic();
+    gKamiMusicRenderedStatus.clear();
+    gKamiMusicEnabled = soundtrack->getValue().asBoolean();
+    if (gKamiMusicEnabled)
+        kamiStartLoginMusic();
+    else
+        kamiStopLoginMusic();
 #endif
 }
 
@@ -560,6 +608,15 @@ void LLPanelLogin::draw()
 {
 #if LL_WINDOWS
     kamiPumpLoginMusic();
+    // Update the native status caption only when playback state changes.
+    if (gKamiMusicStatus != gKamiMusicRenderedStatus)
+    {
+        if (auto* caption = findChild<LLTextBox>("kami_login_music_status"))
+        {
+            caption->setText(gKamiMusicStatus);
+            gKamiMusicRenderedStatus = gKamiMusicStatus;
+        }
+    }
 #endif
     LLPanel::draw();
 }
@@ -947,7 +1004,9 @@ void LLPanelLogin::closePanel()
 void LLPanelLogin::onKamiLoginMusicToggle()
 {
 #if LL_WINDOWS
-    if (getChild<LLCheckBoxCtrl>("kami_login_music_enabled")->getValue().asBoolean())
+    gKamiMusicEnabled =
+        getChild<LLCheckBoxCtrl>("kami_login_music_enabled")->getValue().asBoolean();
+    if (gKamiMusicEnabled)
         kamiStartLoginMusic();
     else
         kamiStopLoginMusic();
