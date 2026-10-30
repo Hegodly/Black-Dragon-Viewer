@@ -34,6 +34,8 @@ entries = [
     ("KAMIPotatoMode","Boolean","0","Force native stage 6 low-quality rendering for very weak PCs."),
     ("KAMIBackgroundFPS","S32","15","Frame cap while KAMI Viewer is not focused; 0 disables."),
     ("KAMISmartBackup","String","","Persistent XML snapshot of manual settings before auto optimization."),
+    ("KAMIBenchmarkCapture","Boolean","0","Opt-in 30-second local FPS test of current Second Life scene."),
+    ("KAMIBenchmarkResult","String","Not measured.","Local current-scene benchmark result. Never transmitted to the project."),
 ]
 def setting_xml(key, typ, value, comment):
     if typ=="Boolean": raw=f"<integer>{value}</integer>"
@@ -42,7 +44,7 @@ def setting_xml(key, typ, value, comment):
     return (
         f"  <key>{key}</key>\n"
         f"  <map><key>Comment</key><string>{comment}</string>"
-        f"<key>Persist</key><integer>{'0' if key=='KAMITargetFPS' else '1'}</integer>"
+        f"<key>Persist</key><integer>{'0' if key=='KAMIBenchmarkCapture' else '1'}</integer>"
         f"<key>Type</key><string>{typ}</string><key>Value</key>{raw}</map>\n"
     )
 extra="".join(setting_xml(*entry) for entry in entries)
@@ -115,9 +117,14 @@ area+=extras+'''       <check_box name="kami_auto_crowd" label="Detect crowded r
        </combo_box>
        <text name="kami_crowd_detection_note" left="12" top="2450" width="465" height="45" wrap="true">Auto Tune can detect avatar counts and reduce distant-scene rendering automatically. Force Crowd Mode above overrides the threshold.</text>
 '''
+area=area.replace('height="2510" auto_resize="false"', 'height="2670" auto_resize="false"', 1)
+area += '''       <text name="kami_bench_header" left="12" top="2515" width="465" height="24" font="SansSerifLarge">Current-scene benchmark</text>
+       <check_box name="kami_bench_start" label="Run 30-second FPS test (stay in this region)" control_name="KAMIBenchmarkCapture" left="12" top="2550" width="465" height="22" />
+       <text name="kami_bench_result" control_name="KAMIBenchmarkResult" left="12" top="2584" width="465" height="65" wrap="true">Results will appear here and in the KAMI log after the test completes.</text>
+'''
 s=s[:start]+area+s[end:]
 assert 'height="1764"' in s
-s=s.replace('height="1764"','height="2514"',1)
+s=s.replace('height="1764"','height="2674"',1)
 p.write_text(s,encoding="utf-8")
 
 # CI fails on invalid XML before downloading SDKs.
