@@ -23,8 +23,10 @@ namespace KAMIAtmosphere
         LLSD glowStrength;
         LLEnvironment::EnvSelection_t previous=LLEnvironment::ENV_LOCAL;
         LLSettingsDay::ptr_t day;
-        LLSettingsDay::Seconds dayLength;
-        LLSettingsDay::Seconds dayOffset;
+        // Strongly typed LLUnit seconds has no implicit default constructor.
+        // Initialize both fields for the baseline snapshot and reset path.
+        LLSettingsDay::Seconds dayLength{0};
+        LLSettingsDay::Seconds dayOffset{0};
         LLEnvironment::fixedEnvironment_t fixed;
         LLSettingsSky::ptr_t sourceSky;
         LLSettingsSky::ptr_t activeSky;
