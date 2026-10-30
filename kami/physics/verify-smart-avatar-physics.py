@@ -41,9 +41,13 @@ check("own avatar priority default enabled",keys["KAMIPhysicsProtectSelf"]=="1")
 check("safety physics stabilizer enabled when opted in",keys["KAMIPhysicsStabilizer"]=="1")
 check("offscreen reduction enabled when opted in",keys["KAMIPhysicsCullOffscreen"]=="1")
 check("balanced physics quality default",keys["KAMIPhysicsQuality"]=="1")
-check("original physics enable toggle retained","AvatarPhysics" in keys)
+# Linden Lab's original physics controls live in settings.xml, while
+# KAMI's new opt-in controls live in settings_blackdragon.xml.
+native=ET.parse(R/"indra/newview/app_settings/settings.xml").getroot()
+native_keys={item.text for item in native.iter("key") if item.text}
+check("original physics enable toggle retained","AvatarPhysics" in native_keys)
 check("original six-level visual physics LOD retained",
-      "RenderAvatarPhysicsLODFactor" in keys)
+      "RenderAvatarPhysicsLODFactor" in native_keys)
 
 native={
  "kami_physics_smart":("check_box","KAMIPhysicsSmart"),
