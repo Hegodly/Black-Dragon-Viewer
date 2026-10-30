@@ -54,7 +54,7 @@ check("native fail-closed header installed from reviewed source",
       header==text("kami/rlv/kami_rlv_safety.h"))
 # LLControlGroup::getControl returns LLControlVariablePtr, not a raw pointer.
 # MSVC C3535/C2440 arises if future RLV patches reintroduce 'auto*'.
-invalid_control_pointer = re.compile(r"auto\\s*\\*\\s*\\w+\\s*=\\s*gSavedSettings\\.getControl\\s*\\(")
+invalid_control_pointer = re.compile(r"auto\s*\*\s*\w+\s*=\s*gSavedSettings\.getControl\s*\(")
 check("RLV smart-pointer type is preserved across native header and source installer",
       not invalid_control_pointer.search(header) and
       not invalid_control_pointer.search(text("kami/rlv/apply-rlv-safety.py")))
