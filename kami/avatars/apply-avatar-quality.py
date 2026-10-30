@@ -47,6 +47,45 @@ s=s.replace(anchor,replacement,1)
 assert s.count("KAMIAvatarQualityFPS")==1
 cpp.write_text(s,encoding="utf-8")
 
+# Use the native avatar impostor budget for an additional crowd FPS saving.
+# Lower limits chosen elsewhere (Potato/Performance) are never increased.
+budget_anchor='''    // the sLimitNonImpostors flag depends on whether or not sMaxNonImpostors is set to the no-limit value (0)
+    sLimitNonImpostors = (0 != sMaxNonImpostors);'''
+budget_new='''    // KAMI Avatar Quality + FPS: retain the existing native impostor
+    // engine; only cap the count of detailed avatars in crowds.
+    if (gSavedSettings.getBOOL("KAMIAvatarQualityFPS") &&
+        (sMaxNonImpostors == 0 || sMaxNonImpostors > 8))
+    {
+        sMaxNonImpostors = 8;
+    }
+    // the sLimitNonImpostors flag depends on whether or not sMaxNonImpostors is set to the no-limit value (0)
+    sLimitNonImpostors = (0 != sMaxNonImpostors);'''
+avatar_code=cpp.read_text(encoding="utf-8")
+assert avatar_code.count(budget_anchor)==1, "Native impostor budget anchor changed"
+avatar_code=avatar_code.replace(budget_anchor,budget_new,1)
+cpp.write_text(avatar_code,encoding="utf-8")
+
+# Refresh the budget when the toggle changes; never reupload textures.
+viewer=view/"llviewercontrol.cpp"
+control=viewer.read_text(encoding="utf-8-sig")
+loc='''static bool handleAvatarPhysicsLODChanged(const LLSD& newvalue)'''
+assert control.count(loc)==1
+control=control.replace(loc,'''static bool handleKAMIAvatarQualityChanged(const LLSD&)
+{
+    // The existing viewer updates the impostor count immediately.
+    // Per-avatar LOD reads the same toggle during normal live rendering.
+    LLVOAvatar::updateImpostorRendering(
+        gSavedSettings.getU32("RenderAvatarMaxNonImpostors"));
+    return true;
+}
+
+'''+loc,1)
+hook='''    setting_setup_signal_listener(gSavedSettings, "RenderAvatarLODFactor", handleAvatarLODChanged);'''
+assert control.count(hook)==1
+control=control.replace(hook,hook+'''
+    setting_setup_signal_listener(gSavedSettings, "KAMIAvatarQualityFPS", handleKAMIAvatarQualityChanged);''',1)
+viewer.write_text(control,encoding="utf-8")
+
 # Persist only the opt-in choice; do not change avatar appearance upload,
 # textures, simulator physics or user-selected world framebuffer resolution.
 settings=view/"app_settings/settings_blackdragon.xml"
@@ -85,7 +124,7 @@ newwidgets=(
     ("check_box","kami_avatar_quality_toggle",{"top":oldheight+42,"height":23,
         "label":"Optimize avatar quality + FPS (live)",
         "control_name":"KAMIAvatarQualityFPS",
-        "tool_tip":"Keep my avatar's native joint mesh detailed. Gradually reduce distant OTHER avatars' joint LOD to save rendering cost. Updates while in-world; no relog needed. Existing mesh attachment/texture limits still apply."}),
+        "tool_tip":"Keep my avatar's native joint mesh detailed. Gradually reduce distant OTHER avatars' joint LOD and cap full-rendered avatars to 8 (or your lower limit). Updates while in-world; no relog needed. Existing mesh attachment/texture limits still apply."}),
     ("text","kami_avatar_quality_note",{"top":oldheight+73,"height":41,"wrap":"true",
         "text":"Self avatar stays detailed; distant avatars are lighter. No new GPU pass, asset re-download, frame cap or render-scale change. Turn off to restore native avatar LOD."}),
 )
