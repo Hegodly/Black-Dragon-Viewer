@@ -9,7 +9,7 @@
  width="980"
  min_width="980"
  name="Model Preview"
- title="KAMI / ULTRA MESH IMPORT"
+ title="KAMI / CREATOR STUDIO - MESH"
  help_topic="upload_model"
  legacy_header_height="25">
 
@@ -1604,6 +1604,16 @@
          width="80"
          tool_tip="Upload to simulator"/>
        <button
+         follows="top|left"
+         layout="topleft"
+         left="258"
+         top="3"
+         width="95"
+         height="20"
+         label="Mesh Audit"
+         name="kami_mesh_audit_btn"
+         tool_tip="Inspect imported mesh pieces, LOD geometry, and material face limitations before calculating upload fees."/>
+       <button
          follows="top|right"
          label="Clear settings &amp; reset form"
          label_color="White"
@@ -1951,15 +1961,5 @@ Analysed:
       max_val="3.0"
       height="20"
       width="150"/>
-    <button
-      follows="top|left"
-      layout="topleft"
-      left="170"
-      top="101"
-      width="165"
-      height="25"
-      label="KAMI Mesh Audit"
-      name="kami_mesh_audit_btn"
-      tool_tip="Inspect the loaded high-detail scene, LODs and mesh-piece limits before calculating SL upload fees."/>
   </panel>
 </floater>
