@@ -48,9 +48,20 @@ verify("Smart World budget changes are reversible",
 verify("world uses real FPS and native view-based impostors", 'const F64 current=fps()' in header)
 verify("Smart World yields to existing performance auto tuning",
  'conflictingMode()' in header and 'gSavedSettings.getBOOL("KAMIAutoTune")' in header)
-verify("camera uses genuine global positions, 30 Hz capped playback",
+verify("camera uses global positions and per-render-frame tracking",
  'setCameraPosAndFocusGlobal' in header and 'getCameraPositionGlobal()' in header and
- 'now-lastFrame<1./30.' in header)
+ 'now-lastFrame<1./30.' not in header and
+ 'const F64 dt=lastFrame>0.' in header)
+verify("camera follows the actual rendered avatar, not just its agent physics",
+ 'gAgentAvatarp->getRenderPosition()' in header and
+ 'smoothedSubject+=(subject-smoothedSubject)*subjectAlpha' in header and
+ 'const LLVector3d followPos=pathPos+(smoothedSubject-subjectAtStart)' in header)
+verify("camera tracking toggle transitions smoothly without snapping",
+ 'trackingBlend+=(track?1.-trackingBlend:-trackingBlend)*blendAlpha' in header and
+ 'const LLVector3d focus=pathFocus+(followFocus-pathFocus)*trackingBlend' in header)
+verify("manual A/B keyframe movement is preserved when tracking is off",
+ 'const LLVector3d pathPos=fromPos+(toPos-fromPos)*eased' in header and
+ 'const LLVector3d pathFocus=fromFocus+(toFocus-fromFocus)*eased' in header)
 verify("camera doesn't move avatar or server", 'setAgentPosition' not in header and
  'setPositionAgent' not in header)
 verify("camera has A/B, smoothstep, optional self subject tracking",
