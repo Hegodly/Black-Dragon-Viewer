@@ -7,6 +7,12 @@ on:
     tags: [v*]
   workflow_dispatch:
 
+# Cancel superseded CI runs for the same branch / pull request.
+# Fresh commits should not compete with obsolete full Windows builds.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
