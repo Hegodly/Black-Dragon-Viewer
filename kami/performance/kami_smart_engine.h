@@ -24,7 +24,7 @@ namespace KAMISmart
         "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors", "RenderImpostors",
         "RenderMaxPartCount", "RenderAttachedParticles", "RenderLocalLightCount",
         "RenderDepthOfField", "RenderMotionBlur", "RenderVolumetricLighting",
-        "KombatantNativeFX"
+        "KombatantNativeFX", "KAMIAvatarFillStrength", "KAMIAvatarSoftShading"
     };
 
     inline void set(const char* name, const LLSD& value)
@@ -112,6 +112,9 @@ namespace KAMISmart
             set("RenderDepthOfField", false);
             if (reflection) set("RenderScreenSpaceReflections", false);
             set("RenderVolumetricLighting", false);
+            // Optional baked-avatar cosmetics yield to FPS-first settings.
+            set("KAMIAvatarFillStrength", 0.f);
+            set("KAMIAvatarSoftShading", 0.f);
         }
         if (stage >= 2)
         {
