@@ -12,7 +12,10 @@ def verify(name,test):
 
 for name in (
     "indra/newview/app_settings/settings_blackdragon.xml",
-    "indra/newview/skins/default/xui/en/floater_kombatant_effects.xml",
+    "indra/newview/skins/default/xui/en/floater_preferences.xml",
+    "indra/newview/skins/default/textures/textures.xml",
+    "indra/newview/skins/default/colors.xml",
+    "indra/newview/skins/default/xui/en/menu_viewer.xml",
     "indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml",
     "indra/newview/skins/default/xui/en/panel_login.xml",
 ):
@@ -47,4 +50,10 @@ verify("optical flow status visible in UI",len(found)==1)
 root=ET.parse(R/"indra/newview/skins/default/xui/en/panel_login.xml").getroot()
 verify("agreed KAMI login background present", any(n.get("name")=="kami_fire_garden" and n.get("image_name")=="KAMI_FireGarden" for n in root.iter()))
 verify("legacy Black Dragon login browser removed",not list(root.iter("web_browser")))
+verify("approved Fire Garden artwork used in Preferences", 'image_name="KAMI_FireGardenPrefs"' in read("indra/newview/skins/default/xui/en/floater_preferences.xml"))
+verify("Fire Garden button textures included", 'windows/kami_fg_button.png' in read("indra/newview/skins/default/textures/textures.xml"))
+verify("Fire Garden native UI images staged", all((R / ("indra/newview/skins/default/textures/windows/"+file)).is_file() for file in ("kami_fg_window.png","kami_fg_panel.png","kami_fg_button.png","kami_fg_preferences.png")))
+verify("obsolete Native Graphics Lab and Studio menu entries removed", not any(n.get("name") in {"Kombatant Effects","Kombatant Studio"} for n in ET.parse(R/"indra/newview/skins/default/xui/en/menu_viewer.xml").getroot().iter()))
+verify("obsolete Native Graphics Lab and Studio XUI removed", not (R/"indra/newview/skins/default/xui/en/floater_kombatant_effects.xml").exists() and not (R/"indra/newview/skins/default/xui/en/floater_kombatant_studio.xml").exists())
+verify("obsolete Native Graphics Lab and Studio C++ registration removed", '"kombatant_effects"' not in read("indra/newview/llviewerfloaterreg.cpp") and '"kombatant_studio"' not in read("indra/newview/llviewerfloaterreg.cpp"))
 print("KAMI next-build integration checks passed.")
