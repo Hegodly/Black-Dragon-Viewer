@@ -112,11 +112,11 @@ prefs.write_text(s,encoding="utf-8")
 # Physical portable staging evidence, no shaders or user-specific files.
 SKIN.parent.parent.joinpath("KAMI-ATMOSPHERE-ENGINE.txt").write_text(
     "KAMI Beyond Reality | Atmosphere Engine | viewer-side EEP local preview\n"
-    "Night Studio, Golden Hour, Overcast Cinema, Luxury Interior.\n"
+    "Night Studio, Golden Hour, Overcast Cinema, Luxury Interior, Dark Cinematic.\n"
     "User-selected EEP intensity and transition duration; broken optional bloom removed.\n"
     "Preview/Restore preserve prior ENV_LOCAL day or fixed sky/water and selection.\n"
     "No parcel/region mutation, asset uploads, FPS cap, 4K changes, or extra passes.\n",
     encoding="utf-8")
 
 ET.parse(settings);ET.parse(ui)
-print("Native KAMI Atmosphere Engine implemented in Fire Garden Display (4 local EEP moods, blend, restore; broken bloom control retired).")
+print("Native KAMI Atmosphere Engine implemented in Fire Garden Display (5 local EEP moods, blend, restore; broken bloom control retired).")
