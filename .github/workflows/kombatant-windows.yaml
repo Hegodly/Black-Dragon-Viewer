@@ -147,6 +147,9 @@ jobs:
       - name: Remove obsolete Native Graphics Lab and KAMI Photo Studio UI
         shell: pwsh
         run: python kami/stability/remove-native-lab-studio.py
+      - name: Keep all original graphics toggles in Fire Garden base kit
+        shell: pwsh
+        run: python kami/theme/preserve-base-graphics-kit.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
