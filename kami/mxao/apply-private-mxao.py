@@ -77,5 +77,46 @@ area=area.replace('height="4250"','height="4650"',1)+''' <text name="kami_mxao_h
 '''
 s=s[:a]+area+s[b:];assert s.count('height="4254"')==1
 s=s.replace('height="4254"','height="4654"',1);f.write_text(s,encoding='utf-8')
+
+# An explicit installation button; never run downloads while drawing frames.
+p='indra/newview/llfloaterpreference.cpp'
+edit(p,'#include "llfloaterpreference.h"', '#include "llfloaterpreference.h"\n#include <filesystem>')
+edit(p,'bool LLFloaterPreference::postBuild()\n{', '''bool LLFloaterPreference::postBuild()
+{
+#if LL_WINDOWS
+    if (auto* install = findChild<LLButton>("kami_mxao_install"))
+    {
+        install->setClickedCallback([this](LLUICtrl*, const LLSD&) {
+            wchar_t executable[32768] = {};
+            DWORD len = GetModuleFileNameW(nullptr, executable, 32768);
+            if (!len || len >= 32768)
+            {
+                gSavedSettings.setString("KAMIMXAOStatus", "Cannot locate KAMIViewer.exe.");
+                return;
+            }
+            const auto base = std::filesystem::path(executable).parent_path();
+            const auto script = base / L"Install-Private-MXAO.ps1";
+            if (!std::filesystem::is_regular_file(script))
+            {
+                gSavedSettings.setString("KAMIMXAOStatus", "MXAO installer missing. Re-extract complete KAMI ZIP.");
+                return;
+            }
+            const std::wstring args = std::wstring(L"-NoProfile -ExecutionPolicy Bypass -File \"")
+                + script.wstring() + L"\" -ViewerDirectory \"" + base.wstring() + L"\"";
+            SHELLEXECUTEINFOW launch = { sizeof(launch) };
+            launch.lpVerb = L"open";
+            launch.lpFile = L"powershell.exe";
+            launch.lpParameters = args.c_str();
+            launch.nShow = SW_SHOWNORMAL;
+            if (ShellExecuteExW(&launch))
+                gSavedSettings.setString("KAMIMXAOStatus",
+                    "Installer launched. Finish download, close viewer, then restart KAMI.");
+            else
+                gSavedSettings.setString("KAMIMXAOStatus", "Cannot open PowerShell installer.");
+        });
+    }
+#endif
+''')
+
 E.parse(f);E.parse(R/settings)
 print('Optional private MXAO runtime adapter applied; shader is separately installed by its user.')
