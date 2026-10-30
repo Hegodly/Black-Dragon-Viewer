@@ -57,9 +57,12 @@ gate("frame cap, render resolution and network untampered",not any(
 names={n.get("name"):n for n in ui.iter() if n.get("name")}
 for name,setting in [
  ("kami_atmo_mood","KAMIAtmosphereMood"),("kami_atmo_strength","KAMIAtmosphereStrength"),
- ("kami_atmo_fade","KAMIAtmosphereFade"),("kami_atmo_bloom","KAMIAtmosphereBloom")]:
+ ("kami_atmo_fade","KAMIAtmosphereFade")]:
  gate("Fire Garden native widget "+name,name in names and
      names[name].get("control_name")==setting)
+gate("retired broken Bloom UI is absent", "kami_atmo_bloom" not in names)
+gate("retired Bloom setting is nonpersistent", '<key>KAMIAtmosphereBloom</key>' in text("indra/newview/app_settings/settings_blackdragon.xml") and
+     '("KAMIAtmosphereBloom","Boolean","integer","0",0,' in text("kami/atmosphere/apply-atmosphere.py"))
 for name in ("kami_atmo_apply","kami_atmo_restore"):
  gate("functional button "+name,name in names and names[name].tag=="button" and
       f'"{name}"' in prefs)
