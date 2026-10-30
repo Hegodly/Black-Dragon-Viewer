@@ -71,13 +71,15 @@ for node in root.iter():
         all_controls.setdefault(key,[]).append(node)
 for name,tags in controls.items():
     matches=[n for n in all_controls.get(name,[]) if n.tag in tags]
-    assert len(matches)==1,(name,[n.tag for n in all_controls.get(name,[])])
-    node=matches[0]
-    assert not node.get("visible")=="false",f"The original {name} toggle has been hidden"
-    assert node.get("enabled")!="false",f"The original {name} toggle was disabled"
-    assert node.get("control_name")==name
-    if node.tag=="combo_box":
-        assert len(node.findall("combo_box.item"))>=2,(name,"lost options")
+    # The native Black Dragon panel legitimately provides some settings in
+    # multiple sections. Preserve ALL of those functional controls.
+    assert len(matches)>=1,(name,[n.tag for n in all_controls.get(name,[])])
+    assert any(node.get("visible")!="false" and node.get("enabled")!="false"
+               for node in matches),(name,"all original controls hidden or disabled")
+    for node in matches:
+        assert node.get("control_name")==name
+        if node.tag=="combo_box":
+            assert len(node.findall("combo_box.item"))>=2,(name,"lost options")
 # Preserve original listeners such as RenderSkyAutoAdjustLegacy's HDR dependency.
 auto=next(n for n in root.iter() if n.get("control_name")=="RenderSkyAutoAdjustLegacy")
 assert auto.get("enabled_control")=="RenderHDREnabled"
