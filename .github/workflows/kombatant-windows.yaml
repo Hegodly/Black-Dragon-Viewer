@@ -7,9 +7,9 @@ concurrency:
 on:
   workflow_dispatch:
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, experimental/kami-diamond-glints]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, experimental/kami-diamond-glints, fix/kami-visual-quality-presets]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**, kami/jewelry/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**, kami/jewelry/**, kami/presets/**]
 permissions:
   contents: read
 jobs:
@@ -25,6 +25,8 @@ jobs:
         run: python3 kami/performance/validate-config-inputs.py
       - name: Compile KAMI native diamond glint shader on Mesa toolchain
         run: python3 kami/jewelry/test-diamond-glints.py
+      - name: Compile native graphical preset fidelity shader
+        run: python3 kami/presets/test-pbr-fidelity.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
       - name: Validate every KAMI and Kombatant Python integration script
@@ -204,6 +206,12 @@ jobs:
       - name: Verify native diamond glint wiring and material limits
         shell: pwsh
         run: python kami/jewelry/verify-diamond-glints.py
+      - name: Install distinct visible PBR quality preset fidelity tiers
+        shell: pwsh
+        run: python kami/presets/apply-visual-quality.py
+      - name: Verify distinct native PBR quality presets
+        shell: pwsh
+        run: python kami/presets/verify-visual-quality.py
       - name: Install user-controlled RLV emergency safety center (no unsupported engine)
         shell: pwsh
         run: python kami/rlv/apply-rlv-safety.py
