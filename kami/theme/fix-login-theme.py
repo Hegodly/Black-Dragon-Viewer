@@ -55,6 +55,32 @@ title.set("left", "148")
 subtitle.set("left", "150")
 root.insert(list(root).index(title), icon)
 
+
+# Optional local soundtrack: public builds contain no audio recording.
+# Place the user-provided KAMI-login.mp3 next to KAMIViewer.exe.
+# These are functional native settings; they do not affect world/voice volume.
+music = ET.Element("panel", attrib={
+    "name": "kami_login_music_controls", "layout": "topleft",
+    "left": "40", "top": "160", "width": "355", "height": "65",
+    "follows": "left|top", "mouse_opaque": "false",
+    "background_visible": "false",
+})
+ET.SubElement(music, "check_box", attrib={
+    "name": "kami_login_music_enabled", "layout": "topleft",
+    "left": "0", "top": "0", "width": "220", "height": "20",
+    "follows": "left|top", "initial_value": "true",
+    "label": "Login soundtrack", "tool_tip": "Play a local KAMI-login.mp3 file beside KAMIViewer.exe",
+})
+ET.SubElement(music, "slider", attrib={
+    "name": "kami_login_music_volume", "layout": "topleft",
+    "left": "0", "top": "28", "width": "330", "height": "18",
+    "follows": "left|top", "min_val": "0", "max_val": "100",
+    "increment": "1", "initial_value": "35", "label": "Volume",
+    "label_width": "75", "show_text": "true",
+    "can_edit_text": "true", "tool_tip": "Login soundtrack volume only",
+})
+root.insert(list(root).index(title) + 1, music)
+
 # Remove the now-inert Black Dragon changelog button, which has no associated
 # content after the old promotional stack is removed.
 for parent in list(root.iter()):
@@ -77,6 +103,8 @@ assert not any(n.get("name") in {"login_bg", "login_stack"} for n in root.iter()
 assert "K A M I" in (title.text or "")
 assert "B E Y O N D" in (subtitle.text or "")
 assert find_one("kami_fire_garden").get("image_name") == "KAMI_FireGarden"
+assert find_one("kami_login_music_enabled").tag == "check_box"
+assert find_one("kami_login_music_volume").tag == "slider"
 
 ET.indent(tree, space=" ")
 tree.write(panel_path, encoding="utf-8", xml_declaration=True)

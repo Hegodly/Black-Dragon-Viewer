@@ -65,6 +65,87 @@
 #include "lltrans.h"
 #include "llglheaders.h"
 #include "llpanelloginlistener.h"
+#include "llsliderctrl.h"
+
+// KAMI Login Soundtrack: local-only, optional Windows MP3 playback.
+// The copyrighted audio is NEVER embedded in or downloaded by the public viewer.
+// Place a user-provided KAMI-login.mp3 beside KAMIViewer.exe to enable it.
+#if LL_WINDOWS
+#include <windows.h>
+#include <mmsystem.h>
+#include <filesystem>
+#include <chrono>
+#include <cwchar>
+#pragma comment(lib, "winmm.lib")
+namespace
+{
+bool gKamiMusicOpen = false;
+int gKamiMusicVolume = 35;
+std::chrono::steady_clock::time_point gKamiMusicNextCheck = std::chrono::steady_clock::now();
+
+void kamiStopLoginMusic()
+{
+    if (!gKamiMusicOpen) return;
+    ::mciSendStringW(L"stop kami_login_audio", nullptr, 0, nullptr);
+    ::mciSendStringW(L"close kami_login_audio", nullptr, 0, nullptr);
+    gKamiMusicOpen = false;
+}
+void kamiSetLoginMusicVolume(int volume)
+{
+    gKamiMusicVolume = (volume < 0) ? 0 : (volume > 100) ? 100 : volume;
+    if (gKamiMusicOpen)
+    {
+        std::wstring command = L"setaudio kami_login_audio volume to " +
+            std::to_wstring(gKamiMusicVolume * 10);
+        ::mciSendStringW(command.c_str(), nullptr, 0, nullptr);
+    }
+}
+void kamiStartLoginMusic()
+{
+    if (gKamiMusicOpen) return;
+    wchar_t exe[MAX_PATH] = {};
+    DWORD count = ::GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    if (!count || count >= MAX_PATH) return;
+    std::filesystem::path file =
+        std::filesystem::path(exe).parent_path() / L"KAMI-login.mp3";
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(file, ec)) return;
+
+    std::wstring command = L"open \"" + file.wstring() +
+        L"\" type mpegvideo alias kami_login_audio";
+    if (::mciSendStringW(command.c_str(), nullptr, 0, nullptr) != 0)
+    {
+        LL_WARNS("KAMI Login Audio") << "Could not open local login soundtrack" << LL_ENDL;
+        return;
+    }
+    gKamiMusicOpen = true;
+    kamiSetLoginMusicVolume(gKamiMusicVolume);
+    // MPEGVideo MCI drivers differ in support for the repeat flag. The
+    // draw-loop pump below also restarts completed playback when necessary.
+    if (::mciSendStringW(L"play kami_login_audio repeat", nullptr, 0, nullptr) != 0 &&
+        ::mciSendStringW(L"play kami_login_audio", nullptr, 0, nullptr) != 0)
+    {
+        kamiStopLoginMusic();
+        return;
+    }
+    gKamiMusicNextCheck = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+}
+void kamiPumpLoginMusic()
+{
+    if (!gKamiMusicOpen) return;
+    const auto now = std::chrono::steady_clock::now();
+    if (now < gKamiMusicNextCheck) return;
+    gKamiMusicNextCheck = now + std::chrono::seconds(2);
+    wchar_t mode[64] = {};
+    if (::mciSendStringW(L"status kami_login_audio mode", mode, 64, nullptr) == 0 &&
+        std::wcscmp(mode, L"stopped") == 0)
+    {
+        ::mciSendStringW(L"play kami_login_audio from 0", nullptr, 0, nullptr);
+    }
+}
+} // namespace
+#endif // LL_WINDOWS
+
 
 //BD
 #include "bdfunctions.h"
@@ -353,6 +434,14 @@ LLPanelLogin::LLPanelLogin(const LLRect &rect,
     LLButton* new_version_text = getChild<LLButton>("new_version");
     new_version_text->setLabelArg("[CHANNEL]", new_version);
     new_version_text->setLabelArg("[UPDATE_STRING]", update_str);
+#if LL_WINDOWS
+    LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");
+    soundtrack->setCommitCallback(boost::bind(&LLPanelLogin::onKamiLoginMusicToggle, this));
+    LLSliderCtrl* volume = getChild<LLSliderCtrl>("kami_login_music_volume");
+    volume->setValue(35);
+    volume->setCommitCallback(boost::bind(&LLPanelLogin::onKamiLoginMusicVolume, this));
+    kamiStartLoginMusic();
+#endif
 }
 
 void LLPanelLogin::addFavoritesToStartLocation()
@@ -456,6 +545,9 @@ void LLPanelLogin::addFavoritesToStartLocation()
 
 LLPanelLogin::~LLPanelLogin()
 {
+#if LL_WINDOWS
+    kamiStopLoginMusic();
+#endif
 	LLPanelLogin::sInstance = NULL;
 
 	// Controls having keyboard focus by default
@@ -466,7 +558,10 @@ LLPanelLogin::~LLPanelLogin()
 // virtual
 void LLPanelLogin::draw()
 {
-	LLPanel::draw();
+#if LL_WINDOWS
+    kamiPumpLoginMusic();
+#endif
+    LLPanel::draw();
 }
 
 // virtual
@@ -849,8 +944,28 @@ void LLPanelLogin::closePanel()
 // Protected methods
 //---------------------------------------------------------------------------
 //BD
+void LLPanelLogin::onKamiLoginMusicToggle()
+{
+#if LL_WINDOWS
+    if (getChild<LLCheckBoxCtrl>("kami_login_music_enabled")->getValue().asBoolean())
+        kamiStartLoginMusic();
+    else
+        kamiStopLoginMusic();
+#endif
+}
+void LLPanelLogin::onKamiLoginMusicVolume()
+{
+#if LL_WINDOWS
+    const S32 volume = getChild<LLSliderCtrl>("kami_login_music_volume")->getValue().asInteger();
+    kamiSetLoginMusicVolume(volume);
+#endif
+}
+
 void LLPanelLogin::onClickQuit()
 {
+#if LL_WINDOWS
+    kamiStopLoginMusic();
+#endif
 	LLAppViewer::instance()->userQuit();
 	return;
 }
