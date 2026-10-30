@@ -29,6 +29,8 @@ entries = [
     ("KAMIAdaptiveDrawDistance","Boolean","1","Reduce render distance and object level of detail."),
     ("KAMIAdaptiveResolution","Boolean","1","Reduce internal 3D world resolution at high performance stages."),
     ("KAMICrowdMode","Boolean","0","Force minimum adaptive optimization stage 3 in busy regions."),
+    ("KAMIAutoCrowdDetection","Boolean","1","Apply crowd optimizations automatically when Auto Tune is on."),
+    ("KAMICrowdAvatarThreshold","S32","20","Number of nearby scene avatars that activates crowd optimization."),
     ("KAMIPotatoMode","Boolean","0","Force native stage 6 low-quality rendering for very weak PCs."),
     ("KAMIBackgroundFPS","S32","15","Frame cap while KAMI Viewer is not focused; 0 disables."),
     ("KAMISmartBackup","String","","Persistent XML snapshot of manual settings before auto optimization."),
@@ -69,7 +71,7 @@ end=s.index('</layout_panel>',start)
 area=s[start:end]
 assert 'height="1760" auto_resize="false"' in area
 area=area.replace('height="1760" auto_resize="false"',
-                  'height="2380" auto_resize="false"',1)
+                  'height="2510" auto_resize="false"',1)
 extras='''       <text name="kami_smart_title" left="12" top="1705" width="465" height="24" font="SansSerifLarge">Smart Performance Engine (native)</text>
        <check_box name="kami_auto" label="Auto-adjust graphics toward target FPS" control_name="KAMIAutoTune" left="12" top="1735" width="465" height="22" />
        <combo_box name="kami_target" control_name="KAMITargetFPS" left="12" top="1765" width="465" height="24">
@@ -103,10 +105,19 @@ extras='''       <text name="kami_smart_title" left="12" top="1705" width="465" 
 '''
 extras=__import__("re").sub(r'\btop="(\d+)"',lambda m: 'top="'+str(int(m.group(1))+75)+'"',extras)
 area=area.replace('<combo_box.item label="90 FPS" value="90" />','<combo_box.item label="90 FPS" value="90" />\n        <combo_box.item label="100 FPS" value="100" />',1)
-area+=extras
+area+=extras+'''       <check_box name="kami_auto_crowd" label="Detect crowded regions automatically (Auto Tune)" control_name="KAMIAutoCrowdDetection" left="12" top="2385" width="465" height="22" />
+       <text name="kami_crowd_threshold_label" left="12" top="2414" width="235" height="20">Crowd threshold (avatars)</text>
+       <combo_box name="kami_crowd_threshold" control_name="KAMICrowdAvatarThreshold" left="240" top="2408" width="237" height="24">
+        <combo_box.item label="10 avatars" value="10" />
+        <combo_box.item label="20 avatars" value="20" />
+        <combo_box.item label="30 avatars" value="30" />
+        <combo_box.item label="40 avatars" value="40" />
+       </combo_box>
+       <text name="kami_crowd_detection_note" left="12" top="2450" width="465" height="45" wrap="true">Auto Tune can detect avatar counts and reduce distant-scene rendering automatically. Force Crowd Mode above overrides the threshold.</text>
+'''
 s=s[:start]+area+s[end:]
 assert 'height="1764"' in s
-s=s.replace('height="1764"','height="2384"',1)
+s=s.replace('height="1764"','height="2514"',1)
 p.write_text(s,encoding="utf-8")
 
 # CI fails on invalid XML before downloading SDKs.
