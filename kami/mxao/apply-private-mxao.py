@@ -58,7 +58,7 @@ edit(p,'void LLFloaterPreference::draw()\n{','''void LLFloaterPreference::draw()
     if (auto* text = findChild<LLTextBox>("kami_mxao_status"))
         text->setText(LLStringExplicit(gSavedSettings.getString("KAMIMXAOStatus")));''')
 p='indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'
-f=R/p;s=f.read_text();a=s.index('<layout_panel name="kombatant_display_quick"');b=s.index('</layout_panel>',a)
+f=R/p;s=f.read_text(encoding='utf-8-sig');a=s.index('<layout_panel name="kombatant_display_quick"');b=s.index('</layout_panel>',a)
 area=s[a:b];assert 'height="4250"' in area
 area=area.replace('height="4250"','height="4600"',1)+''' <text name="kami_mxao_heading" left="12" top="4260" width="465" height="24" font="SansSerifLarge">Private MXAO (optional runtime)</text>
  <check_box name="kami_mxao_enable" control_name="KAMIMXAO" label="Enable actual Marty’s Mods MXAO" left="12" top="4292" width="465" height="22" />
@@ -72,6 +72,6 @@ area=area.replace('height="4250"','height="4600"',1)+''' <text name="kami_mxao_h
  <text name="kami_mxao_help" left="12" top="4510" width="465" height="80" wrap="true">Personal opt-in install and restart required. Fetches the author’s shader directly; not bundled. Native AO, frame generation and Performance Mode pause MXAO. Correct depth must be verified. May lower FPS. Third-party shader compilation occurs on first use.</text>
 '''
 s=s[:a]+area+s[b:];assert s.count('height="4254"')==1
-s=s.replace('height="4254"','height="4604"',1);f.write_text(s)
+s=s.replace('height="4254"','height="4604"',1);f.write_text(s,encoding='utf-8')
 E.parse(f);E.parse(R/settings)
 print('Optional private MXAO runtime adapter applied; shader is separately installed by its user.')
