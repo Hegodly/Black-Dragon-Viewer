@@ -92,9 +92,6 @@ jobs:
     - name: Correct FPS cap units and separate quality target
       shell: pwsh
       run: python kami/performance/fix-fps-controls.py
-    - name: Wire shadow softening independently of SSAO
-      shell: pwsh
-      run: python kami/shadows/apply-shadow-filter-fix.py
     - name: Validate KAMI Firestorm-style WASD movement defaults
       shell: pwsh
       run: python kami/performance/validate-wasd-controls.py
