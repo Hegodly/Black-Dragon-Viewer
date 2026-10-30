@@ -1,37 +1,46 @@
-# KAMI Beyond Reality — GShade compatibility, built-in FX and MXAO
+# KAMI Beyond Reality - External GShade/ReShade support
 
-Includes **20 original KAMI FX effects** (MIT licensed) and two demonstration
-presets. The default FireGarden.ini activates *no* effects to avoid reducing
-FPS or interfering with the built-in tone mapping.
+KAMI's built-in GShade compatibility and private MXAO controls were retired
+after in-world testing. KAMI does not inject, bundle, load or manage a
+GShade or ReShade runtime. The 20 original, MIT-licensed KAMI-FX techniques
+and FireGarden/Cinematic/Clean4K presets are still included as optional assets.
 
-KAMI supports ReShade FX-compatible GShade presets (.ini/.fx/.fxh), but not
-necessarily GShade-exclusive runtime extensions. We do **not** distribute
-the GShade runtime or its non-redistributable shader packages.
+## Install GShade separately on Windows
 
-## Enable effects on Windows
+1. Exit KAMI.
+2. Obtain Windows GShade from its official distributor, or use a trusted
+   compatible ReShade installation. Do not stack multiple OpenGL wrappers
+   (opengl32.dll) in the viewer folder.
+3. Select KAMIViewer.exe as the application and OpenGL as the graphics API.
+   KAMI is an OpenGL Second Life viewer, including with external DX12 modules.
+4. Complete setup using the external installer's instructions. Restart KAMI,
+   then configure shader paths and depth handling in the external overlay.
+   No specific GShade version has been verified on every KAMI system.
+5. Optionally run Install-GShade-Assets.ps1 with the viewer closed to copy
+   original KAMI-FX.fx into an existing installed shaders folder:
 
-Preferences > Display > GShade Preset Compatibility > Activate included KAMI
-FX pack (20 effects). Close KAMI before completing the activation script,
-then restart, enable KAMI FX and press Home for effect/parameter selection.
-Or select Import GShade preset and shader folders, choosing your existing
-.ini and Shaders directory. These two options share the *same* optional
-ReShade FX runtime; there is never a second graphics injector.
+   powershell -ExecutionPolicy Bypass -File ./Install-GShade-Assets.ps1 -ViewerDirectory . -ShaderDirectory ./gshade-shaders/Shaders
 
-## MXAO
+   This helper never installs an injector, overwrites existing shaders or
+   presets, or modifies ReShade.ini.
+6. Choose your KAMI preset from KAMI-FX-Presets in the external overlay,
+   or import your own GShade-compatible ini, fx and fxh files manually.
+   GShade-exclusive extensions may not function on an alternative runtime.
 
-Actual iMMERSE MXAO is included as a **ready-to-install option** in Display
-under Private MXAO, with strength, radius, quality and debug controls. Its
-author, Pascal Gilcher, prohibits public redistribution, so the actual
-MXAO shader cannot lawfully be embedded in KAMI's public ZIP. The installer
-fetches it directly from the author's own pinned source for a **personal**
-installation. It runs only if you enable MXAO, is off by default, and requires
-in-world depth-buffer verification. MXAO personal installation and KAMI FX
-share a single runtime: select one preset configuration per portable folder.
+## Bundled assets
 
-## Performance and compatibility
+- KAMI-FX/Shaders/KAMI-FX.fx: 20 original effects
+- KAMI-FX/FireGarden.ini: starter preset, all effects OFF
+- KAMI-FX/Cinematic.ini and Clean4K.ini: example presets
+- Install-GShade-Assets.ps1: optional external shader asset helper
+- KAMI-GSHADE-EXTERNAL-SETUP.md: these instructions
 
-All optional FX and MXAO are OFF by default. No FPS cap is added, no extra
-shader DLL hook is installed, and Fire Garden UI skins all toggles. Some
-effects may significantly reduce performance, particularly at native 4K;
-depth processing, optical flow and screenshot behavior need GPU validation.
-The tool does not change native 4K resolution or tone mapping.
+Not bundled: GShade binaries, ReShade binaries, proprietary MXAO shaders,
+in-viewer GShade switches, internal runtime hooks or proprietary FX packs.
+Native SSAO/HBAO, Contact Shading, Volumetric Lighting and Render Scale
+remain independent.
+
+If an external shader overlay malfunctions, use that runtime's official
+uninstall procedure for KAMIViewer.exe. Preserve the viewer's own binary,
+data and user settings. Compatibility and GPU performance still require
+direct in-world testing.
