@@ -141,12 +141,12 @@ namespace KAMIAtmosphere
     inline void applyBloom(bool enable)
     {
         auto& s=state();
-        if(auto* control=gSavedSettings.getControl("RenderGlow"))
+        if(auto control = gSavedSettings.getControl("RenderGlow"))
         {
             if(enable)control->setValue(true);
             else if(s.hadGlow)control->setValue(s.glow);
         }
-        if(auto* control=gSavedSettings.getControl("RenderGlowStrength"))
+        if(auto control = gSavedSettings.getControl("RenderGlowStrength"))
         {
             if(enable)control->setValue(0.055f);
             else if(s.hadGlowStrength)control->setValue(s.glowStrength);
@@ -186,11 +186,11 @@ namespace KAMIAtmosphere
                 s.fixed=environment.getEnvironmentFixed(LLEnvironment::ENV_LOCAL);
             }
             s.sourceSky=sky->buildClone();
-            if(auto* c=gSavedSettings.getControl("RenderGlow"))
+            if(auto c = gSavedSettings.getControl("RenderGlow"))
             {
                 s.hadGlow=true; s.glow=c->getValue().asBoolean();
             }
-            if(auto* c=gSavedSettings.getControl("RenderGlowStrength"))
+            if(auto c = gSavedSettings.getControl("RenderGlowStrength"))
             {
                 s.hadGlowStrength=true;s.glowStrength=c->getValue();
             }

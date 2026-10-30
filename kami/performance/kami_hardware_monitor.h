@@ -13,6 +13,7 @@
 #include "llviewercontrol.h"
 #include <windows.h>
 #include <pdh.h>
+#include <pdhmsg.h>
 #include <psapi.h>
 #include <dxgi1_4.h>
 #include <string>

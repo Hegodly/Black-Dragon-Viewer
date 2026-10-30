@@ -101,8 +101,9 @@ edit(p,'bool LLFloaterPreference::postBuild()\n{', '''bool LLFloaterPreference::
                 gSavedSettings.setString("KAMIMXAOStatus", "MXAO installer missing. Re-extract complete KAMI ZIP.");
                 return;
             }
-            const std::wstring args = std::wstring(L"-NoProfile -ExecutionPolicy Bypass -File \"")
-                + script.wstring() + L"\" -ViewerDirectory \"" + base.wstring() + L"\"";
+            const std::wstring quote(1, wchar_t(34));
+            const std::wstring args = std::wstring(L"-NoProfile -ExecutionPolicy Bypass -File ")
+                + quote + script.wstring() + quote + L" -ViewerDirectory " + quote + base.wstring() + quote;
             SHELLEXECUTEINFOW launch = { sizeof(launch) };
             launch.lpVerb = L"open";
             launch.lpFile = L"powershell.exe";

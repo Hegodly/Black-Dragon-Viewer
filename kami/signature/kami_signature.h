@@ -26,7 +26,7 @@ inline F64 seconds()
 }
 inline void put(const char* key,const LLSD& value)
 {
-    if (auto* c=gSavedSettings.getControl(key))
+    if (auto c = gSavedSettings.getControl(key))
         if (c->getValue()!=value) c->setValue(value);
 }
 inline std::string xml(const LLSD& data)
@@ -70,7 +70,7 @@ inline LLSD snapshot()
 {
     LLSD values=LLSD::emptyMap();
     for (const auto& key:graphicKeys())
-        if (auto* c=gSavedSettings.getControl(key))
+        if (auto c = gSavedSettings.getControl(key))
             values[key]=c->getValue();
     return values;
 }
@@ -251,14 +251,14 @@ inline void tick()
         restore(original);
         if (stage>=1)
         {
-            auto* c=gSavedSettings.getControl("RenderAvatarMaxNonImpostors");
+            auto c = gSavedSettings.getControl("RenderAvatarMaxNonImpostors");
             if (c && c->getValue().asInteger()>8)put("RenderAvatarMaxNonImpostors",8);
             c=gSavedSettings.getControl("RenderMaxPartCount");
             if (c && c->getValue().asInteger()>1200)put("RenderMaxPartCount",1200);
         }
         if (stage>=2)
         {
-            auto* c=gSavedSettings.getControl("RenderAvatarMaxNonImpostors");
+            auto c = gSavedSettings.getControl("RenderAvatarMaxNonImpostors");
             if (c && c->getValue().asInteger()>4)put("RenderAvatarMaxNonImpostors",4);
             c=gSavedSettings.getControl("RenderLocalLightCount");
             if(c && c->getValue().asInteger()>32)put("RenderLocalLightCount",32);
@@ -407,7 +407,7 @@ inline LLSD asData(const LLVector3d& p,const LLVector3d& f)
 {
     LLSD result=LLSD::emptyMap();
     LLSD pos=LLSD::emptyArray(),focus=LLSD::emptyArray();
-    for(S32 i=0;i<3;++i){pos.append(p.mV[i]);focus.append(f.mV[i]);}
+    for(S32 i=0;i<3;++i){pos.append(p[i]);focus.append(f[i]);}
     result["position"]=pos;result["focus"]=focus;result["region"]=region();
     return result;
 }
@@ -419,9 +419,9 @@ inline bool readData(const LLSD& d,LLVector3d& p,LLVector3d& f)
        d["region"].asString()!=region())return false;
     for(S32 i=0;i<3;++i)
     {
-        p.mV[i]=d["position"][i].asReal();
-        f.mV[i]=d["focus"][i].asReal();
-        if(!std::isfinite(p.mV[i])||!std::isfinite(f.mV[i]))return false;
+        p[i]=d["position"][i].asReal();
+        f[i]=d["focus"][i].asReal();
+        if(!std::isfinite(p[i])||!std::isfinite(f[i]))return false;
     }
     return true;
 }

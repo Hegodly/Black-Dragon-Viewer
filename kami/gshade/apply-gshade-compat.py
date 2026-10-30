@@ -196,8 +196,9 @@ b=a+'''
                     "Preset importer missing; extract the complete portable KAMI ZIP.");
                 return;
             }
-            const std::wstring args = std::wstring(L"-NoProfile -STA -ExecutionPolicy Bypass -File \\"")
-                + installer.wstring() + L"\\" -ViewerDirectory \\"" + base.wstring() + L"\\"";
+            const std::wstring quote(1, wchar_t(34));
+            const std::wstring args = std::wstring(L"-NoProfile -STA -ExecutionPolicy Bypass -File ")
+                + quote + installer.wstring() + quote + L" -ViewerDirectory " + quote + base.wstring() + quote;
             SHELLEXECUTEINFOW launch = {sizeof(launch)};
             launch.lpVerb = L"open";
             launch.lpFile = L"powershell.exe";
@@ -224,8 +225,9 @@ b=a+'''
                     "Bundled FX activation script missing; extract the full portable package.");
                 return;
             }
-            const std::wstring args = std::wstring(L"-NoProfile -STA -ExecutionPolicy Bypass -File \\"")
-                + installer.wstring() + L"\\" -ViewerDirectory \\"" + base.wstring() + L"\\"";
+            const std::wstring quote(1, wchar_t(34));
+            const std::wstring args = std::wstring(L"-NoProfile -STA -ExecutionPolicy Bypass -File ")
+                + quote + installer.wstring() + quote + L" -ViewerDirectory " + quote + base.wstring() + quote;
             SHELLEXECUTEINFOW launch = {sizeof(launch)};
             launch.lpVerb = L"open";
             launch.lpFile = L"powershell.exe";

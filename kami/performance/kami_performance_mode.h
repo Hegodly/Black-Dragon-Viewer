@@ -26,14 +26,14 @@ namespace KAMIPerformance
 
     inline void set(const char* key, const LLSD& value)
     {
-        if (LLControlVariable* control = gSavedSettings.getControl(key))
+        if (auto control = gSavedSettings.getControl(key))
             if (control->getValue() != value)
                 control->setValue(value);
     }
 
     inline void atMostF32(const char* key, F32 threshold)
     {
-        if (auto* control = gSavedSettings.getControl(key))
+        if (auto control = gSavedSettings.getControl(key))
             if (control->getValue().asReal() > threshold)
                 control->setValue(threshold);
     }
@@ -84,7 +84,7 @@ namespace KAMIPerformance
                 LLSD before = LLSD::emptyMap();
                 for (const char* key : keys)
                 {
-                    if (LLControlVariable* c = gSavedSettings.getControl(key))
+                    if (auto c = gSavedSettings.getControl(key))
                         before[key] = c->getValue();
                 }
                 std::ostringstream out;
