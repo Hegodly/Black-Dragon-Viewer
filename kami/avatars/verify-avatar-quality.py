@@ -22,6 +22,14 @@ check("distant avatars optimized gradually, self untouched by reduction",
       'else if (!mIsDummy && mDrawable.notNull())' in avatar and
       'mAdjustedPixelArea *= factor;' in avatar and
       '0.65f, 1.f' in avatar)
+controlcpp=read("indra/newview/llviewercontrol.cpp")
+check("live toggle refreshes existing impostor budget",
+      'setting_setup_signal_listener(gSavedSettings, "KAMIAvatarQualityFPS", handleKAMIAvatarQualityChanged)' in controlcpp and
+      'LLVOAvatar::updateImpostorRendering(' in controlcpp)
+check("native crowd impostor cap respects stricter FPS settings",
+      'sMaxNonImpostors == 0 || sMaxNonImpostors > 8' in avatar and
+      'sMaxNonImpostors = 8;' in avatar and
+      'sLimitNonImpostors = (0 != sMaxNonImpostors);' in avatar)
 check("native mesh LOD renderer still processes quality changes",
       'root->updateLOD(mAdjustedPixelArea, true);' in avatar and
       'dirtyMesh(2);' in avatar)
@@ -43,8 +51,8 @@ stack=byname.get("gfx_stack")
 check("all graphics scroll ancestors exist",
       quick is not None and scroll is not None and stack is not None)
 check("Avatar Quality visible after Session Recovery",
-      byname["kami_avatar_quality_heading"].get("top") >
-      byname["kami_recovery_status"].get("top") and
+      int(byname["kami_avatar_quality_heading"].get("top")) >
+      int(byname["kami_recovery_status"].get("top")) and
       int(checkbox.get("top"))+int(checkbox.get("height")) <= int(quick.get("height")))
 native_panels={"basic_layout_panel","advanced_layout_panel","finetuning_layout_panel"}
 children=[x for x in stack if x.tag=="layout_panel"]
