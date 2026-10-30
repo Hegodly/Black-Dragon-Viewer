@@ -6,11 +6,13 @@ import xml.etree.ElementTree as ET
 R=Path(__file__).resolve().parents[2]
 settings=R/"indra/newview/app_settings/settings_blackdragon.xml"
 s=settings.read_text(encoding="utf-8-sig")
-anchor="<key>KAMIMXAO</key>"
-assert s.count(anchor)==1, "Expected optional MXAO to have been integrated"
-s=s.replace(anchor,'''<key>KAMIFrameGenerationStatus</key>
+# Frame generation status is independent of the retired MXAO adapter.
+anchor="<map>\n"
+assert s.count(anchor)>=1, "Missing viewer settings map"
+assert "<key>KAMIFrameGenerationStatus</key>" not in s, "Duplicate status setting"
+s=s.replace(anchor,anchor+'''  <key>KAMIFrameGenerationStatus</key>
   <map><key>Comment</key><string>Actual last optical-flow presentation state; not a frame-rate promise.</string><key>Persist</key><integer>0</integer><key>Type</key><string>String</string><key>Value</key><string>Off</string></map>
-  <key>KAMIMXAO</key>''',1)
+''',1)
 settings.write_text(s,encoding="utf-8")
 
 display=R/"indra/newview/llviewerdisplay.cpp"
@@ -38,9 +40,10 @@ display.write_text(s,encoding="utf-8")
 
 prefs=R/"indra/newview/llfloaterpreference.cpp"
 s=prefs.read_text(encoding="utf-8-sig")
-old='''    if (auto* text = findChild<LLTextBox>("kami_mxao_status"))
-        text->setText(LLStringExplicit(gSavedSettings.getString("KAMIMXAOStatus")));'''
-assert s.count(old)==1
+# Status updates attach to the ordinary Preferences draw method,
+# regardless of whether any private MXAO/GShade runtime is installed.
+old='void LLFloaterPreference::draw()\n{'
+assert s.count(old)==1, "Preferences draw anchor changed"
 s=s.replace(old,old+'''
     if (auto* text = findChild<LLTextBox>("kami_fg_status"))
         text->setText(LLStringExplicit(gSavedSettings.getString("KAMIFrameGenerationStatus")));''',1)
