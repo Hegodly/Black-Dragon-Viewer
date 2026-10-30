@@ -4,7 +4,12 @@ $base = (Resolve-Path $ViewerDirectory).Path
 if (!(Test-Path "$base/KAMIMXAO64.dll")) { throw 'This build lacks KAMIMXAO64.dll. Extract the complete KAMI portable ZIP first.' }
 if (Test-Path "$base/opengl32.dll") { throw 'An external ReShade/GShade installation exists. Use that installation instead.' }
 if (Test-Path "$base/ReShade.ini") { throw 'Existing ReShade.ini found. Back it up and review your installation; this installer will not overwrite it.' }
-if (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) { throw 'Close the viewer before installing.' }
+if (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) {
+    Write-Host 'Close KAMI Viewer to continue installing MXAO.' -ForegroundColor Yellow
+    while (Get-Process -Name KAMIViewer,BlackDragonViewer,BlackDragon -ErrorAction SilentlyContinue) {
+        Start-Sleep -Milliseconds 500
+    }
+}
 $revision = 'f57d3afa1ebe5d1fd6152d4f6fb9a2e75bd1d1cb'
 $cache = Join-Path ([IO.Path]::GetTempPath()) ('KAMI-MXAO-' + [guid]::NewGuid().ToString())
 function Check { if ($LASTEXITCODE -ne 0) { throw "Download command failed: $LASTEXITCODE" } }
