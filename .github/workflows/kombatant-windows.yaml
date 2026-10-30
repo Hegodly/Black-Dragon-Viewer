@@ -73,6 +73,9 @@ jobs:
       - name: Add performance-friendly lighting and skin options
         shell: pwsh
         run: python kami/performance/add-balanced-graphics.py
+      - name: Integrate shadow filtering, reflections, shader caching and auto optimization
+        shell: pwsh
+        run: python kami/performance/add-mw-render-controls.py
       - name: Validate native graphics settings and panels
         shell: pwsh
         run: |
