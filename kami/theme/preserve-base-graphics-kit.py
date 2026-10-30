@@ -179,8 +179,18 @@ retired_settings = {
     "RenderGlowWidth", "RenderGlowMaxExtractAlpha", "RenderGlowLumWeights",
     "RenderGlowWarmthWeights",
 }
+# Other build patches may append duplicate widgets outside the original
+# Black Dragon subpanels. Remove those too rather than aborting the release.
+# This only changes UI presentation, not native shader/settings definitions.
+orphaned = []
+for parent in root.iter():
+    for child in list(parent):
+        if child.get("control_name") in retired_settings:
+            orphaned.append((child.tag, child.get("control_name")))
+            parent.remove(child)
 assert not any(n.get("control_name") in retired_settings for n in root.iter()), (
     "DoF, motion blur or bloom UI remained visible")
+print("Retired duplicate DoF/Bloom/MotionBlur widgets:", orphaned)
 assert not any((n.text or "").strip() in
                {"Depth of Field", "Motion Blur", "Post Processing Glow", "Glow Quality:"}
                for n in root.iter("text")), "Orphaned effect heading"
