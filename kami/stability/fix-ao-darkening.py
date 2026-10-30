@@ -12,12 +12,11 @@ R = Path(__file__).resolve().parents[2]
 
 settings = R / "indra/newview/app_settings/settings_blackdragon.xml"
 s = settings.read_text(encoding="utf-8-sig")
-anchor = "<map>\n  <key>KAMIMXAO</key>"
+anchor = "<key>KAMIMXAO</key>"
 assert s.count(anchor) == 1, "Cannot add AO setting after MXAO integration"
-s = s.replace(anchor, '''<map>
-  <key>KAMIAODarkening</key>
+s = s.replace(anchor, '''<key>KAMIAODarkening</key>
   <map><key>Comment</key><string>Native AO indirect-light darkening; 0 off, 1 normal, 2 stronger. Requires SSAO enabled; no extra graphics pass.</string><key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>1.0</real></map>
-  <key>KAMIMXAO</key>''', 1)
+<key>KAMIMXAO</key>''', 1)
 settings.write_text(s, encoding="utf-8")
 
 shader = R / "indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl"
