@@ -39,7 +39,7 @@ void KAMIFullscreenVS(uint id : SV_VertexID, out float4 position : SV_Position, 
     position=float4(texcoord*float2(2.0,-2.0)+float2(-1.0,1.0),0.0,1.0);
 }
 float3 KAMIRead(float2 uv) { return tex2D(KAMISource,clamp(uv,0.0,1.0)).rgb; }
-float3 KAMILuma(float3 c) { return dot(c,float3(0.2126,0.7152,0.0722)).xxx; }
+float3 KAMILuma(float3 c) { float l=dot(c,float3(0.2126,0.7152,0.0722)); return float3(l,l,l); }
 float3 KAMIBlur(float2 uv)
 {
     float2 px=KAMI_PX;
