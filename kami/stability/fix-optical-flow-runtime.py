@@ -6,13 +6,11 @@ import xml.etree.ElementTree as ET
 R=Path(__file__).resolve().parents[2]
 settings=R/"indra/newview/app_settings/settings_blackdragon.xml"
 s=settings.read_text(encoding="utf-8-sig")
-anchor="<map>\n<key>KAMIMXAO</key>"
-if anchor not in s:
-    anchor="<map>\n  <key>KAMIMXAO</key>"
+anchor="<key>KAMIMXAO</key>"
 assert s.count(anchor)==1, "Expected optional MXAO to have been integrated"
-s=s.replace(anchor,anchor.replace("<key>KAMIMXAO</key>",'''<key>KAMIFrameGenerationStatus</key>
+s=s.replace(anchor,'''<key>KAMIFrameGenerationStatus</key>
   <map><key>Comment</key><string>Actual last optical-flow presentation state; not a frame-rate promise.</string><key>Persist</key><integer>0</integer><key>Type</key><string>String</string><key>Value</key><string>Off</string></map>
-  <key>KAMIMXAO</key>'''),1)
+  <key>KAMIMXAO</key>''',1)
 settings.write_text(s,encoding="utf-8")
 
 display=R/"indra/newview/llviewerdisplay.cpp"
