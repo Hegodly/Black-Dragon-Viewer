@@ -125,6 +125,11 @@ verify("MSVC control handle compatibility", all(not bad_control_handle.search(re
 verify("camera vector uses LLVector3d indexing", all(part not in read("indra/newview/kami_signature.h") for part in ("p.mV[", "f.mV[")))
 verify("Windows PDH status definitions available", "#include <pdhmsg.h>" in read("indra/newview/kami_hardware_monitor.h"))
 verify("SSR requests resize on the pipeline instance", "gPipeline.requestResizeScreenTexture();" in read("indra/newview/pipeline.cpp"))
-verify("installer argument quoting doesn't break C++ strings", read("indra/newview/llfloaterpreference.cpp").count("const std::wstring quote(1, wchar_t(34));") >= 3)
+verify("retired private GShade/MXAO installer removed from Preferences",
+       "Install-Private-MXAO.ps1" not in read("indra/newview/llfloaterpreference.cpp") and
+       "Enable-KAMI-FX.ps1" not in read("indra/newview/llfloaterpreference.cpp"))
+verify("new cinematic UI binds both real preview and restore actions",
+       'KAMICinematic::apply();' in read("indra/newview/llfloaterpreference.cpp") and
+       'KAMICinematic::restore();' in read("indra/newview/llfloaterpreference.cpp"))
 
 print("KAMI next-build integration checks passed.")
