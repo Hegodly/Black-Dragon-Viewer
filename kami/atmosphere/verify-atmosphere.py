@@ -43,6 +43,10 @@ gate("prior personal EEP selection retained",all(x in header for x in
   's.fixed','setSelectedEnvironment(s.previous')))
 gate("previous local sky and water restored", 'environment.setEnvironment(LLEnvironment::ENV_LOCAL,s.fixed)' in header)
 gate("previous day cycle restored", 'environment.setEnvironment(LLEnvironment::ENV_LOCAL,' in header and 's.day,s.dayLength,s.dayOffset' in header)
+gate("strongly typed day timestamps are explicitly initialized",
+     "LLSettingsDay::Seconds dayLength{0};" in header and
+     "LLSettingsDay::Seconds dayOffset{0};" in header)
+
 gate("do not overwrite other EEP editor takeover", 'ownLocal' in header and '==s.activeSky' in header)
 gate("native glow is optional and restored",all(x in header for x in
  ('KAMIAtmosphereBloom','s.hadGlow','s.glowStrength','applyBloom(false)')))
