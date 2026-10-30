@@ -1,47 +1,103 @@
 #!/usr/bin/env python3
-"""Verify KAMI native LLSD settings and line-delimited keyboard mapping.
+"""Validate KAMI settings and both supported Black Dragon keyboard LLSD formats.
 
-Black Dragon deliberately stores one <llsd> root per controls.xml line.
-Parsing all records as one XML tree destroys this valid native keybind format.
+Old Black Dragon installations store one LLSD <map> document per line.
+Creator Studio writes one valid LLSD <array> document containing those maps.
+The viewer accepts both to protect existing resident key customizations.
 """
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-settings = ET.parse(ROOT / "indra/newview/app_settings/settings_blackdragon.xml")
-assert settings.getroot().tag == "llsd" and settings.getroot().find("map") is not None
-# Validate each named setting independently so CI identifies the source key,
-# not just the malformed text. Never silently coerce float values to integers.
-root = settings.getroot().find("map")
-entries = list(root)
-assert len(entries) % 2 == 0, "Settings key/value pairs are truncated"
-for i in range(0, len(entries), 2):
-    key_element, setting = entries[i], entries[i + 1]
-    assert key_element.tag == "key" and setting.tag == "map", ("Invalid settings structure", i)
-    key = key_element.text or "<unnamed>"
-    for element in setting.iter("integer"):
+
+
+def require(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+
+def map_values(node, label):
+    require(node.tag == "map", f"{label}: expected LLSD map")
+    children = list(node)
+    require(len(children) % 2 == 0, f"{label}: truncated LLSD pairs")
+    values = {}
+    for i in range(0, len(children), 2):
+        key, value = children[i], children[i + 1]
+        require(key.tag == "key" and bool(key.text), f"{label}: invalid key at pair {i // 2}")
+        require(key.text not in values, f"{label}: duplicate key {key.text}")
+        values[key.text] = value
+    return values
+
+
+def read_binding_maps(path):
+    data = path.read_text(encoding="utf-8-sig")
+    try:
+        document = ET.fromstring(data)
+    except ET.ParseError:
+        # Historical Black Dragon files contain multiple top-level LLSD
+        # documents. Only fall back to that format, never silently drop rows.
+        maps = []
+        for line_no, line in enumerate(data.splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                document = ET.fromstring(line)
+            except ET.ParseError as exc:
+                raise AssertionError(f"Legacy keyboard record {line_no}: malformed LLSD") from exc
+            require(document.tag == "llsd" and len(document) == 1,
+                    f"Legacy keyboard record {line_no}: expected LLSD root")
+            require(document[0].tag == "map",
+                    f"Legacy keyboard record {line_no}: expected map")
+            maps.append(document[0])
+        return maps, "legacy multi-document"
+    require(document.tag == "llsd" and len(document) == 1,
+            "Keyboard bindings: expected single LLSD root")
+    child = document[0]
+    if child.tag == "array":
+        maps = list(child)
+    elif child.tag == "map":
+        maps = [child]
+    else:
+        raise AssertionError("Keyboard bindings: expected array or map")
+    require(all(node.tag == "map" for node in maps),
+            "Keyboard bindings: array contains non-map record")
+    return maps, "single-document"
+
+
+settings = ET.parse(ROOT / "indra/newview/app_settings/settings_blackdragon.xml").getroot()
+require(settings.tag == "llsd" and len(settings) == 1,
+        "Native settings: invalid LLSD root")
+setting_values = map_values(settings[0], "Native settings")
+for key, definition in setting_values.items():
+    require(definition.tag == "map", f"Native setting {key}: expected map")
+    for element in definition.iter("integer"):
         literal = (element.text or "").strip()
         try:
             int(literal)
         except ValueError as exc:
             raise AssertionError(
-                f"Invalid integer LLSD literal in setting {key}: {literal!r}. "
-                "Use <real> for F32 values."
+                f"Native setting {key}: invalid integer {literal!r}; use <real> for floats"
             ) from exc
 
 controls = ROOT / "indra/newview/app_settings/controls.xml"
-rows = [row.strip() for row in controls.read_text(encoding="utf-8-sig").splitlines() if row.strip()]
-assert len(rows) > 100, "Keyboard records truncated"
+records, format_name = read_binding_maps(controls)
+require(len(records) > 100, "Keyboard bindings: records unexpectedly truncated")
 slots = []
-for line, row in enumerate(rows, 1):
-    node = ET.fromstring(row)
-    assert node.tag == "llsd" and len(node) == 1 and node[0].tag == "map", line
-    fields = list(node[0])
-    assert len(fields) % 2 == 0, line
-    mapping = {fields[i].text: fields[i + 1].text
-               for i in range(0, len(fields), 2)}
-    assert mapping.get("function"), ("Missing keybinding function", line)
-    slots.append(int(mapping["slot"]))
-assert slots == list(range(len(slots))), "Keyboard slots duplicated or missing"
-print("PASS native settings LLSD numeric types")
-print(f"PASS {len(rows)} original keyboard LLSD records, order preserved")
+for index, record in enumerate(records):
+    values = map_values(record, f"Keyboard record {index}")
+    require("function" in values and (values["function"].text or "").strip(),
+            f"Keyboard record {index}: missing function")
+    require("key" in values and "mask" in values and "mode" in values and "slot" in values,
+            f"Keyboard record {index}: incomplete binding")
+    try:
+        mode = int(values["mode"].text or "")
+        slot = int(values["slot"].text or "")
+    except ValueError as exc:
+        raise AssertionError(f"Keyboard record {index}: invalid mode or slot") from exc
+    require(0 <= mode < 5, f"Keyboard record {index}: invalid mode {mode}")
+    slots.append(slot)
+require(slots == list(range(len(records))),
+        "Keyboard bindings: duplicate, missing or out-of-order slots")
+
+print(f"PASS settings LLSD numeric types ({len(setting_values)} keys)")
+print(f"PASS keyboard LLSD {format_name} ({len(records)} records); slots preserved")

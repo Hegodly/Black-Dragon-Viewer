@@ -204,6 +204,8 @@ protected:
     LLSD mModelPhysicsFee;
 
 private:
+    bool runKamiMeshAudit(bool report);
+    void onKamiMeshAudit();
     void onClickCalculateBtn();
     void onJointListSelection();
 
