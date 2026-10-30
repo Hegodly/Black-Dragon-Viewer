@@ -5,6 +5,7 @@ No per-pixel texture fetches or shader-injection DLLs.
 """
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import shutil
 R=Path(__file__).resolve().parents[2]
 
 def edit(path,old,new):
@@ -106,6 +107,7 @@ edit(smart,'            set("RenderVolumetricLighting", false);',
 edit(smart,'            set("KombatantNativeFX", false);',
 '''            set("KombatantNativeFX", false);
             set("KAMIAvatarSoftLight", 0.f);''')
+shutil.copy2(R/"kami/performance/kami_smart_engine.h", R/"indra/newview/kami_smart_engine.h")
 ET.parse(R/settings)
 ET.parse(R/ui)
 assert 'kami_avatar_light' in (R/shader).read_text()
