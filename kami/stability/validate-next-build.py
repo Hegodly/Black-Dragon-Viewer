@@ -128,8 +128,12 @@ verify("SSR requests resize on the pipeline instance", "gPipeline.requestResizeS
 verify("retired private GShade/MXAO installer removed from Preferences",
        "Install-Private-MXAO.ps1" not in read("indra/newview/llfloaterpreference.cpp") and
        "Enable-KAMI-FX.ps1" not in read("indra/newview/llfloaterpreference.cpp"))
-verify("new cinematic UI binds both real preview and restore actions",
-       'KAMICinematic::apply();' in read("indra/newview/llfloaterpreference.cpp") and
-       'KAMICinematic::restore();' in read("indra/newview/llfloaterpreference.cpp"))
+verify("independent cinematic lighting checkbox dispatches real on/off EEP",
+       'KAMICinematic::setLighting(ctrl->getValue().asBoolean());' in
+       read("indra/newview/llfloaterpreference.cpp"))
+verify("cinematic PBR and avatar controls use native settings independently",
+       all(name in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml")
+           for name in ("kami_cine_materials", "kami_cine_lighting", "kami_cine_avatar")) and
+       "kami_cine_apply" not in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
 
 print("KAMI next-build integration checks passed.")
