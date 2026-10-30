@@ -4,6 +4,8 @@ repos:
     hooks:
       - id: opensource-license
       - id: llsd
+        # The original controls.xml stores 239 separate LLSD roots.
+        exclude: ^indra/newview/app_settings/controls\.xml$
       - id: no-trigraphs
       - id: copyright
       - id: end-of-file
@@ -15,6 +17,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-xml
+        exclude: ^indra/newview/app_settings/controls\.xml$
       - id: mixed-line-ending
       - id: trailing-whitespace
         files: \.(cpp|c|m|mm|h|inl|py|glsl|cmake|yaml|sh)$

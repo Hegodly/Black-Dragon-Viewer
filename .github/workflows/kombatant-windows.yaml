@@ -206,6 +206,9 @@ jobs:
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
+      - name: Verify native settings and all legacy WASD keybindings
+        shell: pwsh
+        run: python kami/performance/validate-config-inputs.py
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
