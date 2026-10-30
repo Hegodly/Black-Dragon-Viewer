@@ -135,6 +135,9 @@ jobs:
       - name: Explain actual Performance preset and measured OFF/ON FPS comparison
         shell: pwsh
         run: python kami/stability/explain-performance-preset.py
+      - name: Wire five verified quality presets to actual renderer controls
+        shell: pwsh
+        run: python kami/performance/verify-and-wire-quality-presets.py
       - name: Apply approved Fire Garden theme across all native KAMI windows
         shell: pwsh
         run: python kami/theme/apply-fire-garden-ui.py
