@@ -92,6 +92,9 @@ jobs:
     - name: Correct FPS cap units and separate quality target
       shell: pwsh
       run: python kami/performance/fix-fps-controls.py
+    - name: Remove unsupported 12K live rendering
+      shell: pwsh
+      run: python kami/stability/remove-12k-live.py
     - name: Validate KAMI Firestorm-style WASD movement defaults
       shell: pwsh
       run: python kami/performance/validate-wasd-controls.py

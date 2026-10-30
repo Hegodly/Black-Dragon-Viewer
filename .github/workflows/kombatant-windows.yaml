@@ -114,6 +114,9 @@ jobs:
       - name: Contain Performance Mode scaled-view cropping
         shell: pwsh
         run: python kami/stability/keep-performance-native.py
+      - name: Remove unsupported 12K live rendering
+        shell: pwsh
+        run: python kami/stability/remove-12k-live.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
