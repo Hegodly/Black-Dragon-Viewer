@@ -87,6 +87,7 @@ controls = ROOT / "indra/newview/app_settings/controls.xml"
 records, format_name = read_binding_maps(controls)
 require(len(records) > 100, "Keyboard bindings: records unexpectedly truncated")
 slots = []
+third_person_defaults = {}
 for index, record in enumerate(records):
     values = map_values(record, f"Keyboard record {index}")
     require("function" in values and (values["function"].text or "").strip(),
@@ -99,9 +100,26 @@ for index, record in enumerate(records):
     except ValueError as exc:
         raise AssertionError(f"Keyboard record {index}: invalid mode or slot") from exc
     require(0 <= mode < 5, f"Keyboard record {index}: invalid mode {mode}")
+    if mode == 0:
+        key_name = (values["key"].text or "").strip()
+        mask_name = (values["mask"].text or "").strip()
+        binding = (key_name, mask_name)
+        require(binding not in third_person_defaults,
+                f"Third-person keyboard: duplicate {binding}")
+        third_person_defaults[binding] = values["function"].text
     slots.append(slot)
 require(slots == list(range(len(records))),
         "Keyboard bindings: duplicate, missing or out-of-order slots")
+
+for key_name, mask_name, expected in (
+    ("W", "NONE", "push_forward"), ("S", "NONE", "push_backward"),
+    ("A", "NONE", "turn_left"), ("D", "NONE", "turn_right"),
+    ("Left", "NONE", "turn_left"), ("Right", "NONE", "turn_right"),
+    ("A", "SHIFT", "slide_left"), ("D", "SHIFT", "slide_right"),
+):
+    actual = third_person_defaults.get((key_name, mask_name))
+    require(actual == expected,
+            f"Third-person {key_name}/{mask_name}: expected {expected}, got {actual}")
 
 print(f"PASS settings LLSD numeric types ({len(setting_values)} keys)")
 print(f"PASS keyboard LLSD {format_name} ({len(records)} records); slots preserved")
