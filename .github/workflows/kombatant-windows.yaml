@@ -102,6 +102,9 @@ jobs:
       - name: Integrate fast login without bypassing outfit readiness
         shell: pwsh
         run: python kami/loading/apply-fast-loading.py
+      - name: Clean KAMI login layout and identity
+        shell: pwsh
+        run: python kami/theme/clean-login.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
