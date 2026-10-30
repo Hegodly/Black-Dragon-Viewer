@@ -107,15 +107,9 @@ jobs:
       - name: Integrate experimental OpenGL optical-flow frame generation
         shell: pwsh
         run: python kami/framegen/apply-framegen.py
-      - name: Build optional private ReShade FX runtime (no MXAO source)
-        shell: pwsh
-        run: ./kami/mxao/build-runtime.ps1
       - name: Integrate live current-scene graphics preview
         shell: pwsh
         run: python kami/preview/apply-live-preview.py
-      - name: Integrate optional private MXAO adapter
-        shell: pwsh
-        run: python kami/mxao/apply-private-mxao.py
       - name: Integrate fast login without bypassing outfit readiness
         shell: pwsh
         run: python kami/loading/apply-fast-loading.py
@@ -161,9 +155,6 @@ jobs:
       - name: Stabilize and expose actual native 4K/8K world buffer resolution
         shell: pwsh
         run: python kami/stability/fix-live-resolution-quality.py
-      - name: Add built-in KAMI FX and GShade-compatible shader loading
-        shell: pwsh
-        run: python kami/gshade/apply-gshade-compat.py
       - name: Apply approved Fire Garden theme across all native KAMI windows
         shell: pwsh
         run: python kami/theme/apply-fire-garden-ui.py
@@ -206,7 +197,7 @@ jobs:
       - name: Verify all five preset quality levels and native 4K/8K FPS contracts
         shell: pwsh
         run: python kami/performance/verify-preset-contracts.py
-      - name: Validate bundled KAMI FX, GShade compatibility and actual MXAO integration
+      - name: Validate external-only GShade assets and absence of bundled hooks
         shell: pwsh
         run: python kami/gshade/verify-gshade-fx.py
       - name: Verify adaptive avatar physics and actual hardware performance telemetry
@@ -252,9 +243,9 @@ jobs:
       - name: Stage AMD FSR and Intel XeSS runtimes
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1 -StageOnly
-      - name: Stage private runtime and personal installer (no MXAO source)
+      - name: Stage optional externally installed GShade shader assets
         shell: pwsh
-        run: ./kami/mxao/build-runtime.ps1 -StageOnly
+        run: ./kami/gshade/stage-external-assets.ps1
       - name: Stage and validate portable runtime assets
         shell: pwsh
         run: python kami/packaging/stage-portable-data.py
