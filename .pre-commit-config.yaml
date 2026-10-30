@@ -11,6 +11,9 @@ repos:
         exclude: language.txt
       - id: indent-with-spaces
         files: \.(cpp|c|m|mm|h|inl|py|glsl|cmake)$
+        # Black Dragon's keyboard loader intentionally uses legacy tab indentation.
+        # A whole-file formatter would obscure the functional migration diff.
+        exclude: ^indra/newview/llviewerinput\.cpp$
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
