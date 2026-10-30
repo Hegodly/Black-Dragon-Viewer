@@ -18,14 +18,19 @@ ART=WIN/"kami_fire_garden.jpg"
 assert ART.is_file(), "The approved KAMI Fire Garden art was not staged"
 WIN.mkdir(parents=True,exist_ok=True)
 
-# Dark smoked glass, restrained blue interaction glow, warm fire-garden accents.
-obsidian=(9,14,22)
-smoke=(19,26,38)
-blue=(78,151,209)
-ember=(151,80,54)
-text=(230,238,246)
+# Exact design direction from the APPROVED Fire Garden mockup:
+# black/charcoal smoked glass, silver/chrome edges and typography, fire-red
+# garden visible behind windows, amber highlights, icy cyan ONLY for selection.
+# These are SKIN colors/textures, never scene-lighting or GPU settings.
+obsidian=(8,10,12)
+smoke=(24,24,27)
+blue=(77,187,224)
+ember=(215,65,33)
+silver=(167,176,183)
+gold=(209,113,54)
+text=(235,238,239)
 
-def gradient(w,h,first,second,alpha=244):
+def gradient(w,h,first,second,alpha=233):
     img=Image.new("RGBA",(w,h))
     px=img.load()
     for y in range(h):
@@ -39,12 +44,15 @@ def gradient(w,h,first,second,alpha=244):
 def outline(canvas, glow=False, selected=False):
     d=ImageDraw.Draw(canvas,"RGBA")
     w,h=canvas.size
-    border=blue if selected or glow else (66,94,119)
-    alpha=186 if selected else 115 if glow else 85
-    d.rounded_rectangle((1,1,w-2,h-2),radius=min(8,h//3),
+    border=blue if selected or glow else silver
+    alpha=208 if selected else 115 if glow else 115
+    d.rounded_rectangle((1,1,w-2,h-2),radius=min(5,h//3),
                         outline=(*border,alpha),width=2 if selected else 1)
     if selected:
-        d.line((8,h-3,w-8,h-3),fill=(*blue,160),width=2)
+        d.line((8,h-3,w-8,h-3),fill=(*blue,210),width=2)
+    else:
+        # Very thin metallic glint, not the stock Black Dragon blue border.
+        d.line((8,2,w-8,2),fill=(220,225,230,65),width=1)
     return canvas
 
 def widget(filename, a=obsidian,b=smoke, selected=False, glow=False):
@@ -55,7 +63,7 @@ def widget(filename, a=obsidian,b=smoke, selected=False, glow=False):
         dimensions=(256,26)
     else:
         dimensions=(128,32)
-    canvas=gradient(*dimensions,a,b,251)
+    canvas=gradient(*dimensions,a,b,232)
     outline(canvas,selected=selected,glow=glow)
     canvas.save(p,optimize=True)
     return p
@@ -103,44 +111,44 @@ assets={
   "Checkbox_On": "kami_fg_checkbox_on.png",
   "Checkbox_On_Press": "kami_fg_checkbox_on.png",
 }
-widget("kami_fg_window.png",(10,15,24),(16,22,32))
-widget("kami_fg_panel.png",(14,20,30),(19,27,40))
-widget("kami_fg_button.png",(24,32,43),(18,27,39))
-widget("kami_fg_button_on.png",(26,47,65),(19,31,50),selected=True)
-widget("kami_fg_button_press.png",(20,52,77),(16,35,57),selected=True)
-widget("kami_fg_button_selected.png",(20,41,62),(16,30,50),selected=True)
-widget("kami_fg_toolbar.png",(14,20,32),(19,25,36))
-widget("kami_fg_toolbar_hover.png",(20,37,57),(14,25,38),glow=True)
-widget("kami_fg_toolbar_selected.png",(21,48,70),(15,30,48),selected=True)
-widget("kami_fg_tab.png",(18,26,37),(15,22,35))
-widget("kami_fg_tab_selected.png",(19,48,68),(15,31,47),selected=True)
-widget("kami_fg_text_field.png",(16,22,31),(20,28,40))
-widget("kami_fg_text_field_active.png",(22,37,51),(17,29,44),selected=True)
+widget("kami_fg_window.png",(8,10,12),(22,21,23))
+widget("kami_fg_panel.png",(12,12,14),(25,23,23))
+widget("kami_fg_button.png",(29,29,31),(15,15,17))
+widget("kami_fg_button_on.png",(23,40,48),(15,20,24),selected=True)
+widget("kami_fg_button_press.png",(25,51,63),(13,22,29),selected=True)
+widget("kami_fg_button_selected.png",(19,40,51),(13,23,29),selected=True)
+widget("kami_fg_toolbar.png",(13,14,16),(20,21,23))
+widget("kami_fg_toolbar_hover.png",(23,35,40),(14,19,23),glow=True)
+widget("kami_fg_toolbar_selected.png",(17,38,48),(12,20,25),selected=True)
+widget("kami_fg_tab.png",(22,22,24),(13,14,17))
+widget("kami_fg_tab_selected.png",(17,39,50),(12,22,28),selected=True)
+widget("kami_fg_text_field.png",(14,15,17),(27,27,29))
+widget("kami_fg_text_field_active.png",(16,30,36),(21,23,28),selected=True)
 
 def slider_track(filename,filled):
     img=Image.new("RGBA",(104,16),(0,0,0,0))
     draw=ImageDraw.Draw(img)
     draw.rounded_rectangle((0,5,103,12),radius=4,
-        fill=(15,25,39,235),outline=(66,104,133,195),width=1)
+        fill=(13,14,16,235),outline=(*silver,170),width=1)
     if filled:
-        draw.rounded_rectangle((2,6,101,11),radius=3,fill=(53,122,175,240))
+        draw.rounded_rectangle((2,6,101,11),radius=3,fill=(*blue,242))
     img.save(WIN/filename,optimize=True)
 slider_track("kami_fg_slider_track.png",False)
 slider_track("kami_fg_slider_track_progress.png",True)
 
 thumb=Image.new("RGBA",(32,32),(0,0,0,0))
 d=ImageDraw.Draw(thumb)
-d.rounded_rectangle((9,6,23,25),radius=5,fill=(29,73,105,245),outline=(108,173,214,255),width=2)
+d.rounded_rectangle((9,6,23,25),radius=5,fill=(169,177,187,249),outline=(233,239,244,255),width=2)
 thumb.save(WIN/"kami_fg_slider_thumb.png",optimize=True)
 
 def checkbox(name,checked):
     img=Image.new("RGBA",(24,24),(0,0,0,0))
     draw=ImageDraw.Draw(img)
     draw.rounded_rectangle((2,2,21,21),radius=4,
-        fill=(25,49,67,255) if checked else (16,25,38,248),
-        outline=(89,159,202,255) if checked else (70,106,133,220),width=2)
+        fill=(24,44,54,251) if checked else (16,17,20,245),
+        outline=(*blue,255) if checked else (*silver,212),width=2)
     if checked:
-        draw.line(((6,12),(10,16),(18,7)),fill=(227,243,255,255),width=3,joint="curve")
+        draw.line(((6,12),(10,16),(18,7)),fill=(241,244,246,255),width=3,joint="curve")
     img.save(WIN/name,optimize=True)
 checkbox("kami_fg_checkbox_off.png",False)
 checkbox("kami_fg_checkbox_on.png",True)
@@ -150,19 +158,20 @@ checkbox("kami_fg_checkbox_on.png",True)
 # dark enough to maintain contrast behind every preferences control.
 art=Image.open(ART).convert("RGB")
 fitted=ImageOps.fit(art,(960,760),method=Image.Resampling.LANCZOS,centering=(0.50,0.50))
-fitted=ImageEnhance.Color(fitted).enhance(0.75)
-fitted=ImageEnhance.Brightness(fitted).enhance(0.28)
+fitted=ImageEnhance.Color(fitted).enhance(1.07)
+fitted=ImageEnhance.Brightness(fitted).enhance(0.59)
 base=Image.new("RGBA",fitted.size)
 base.paste(fitted.convert("RGBA"),(0,0))
-base=Image.alpha_composite(base,Image.new("RGBA",base.size,(7,13,22,155)))
+base=Image.alpha_composite(base,Image.new("RGBA",base.size,(7,8,11,129)))
 d=ImageDraw.Draw(base,"RGBA")
-d.rectangle((0,0,960,60),fill=(9,16,27,225))
-d.line((0,59,959,59),fill=(*blue,150),width=2)
-d.rectangle((0,0,245,760),fill=(8,14,24,165))
-d.line((245,60,245,760),fill=(*blue,60),width=2)
-d.rounded_rectangle((4,4,956,756),radius=11,outline=(*blue,96),width=2)
+d.rectangle((0,0,960,60),fill=(9,10,12,226))
+d.line((0,59,959,59),fill=(*silver,157),width=2)
+d.rectangle((0,0,245,760),fill=(7,8,10,184))
+d.line((245,60,245,760),fill=(*silver,91),width=2)
+d.rounded_rectangle((4,4,956,756),radius=7,outline=(*silver,175),width=2)
 # Small ember line references the original garden without drowning blue controls.
-d.line((18,63,138,63),fill=(*ember,178),width=3)
+d.line((18,63,138,63),fill=(*ember,215),width=3)
+d.line((820,63,945,63),fill=(*gold,174),width=1)
 base.save(WIN/"kami_fg_preferences.png",optimize=True)
 
 # Repoint the actual texture keys used by buttons, nav, tabs and floaters.
@@ -180,39 +189,41 @@ ET.parse(tex)
 # Change only the relevant UI semantic palette, never the world renderer,
 # accessibility warning colors, or scene atmosphere/tone mapping.
 colors={
- "FloaterDefaultBackgroundColor": "0.035 0.055 0.085 0.94",
- "FloaterFocusBackgroundColor": "0.045 0.065 0.095 0.96",
- "FloaterFocusBorderColor": "0.31 0.59 0.82 0.78",
- "FloaterUnfocusBorderColor": "0.18 0.32 0.44 0.55",
- "PanelDefaultBackgroundColor": "0.050 0.075 0.115 0.96",
- "PanelFocusBackgroundColor": "0.060 0.090 0.125 0.96",
- "MenuBarBgColor": "0.035 0.055 0.080 0.97",
- "MenuDefaultBgColor": "0.040 0.060 0.090 0.97",
- "MenuPopupBgColor": "0.050 0.070 0.100 0.97",
- "MenuItemHighlightBgColor": "0.20 0.40 0.60 0.68",
- "MenuItemHighlightFgColor": "0.94 0.96 1 1",
- "EmphasisColor": "0.26 0.53 0.75 0.55",
- "EmphasisColor_13": "0.26 0.53 0.75 0.13",
- "EmphasisColor_35": "0.26 0.53 0.75 0.35",
- "BeaconColor": "0.35 0.63 0.86 0.95",
- "ComboListBgColor": "0.065 0.085 0.115 0.98",
- "ButtonLabelColor": "0.88 0.92 0.96 1",
- "ButtonLabelSelectedColor": "0.98 0.99 1 1",
- "LabelTextColor": "0.88 0.92 0.96 1",
- "ScrollSelectedBGColor": "0.18 0.38 0.56 0.75",
- "ScrollSelectedFGColor": "0.96 0.98 1 1",
- "ScrollHoveredColor": "0.20 0.42 0.62 0.28",
- "ScrollUnselectedColor": "0.78 0.85 0.92 1",
- "InventoryBackgroundColor": "0.05 0.075 0.11 0.92",
- "InventoryMouseOverColor": "0.15 0.34 0.48 0.35",
- "SliderThumbCenterColor": "0.40 0.68 0.88 1",
- "SliderThumbOutlineColor": "0.13 0.32 0.50 1",
- "MultiSliderThumbCenterColor": "0.40 0.68 0.88 1",
- "ScrollbarTrackColor": "0.08 0.11 0.16 0.85",
- "ScrollbarThumbColor": "0.26 0.47 0.62 0.9",
- "DefaultHighlightLight": "0.30 0.55 0.72 0.26",
- "DefaultHighlightDark": "0.06 0.12 0.18 0.65",
- "TitleBarFocusColor": "0.06 0.11 0.17 0.65",
+ # KAMI mockup's black / charcoal-glass chrome palette.
+ "FloaterDefaultBackgroundColor": "0.036 0.038 0.045 0.90",
+ "FloaterFocusBackgroundColor": "0.046 0.044 0.048 0.92",
+ "FloaterFocusBorderColor": "0.68 0.71 0.74 0.86",
+ "FloaterUnfocusBorderColor": "0.40 0.43 0.46 0.64",
+ "PanelDefaultBackgroundColor": "0.040 0.040 0.046 0.88",
+ "PanelFocusBackgroundColor": "0.055 0.053 0.055 0.91",
+ "MenuBarBgColor": "0.034 0.038 0.045 0.97",
+ "MenuDefaultBgColor": "0.041 0.042 0.047 0.97",
+ "MenuPopupBgColor": "0.049 0.050 0.057 0.97",
+ # Cyan is a small interaction highlight, not the entire background.
+ "MenuItemHighlightBgColor": "0.11 0.30 0.38 0.70",
+ "MenuItemHighlightFgColor": "0.96 0.97 0.98 1",
+ "EmphasisColor": "0.30 0.73 0.88 0.54",
+ "EmphasisColor_13": "0.30 0.73 0.88 0.13",
+ "EmphasisColor_35": "0.30 0.73 0.88 0.35",
+ "BeaconColor": "0.30 0.73 0.88 0.95",
+ "ComboListBgColor": "0.07 0.07 0.08 0.98",
+ "ButtonLabelColor": "0.91 0.92 0.94 1",
+ "ButtonLabelSelectedColor": "1 1 1 1",
+ "LabelTextColor": "0.92 0.92 0.94 1",
+ "ScrollSelectedBGColor": "0.11 0.30 0.39 0.74",
+ "ScrollSelectedFGColor": "0.97 0.98 1 1",
+ "ScrollHoveredColor": "0.21 0.25 0.28 0.34",
+ "ScrollUnselectedColor": "0.78 0.80 0.84 1",
+ "InventoryBackgroundColor": "0.046 0.045 0.049 0.92",
+ "InventoryMouseOverColor": "0.15 0.24 0.29 0.36",
+ "SliderThumbCenterColor": "0.79 0.82 0.85 1",
+ "SliderThumbOutlineColor": "0.30 0.73 0.88 1",
+ "MultiSliderThumbCenterColor": "0.79 0.82 0.85 1",
+ "ScrollbarTrackColor": "0.08 0.08 0.10 0.84",
+ "ScrollbarThumbColor": "0.46 0.49 0.52 0.90",
+ "DefaultHighlightLight": "0.68 0.72 0.76 0.24",
+ "DefaultHighlightDark": "0.08 0.08 0.10 0.65",
+ "TitleBarFocusColor": "0.08 0.08 0.10 0.66",
 }
 col=SKIN/"colors.xml"
 ct=ET.parse(col)
