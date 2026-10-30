@@ -552,7 +552,7 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
             if (face_count == 0)
             {
                 valid = false;
-                if (report && issues_displayed++ < 20)
+                if (report && ++issues_displayed <= 20)
                 {
                     details << "  " << lod_names[lod] << " / " << model->mLabel
                             << ": no material faces.\n";
@@ -562,6 +562,11 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
             {
                 ++overfull_prims;
                 valid = false;
+                if (report && ++issues_displayed <= 20)
+                {
+                    details << "  " << lod_names[lod] << " / " << model->mLabel
+                            << ": invalid material face count " << face_count << ".\n";
+                }
             }
             for (S32 f = 0; f < face_count; ++f)
             {
@@ -583,16 +588,20 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
                 {
                     ++legacy_triangle_warnings;
                 }
-                if (report && issues_displayed < 20
+                if (report
                     && (face.mNumVertices > max_vertices_per_face
                         || face.mNumIndices % 3 != 0
                         || face.mNumIndices / 3 > warning_triangles_per_face))
                 {
-                    ++issues_displayed;
-                    details << "  " << lod_names[lod] << " / " << model->mLabel
-                            << " / material face " << (f + 1) << ": "
-                            << face.mNumVertices << " vertices, "
-                            << (face.mNumIndices / 3) << " triangles.\n";
+                    // Count every issue even after the log detail cap, so the
+                    // user knows whether additional mesh pieces need review.
+                    if (++issues_displayed <= 20)
+                    {
+                        details << "  " << lod_names[lod] << " / " << model->mLabel
+                                << " / material face " << (f + 1) << ": "
+                                << face.mNumVertices << " vertices, "
+                                << (face.mNumIndices / 3) << " triangles.\n";
+                    }
                 }
             }
         }
