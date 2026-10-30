@@ -25,7 +25,8 @@ change(header,
 change(header,
     '    if(!std::filesystem::is_regular_file(base/L"KAMI_MXAO_PRIVATE.enabled",ec))return;',
     '''    if(!std::filesystem::is_regular_file(base/L"KAMI_MXAO_PRIVATE.enabled",ec) &&
-       !std::filesystem::is_regular_file(base/L"KAMI_GSHADE_USER.enabled",ec)) {
+       !std::filesystem::is_regular_file(base/L"KAMI_GSHADE_USER.enabled",ec) &&
+       !std::filesystem::is_regular_file(base/L"KAMI_EFFECTS_BUNDLED.enabled",ec)) {
         status="Import a GShade-compatible preset from Preferences > Display, then restart.";
         return;
     }''')
@@ -142,10 +143,10 @@ assert len(panels)==1
 quick=panels[0]
 oldheight=int(quick.get("height"))
 assert oldheight>=4600,oldheight
-quick.set("height",str(oldheight+245))
+quick.set("height",str(oldheight+289))
 scroll_sizes=[n for n in root.iter() if n.get("height")==str(oldheight+4)]
 assert len(scroll_sizes)>=1,("Expected parent scroll contents sizing",oldheight)
-for node in scroll_sizes:node.set("height",str(oldheight+249))
+for node in scroll_sizes:node.set("height",str(oldheight+293))
 def new(tag,name,top,**attrs):
     attributes={k:str(v) for k,v in attrs.items()}
     x=ET.Element(tag,name=name,left="12",top=str(top),**attributes)
@@ -154,17 +155,18 @@ def new(tag,name,top,**attrs):
 y=oldheight+6
 new("text","kami_gshade_heading",y,width="465",height="24",font="SansSerifLarge").text="GShade Preset Compatibility"
 new("check_box","kami_gshade_toggle",y+33,width="465",height="22",
-    control_name="KAMIGShadeCompatibility",label="Enable my imported GShade-compatible preset",
+    control_name="KAMIGShadeCompatibility",label="Enable built-in / compatible GShade FX",
     tool_tip="Use user-supplied ReShade FX-compatible .ini/.fx/.fxh and textures with the single optional KAMI runtime. Does not run proprietary GShade itself.")
 new("check_box","kami_gshade_overlay",y+65,width="465",height="22",
     control_name="KAMIGShadeOverlay",label="Open shader diagnostics / effects overlay (Home)")
 new("button","kami_gshade_import",y+98,width="465",height="28",
     label="Import GShade preset and shader folders...")
-new("text","kami_gshade_status",y+137,width="465",height="48",wrap="true").text="Import preset to begin."
-new("text","kami_gshade_help",y+187,width="465",height="48",wrap="true").text=(
-    "Import your own .ini and .fx/.fxh files. Restart KAMI after importing. "
-    "GShade-exclusive shaders may not compile; check the Home overlay. "
-    "A separate external opengl32.dll is never loaded alongside KAMI's FX runtime.")
+new("button","kami_fx_enable",y+137,width="465",height="28",label="Activate included KAMI FX pack (20 effects)")
+new("text","kami_gshade_status",y+172,width="465",height="45",wrap="true").text="20 original effects included; optional one-time activation."
+new("text","kami_gshade_help",y+219,width="465",height="55",wrap="true").text=(
+    "20 original KAMI effects are included; activation is optional and requires restart. "
+    "To use your personal GShade .ini and .fx/.fxh collection, click Import instead. "
+    "GShade-exclusive effects may not compile; no duplicate OpenGL hooks.")
 ET.indent(tree,space=" ")
 tree.write(ui,encoding="utf-8",xml_declaration=True)
 
@@ -176,9 +178,9 @@ a='''bool LLFloaterPreference::postBuild()
 assert s.count(a)==1
 b=a+'''
 #if LL_WINDOWS
-    if (auto* import = findChild<LLButton>("kami_gshade_import"))
+    if (auto* import_button = findChild<LLButton>("kami_gshade_import"))
     {
-        import->setClickedCallback([this](LLUICtrl*, const LLSD&) {
+        import_button->setClickedCallback([this](LLUICtrl*, const LLSD&) {
             wchar_t executable[32768] = {};
             DWORD len = GetModuleFileNameW(nullptr, executable, 32768);
             if (!len || len >= 32768)
@@ -206,6 +208,34 @@ b=a+'''
                     "Import wizard launched. Close KAMI, select preset/shaders, restart viewer.");
             else
                 gSavedSettings.setString("KAMIGShadeStatus", "Could not launch preset importer.");
+        });
+    }
+    if (auto* activate = findChild<LLButton>("kami_fx_enable"))
+    {
+        activate->setClickedCallback([this](LLUICtrl*, const LLSD&) {
+            wchar_t executable[32768] = {};
+            DWORD len = GetModuleFileNameW(nullptr, executable, 32768);
+            if (!len || len >= 32768) return;
+            const auto base = std::filesystem::path(executable).parent_path();
+            const auto installer = base / L"Enable-KAMI-FX.ps1";
+            if (!std::filesystem::is_regular_file(installer))
+            {
+                gSavedSettings.setString("KAMIGShadeStatus",
+                    "Bundled FX activation script missing; extract the full portable package.");
+                return;
+            }
+            const std::wstring args = std::wstring(L"-NoProfile -STA -ExecutionPolicy Bypass -File \\"")
+                + installer.wstring() + L"\\" -ViewerDirectory \\"" + base.wstring() + L"\\"";
+            SHELLEXECUTEINFOW launch = {sizeof(launch)};
+            launch.lpVerb = L"open";
+            launch.lpFile = L"powershell.exe";
+            launch.lpParameters = args.c_str();
+            launch.nShow = SW_SHOWNORMAL;
+            if (ShellExecuteExW(&launch))
+                gSavedSettings.setString("KAMIGShadeStatus",
+                    "FX activator opened. Close viewer when prompted, then restart and enable FX.");
+            else
+                gSavedSettings.setString("KAMIGShadeStatus", "Failed to launch FX activator.");
         });
     }
 #endif
