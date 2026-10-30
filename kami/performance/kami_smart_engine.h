@@ -5,6 +5,7 @@
 
 #include "llsdserialize.h"
 #include "llviewercontrol.h"
+#include "llviewerobjectlist.h"
 #include "lltimer.h"
 #include <sstream>
 #include <algorithm>
@@ -208,8 +209,11 @@ namespace KAMISmart
         const U64 now = LLTimer::getTotalTime();
 
         const bool potato = gSavedSettings.getBOOL("KAMIPotatoMode");
-        const bool crowd = gSavedSettings.getBOOL("KAMICrowdMode");
         const bool autoTune = gSavedSettings.getBOOL("KAMIAutoTune");
+        const bool crowd = gSavedSettings.getBOOL("KAMICrowdMode") ||
+            (autoTune && gSavedSettings.getBOOL("KAMIAutoCrowdDetection") &&
+            gObjectList.getAvatarCount() >=
+                llclamp(gSavedSettings.getS32("KAMICrowdAvatarThreshold"), 5, 100));
         const bool active = autoTune || potato || crowd;
 
         // Existing older Performance Mode is mutually exclusive with the
