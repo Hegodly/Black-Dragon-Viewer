@@ -529,7 +529,9 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
     U64 overfull_prims = 0;
     U64 legacy_triangle_warnings = 0;
     U64 non_triangle_index_buffers = 0;
-    bool valid = true;
+    U32 issues_displayed = 0;
+    std::ostringstream details;
+    bool valid = mModelPreview->mModelNoErrors;
 
     std::ostringstream out;
     out << "KAMI / ULTRA MESH PREFLIGHT\n";
@@ -547,6 +549,15 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
             }
             ++lod_models;
             const S32 face_count = model->getNumVolumeFaces();
+            if (face_count == 0)
+            {
+                valid = false;
+                if (report && issues_displayed++ < 20)
+                {
+                    details << "  " << lod_names[lod] << " / " << model->mLabel
+                            << ": no material faces.\n";
+                }
+            }
             if (face_count < 0 || face_count > static_cast<S32>(max_faces_per_prim))
             {
                 ++overfull_prims;
@@ -572,6 +583,17 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
                 {
                     ++legacy_triangle_warnings;
                 }
+                if (report && issues_displayed < 20
+                    && (face.mNumVertices > max_vertices_per_face
+                        || face.mNumIndices % 3 != 0
+                        || face.mNumIndices / 3 > warning_triangles_per_face))
+                {
+                    ++issues_displayed;
+                    details << "  " << lod_names[lod] << " / " << model->mLabel
+                            << " / material face " << (f + 1) << ": "
+                            << face.mNumVertices << " vertices, "
+                            << (face.mNumIndices / 3) << " triangles.\n";
+                }
             }
         }
 
@@ -591,6 +613,10 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
     {
         out << "High LOD totals: " << scene_models << " pieces, " << scene_vertices
             << " vertices, " << scene_triangles << " triangles.\n";
+        if (!mModelPreview->mModelNoErrors)
+        {
+            out << "ERROR: built-in LOD or mesh validation failed. See LOD statuses for details.\n";
+        }
         if (scene_triangles > 1000000)
         {
             out << "WARNING: high-density scene; upload costs, memory use and avatar"
@@ -608,6 +634,14 @@ bool LLFloaterModelPreview::runKamiMeshAudit(bool report)
                 << overfull_prims << " meshes with more than 8 faces, "
                 << non_triangle_index_buffers << " malformed triangle index buffers.\n"
                    "Separate or simplify affected pieces before uploading.\n";
+        }
+        if (issues_displayed)
+        {
+            out << "Affected mesh pieces (first 20):\n" << details.str();
+            if (issues_displayed > 20)
+            {
+                out << "  Additional issues exist; inspect the source scene.\n";
+            }
         }
         out << (valid ? "Preflight complete. Calculate the authoritative SL fee before upload."
                       : "Preflight failed. No fee calculation or upload should proceed.")
