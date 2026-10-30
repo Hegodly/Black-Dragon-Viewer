@@ -288,11 +288,33 @@ namespace KAMISmart
         const F64 medianMs = frameMs[n/2];
         const F64 p99Ms = frameMs[static_cast<size_t>((n-1)*0.99)];
         const F64 medianFPS = 1000.0/medianMs;
+        const bool performance = gSavedSettings.getBOOL("KAMIPerformanceMode");
+        const bool manualBaseline = !performance && !gSavedSettings.getBOOL("KAMIAutoTune") &&
+            !gSavedSettings.getBOOL("KAMIPotatoMode") && !gSavedSettings.getBOOL("KAMICrowdMode");
+        const F64 baselineFPS = gSavedSettings.getF32("KAMIPerformanceBaselineFPS");
         std::ostringstream out;
         out << std::fixed << std::setprecision(1)
             << "Current scene: median " << medianFPS
             << " FPS; p99 frame " << p99Ms << " ms; "
-            << n << " samples. Scene and cap affect results.";
+            << n << " samples. ";
+        if (manualBaseline)
+        {
+            gSavedSettings.setF32("KAMIPerformanceBaselineFPS", static_cast<F32>(medianFPS));
+            out << "Baseline saved. Turn on Performance Mode and repeat the same view.";
+        }
+        else if (performance)
+        {
+            if (baselineFPS > 1.0)
+            {
+                const F64 gain = (medianFPS / baselineFPS - 1.0) * 100.0;
+                out << "Performance vs last baseline: " << (gain >= 0.0 ? "+" : "")
+                    << gain << "% (baseline " << baselineFPS << " FPS). ";
+            }
+            else
+                out << "No baseline yet. Turn preset off and benchmark the same scene first. ";
+            out << "Scene changes, VSync and FPS cap affect comparison.";
+        }
+        else out << "Auto quality active; not a manual baseline. ";
         gSavedSettings.setString("KAMIBenchmarkResult", out.str());
         LL_INFOS("KAMIBenchmark") << out.str() << LL_ENDL;
         gSavedSettings.setBOOL("KAMIBenchmarkCapture", false);
