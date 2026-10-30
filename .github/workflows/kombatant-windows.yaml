@@ -135,6 +135,12 @@ jobs:
       - name: Explain actual Performance preset and measured OFF/ON FPS comparison
         shell: pwsh
         run: python kami/stability/explain-performance-preset.py
+      - name: Apply approved Fire Garden theme across all native KAMI windows
+        shell: pwsh
+        run: python kami/theme/apply-fire-garden-ui.py
+      - name: Remove obsolete Native Graphics Lab and KAMI Photo Studio UI
+        shell: pwsh
+        run: python kami/stability/remove-native-lab-studio.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
