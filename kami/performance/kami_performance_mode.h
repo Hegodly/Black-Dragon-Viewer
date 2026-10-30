@@ -91,6 +91,9 @@ namespace KAMIPerformance
                 LLSDSerialize::toXML(before, out);
                 gSavedSettings.setString(backupKey, out.str());
             }
+            // A named quality preset no longer describes the current visual
+            // configuration after switching to the FPS-first mode.
+            set("KAMIQualityPreset", -1);
             // Use native OpenGL rendering. GPU/CPU SDK copies are too costly
             // to risk in a high-FPS mode.
             set("KombatantUpscalerProvider", 0);
