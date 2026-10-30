@@ -1467,11 +1467,12 @@ bool LLViewerInput::exportBindingsXML(const std::string& filename)
 		//BD - Special Case to handle the left-click script trigger.
 		for (S32 it = 0, end_it = mLMouseDefaultHandling[i]; it < end_it; it++)
 		{
-			KEY key;
+			// Mouse-only bindings have no keyboard key. Never serialize an
+			// uninitialized KEY value into resident control settings.
 			MASK mask = MASK_NONE;
 			LLSD record;
 			record["function"] = script_mouse_handler_name;
-			record["key"] = key;
+			record["key"] = std::string();
 			record["mouse"] = CLICK_LEFT;
 			record["mode"] = i;
 			record["mask"] = gKeyboard->stringFromMask(mask);
