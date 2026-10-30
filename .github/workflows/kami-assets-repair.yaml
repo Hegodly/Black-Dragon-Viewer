@@ -89,6 +89,9 @@ jobs:
     - name: Clean KAMI login layout and identity
       shell: pwsh
       run: python kami/theme/clean-login.py
+    - name: Correct FPS cap units and separate quality target
+      shell: pwsh
+      run: python kami/performance/fix-fps-controls.py
     - name: Validate KAMI Firestorm-style WASD movement defaults
       shell: pwsh
       run: python kami/performance/validate-wasd-controls.py
