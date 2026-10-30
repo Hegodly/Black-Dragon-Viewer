@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**]
 permissions:
   contents: read
 jobs:
@@ -115,6 +115,9 @@ jobs:
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
+      - name: Install stabilized ray AO shader
+        shell: pwsh
+        run: Copy-Item kami/rtx/ray_ao.hlsl kombatant/rtx/ray_ao.hlsl -Force
       - name: Build experimental DLSS and DXR module
         shell: pwsh
         run: ./kombatant/build-rtx.ps1

@@ -1,0 +1,29 @@
+name: KAMI filtered ray AO shader
+on:
+  push:
+    branches: [experimental/kami-optical-flow-framegen]
+    paths: [kami/rtx/**, .github/workflows/kami-ao-shader.yaml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shader:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile filtered ray AO with pinned DXC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2505.1/dxc_2025_07_14.zip' -OutFile dxc.zip
+          if ((Get-FileHash dxc.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9ad895a6b039e3a8f8c22a1009f866800b840a74b50db9218d13319e215ea8a4') { throw 'DXC hash mismatch' }
+          Expand-Archive dxc.zip dxc
+          New-Item -ItemType Directory AO-shader-update | Out-Null
+          & ./dxc/bin/x64/dxc.exe -T cs_6_5 -E main -O3 -Fo AO-shader-update/kombatant_rtao.dxil kami/rtx/ray_ao.hlsl
+          if ($LASTEXITCODE) { throw 'AO shader compilation failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KAMI-filtered-ray-AO-shader
+          path: AO-shader-update/
+          if-no-files-found: error
+          retention-days: 7
