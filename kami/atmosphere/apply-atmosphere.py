@@ -52,7 +52,7 @@ control("text","kami_atmo_title",8,width=465,height=25,font="SansSerifLarge",
 combo=control("combo_box","kami_atmo_mood",40,width=465,height=27,
     control_name="KAMIAtmosphereMood",
     tool_tip="Only modifies your own viewer-local sky. Does not change parcel or estate environment.")
-for name in ["Night Studio","Golden Hour","Overcast Cinema","Luxury Interior"]:
+for name in ["Night Studio","Golden Hour","Overcast Cinema","Luxury Interior","Dark Cinematic"]:
     ET.SubElement(combo,"combo_box.item",{"label":name,"value":name})
 strength=control("combo_box","kami_atmo_strength",75,width=465,height=26,
     control_name="KAMIAtmosphereStrength",tool_tip="Choose 25-100% of the desired look, based on the original current sky.")
