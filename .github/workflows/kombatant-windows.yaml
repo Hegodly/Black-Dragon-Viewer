@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/signature/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -17,6 +17,8 @@ jobs:
         run: python3 kami/framegen/test-shaders.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
+      - name: Validate KAMI signature build scripts syntax
+        run: python3 -m py_compile kami/signature/apply-signature-features.py kami/signature/verify-signature-features.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 180
@@ -164,6 +166,12 @@ jobs:
       - name: Add native KAMI Hardware Monitor with Windows usage telemetry
         shell: pwsh
         run: python kami/performance/apply-hardware-monitor.py
+      - name: Install KAMI Render Doctor, Smart World, Camera Director and Intelligent Profiles
+        shell: pwsh
+        run: python kami/signature/apply-signature-features.py
+      - name: Verify KAMI four signature feature engines, controls and telemetry
+        shell: pwsh
+        run: python kami/signature/verify-signature-features.py
       - name: Verify all six real Smart Avatar Physics optimizations and performance stats
         shell: pwsh
         run: python kami/physics/verify-smart-avatar-physics.py
