@@ -85,6 +85,12 @@ h = once(h, anchor, """        static const char* const visualStatus[] = {
         set("KAMIQualityVisualStatus", LLSD(visualStatus[q]));
 """ + anchor, "quality status update")
 PRESETS.write_text(h, encoding="utf-8")
+# Earlier quality wiring copied the original controller into newview.
+# Keep the compiled header identical to the updated source template.
+compiled_header = VIEW / "kami_quality_presets.h"
+if not compiled_header.is_file():
+    raise AssertionError("Compiled quality preset header is missing")
+compiled_header.write_text(h, encoding="utf-8")
 
 tree = ET.parse(SETTINGS)
 root = tree.getroot().find("map")
