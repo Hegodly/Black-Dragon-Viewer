@@ -22,9 +22,12 @@ new='''    // KAMI: Keep self-avatar physics fully responsive. Reduce the CPU co
     // and the upstream solver already substeps dt for stability.
     static LLCachedControl<bool> adaptive_physics(gSavedSettings,
                                                   "KAMIAvatarPhysicsAdaptive", true);
-    if (adaptive_physics && dynamic_cast<LLVOAvatarSelf*>(mCharacter) == nullptr)
+    // Smart mode owns update cadence when enabled; never stack both limiters.
+    if (adaptive_physics && !gSavedSettings.getBOOL("KAMIPhysicsSmart") &&
+        dynamic_cast<LLVOAvatarSelf*>(mCharacter) == nullptr)
     {
-        const F32 view_pixels = sqrtf(llmax(0.f, mCharacter->getPixelArea()));
+        // Compare squared pixel thresholds, avoiding per-avatar sqrtf work.
+        const F32 area = llmax(0.f, mCharacter->getPixelArea());
         static LLCachedControl<F32> near_pixels(gSavedSettings,
                                                  "KAMIAvatarPhysicsNearPixels", 70.f);
         static LLCachedControl<F32> distant_pixels(gSavedSettings,
@@ -33,8 +36,9 @@ new='''    // KAMI: Keep self-avatar physics fully responsive. Reduce the CPU co
                                                  "KAMIAvatarPhysicsMidHz", 18);
         static LLCachedControl<S32> far_rate(gSavedSettings,
                                               "KAMIAvatarPhysicsFarHz", 6);
-        const F32 interval = view_pixels >= near_pixels ? 0.f :
-            (view_pixels >= distant_pixels ?
+        const F32 interval =
+            area >= (F32)near_pixels * (F32)near_pixels ? 0.f :
+            (area >= (F32)distant_pixels * (F32)distant_pixels ?
                1.f / llmax(1, (S32)medium_rate) :
                1.f / llmax(1, (S32)far_rate));
         if (interval > 0.f && mKAMILastPhysicsUpdate > 0.f &&

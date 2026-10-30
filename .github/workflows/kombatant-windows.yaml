@@ -1,4 +1,9 @@
 name: KAMI Viewer native Windows build
+
+# Cancel superseded revisions to free scarce Windows CI runners.
+concurrency:
+  group: kami-native-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
 on:
   workflow_dispatch:
   push:

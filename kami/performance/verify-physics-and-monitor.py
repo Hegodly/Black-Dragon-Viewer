@@ -19,6 +19,11 @@ settings=read("indra/newview/app_settings/settings_blackdragon.xml")
 ui=ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot()
 expect("adaptive physics controller actually throttles remote spring simulation",
        'if (interval > 0.f && mKAMILastPhysicsUpdate > 0.f' in physics)
+expect("two adaptive physics limiters never run simultaneously",
+       'adaptive_physics && !gSavedSettings.getBOOL("KAMIPhysicsSmart")' in physics)
+expect("no per-avatar pixel-area square root in physics hot path",
+       'const F32 area = llmax(0.f, mCharacter->getPixelArea());' in physics and
+       'sqrtf(llmax(0.f, mCharacter->getPixelArea()))' not in physics)
 expect("self-avatar physics remains fully responsive",
        'dynamic_cast<LLVOAvatarSelf*>(mCharacter) == nullptr' in physics)
 expect("native body physics six original springs retained",
