@@ -32,7 +32,7 @@ entries = [
     ("KAMIAutoCrowdDetection","Boolean","1","Apply crowd optimizations automatically when Auto Tune is on."),
     ("KAMICrowdAvatarThreshold","S32","20","Number of nearby scene avatars that activates crowd optimization."),
     ("KAMIPotatoMode","Boolean","0","Force native stage 6 low-quality rendering for very weak PCs."),
-    ("KAMIBackgroundFPS","S32","15","Frame cap while KAMI Viewer is not focused; 0 disables."),
+    ("KAMIBackgroundFPS","S32","0","Optional background-only FPS limit; zero (default) disables it entirely. Foreground FPS is always independent."),
     ("KAMISmartBackup","String","","Persistent XML snapshot of manual settings before auto optimization."),
     ("KAMIBenchmarkCapture","Boolean","0","Opt-in 30-second local FPS test of current Second Life scene."),
     ("KAMIBenchmarkResult","String","Not measured.","Local current-scene benchmark result. Never transmitted to the project."),
