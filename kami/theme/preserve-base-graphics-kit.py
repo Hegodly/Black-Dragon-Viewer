@@ -95,7 +95,7 @@ if headers:
     headers[0].set("tool_tip","Built-in Fire Garden themed viewer graphics. Original functional switches, sliders and menu items remain accessible.")
     headers[0].set("text_color","0.72 0.85 0.96 1")
 else:
-    # Preserve all 42 underlying controls. A harmless heading is appended
+    # Preserve all remaining required underlying controls. A harmless heading is appended
     # to the end of the scroll area rather than shifting their positions.
     stack=[x for x in root.iter() if x.get("name")=="kombatant_display_quick"]
     assert len(stack)==1, "KAMI graphics scroll area missing"
@@ -207,6 +207,7 @@ manifest.write_text(
     f"{len(controls)} original interactive renderer/UI settings kept intact.\n"
     "Includes checked original controls: "+", ".join(controls)+"\n"
     "All switches remain real viewer settings; themed by skin images/colors.\n"
-    "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n"\n    "Removed broken DoF, Bloom/Glow and Motion Blur settings and fine-tuning UI.\n",
+    "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n"
+    "Removed broken DoF, Bloom/Glow and Motion Blur settings and fine-tuning UI.\n",
     encoding="utf-8")
 print(f"KAMI graphics base kit: {len(controls)} core controls preserved; removed nonworking Exposure/Sharpening, DoF, Bloom and Motion Blur UI.")
