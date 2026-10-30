@@ -68,6 +68,17 @@ edit(cpp,
 #include <set>
 #include <sstream>
 #include <iomanip>''')
+# The original motion constructor left several spring-integrator state
+# members uninitialized. Initialize them deterministically for all avatars;
+# this avoids random spikes and costs nothing at runtime.
+edit(cpp,
+     '''                mVelocityJoint_local(0),
+                mPositionLastUpdate_local(0)''',
+     '''                mVelocityJoint_local(0),
+                mAccelerationJoint_local(0),
+                mVelocity_local(0),
+                mPositionLastUpdate_local(0),
+                mPosition_world(0.f,0.f,0.f)''')
 edit(cpp,
      '#define MIN_REQUIRED_PIXEL_AREA_AVATAR_PHYSICS_MOTION 0.f',
      '''#define MIN_REQUIRED_PIXEL_AREA_AVATAR_PHYSICS_MOTION 0.f
