@@ -109,6 +109,17 @@ namespace KAMIAtmosphere
             haze=0.66f;star=0.f;cloudCover=0.78f;
             tilt=0.45f*F_PI; yaw=0.23f*F_PI; reposition=true;
         }
+        else if(mood=="Dark Cinematic")
+        {
+            // Cool directional EEP light and readable ambient fill.
+            // No extra fullscreen shader, lights, or shadow-map pass.
+            ambient=color(0.31f,0.35f,0.43f);
+            sunlight=color(0.66f,0.72f,0.87f);
+            blue=color(0.20f,0.23f,0.29f);
+            cloud=color(0.33f,0.38f,0.47f);
+            haze=0.23f;star=0.04f;cloudCover=0.17f;
+            tilt=0.36f*F_PI; yaw=0.76f*F_PI; reposition=true;
+        }
         else if(mood=="Luxury Interior")
         {
             ambient=color(0.46f,0.40f,0.37f);
@@ -161,7 +172,8 @@ namespace KAMIAtmosphere
         auto& s=state();
         const std::string mood=gSavedSettings.getString("KAMIAtmosphereMood");
         if(mood!="Night Studio"&&mood!="Golden Hour"&&
-           mood!="Overcast Cinema"&&mood!="Luxury Interior")
+           mood!="Overcast Cinema"&&mood!="Luxury Interior"&&
+           mood!="Dark Cinematic")
         {
             status("Choose a valid local mood before applying.");
             return;
