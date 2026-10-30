@@ -43,6 +43,9 @@ for mode,bindings in expected.items():
     if node is None: raise AssertionError("Missing movement mode: "+mode)
     seen={}
     for bind in node.findall("binding"):
+        # Mouse-only/unbound rows do not share a keyboard key.
+        if not bind.get("key"):
+            continue
         key=(bind.get("key"),bind.get("mask"))
         if key in seen and seen[key]!=bind.get("command"):
             raise AssertionError(f"{mode}: conflicting actions for {key}")
