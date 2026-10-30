@@ -20,6 +20,7 @@ namespace KAMISmart
         "KombatantRenderWidth", "KombatantUpscalerProvider", "KombatantRayAO",
         "RenderMaxTextureResolution", "RenderMaxVRAMBudget", "RenderTextureVRAMDivisor",
         "RenderFSAAType", "RenderShadowDetail", "RenderShadowResolutionScale",
+        "RenderScreenSpaceReflectionGlossySamples", "RenderDeferredHBAO",
         "RenderDeferredSSAO", "RenderGlow", "RenderScreenSpaceReflections",
         "RenderReflectionProbeDetail", "RenderReflectionProbeCount",
         "RenderVolumeLODFactor", "RenderTreeLODFactor", "RenderTerrainLODFactor",
@@ -94,9 +95,13 @@ namespace KAMISmart
 
     // One quality level at a time; capture and restore the complete manual
     // configuration on each transition so the user doesn't lose preferences.
-    inline void applyStage(S32 stage)
+    inline void applyStage(S32 stage, bool restoreBaseline)
     {
-        restore(false);
+        // Escalating quality reductions can be applied in place. Restoring
+        // every managed setting before each step caused unnecessary FBO and
+        // shader reallocations, which appear as large frame-time spikes.
+        // Restore the saved baseline when lowering stage or editing policies.
+        if (restoreBaseline) restore(false);
         const bool avatar = gSavedSettings.getBOOL("KAMIOptimizeAvatars");
         const bool protect = gSavedSettings.getBOOL("KAMIProtectMyAvatar");
         const bool shadow = gSavedSettings.getBOOL("KAMIAdaptiveShadows");
@@ -113,7 +118,9 @@ namespace KAMISmart
             set("KombatantRayAO", false);
             set("RenderMotionBlur", false);
             set("RenderDepthOfField", false);
-            if (reflection) set("RenderScreenSpaceReflections", false);
+            if (reflection) atMostU32("RenderScreenSpaceReflectionGlossySamples", 2);
+            // Keep manually requested SSR on during early adaptive stages.
+            // Only the higher-cost emergency stages disable reflections.
             // Volumetrics remain a manual choice during Auto Tune / Crowd Mode.
             // Only the explicitly selected emergency Potato preset disables them.
             if (gSavedSettings.getBOOL("KAMIPotatoMode"))
@@ -124,7 +131,13 @@ namespace KAMISmart
         }
         if (stage >= 2)
         {
-            set("RenderDeferredSSAO", false);
+            // Keep the AO darkening control effective during ordinary
+            // adaptation. HBAO is more costly; fall back to existing SSAO.
+            // Explicit Potato Mode disables native AO for maximum speed.
+            if (gSavedSettings.getBOOL("KAMIPotatoMode"))
+                set("RenderDeferredSSAO", false);
+            else
+                set("RenderDeferredHBAO", false);
             set("RenderGlow", false);
             if (shadow)
             {
@@ -163,7 +176,11 @@ namespace KAMISmart
             }
             if (distance) atMostF32("RenderFarClip", 64.f);
             if (particles) atMostU32("RenderMaxPartCount", 256);
-            if (reflection) atMostU32("RenderReflectionProbeCount", 16);
+            if (reflection)
+            {
+                atMostU32("RenderReflectionProbeCount", 16);
+                set("RenderScreenSpaceReflections", false);
+            }
             if (shadow) atMostF32("RenderShadowResolutionScale", 0.5f);
             atMostF32("RenderVolumeLODFactor", 1.0f);
             atMostF32("RenderTreeLODFactor", 1.0f);
@@ -178,6 +195,9 @@ namespace KAMISmart
         if (stage >= 5)
         {
             if (shadow) set("RenderShadowDetail", 0);
+            // Last-resort AO reduction only after cheaper options have
+            // already been exhausted and actual FPS remains below target.
+            set("RenderDeferredSSAO", false);
             if (reflection) set("RenderReflectionProbeDetail", -1);
             if (avatar) atMostU32("RenderAvatarMaxNonImpostors", 2);
             if (particles) atMostU32("RenderMaxPartCount", 128);
@@ -287,15 +307,31 @@ namespace KAMISmart
         static S32 highWindows = 0;
         static U32 options = 0;
         static bool wasActive = false;
+        static bool needsBaselineRestore = true;
+        static U64 lastCrowdScan = 0;
+        static bool cachedCrowd = false;
         const U64 now = LLTimer::getTotalTime();
         benchmarkFrame(now);
 
         const bool potato = gSavedSettings.getBOOL("KAMIPotatoMode");
         const bool autoTune = gSavedSettings.getBOOL("KAMIAutoTune");
-        const bool crowd = gSavedSettings.getBOOL("KAMICrowdMode") ||
-            (autoTune && gSavedSettings.getBOOL("KAMIAutoCrowdDetection") &&
-            gObjectList.getAvatarCount() >=
-                llclamp(gSavedSettings.getS32("KAMICrowdAvatarThreshold"), 5, 100));
+        // Avatar enumeration can be costly in busy regions: scan on a
+        // 2-second interval instead of every rendering frame.
+        if (autoTune && gSavedSettings.getBOOL("KAMIAutoCrowdDetection"))
+        {
+            if (!lastCrowdScan || now - lastCrowdScan >= 2000000ULL)
+            {
+                cachedCrowd = gObjectList.getAvatarCount() >=
+                    llclamp(gSavedSettings.getS32("KAMICrowdAvatarThreshold"), 5, 100);
+                lastCrowdScan = now;
+            }
+        }
+        else
+        {
+            cachedCrowd = false;
+            lastCrowdScan = 0;
+        }
+        const bool crowd = gSavedSettings.getBOOL("KAMICrowdMode") || cachedCrowd;
         const bool active = autoTune || potato || crowd;
 
         // Existing older Performance Mode is mutually exclusive with the
@@ -309,6 +345,7 @@ namespace KAMISmart
                 restore(true);
             wasActive = false;
             stage = -1;
+            needsBaselineRestore = true;
             frames = 0;
             highWindows = 0;
             windowStart = now;
@@ -321,6 +358,7 @@ namespace KAMISmart
             storeBackup();
             stage = -1;
             wasActive = true;
+            needsBaselineRestore = true;
             frames = 0;
             highWindows = 0;
             windowStart = now;
@@ -342,6 +380,7 @@ namespace KAMISmart
         {
             options = newOptions;
             stage = -1;
+            needsBaselineRestore = true;
         }
 
         // Deliberately don't use wall-clock FPS when window isn't focused:
@@ -391,8 +430,10 @@ namespace KAMISmart
 
         if (stage != chosen)
         {
+            const S32 previousStage = stage;
             stage = chosen;
-            applyStage(stage);
+            applyStage(stage, needsBaselineRestore || previousStage > stage);
+            needsBaselineRestore = false;
             LL_INFOS("KAMISmart") << "Native adaptive quality stage " << stage <<
                 "/6 (0=original, 6=Potato)" << LL_ENDL;
         }
