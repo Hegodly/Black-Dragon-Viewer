@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen]
-    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**]
+    paths: [kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/theme/**, kami/loading/**]
 permissions:
   contents: read
 jobs:
@@ -99,6 +99,9 @@ jobs:
       - name: Integrate optional private MXAO adapter
         shell: pwsh
         run: python kami/mxao/apply-private-mxao.py
+      - name: Integrate fast login without bypassing outfit readiness
+        shell: pwsh
+        run: python kami/loading/apply-fast-loading.py
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
