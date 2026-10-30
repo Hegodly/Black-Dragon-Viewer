@@ -195,6 +195,46 @@ assert not any((n.text or "").strip() in
                {"Depth of Field", "Motion Blur", "Post Processing Glow", "Glow Quality:"}
                for n in root.iter("text")), "Orphaned effect heading"
 
+# In-world QA: the optional private MXAO controls are not functional.
+# GShade/KAMI-FX uses the SAME ReShade runtime, so retire only MXAO's own
+# controls. Keep the GShade importer, effect pack and native SSAO/HBAO.
+mxao_widgets = {
+    "kami_mxao_heading", "kami_mxao_enable", "kami_mxao_amount",
+    "kami_mxao_radius", "kami_mxao_quality", "kami_mxao_overlay",
+    "kami_mxao_status", "kami_mxao_install", "kami_mxao_help",
+}
+quick = next((n for n in root.iter("layout_panel")
+              if n.get("name") == "kombatant_display_quick"), None)
+assert quick is not None, "KAMI Display scroll panel missing"
+removed_mxao = []
+for parent in root.iter():
+    for child in list(parent):
+        if child.get("name") in mxao_widgets:
+            removed_mxao.append(child.get("name"))
+            parent.remove(child)
+assert set(removed_mxao) == mxao_widgets and len(removed_mxao) == len(mxao_widgets), (
+    "Unexpected private MXAO controls; prevent orphaned widgets", removed_mxao)
+
+# Private MXAO originally reserved 400 px between native graphics and
+# GShade FX. Close that gap while preserving all later widgets and their
+# relative placement. This also keeps the Display scroll bounds accurate.
+old_height = int(quick.get("height"))
+for widget in quick:
+    top = widget.get("top")
+    if top is not None:
+        try:
+            value = int(top)
+        except ValueError:
+            continue
+        if value >= 4650:
+            widget.set("top", str(value - 400))
+quick.set("height", str(old_height - 400))
+for ancestor in root.iter():
+    if ancestor is not quick and ancestor.get("height") == str(old_height + 4):
+        ancestor.set("height", str(old_height - 396))
+assert not any(n.get("name") in mxao_widgets for n in root.iter()), (
+    "Nonfunctional private MXAO widget remained")
+
 # Existing core toggles inherit the *actual* skinned assets. Explicitly check
 # that our Fire Garden theme was applied to each widget family in textures.xml.
 registry=ET.parse(ROOT/"indra/newview/skins/default/textures/textures.xml")
@@ -220,6 +260,7 @@ manifest.write_text(
     "Includes checked original controls: "+", ".join(controls)+"\n"
     "All switches remain real viewer settings; themed by skin images/colors.\n"
     "User-controlled FPS cap preserved. No graphics preset forces FPS cap.\n"
-    "Removed broken DoF, Bloom/Glow and Motion Blur settings and fine-tuning UI.\n",
+    "Removed broken DoF, Bloom/Glow and Motion Blur settings and fine-tuning UI.\n"
+    "Retired nonworking private MXAO panel and installer controls; GShade remains.\n",
     encoding="utf-8")
-print(f"KAMI graphics base kit: {len(controls)} core controls preserved; removed nonworking Exposure/Sharpening, DoF, Bloom and Motion Blur UI.")
+print(f"KAMI graphics base kit: {len(controls)} core controls preserved; removed nonworking Exposure/Sharpening, DoF, Bloom, Motion Blur, and private MXAO UI.")
