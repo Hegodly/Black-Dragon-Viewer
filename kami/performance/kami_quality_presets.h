@@ -64,7 +64,6 @@ namespace KAMIQuality
         static const U32 probes[] = {16, 32, 64, 128, 256};
         static const S32 probeDetail[] = {-1, 0, 0, 1, 2};
         static const S32 shadowDetail[] = {0, 0, 1, 2, 2};
-        static const F32 glowStrength[] = {0.0f, 0.0f, 0.04f, 0.06f, 0.10f};
         static const S32 ssrSamples[] = {1, 1, 2, 3, 4};
 
         set("RenderFarClip", distance[q]);
@@ -85,8 +84,9 @@ namespace KAMIQuality
         set("RenderScreenSpaceReflectionGlossySamples", ssrSamples[q]);
         set("RenderReflectionProbeDetail", probeDetail[q]);
         set("RenderReflectionProbeCount", probes[q]);
-        set("RenderGlow", q >= 2);
-        set("RenderGlowStrength", glowStrength[q]);
+        // Broken Bloom/Glow and DoF were retired after in-world QA.
+        // Quality presets must not silently switch them back on.
+        set("RenderGlow", false);
         set("RenderDepthOfField", false); // User-directed focus effect, not auto.
         set("RenderMotionBlur", false);
         set("KAMINearFieldGI", q == 4); // Experimental, costly quality choice only.
