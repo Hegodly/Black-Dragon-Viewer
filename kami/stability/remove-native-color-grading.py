@@ -8,13 +8,15 @@ R = Path(__file__).resolve().parents[2]
 grading = {
     "KombatantNativeFX", "KombatantSaturation", "KombatantContrast",
     "KombatantVignette", "KombatantTemperature", "KombatantTint",
-    "KombatantGrain", "KombatantVignetteSize", "KombatantVignetteSoftness"
+    "KombatantGrain", "KombatantVignetteSize", "KombatantVignetteSoftness",
+    "KAMIColorTemperature", "KAMIColorVibrance"
 }
 
 shader = R / "indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl"
 s = shader.read_text(encoding="utf-8-sig")
 assert "uniform vec3 kombatant_fx;" in s, "Expected grading shader not found"
 s = re.sub(r"^uniform (?:vec2|vec3) kombatant_(?:fx|color|vignette_shape);[^\n]*\n", "", s, flags=re.M)
+s = re.sub(r"^uniform vec2 kami_color_balance;[^\n]*\n", "", s, flags=re.M)
 start = s.index("    diff.rgb = clamp(diff.rgb, vec3(0.0), vec3(1.0));")
 end = s.index("\n}", start)
 s = s[:start] + "    diff.rgb = clamp(diff.rgb, vec3(0.0), vec3(1.0));\n    frag_color = diff;" + s[end:]
