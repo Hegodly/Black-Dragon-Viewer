@@ -130,13 +130,13 @@ assert s.count(a)==1;s=s.replace(a,b)
 hw.write_text(s,encoding="utf-8")
 
 # Add real Fire Garden themed controls inside native Display scroll. Existing
-# 42 graphics toggles, MXAO/GShade, physics and hardware menu all remain.
+# User-tested native graphics, physics and hardware menus remain.
 p=skin/"xui/en/panel_preferences_graphics1.xml"
 tree=ET.parse(p);main=tree.getroot()
 panel=[n for n in main.iter() if n.tag=="layout_panel" and n.get("name")=="kombatant_display_quick"]
 assert len(panel)==1
 panel=panel[0]
-height=int(panel.get("height"));assert height>=4500
+height=int(panel.get("height"));assert height>=4200
 panel.set("height",str(height+870))
 parent=[n for n in main.iter() if n.get("height")==str(height+4)]
 assert parent,("graphics quick scroll parent not found",height)
@@ -169,8 +169,8 @@ for label,value in [("2-second camera path","2"),("5-second path","5"),
                     ("8-second path","8"),("12-second path","12"),("20-second path","20")]:
  ET.SubElement(panel[-1],"combo_box.item",{"label":label,"value":value})
 widget("check_box","kami_cam_track",y+517,width=465,height=23,
- control_name="KAMICameraTrackSelf",label="Aim at my avatar while playing (subject tracking)")
-widget("text","kami_cam_status",y+542,width=465,height=49,wrap="true").text="Record A & B in same region; not available during mouselook."
+ control_name="KAMICameraTrackSelf",label="Follow and aim at my avatar during playback")
+widget("text","kami_cam_status",y+542,width=465,height=49,wrap="true").text="Capture A and B, then Play. Follow/aim tracking uses smoothed avatar movement; unavailable in mouselook."
 widget("text","kami_profile_head",y+595,width=465,height=24,font="SansSerifLarge").text="KAMI INTELLIGENT PROFILES  |  Region memory"
 choices=widget("combo_box","kami_profile_choice",y+626,width=465,height=24,
  control_name="KAMIProfileSelected")
@@ -258,7 +258,7 @@ manifest.write_text(
  "KAMI | Beyond Reality | signature features\n"
  "Render Doctor: measured FPS + optional CPU/GPU/VRAM monitor, single-fix undo.\n"
  "Smart World: scene-aware native impostors and reversible stage budgets.\n"
- "Camera Director: keyframe A/B, 30Hz smooth path, optional avatar tracking.\n"
+ "Camera Director: keyframe A/B, per-display-frame path and smooth avatar tracking.\n"
  "Intelligent Profiles: Club, Photography, Exploration, Low-end PC; save/restore, region recall.\n"
  "Controls inside Fire Garden Display; no Material Inspector or new GL hooks.\n",
  encoding="utf-8")
