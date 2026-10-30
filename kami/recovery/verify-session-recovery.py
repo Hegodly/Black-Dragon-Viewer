@@ -39,9 +39,12 @@ check("capture only existing native profile/sky and camera settings",
      all(k in code for k in ('KAMISignature::snapshot()','KAMIProfileSelected',
            'KAMIAtmosphereMood','KAMICameraStart','KAMICameraEnd',
            'KAMIRecoveryIncludeCamera')))
+# Audit calls, not comments: the documentation explicitly mentions that
+# teleport is unsupported, which is not evidence of a teleport call.
 check("no unsolicited camera move, teleport or shared environment modification",
-      all(k not in code for k in ('setCameraPosAndFocusGlobal',
-        'teleport','setEnvironment(','updateRegion(','updateParcel(')))
+      all(k not in code for k in ('setCameraPosAndFocusGlobal(',
+        'teleportVia','teleportHome(', 'teleportRequest(', 'setEnvironment(',
+        'updateRegion(', 'updateParcel(')))
 check("conflicting adaptive performance modes block restore",
       "KAMISignature::conflictingMode()" in code and 'KAMIWorldSmart' in code)
 check("real application idle tick",
