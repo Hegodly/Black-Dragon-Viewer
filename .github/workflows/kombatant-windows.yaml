@@ -123,6 +123,12 @@ jobs:
       - name: Remove KAMI native color grading (retain built-in gamma and tone mapping)
         shell: pwsh
         run: python kami/stability/remove-native-color-grading.py
+      - name: Fix native AO darkening slider and diffuse occlusion strength
+        shell: pwsh
+        run: python kami/stability/fix-ao-darkening.py
+      - name: Make actual optical-flow frame generation status visible
+        shell: pwsh
+        run: python kami/stability/fix-optical-flow-runtime.py
       - name: Fix live SSR reflection texture allocation on toggle
         shell: pwsh
         run: python kami/stability/fix-ssr-toggle.py
@@ -132,7 +138,7 @@ jobs:
       - name: Validate native graphics settings and panels
         shell: pwsh
         run: |
-          python -c "from pathlib import Path; import xml.etree.ElementTree as E; E.parse('indra/newview/app_settings/settings_blackdragon.xml'); E.parse('indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'); E.parse('indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'); assert 'KAMITargetFPS' in Path('indra/newview/llviewerdisplay.cpp').read_text(); assert 'kombatant_fx' not in Path('indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl').read_text(); assert 'if (ssr_was_enabled != RenderScreenSpaceReflections)' in Path('indra/newview/pipeline.cpp').read_text(); assert 'kamiNearFieldBounce' in Path('indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl').read_text(); s=Path('indra/llwindow/llwindowwin32.cpp').read_text(); assert 'KombatantFX::' not in s; assert not Path('indra/llwindow/kombatantfxwin32.h').exists(); print('Native graphics integration verified')"
+          python -c "from pathlib import Path; import xml.etree.ElementTree as E; E.parse('indra/newview/app_settings/settings_blackdragon.xml'); E.parse('indra/newview/skins/default/xui/en/floater_kombatant_effects.xml'); E.parse('indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'); assert 'KAMITargetFPS' in Path('indra/newview/llviewerdisplay.cpp').read_text(); assert 'kombatant_fx' not in Path('indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl').read_text(); assert 'if (ssr_was_enabled != RenderScreenSpaceReflections)' in Path('indra/newview/pipeline.cpp').read_text(); assert 'kamiNearFieldBounce' in Path('indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl').read_text(); assert 'kami_ao_darkening' in Path('indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl').read_text(); assert 'actual_fg_status' in Path('indra/newview/llviewerdisplay.cpp').read_text(); s=Path('indra/llwindow/llwindowwin32.cpp').read_text(); assert 'KombatantFX::' not in s; assert not Path('indra/llwindow/kombatantfxwin32.h').exists(); print('Native graphics integration verified')"
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
