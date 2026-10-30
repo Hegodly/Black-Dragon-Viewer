@@ -49,9 +49,10 @@ inline void emergencyRelease()
 // here prevents a partial port from silently enabling remote control.
 inline bool allowInboundCommand()
 {
-    return kNativeRLVaEngineInstalled &&
-        gSavedSettings.getControl("KAMIRLVEmergencyBlock") &&
-        !gSavedSettings.getBOOL("KAMIRLVEmergencyBlock") &&
-        gSavedSettings.getBOOL("KAMIRLVRequireConsent");
+    // NO future developer may flip a single boolean to bypass consent.
+    // A separately reviewed per-source/per-command authorization gate,
+    // implemented in the actual RLVa dispatch pipeline, is mandatory.
+    // Until that exists, absolutely no command is authorized.
+    return false;
 }
 } // namespace KAMIRLVSafety
