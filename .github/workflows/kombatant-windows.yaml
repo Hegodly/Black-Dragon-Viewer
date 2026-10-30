@@ -23,6 +23,9 @@ jobs:
         run: python3 kami/framegen/test-shaders.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
+      - name: Validate every KAMI and Kombatant Python integration script
+        shell: pwsh
+        run: python -m compileall -q kami kombatant
       - name: Validate KAMI signature build scripts syntax
         run: python3 -m py_compile kami/signature/apply-signature-features.py kami/signature/verify-signature-features.py
       - name: Validate Atmosphere Engine build scripts
