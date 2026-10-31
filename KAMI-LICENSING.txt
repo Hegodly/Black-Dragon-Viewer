@@ -1,0 +1,111 @@
+KAMI VIEWER — SOFTWARE LICENSE AND COPYRIGHT NOTICE
+===================================================
+Project: KAMI Viewer — Beyond Reality
+Project source: https://github.com/Hegodly/Black-Dragon-Viewer
+Status: Pre-release notice; final distribution subject to asset/dependency audit.
+
+1. OPEN-SOURCE SOFTWARE LICENSE
+
+KAMI Viewer is developed from Black Dragon Viewer and the open-source
+Second Life Viewer. Their existing copyright notices and license terms
+continue to apply to the inherited software and any derivative changes.
+
+The viewer source repository includes the GNU Lesser General Public License,
+version 2.1 (LGPL-2.1), in the root LICENSE file and doc/LGPL-license.txt.
+To the extent that KAMI changes modify LGPL-covered files, those changes
+must be distributed under the applicable LGPL terms. Any file carrying a
+different license or an "or later" permission remains subject to its own
+express license grant. This notice does not replace, amend or override them.
+
+Original KAMI source contributions made by contributors who own the necessary
+rights are intended to be distributed under LGPL-2.1, unless a particular
+contribution clearly identifies a different compatible license. A contributor
+may not relicense code or assets that they do not own or have permission to
+license.
+
+The applicable licenses permit software redistribution and modification
+subject to their conditions. The viewer is intended to be free to download
+and use; no payment is required to access normal viewer features.
+
+Complete license terms: https://github.com/Hegodly/Black-Dragon-Viewer/blob/master/LICENSE
+Actual release source: use the precise KAMI release tag and commit that
+correspond to the distributed installer or portable binary. Do not present
+the project default branch as a substitute for matching release source.
+
+2. SOURCE CODE AND MODIFICATIONS
+
+On public distribution, KAMI's distributor must supply or otherwise make
+available the corresponding source code and modification notices as required
+by the applicable license(s). Preserve existing copyright and permission
+statements, license copies, credits, and any component-specific notices.
+Provide the build scripts and information needed to satisfy those license
+obligations. Do not impose additional terms that remove recipients' LGPL
+rights. Binary installers should provide an accessible source-code link and
+license/attribution information.
+
+This code is a modified third-party viewer, not an official Linden Lab
+product. Changes to the viewer are attributable to KAMI contributors only
+to the extent they actually created them.
+
+3. ORIGINAL PROJECTS AND ACKNOWLEDGMENTS
+
+Second Life Viewer:
+  Linden Research, Inc. and other respective contributors
+  https://github.com/secondlife/viewer
+
+Black Dragon Viewer:
+  NiranV and other respective contributors
+  https://github.com/NiranV/Black-Dragon-Viewer
+
+KAMI Viewer adaptations:
+  The respective KAMI contributors, for their original contributions
+  https://github.com/Hegodly/Black-Dragon-Viewer
+
+All original third-party copyright notices remain in force.
+
+4. ARTWORK, FONTS, AUDIO, SDKs AND THIRD-PARTY COMPONENTS
+
+This software notice does NOT automatically license any artwork, icons,
+fonts, music, sound effects, screenshots, third-party SDKs, or branding.
+Each asset and dependency retains its applicable license and permissions.
+Consult doc/LICENSE-logos.txt for Linden Lab's viewer-artwork notice and
+trademark restrictions. "Second Life" and "Linden Lab" are trademarks of
+Linden Research, Inc.; KAMI is independent and is not endorsed by them.
+
+Do not redistribute third-party commercial music or unlicensed media
+as part of KAMI. Remove or replace such assets unless suitable rights for
+redistribution and any required public use are documented.
+
+For any FSR, XeSS, DLSS, graphics middleware, dynamic libraries, installers,
+icons, and other dependencies, verify the version-specific terms and
+redistribution conditions before shipping; this document does not certify
+their compliance.
+
+The KAMI name and independently created branding may have separate legal
+protections, but no branding claim overrides the software rights granted
+by applicable open-source licenses.
+
+5. SECOND LIFE THIRD-PARTY VIEWER REQUIREMENTS
+
+A KAMI build connecting to Second Life must also comply with the current
+Linden Lab Third-Party Viewer Policy and Terms of Service. Distribution
+requires a public privacy policy and other compliance steps. These service
+policies are separate from the software copyright licenses.
+
+Policy: https://secondlife.com/corporate/third-party-viewers
+
+6. NO WARRANTY
+
+THE KAMI-SPECIFIC CONTRIBUTIONS ARE PROVIDED "AS IS" TO THE EXTENT
+PERMITTED BY APPLICABLE LAW, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, OR NON-INFRINGEMENT. SEE THE FULL APPLICABLE OPEN-SOURCE LICENSES
+FOR THEIR AUTHORITATIVE WARRANTY DISCLAIMERS AND LIABILITY TERMS.
+
+7. RELEASE REVIEW
+
+This notice accompanies the existing LGPL license; it is not a replacement.
+Before publicly distributing KAMI, complete a real license and dependency
+audit, confirm ownership and permissions for all bundled media, verify the
+release source matches the binaries, and obtain professional legal advice
+if questions remain about proprietary SDKs, music, or asset permissions.
