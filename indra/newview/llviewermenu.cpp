@@ -10297,6 +10297,9 @@ void initialize_menus()
 	enable.add("Conversation.IsConversationLoggingAllowed", boost::bind(&LLFloaterIMContainer::isConversationLoggingAllowed));
 
 	// Agent
+    // Accessible even after a followed avatar leaves nearby radar.
+    commit.add("Avatar.KamiStopFollowingGlobal", boost::bind(&LLAvatarActions::stopFollowingAvatar));
+    enable.add("Avatar.KamiCanStopFollowing", boost::bind(&LLAvatarActions::isFollowingAvatar));
 	commit.add("Agent.toggleFlying", boost::bind(&LLAgent::toggleFlying));
 	enable.add("Agent.enableFlyLand", boost::bind(&enable_fly_land));
 	commit.add("Agent.PressMicrophone", boost::bind(&LLAgent::pressMicrophone, _2));
