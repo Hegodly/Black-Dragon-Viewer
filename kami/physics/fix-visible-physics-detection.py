@@ -55,13 +55,15 @@ replace(CPP,
             const F32 min_delta = (1.0001f-lod_factor)*0.4f;''',
 '''        const bool is_self =
             dynamic_cast<LLVOAvatarSelf*>(mCharacter) != nullptr;
-        const F32 pixel_area = sqrtf(llmax(0.f, mCharacter->getPixelArea()));
+        // Use the source pixel AREA directly; squared threshold comparisons
+        // preserve the same visible-avatar cutoff without expensive sqrtf.
+        const F32 pixel_area = llmax(0.f, mCharacter->getPixelArea());
         // Original low-LOD cutoff can reach 1400 pixels, effectively
         // hiding physics on avatars even at conversational distance.
         // Do not update truly tiny remote avatars, or use LOD=0.
         const F32 area_for_this_setting = llclamp(
             1400.f*(1.f-lod_factor), 0.f, 32.f);
-        if ((pixel_area > area_for_this_setting) || is_self)
+        if ((pixel_area > area_for_this_setting * area_for_this_setting) || is_self)
         {
             const F32 position_diff_local =
                 llabs(mPositionLastUpdate_local-position_new_local_clamped);
@@ -70,7 +72,7 @@ replace(CPP,
             // near remote avatars get precise motion; distant avatars
             // can still use coarser visual updates.
             const F32 min_delta = is_self ? 0.00004f :
-                (pixel_area >= 64.f ? 0.00025f :
+                (pixel_area >= 64.f * 64.f ? 0.00025f :
                  llmin((1.0001f-lod_factor)*0.4f, 0.005f));''')
 
 # Display the real local wearable state from the existing native outfit
