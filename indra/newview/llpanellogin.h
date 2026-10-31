@@ -107,6 +107,7 @@ private:
 	//BD
 	void onClickQuit();
 	void onKamiLoginMusicToggle();
+	void onKamiLoginMusicBrowse();
 	void onKamiLoginMusicVolume();
 
 	static void onRememberUserCheck(void*);
