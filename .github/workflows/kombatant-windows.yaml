@@ -362,6 +362,9 @@ jobs:
           & $viewer --kami-dx12-warp-test
           if ($LASTEXITCODE -ne 0) { throw "Embedded D3D12 WARP render/readback failed with exit $LASTEXITCODE" }
           Write-Host 'PASS: native D3D12 GPU pixel test executed from KAMIViewer.exe'
+          & $viewer --kami-dx12-world-warp-test
+          if ($LASTEXITCODE -ne 0) { throw "Native D3D12 indexed world/depth render failed: $LASTEXITCODE" }
+          Write-Host 'PASS: native D3D12 indexed mesh, camera transform and occlusion test inside KAMIViewer.exe'
 
       - name: Cache downloaded libraries
         if: always()
