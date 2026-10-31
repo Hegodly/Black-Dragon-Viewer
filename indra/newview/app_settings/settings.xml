@@ -14077,6 +14077,55 @@
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <!-- KAMI AUDIO LAB: true viewer-local processing controls, no server-side changes -->
+    <key>KamiAudioMuteMicrophone</key>
+    <map>
+      <key>Comment</key>
+      <string>Kami independent microphone mute, separate from playback voice mute and push-to-talk.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>Boolean</string>
+      <key>Value</key><integer>0</integer>
+    </map>
+    <key>KamiAudioDuckMusicOnVoice</key>
+    <map>
+      <key>Comment</key>
+      <string>Reduce music volume while an unmuted remote voice participant is speaking.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>Boolean</string>
+      <key>Value</key><integer>0</integer>
+    </map>
+    <key>KamiAudioDuckMediaOnVoice</key>
+    <map>
+      <key>Comment</key>
+      <string>Also reduce media volume while another voice participant is speaking.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>Boolean</string>
+      <key>Value</key><integer>0</integer>
+    </map>
+    <key>KamiAudioDuckingLevel</key>
+    <map>
+      <key>Comment</key>
+      <string>Music/media gain multiplier when voice ducking is active; 0.20 means 20 percent of normal.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>F32</string>
+      <key>Value</key><real>0.35</real>
+    </map>
+    <key>KamiAudioWorldRolloff</key>
+    <map>
+      <key>Comment</key>
+      <string>World sound 3D distance rolloff factor above water (underwater scales by five).</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>F32</string>
+      <key>Value</key><real>1.0</real>
+    </map>
+    <key>KamiAudioDopplerFactor</key>
+    <map>
+      <key>Comment</key>
+      <string>World sound motion/Doppler multiplier; zero disables Doppler.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>F32</string>
+      <key>Value</key><real>1.0</real>
+    </map>
     <key>VoiceNoiseSuppressionLevel</key>
     <map>
       <key>Comment</key>
