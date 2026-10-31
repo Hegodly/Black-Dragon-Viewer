@@ -182,18 +182,40 @@ No tutorial is currently available.
 
   <notification
    icon="alertmodal.tga"
+   name="KamiSmartSortChooseMode"
+   type="alertmodal">
+Kami Smart Sort
+
+Choose how to organize loose items directly under My Inventory:
+
+Category: item type and conservative name matches
+Creator: the item's creator ID
+Store: an inferred brand prefix in the item name
+
+No inventory changes will happen until you review and confirm the next screen.
+    <form>
+      <button index="0" name="ByCategory" text="Category"/>
+      <button index="1" name="ByCreator" text="Creator"/>
+      <button index="2" name="ByStore" text="Store"/>
+      <button index="3" name="Cancel" text="Cancel" default="true"/>
+    </form>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
    name="KamiSmartSortPreview"
    type="alertmodal">
-Kami Smart Sort - Preview
+Kami Smart Sort - Preview: [MODE]
 
-This will MOVE [COUNT] confidently classified loose inventory items into category folders inside My Inventory / Kami Smart Sort.
+Organize [COUNT] confidently grouped loose inventory items into My Inventory / Kami Smart Sort / [MODE].
 
-Proposed changes:
+Proposed groups:
 [DETAILS]
 
-Left untouched: [SKIPPED] loose items, all existing folders, outfit links and no-copy items.
+Skipped: [SKIPPED] loose items. Existing folders, links and no-copy items will not be moved.
 
-No items will be deleted. Classification is based on item metadata, not verified mesh geometry. Confirm before organizing.
+[LIMITATION]
+
+No items will be deleted. Confirm before organizing.
     <usetemplate
      name="okcancelbuttons"
      notext="Cancel"

@@ -37,7 +37,7 @@
     <menu_item_separator
      layout="topleft" />
     <menu_item_call
-     label="Kami Smart Sort..."
+     label="Kami Smart Sort (Category / Creator / Store)..."
      layout="topleft"
      name="kami_smart_sort">
         <on_click
