@@ -47,7 +47,7 @@ typedef struct FMOD_DSP_DESCRIPTION FMOD_DSP_DESCRIPTION;
 class LLAudioEngine_FMODSTUDIO : public LLAudioEngine
 {
 public:
-	LLAudioEngine_FMODSTUDIO(bool enable_profiler);
+	LLAudioEngine_FMODSTUDIO(bool enable_profiler, U32 resampler_quality = 0);
 	virtual ~LLAudioEngine_FMODSTUDIO();
 
 	// initialization/startup/shutdown
@@ -80,6 +80,7 @@ protected:
 	FMOD::DSP *mWindDSP;
 	FMOD::System *mSystem;
 	bool mEnableProfiler;
+	U32 mResamplerQuality;
 
 public:
 	static FMOD::ChannelGroup *mChannelGroups[LLAudioEngine::AUDIO_TYPE_COUNT];
