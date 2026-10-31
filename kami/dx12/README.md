@@ -23,6 +23,69 @@ The native D3D12 C++ implementation in this directory provides:
 WARP is Microsoft's D3D12 software rasterizer, not OpenGL or a translation
 layer. GPU acceleration and FPS still require hardware testing.
 
+## DX12-01b: compiled into the actual Kami Windows executable
+
+The native D3D12 renderer's C++ implementation is now also compiled into
+`KAMIViewer.exe` by `indra/newview/CMakeLists.txt`, with native Windows SDK
+D3D12/DXGI/D3DCompiler linkage. This avoids any separate installation script
+or loose external renderer DLL.
+
+Run these diagnostics on the finished, packaged Windows viewer:
+
+    KAMIViewer.exe --kami-dx12-warp-test
+    KAMIViewer.exe --kami-dx12-hardware-test
+
+Exit status 0 means an actual DirectX 12 pixel shader drew an offscreen
+triangle, its pixels were read back and validated, and the D3D12 resources were
+released. Nonzero means the D3D12 initialization or rasterizer test failed.
+The WARP option uses Windows' built-in D3D12 CPU rasterizer, while the hardware
+option selects a DX12-capable discrete/integrated GPU.
+
+These flags do not start a Second Life session. Normal viewer startup is not
+slowed by probing or initializing a second graphics device. The current viewer
+still uses the existing OpenGL renderer for its actual world and UI until every
+rendering subsystem is migrated and verified under D3D12.
+
+## DX12-02 prototype: actual indexed world-geometry rendering
+
+A native D3D12 indexed mesh renderer has been added in `KamiDx12World.cpp`.
+This path draws arbitrary CPU-supplied triangle meshes with per-mesh
+world-view-projection matrices, per-vertex color, a D32 depth buffer, index
+validation, a bounded upload memory budget and per-frame GPU-fence-protected
+resource lifetimes. The native viewport/RTV can display these meshes, and
+the WARP/MSVC test renders overlapping meshes, reads actual BGRA pixels and
+verifies the nearest surface wins the hardware depth test.
+
+The `KAMIViewer.exe --kami-dx12-world-warp-test` diagnostic runs this renderer
+from inside the real viewer executable without booting the existing viewer.
+No OpenGL translation layer is involved. This is a genuine step toward
+world rendering, but it does **not** pull Second Life regions, terrain,
+avatars or material textures from the live viewer. World/rigged mesh scene
+extraction, UVs and textures, draw batching, texture residency, GPU default
+heap caching, PBR and UI are not yet implemented. The prototype caps a frame
+at 256 small meshes and 32 MiB of per-frame upload memory; do not call it
+production-performance-ready.
+
+## DX12-03 experimental live Second Life scene bridge
+
+A new C++ bridge inside the Windows viewer now reads actual decoded Second
+Life geometry without OpenGL buffer readbacks:
+
+- Visible non-rigged, opaque volume/prims and meshes from LLVolumeFace
+- Live terrain heightfield patches via LLSurfacePatch::getPointAgent()
+- Scale/rotation/translation and current viewer camera transform and frustum
+- Native HLSL-compatible D3D depth 0..1 projection and indexed triangles
+- Strict memory and object limits (256 meshes, 64 terrain patches, 32 MiB),
+  no automatic per-frame geometry capture and no GL state manipulation
+
+The bridge returns WorldFrame input for Renderer::renderWorldFrame(). It is
+**not yet the actual frame loop**: no Second Life world graphics have been
+switched from OpenGL. Terrain is flat-colored for development; it lacks
+terrain-layer textures, adjacent LOD seam stitching, water, EEP lighting.
+Avatar skinning, wearable materials, PBR, alpha, texture streaming, etc.
+remain to be migrated. A successful source/C++ build of this bridge does NOT
+prove live-region rendering or establish performance parity.
+
 ## NOT implemented yet
 
 The standalone smoke renderer **does not render Second Life**. The OpenGL

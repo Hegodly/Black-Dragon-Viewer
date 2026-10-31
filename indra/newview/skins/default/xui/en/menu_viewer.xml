@@ -502,6 +502,15 @@
             <menu_item_call.on_click function="World.KamiStopFollowing"/>
             <menu_item_call.on_enable function="World.KamiCanStopFollowing"/>
         </menu_item_call>
+        <menu_item_check
+         label="Native DX12 Scene Preview (Experimental)"
+         name="Kami DX12 Live Preview">
+            <menu_item_check.on_check
+             control="KamiDX12LivePreview" />
+            <menu_item_check.on_click
+             function="ToggleControl"
+             parameter="KamiDX12LivePreview" />
+        </menu_item_check>
         <menu_item_separator/>
             <menu_item_check
          label="Mini-Map"

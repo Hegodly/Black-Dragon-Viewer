@@ -2080,6 +2080,31 @@ endif (WINDOWS)
 # dumped into the target binary and runtime lookup will find the most
 # modern version.
 
+# KAMI DX12: compile the native renderer into the actual Windows viewer
+# executable, not a separate asset, batch installer or compatibility shim.
+# Legacy LLRender still handles SL world frames until all DX12 scene features
+# have been ported and validated. Diagnostic mode renders native D3D12 frames.
+if (WINDOWS)
+    set(KAMI_DX12_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../kami/dx12")
+    target_sources(${VIEWER_BINARY_NAME} PRIVATE
+        "${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
+        "${KAMI_DX12_DIR}/KamiDx12World.cpp"
+        "${KAMI_DX12_DIR}/KamiDx12Renderer.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_live_preview.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_live_preview.h")
+    # Keep the standalone D3D12 translation unit isolated from legacy GL PCH.
+    set_source_files_properties(
+        "${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
+        "${KAMI_DX12_DIR}/KamiDx12World.cpp"
+        PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
+    target_include_directories(${VIEWER_BINARY_NAME} PRIVATE "${KAMI_DX12_DIR}")
+    target_link_libraries(${VIEWER_BINARY_NAME} d3d12 dxgi d3dcompiler)
+    target_compile_definitions(${VIEWER_BINARY_NAME} PRIVATE KAMI_HAS_NATIVE_DX12=1)
+    message(STATUS "KAMI: native D3D12 renderer linked into viewer (SL scene migration pending)")
+endif ()
+
 target_link_libraries(${VIEWER_BINARY_NAME}
         llaudio
         llcharacter
