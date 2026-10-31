@@ -14118,6 +14118,14 @@
       <key>Type</key><string>F32</string>
       <key>Value</key><real>1.0</real>
     </map>
+    <key>KamiAudioResamplerQuality</key>
+    <map>
+      <key>Comment</key>
+      <string>FMOD startup resampler: 0=linear/performance, 1=cubic/balanced, 2=spline/high quality. Requires restart.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>U32</string>
+      <key>Value</key><integer>0</integer>
+    </map>
     <key>KamiAudioDopplerFactor</key>
     <map>
       <key>Comment</key>
