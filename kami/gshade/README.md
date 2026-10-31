@@ -16,24 +16,23 @@ and FireGarden/Cinematic/Clean4K presets are still included as optional assets.
 4. Complete setup using the external installer's instructions. Restart KAMI,
    then configure shader paths and depth handling in the external overlay.
    No specific GShade version has been verified on every KAMI system.
-5. Optionally run Install-GShade-Assets.ps1 with the viewer closed to copy
-   original KAMI-FX.fx into an existing installed shaders folder:
+5. KAMI ships its original optional shader *source* files in `KAMI-FX/`,
+   with no CMD/PowerShell installer. These .fx/.ini files are **not active**
+   inside the native renderer. If you independently install a supported
+   GShade/ReShade runtime, use its own interface to add the KAMI-FX shader
+   path and select a preset. KAMI does not install or inject that runtime.
 
-   powershell -ExecutionPolicy Bypass -File ./Install-GShade-Assets.ps1 -ViewerDirectory . -ShaderDirectory ./gshade-shaders/Shaders
+## Optional compatibility assets
 
-   This helper never installs an injector, overwrites existing shaders or
-   presets, or modifies ReShade.ini.
-6. Choose your KAMI preset from KAMI-FX-Presets in the external overlay,
-   or import your own GShade-compatible ini, fx and fxh files manually.
-   GShade-exclusive extensions may not function on an alternative runtime.
+- KAMI-FX/Shaders/KAMI-FX.fx: 20 original external shader techniques
+- KAMI-FX/FireGarden.ini: no effects active by default
+- KAMI-FX/Cinematic.ini and Clean4K.ini: example external presets
+- KAMI-FX/FX-LICENSE.txt
+- KAMI-GSHADE-EXTERNAL-SETUP.md
 
-## Bundled assets
-
-- KAMI-FX/Shaders/KAMI-FX.fx: 20 original effects
-- KAMI-FX/FireGarden.ini: starter preset, all effects OFF
-- KAMI-FX/Cinematic.ini and Clean4K.ini: example presets
-- Install-GShade-Assets.ps1: optional external shader asset helper
-- KAMI-GSHADE-EXTERNAL-SETUP.md: these instructions
+No user-facing feature-installation batch, CMD or PowerShell scripts are
+shipped. KAMI's native PBR, deferred effects, real QHD/4K/8K and Workspaces
+are compiled and integrated before the portable release is packaged.
 
 Not bundled: GShade binaries, ReShade binaries, proprietary MXAO shaders,
 in-viewer GShade switches, internal runtime hooks or proprietary FX packs.
