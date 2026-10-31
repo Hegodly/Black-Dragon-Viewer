@@ -20,7 +20,7 @@ width="510">
  height="407">
   <panel
   follows="top|left|right"
-  height="627"
+  height="1140"
   label="Sounds"
   layout="topleft"
   left="0"
@@ -392,8 +392,8 @@ width="510">
    disabled_control="MuteAudio"
    follows="left|top"
    height="14"
-   increment="0.5"
-   initial_value="10"
+   increment="0.01"
+   initial_value="0.02"
    max_val="1"
    min_val="0"
    label="Media Rolloff Rate"
@@ -401,7 +401,7 @@ width="510">
    layout="topleft"
    left="10"
    name="MediaRollOffRate"
-   tool_tip="This option controls the strength at which media should fade in volume over distance."
+   tool_tip="Adjusts the strength of positional media fade over distance. Zero disables this rate multiplier."
    show_text="true"
    can_edit_text="true"
    slider_label.halign="left"
@@ -830,6 +830,177 @@ width="510">
     name="bar4"
     top_delta="0"
     width="8" />
+   </panel>
+
+   <!-- KAMI Audio Lab: native settings bound to real WebRTC and 3D engine controls -->
+   <panel
+    name="kami_audio_lab_panel"
+    label="Kami Audio Lab"
+    follows="top|left|right"
+    height="360"
+    width="492"
+    left="1"
+    top_pad="16"
+    layout="topleft"
+    background_visible="false">
+     <panel
+      name="kami_audio_lab_header"
+      follows="top|left|right"
+      height="23"
+      width="492"
+      top="0"
+      left="0"
+      layout="topleft"
+      bg_visible="true"
+      bg_alpha_color="0.10 0.43 0.77 0.28"/>
+     <text
+      name="kami_audio_lab_title"
+      height="18"
+      width="300"
+      left="10"
+      top="4"
+      layout="topleft"
+      font.style="BOLD">
+      KAMI AUDIO LAB - Native Audio Processing
+     </text>
+     <check_box
+      name="kami_audio_independent_mic_mute"
+      control_name="KamiAudioMuteMicrophone"
+      label="Mute my microphone (independent of incoming voice)"
+      tool_tip="Blocks your microphone audio without muting other residents. Push-to-talk is still respected."
+      layout="topleft"
+      left="10"
+      top="31"
+      height="18"
+      width="465"/>
+     <check_box
+      name="kami_audio_echo_cancel"
+      control_name="VoiceEchoCancellation"
+      enabled_control="EnableVoiceChat"
+      label="Echo cancellation"
+      tool_tip="Uses the existing WebRTC echo cancellation setting."
+      layout="topleft"
+      left="10"
+      top_pad="3"
+      height="18"
+      width="465"/>
+     <check_box
+      name="kami_audio_auto_gain"
+      control_name="VoiceAutomaticGainControl"
+      enabled_control="EnableVoiceChat"
+      label="Automatic microphone gain"
+      tool_tip="Uses WebRTC automatic gain control for voice capture."
+      layout="topleft"
+      left="10"
+      top_pad="3"
+      height="18"
+      width="465"/>
+     <check_box
+      name="kami_audio_duck_music"
+      control_name="KamiAudioDuckMusicOnVoice"
+      label="Lower streaming music when someone speaks"
+      tool_tip="Ducks music when a remote voice participant is speaking, with smooth fade in and out."
+      layout="topleft"
+      left="10"
+      top_pad="5"
+      height="18"
+      width="465"/>
+     <check_box
+      name="kami_audio_duck_media"
+      control_name="KamiAudioDuckMediaOnVoice"
+      label="Also lower media audio during voice"
+      tool_tip="Optional: applies the same voice priority mixing to media streams."
+      layout="topleft"
+      left="10"
+      top_pad="3"
+      height="18"
+      width="465"/>
+     <slider
+      name="kami_audio_duck_level"
+      control_name="KamiAudioDuckingLevel"
+      label="Speaking-time music/media volume"
+      tool_tip="How loud ducked music/media remains while people speak. 0.35 means 35 percent of normal."
+      layout="topleft"
+      left="10"
+      top_pad="6"
+      height="19"
+      width="467"
+      label_width="280"
+      min_val="0.15"
+      max_val="1.0"
+      increment="0.05"
+      decimal_digits="2"
+      show_text="true"
+      can_edit_text="true"/>
+     <slider
+      name="kami_audio_world_rolloff"
+      control_name="KamiAudioWorldRolloff"
+      label="World sound distance falloff"
+      tool_tip="Real 3D sound distance attenuation: larger values make distant sounds fade sooner."
+      layout="topleft"
+      left="10"
+      top_pad="7"
+      height="19"
+      width="467"
+      label_width="280"
+      min_val="0.25"
+      max_val="3.0"
+      increment="0.05"
+      decimal_digits="2"
+      show_text="true"
+      can_edit_text="true"/>
+     <slider
+      name="kami_audio_doppler"
+      control_name="KamiAudioDopplerFactor"
+      label="Movement / Doppler effect"
+      tool_tip="Real spatial-audio Doppler factor: 0 disables Doppler; 1 is the existing behavior."
+      layout="topleft"
+      left="10"
+      top_pad="7"
+      height="19"
+      width="467"
+      label_width="280"
+      min_val="0"
+      max_val="2.0"
+      increment="0.05"
+      decimal_digits="2"
+      show_text="true"
+      can_edit_text="true"/>
+     <text
+      name="kami_audio_quality_label"
+      layout="topleft"
+      left="10"
+      top_pad="10"
+      height="18"
+      width="247">
+      Audio Resampling (restart required):
+     </text>
+     <combo_box
+      name="kami_audio_quality"
+      control_name="KamiAudioResamplerQuality"
+      label="Processing quality"
+      layout="topleft"
+      left="272"
+      top_delta="-3"
+      width="208"
+      height="22"
+      tool_tip="FMOD resampler: Linear is fast, Cubic improves interpolation quality, Spline uses more CPU. Restart Kami to apply.">
+       <combo_box.item name="performance" label="Performance (Linear)" value="0"/>
+       <combo_box.item name="balanced" label="Balanced (Cubic)" value="1"/>
+       <combo_box.item name="quality" label="Cinematic (Spline)" value="2"/>
+     </combo_box>
+     <text
+      name="kami_audio_lab_note"
+      layout="topleft"
+      left="10"
+      top_pad="13"
+      height="34"
+      width="475"
+      word_wrap="true"
+      text_color="LabelDisabledColor">
+      Audio Lab controls affect real audio playback and capture. Headphone HRTF,
+      room occlusion and separate world-output routing are not enabled here.
+     </text>
    </panel>
   </panel>
  </scroll_container>

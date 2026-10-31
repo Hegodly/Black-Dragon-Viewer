@@ -48,13 +48,14 @@ FMOD_RESULT F_CALLBACK windCallback(FMOD_DSP_STATE *dsp_state, float *inbuffer, 
 
 FMOD::ChannelGroup *LLAudioEngine_FMODSTUDIO::mChannelGroups[LLAudioEngine::AUDIO_TYPE_COUNT] = { 0 };
 
-LLAudioEngine_FMODSTUDIO::LLAudioEngine_FMODSTUDIO(bool enable_profiler)
+LLAudioEngine_FMODSTUDIO::LLAudioEngine_FMODSTUDIO(bool enable_profiler, U32 resampler_quality)
 	: mInited(false),
 	mWindGen(NULL),
+	mWindDSPDesc(NULL),
 	mWindDSP(NULL),
 	mSystem(NULL),
 	mEnableProfiler(enable_profiler),
-	mWindDSPDesc(NULL)
+	mResamplerQuality(resampler_quality)
 {
 }
 
@@ -104,7 +105,14 @@ bool LLAudioEngine_FMODSTUDIO::init(void* userdata, const std::string &app_title
 	FMOD_ADVANCEDSETTINGS settings;
 	memset(&settings, 0, sizeof(settings));
 	settings.cbSize = sizeof(FMOD_ADVANCEDSETTINGS);
-	settings.resamplerMethod = FMOD_DSP_RESAMPLER_LINEAR;
+	// Audio Lab quality is chosen at engine initialization and requires restart.
+    // Linear is the original low-cost algorithm; cubic and spline cost more CPU.
+    switch (mResamplerQuality)
+    {
+        case 1: settings.resamplerMethod = FMOD_DSP_RESAMPLER_CUBIC; break;
+        case 2: settings.resamplerMethod = FMOD_DSP_RESAMPLER_SPLINE; break;
+        default: settings.resamplerMethod = FMOD_DSP_RESAMPLER_LINEAR; break;
+    }
 
 	result = mSystem->setAdvancedSettings(&settings);
 	Check_FMOD_Error(result, "FMOD::System::setAdvancedSettings");

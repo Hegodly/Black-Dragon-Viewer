@@ -751,7 +751,8 @@ bool idle_startup()
 			if (NULL == getenv("LL_BAD_FMODSTUDIO_DRIVER"))
 #endif // !LL_WINDOWS
 			{
-				gAudiop = (LLAudioEngine *) new LLAudioEngine_FMODSTUDIO(gSavedSettings.getBOOL("FMODExProfilerEnable"));
+				gAudiop = (LLAudioEngine *) new LLAudioEngine_FMODSTUDIO(gSavedSettings.getBOOL("FMODExProfilerEnable"),
+                    llclamp(gSavedSettings.getU32("KamiAudioResamplerQuality"), 0u, 2u));
 			}
 #endif
 
