@@ -94,6 +94,8 @@ LLContextMenu* PeopleContextMenu::createMenu()
 		registrar.add("Avatar.InviteToGroup",	boost::bind(&LLAvatarActions::inviteToGroup,				id));
 		registrar.add("Avatar.TeleportRequest",	boost::bind(&PeopleContextMenu::requestTeleport,			this));
 		registrar.add("Avatar.TeleportToNearby", boost::bind(&LLAvatarActions::teleportTo, id));
+        registrar.add("Avatar.KamiFollowAvatar", boost::bind(&LLAvatarActions::followAvatar, id));
+        registrar.add("Avatar.KamiStopFollowing", boost::bind(&LLAvatarActions::stopFollowingAvatar));
 		registrar.add("Avatar.Calllog",			boost::bind(&LLAvatarActions::viewChatHistory,				id));
 		registrar.add("Avatar.Freeze",			boost::bind(&LLAvatarActions::freezeAvatar,					id));
 		registrar.add("Avatar.Eject",			boost::bind(&PeopleContextMenu::eject,						this));
@@ -176,6 +178,8 @@ void PeopleContextMenu::buildContextMenu(class LLMenuGL& menu, U32 flags)
 		items.push_back(std::string("offer_teleport"));
 		items.push_back(std::string("request_teleport"));
 		items.push_back(std::string("teleport_to"));
+        items.push_back(std::string("kami_follow_avatar"));
+        items.push_back(std::string("kami_stop_following"));
 		items.push_back(std::string("voice_call"));
 		items.push_back(std::string("chat_history"));
 		items.push_back(std::string("separator_chat_history"));
@@ -295,6 +299,14 @@ bool PeopleContextMenu::enableContextMenuItem(const LLSD& userdata)
     else if (item == std::string("can_teleport_to"))
     {
         return mUUIDs.size() == 1 && LLAvatarActions::canTeleportTo(mUUIDs.front());
+    }
+    else if (item == std::string("can_follow_avatar"))
+    {
+        return mUUIDs.size() == 1 && LLAvatarActions::canFollowAvatar(mUUIDs.front());
+    }
+    else if (item == std::string("is_following_avatar"))
+    {
+        return LLAvatarActions::isFollowingAvatar();
     }
     else if (item == std::string("can_zoom_in"))
     {
@@ -657,6 +669,8 @@ void NearbyPeopleContextMenu::buildContextMenu(class LLMenuGL& menu, U32 flags)
 		items.push_back(std::string("offer_teleport"));
 		items.push_back(std::string("request_teleport"));
 		items.push_back(std::string("teleport_to"));
+        items.push_back(std::string("kami_follow_avatar"));
+        items.push_back(std::string("kami_stop_following"));
 		items.push_back(std::string("voice_call"));
 		items.push_back(std::string("chat_history"));
 		items.push_back(std::string("separator_chat_history"));
