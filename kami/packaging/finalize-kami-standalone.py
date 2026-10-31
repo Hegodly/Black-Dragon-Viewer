@@ -141,8 +141,9 @@ def finalize(out: Path) -> list[str]:
     if scripts:
         raise RuntimeError("User-facing installer/launcher scripts found in standalone release: " +
                            ", ".join(scripts))
-    login_source = (out / "skins/default/xui/en/panel_login.xml").read_text(encoding="utf-8-sig")
-    assert 'name="kami_login_music_browse"' in login_source, (
+    login_root = ET.parse(out / "skins/default/xui/en/panel_login.xml").getroot()
+    assert any(node.tag == "button" and node.get("name") == "kami_login_music_browse"
+               for node in login_root.iter()), (
         "KAMI personal music must be selectable from the native login UI")
     assert not list(out.rglob("Install-GShade-Assets.ps1"))
     assert not list(out.rglob("Install-KAMI-Login-Music.cmd"))
