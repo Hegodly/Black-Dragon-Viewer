@@ -45,6 +45,8 @@ jobs:
         run: python3 kami/renderer/verify-true-pbr-off.py
       - name: Run KAMI's real final postprocess GLSL on headless Mesa
         run: python3 kami/renderer/test-supersample-glsl.py
+      - name: Verify Kami Follow Avatar user controls and movement safety
+        run: python3 kami/avatars/verify-follow-avatar.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
       - name: Verify avatar physics wearable and motion status source contracts
