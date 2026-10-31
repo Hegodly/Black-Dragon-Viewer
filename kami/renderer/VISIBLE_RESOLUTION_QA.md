@@ -25,7 +25,7 @@ on a smaller monitor. That makes FPS drop without an obvious quality gain.
    - 1x1 (ordinary bilinear) when world and output sizes are equal;
    - 2x2 sampling for modest oversampling;
    - 3x3 sampling for approximately 2x oversampling (e.g. 4K to 1080p);
-   - 4x4 sampling for 3.75x+ oversampling (e.g. 8K to 1080p).
+   - 4x4 sampling for 2.75x+ oversampling (e.g. 8K to 1080p).
    UI/HUD are still rendered natively without smoothing.
 5. The Display status reports the real allocated GPU source size,
    the final output window dimensions, and the number of SSAA taps actually
