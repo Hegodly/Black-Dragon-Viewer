@@ -554,6 +554,37 @@ bool LLAvatarActions::canTeleportTo(const LLUUID& id)
     return getNearbyAvatarTeleportPosition(id, position);
 }
 
+// Kami: avatar-follow uses local object positions and standard movement controls.
+// No teleport, camera spying, remote actions, or hidden tracking.
+bool LLAvatarActions::canFollowAvatar(const LLUUID& id)
+{
+    if (id.isNull() || id == gAgent.getID()) return false;
+    LLViewerObject* avatar = gObjectList.findObject(id);
+    if (!avatar || avatar->isDead() || !avatar->asAvatar()) return false;
+    return !gAgent.isFollowingAvatar() || gAgent.getAutoPilotLeaderID() != id;
+}
+
+void LLAvatarActions::followAvatar(const LLUUID& id)
+{
+    if (!canFollowAvatar(id)) return;
+    if (gAgent.getAutoPilot()) gAgent.stopAutoPilot(true);
+    // Keeps a comfortable walking distance and permits normal flying.
+    gAgent.startFollowPilot(id, true, 2.5f);
+}
+
+bool LLAvatarActions::isFollowingAvatar()
+{
+    return gAgent.isFollowingAvatar();
+}
+
+void LLAvatarActions::stopFollowingAvatar()
+{
+    if (gAgent.isFollowingAvatar())
+    {
+        gAgent.stopAutoPilot(true);
+    }
+}
+
 // static
 void LLAvatarActions::teleportTo(const LLUUID& id)
 {
