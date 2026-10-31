@@ -1047,7 +1047,7 @@ void LLPanelLogin::onKamiLoginMusicBrowse()
     const std::string selected = LLFilePicker::instance().getFirstFile();
     if (selected.empty())
         return;
-    const std::filesystem::path source = std::filesystem::u8path(selected);
+    const std::filesystem::path source(std::u8string(selected.begin(), selected.end()));
     if (_wcsicmp(source.extension().c_str(), L".mp3") != 0)
     {
         gKamiMusicStatus = "Please choose an MP3 file.";
