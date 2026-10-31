@@ -23,6 +23,29 @@ The native D3D12 C++ implementation in this directory provides:
 WARP is Microsoft's D3D12 software rasterizer, not OpenGL or a translation
 layer. GPU acceleration and FPS still require hardware testing.
 
+## DX12-01b: compiled into the actual Kami Windows executable
+
+The native D3D12 renderer's C++ implementation is now also compiled into
+`KAMIViewer.exe` by `indra/newview/CMakeLists.txt`, with native Windows SDK
+D3D12/DXGI/D3DCompiler linkage. This avoids any separate installation script
+or loose external renderer DLL.
+
+Run these diagnostics on the finished, packaged Windows viewer:
+
+    KAMIViewer.exe --kami-dx12-warp-test
+    KAMIViewer.exe --kami-dx12-hardware-test
+
+Exit status 0 means an actual DirectX 12 pixel shader drew an offscreen
+triangle, its pixels were read back and validated, and the D3D12 resources were
+released. Nonzero means the D3D12 initialization or rasterizer test failed.
+The WARP option uses Windows' built-in D3D12 CPU rasterizer, while the hardware
+option selects a DX12-capable discrete/integrated GPU.
+
+These flags do not start a Second Life session. Normal viewer startup is not
+slowed by probing or initializing a second graphics device. The current viewer
+still uses the existing OpenGL renderer for its actual world and UI until every
+rendering subsystem is migrated and verified under D3D12.
+
 ## NOT implemented yet
 
 The standalone smoke renderer **does not render Second Life**. The OpenGL
