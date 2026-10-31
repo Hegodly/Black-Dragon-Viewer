@@ -117,7 +117,10 @@ vec3 PBRNeutralToneMapping( vec3 color )
 vec3 PBRReinhardToneMapping(vec3 color)
 {
 	float white = 2.;
-	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	float luma = max(dot(color, vec3(0.2126, 0.7152, 0.0722)), 0.0);
+	// A black pixel must stay black; dividing by zero produces GPU-dependent NaNs.
+	if (luma <= 1e-6)
+	    return vec3(0.0);
 	float toneMappedLuma = luma * (1. + luma / (white*white)) / (1. + luma);
 	color *= toneMappedLuma / luma;
 	return color;
@@ -172,7 +175,7 @@ vec3 toneMap(vec3 color)
         tonemapped_color = toneMapACES_Hill(exposed_color);
         break;
     case 2:
-        tonemapped_color = PBRReinhardToneMapping(color);
+        tonemapped_color = PBRReinhardToneMapping(exposed_color);
         break;
     case 3:
         tonemapped_color = Uncharted2ToneMapping(color);
