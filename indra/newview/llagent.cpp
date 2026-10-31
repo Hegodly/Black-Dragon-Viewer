@@ -681,6 +681,8 @@ void LLAgent::ageChat()
 //-----------------------------------------------------------------------------
 void LLAgent::moveAt(S32 direction, bool reset)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (direction != 0 && isFollowingAvatar()) stopAutoPilot(true);
     LLUIUsage::instance().logCommand("Agent.MoveAt");
 
     mMoveTimer.reset();
@@ -712,6 +714,8 @@ void LLAgent::moveAt(S32 direction, bool reset)
 //-----------------------------------------------------------------------------
 void LLAgent::moveAtNudge(S32 direction)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (direction != 0 && isFollowingAvatar()) stopAutoPilot(true);
     mMoveTimer.reset();
     LLFirstUse::notMoving(false);
 
@@ -741,6 +745,8 @@ void LLAgent::moveAtNudge(S32 direction)
 //-----------------------------------------------------------------------------
 void LLAgent::moveLeft(S32 direction, bool reset)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (direction != 0 && isFollowingAvatar()) stopAutoPilot(true);
     mMoveTimer.reset();
     LLFirstUse::notMoving(false);
 
@@ -770,6 +776,8 @@ void LLAgent::moveLeft(S32 direction, bool reset)
 //-----------------------------------------------------------------------------
 void LLAgent::moveLeftNudge(S32 direction)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (direction != 0 && isFollowingAvatar()) stopAutoPilot(true);
     mMoveTimer.reset();
     LLFirstUse::notMoving(false);
 
@@ -799,6 +807,8 @@ void LLAgent::moveLeftNudge(S32 direction)
 //-----------------------------------------------------------------------------
 void LLAgent::moveUp(S32 direction, bool reset)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (direction != 0 && isFollowingAvatar()) stopAutoPilot(true);
     mMoveTimer.reset();
     LLFirstUse::notMoving(false);
 
@@ -832,6 +842,8 @@ void LLAgent::moveUp(S32 direction, bool reset)
 //-----------------------------------------------------------------------------
 void LLAgent::moveYaw(F32 mag, bool reset_view)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (mag != 0.f && isFollowingAvatar()) stopAutoPilot(true);
     gAgentCamera.setYawKey(mag);
 
     if (mag > 0)
@@ -864,6 +876,8 @@ void LLAgent::moveYaw(F32 mag, bool reset_view)
 //-----------------------------------------------------------------------------
 void LLAgent::movePitch(F32 mag)
 {
+    // KAMI: manual movement always overrides Follow Avatar.
+    if (mag != 0.f && isFollowingAvatar()) stopAutoPilot(true);
     gAgentCamera.setPitchKey(mag);
 
     if (mag > 0)
@@ -1001,7 +1015,11 @@ void LLAgent::setCrouching(bool crouch)
 // static
 void LLAgent::toggleFlying()
 {
-    if ( gAgent.mAutoPilot )
+    if (gAgent.isFollowingAvatar())
+    {
+        gAgent.stopAutoPilot(true);
+    }
+    else if (gAgent.mAutoPilot)
     {
         LLToolPie::instance().stopClickToWalk();
     }
@@ -1859,10 +1877,10 @@ void LLAgent::setAutoPilotTargetGlobal(const LLVector3d &target_global)
 void LLAgent::startFollowPilot(const LLUUID &leader_id, bool allow_flying, F32 stop_distance)
 {
     mLeaderID = leader_id;
-    if ( mLeaderID.isNull() ) return;
+    if (mLeaderID.isNull() || mLeaderID == gAgent.getID()) return;
 
     LLViewerObject* object = gObjectList.findObject(mLeaderID);
-    if (!object)
+    if (!object || object->isDead() || !object->asAvatar())
     {
         mLeaderID = LLUUID::null;
         return;
@@ -1930,12 +1948,18 @@ void LLAgent::autoPilot(F32 *delta_yaw)
         if (!mLeaderID.isNull())
         {
             LLViewerObject* object = gObjectList.findObject(mLeaderID);
-            if (!object)
+            if (!object || object->isDead() || !object->asAvatar())
             {
-                stopAutoPilot();
+                stopAutoPilot(true);
                 return;
             }
+            // Keep the target live while the resident moves. Never teleport.
             mAutoPilotTargetGlobal = object->getPositionGlobal();
+            if (dist_vec(getPositionGlobal(), mAutoPilotTargetGlobal) > 96.0)
+            {
+                stopAutoPilot(true);
+                return;
+            }
         }
 
         if (!isAgentAvatarValid()) return;
@@ -1952,7 +1976,13 @@ void LLAgent::autoPilot(F32 *delta_yaw)
 
         F32 target_dist = direction.magVec();
 
-        if (target_dist >= mAutoPilotTargetDist)
+        if (isFollowingAvatar() && (target_dist <= mAutoPilotStopDistance + 1.f ||
+                                    getVelocity().magVecSquared() > 0.09f))
+        {
+            // The target may move as quickly as we do; do not call that stuck.
+            mAutoPilotNoProgressFrameCount = 0;
+        }
+        else if (target_dist >= mAutoPilotTargetDist)
         {
             mAutoPilotNoProgressFrameCount++;
             bool out_of_time = false;
@@ -2099,7 +2129,8 @@ void LLAgent::autoPilot(F32 *delta_yaw)
         if (mAutoPilotTargetDist < mAutoPilotStopDistance)
         {
             setControlFlags(AGENT_CONTROL_STOP);
-            if(!mAutoPilotUseRotation || (delta_target_heading < mAutoPilotRotationThreshold))
+            if (!isFollowingAvatar() &&
+                (!mAutoPilotUseRotation || (delta_target_heading < mAutoPilotRotationThreshold)))
             {
                 stopAutoPilot();
             }
