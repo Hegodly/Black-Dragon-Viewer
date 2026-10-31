@@ -440,6 +440,7 @@ LLAgent::LLAgent() :
     mAutoPilotUseRotation(false),
     mAutoPilotTargetFacing(LLVector3::zero),
     mAutoPilotTargetDist(0.f),
+    mAutoPilotLastFollowProgressPos(),
     mAutoPilotNoProgressFrameCount(0),
     mAutoPilotRotationThreshold(0.f),
     mAutoPilotFinishedCallback(nullptr),
@@ -689,6 +690,7 @@ void LLAgent::moveAt(S32 direction, bool reset)
     // age chat timer so it fades more quickly when you are intentionally moving
     ageChat();
 
+    if (direction && mAutoPilot && mLeaderID.notNull()) stopAutoPilot(true);
     gAgentCamera.setAtKey(LLAgentCamera::directionToKey(direction));
 
     if (direction > 0)
@@ -718,6 +720,7 @@ void LLAgent::moveAtNudge(S32 direction)
     // age chat timer so it fades more quickly when you are intentionally moving
     ageChat();
 
+    if (direction && mAutoPilot && mLeaderID.notNull()) stopAutoPilot(true);
     gAgentCamera.setWalkKey(LLAgentCamera::directionToKey(direction));
 
     if (direction > 0)
@@ -741,6 +744,7 @@ void LLAgent::moveAtNudge(S32 direction)
 //-----------------------------------------------------------------------------
 void LLAgent::moveLeft(S32 direction, bool reset)
 {
+    if (direction && mAutoPilot && mLeaderID.notNull()) stopAutoPilot(true);
     mMoveTimer.reset();
     LLFirstUse::notMoving(false);
 
@@ -770,6 +774,7 @@ void LLAgent::moveLeft(S32 direction, bool reset)
 //-----------------------------------------------------------------------------
 void LLAgent::moveLeftNudge(S32 direction)
 {
+    if (direction && mAutoPilot && mLeaderID.notNull()) stopAutoPilot(true);
     mMoveTimer.reset();
     LLFirstUse::notMoving(false);
 
@@ -807,6 +812,7 @@ void LLAgent::moveUp(S32 direction, bool reset)
 
     gAgentCamera.setUpKey(LLAgentCamera::directionToKey(direction));
 
+    if (direction && mAutoPilot && mLeaderID.notNull()) stopAutoPilot(true);
     if (direction > 0)
     {
         if (!getFlying())
@@ -832,6 +838,7 @@ void LLAgent::moveUp(S32 direction, bool reset)
 //-----------------------------------------------------------------------------
 void LLAgent::moveYaw(F32 mag, bool reset_view)
 {
+    if (mag != 0.f && mAutoPilot && mLeaderID.notNull()) stopAutoPilot(true);
     gAgentCamera.setYawKey(mag);
 
     if (mag > 0)
@@ -1823,6 +1830,7 @@ void LLAgent::startAutoPilotGlobal(
     }
 
     mAutoPilotNoProgressFrameCount = 0;
+    mAutoPilotLastFollowProgressPos = getPositionGlobal();
 }
 
 //-----------------------------------------------------------------------------
@@ -1930,9 +1938,12 @@ void LLAgent::autoPilot(F32 *delta_yaw)
         if (!mLeaderID.isNull())
         {
             LLViewerObject* object = gObjectList.findObject(mLeaderID);
-            if (!object)
+            if (!object || object->isDead() ||
+                dist_vec(getPositionGlobal(), object->getPositionGlobal()) > 128.0)
             {
-                stopAutoPilot();
+                // The leader left the currently rendered vicinity. Do not
+                // track across the grid or automatically teleport after them.
+                stopAutoPilot(true);
                 return;
             }
             mAutoPilotTargetGlobal = object->getPositionGlobal();
@@ -1952,7 +1963,25 @@ void LLAgent::autoPilot(F32 *delta_yaw)
 
         F32 target_dist = direction.magVec();
 
-        if (target_dist >= mAutoPilotTargetDist)
+        // Hold position but remain following, so we resume once the leader
+        // walks away again. Avoid false no-progress timeouts while waiting.
+        if (mLeaderID.notNull() && target_dist <= mAutoPilotStopDistance)
+        {
+            mAutoPilotNoProgressFrameCount = 0;
+            mAutoPilotTargetDist = target_dist;
+            setControlFlags(AGENT_CONTROL_STOP);
+            return;
+        }
+
+        // Following a running leader can keep the target distance constant.
+        // Track our own physical movement rather than just target distance.
+        if (mLeaderID.notNull() &&
+            dist_vec(getPositionGlobal(), mAutoPilotLastFollowProgressPos) > 0.3)
+        {
+            mAutoPilotLastFollowProgressPos = getPositionGlobal();
+            mAutoPilotNoProgressFrameCount = 0;
+        }
+        else if (target_dist >= mAutoPilotTargetDist)
         {
             mAutoPilotNoProgressFrameCount++;
             bool out_of_time = false;

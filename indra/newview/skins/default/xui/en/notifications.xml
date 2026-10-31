@@ -13301,4 +13301,23 @@ Allow them to pose you?
    type="notify">
     Teleport To is not available because the viewer does not have a reliable position for this resident. Try again when they appear in Nearby People.
   </notification>
+  <!-- Kami Follow Avatar: this is a local movement convenience, not teleportation. -->
+  <notification
+    icon="notify.tga"
+    name="KamiFollowAvatarStarted"
+    type="notify">
+    Following this avatar. Use World &gt; Stop Following Avatar, or press movement controls, to stop. Kami will remain about 3m away and will not teleport after them.
+  </notification>
+  <notification
+    icon="notify.tga"
+    name="KamiFollowAvatarNotPossible"
+    type="notify">
+    Follow Avatar requires a nearby, currently visible resident and an available standing avatar. Get closer or stand up and try again.
+  </notification>
+  <notification
+    icon="notify.tga"
+    name="KamiFollowAvatarStopped"
+    type="notify">
+    Stopped following the avatar.
+  </notification>
 </notifications>

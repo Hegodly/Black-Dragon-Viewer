@@ -67,6 +67,7 @@
 #include "llurlaction.h"
 #include "llviewercontrol.h"
 #include "llviewerobjectlist.h"
+#include "llvoavatarself.h"
 #include "llviewermessage.h"    // for handle_lure
 #include "llviewernetwork.h" //LLGridManager
 #include "llviewerparcelmgr.h"
@@ -546,6 +547,67 @@ bool getNearbyAvatarTeleportPosition(const LLUUID& id, LLVector3d& position)
     return false;
 }
 } // namespace
+
+// Kami Follow Avatar: only use live avatar objects already visible to the
+// viewer. This uses existing agent autopilot movement, not remote tracking,
+// permissions bypasses, or teleportation.
+bool LLAvatarActions::canFollowAvatar(const LLUUID& id)
+{
+    if (id.isNull() || id == gAgent.getID() || !isAgentAvatarValid() ||
+        gAgentAvatarp->isSitting() || !gAgent.getRegion())
+    {
+        return false;
+    }
+
+    LLViewerObject* avatar = gObjectList.findObject(id);
+    if (!avatar || avatar->isDead() || !avatar->isAvatar())
+    {
+        return false;
+    }
+
+    if (dist_vec(gAgent.getPositionGlobal(), avatar->getPositionGlobal()) > 128.0)
+    {
+        return false;
+    }
+
+    // Selecting the same target again should not silently restart follow.
+    return !gAgent.getAutoPilot() || gAgent.getAutoPilotLeaderID() != id;
+}
+
+void LLAvatarActions::followAvatar(const LLUUID& id)
+{
+    if (!canFollowAvatar(id))
+    {
+        LLNotificationsUtil::add("KamiFollowAvatarNotPossible");
+        return;
+    }
+
+    // Keep a 3m personal-space buffer; only fly automatically if the user
+    // already enabled flight. The SL simulator remains authoritative.
+    gAgent.startFollowPilot(id, gAgent.getFlying(), 3.0f);
+    if (gAgent.getAutoPilot() && gAgent.getAutoPilotLeaderID() == id)
+    {
+        LLNotificationsUtil::add("KamiFollowAvatarStarted");
+    }
+    else
+    {
+        LLNotificationsUtil::add("KamiFollowAvatarNotPossible");
+    }
+}
+
+bool LLAvatarActions::isFollowingAvatar()
+{
+    return gAgent.getAutoPilot() && gAgent.getAutoPilotLeaderID().notNull();
+}
+
+void LLAvatarActions::stopFollowingAvatar()
+{
+    if (isFollowingAvatar())
+    {
+        gAgent.stopAutoPilot(true);
+        LLNotificationsUtil::add("KamiFollowAvatarStopped");
+    }
+}
 
 // static
 bool LLAvatarActions::canTeleportTo(const LLUUID& id)

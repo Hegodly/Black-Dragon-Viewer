@@ -625,6 +625,7 @@ private:
     bool            mAutoPilotUseRotation;
     LLVector3       mAutoPilotTargetFacing;
     F32             mAutoPilotTargetDist;
+    LLVector3d      mAutoPilotLastFollowProgressPos; // Detect stalls using the follower's motion.
     S32             mAutoPilotNoProgressFrameCount;
     F32             mAutoPilotRotationThreshold;
     std::string     mAutoPilotBehaviorName;
