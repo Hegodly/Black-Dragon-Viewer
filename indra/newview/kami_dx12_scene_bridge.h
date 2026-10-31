@@ -18,6 +18,7 @@ struct SceneCaptureStats
 {
     std::size_t visitedObjects = 0;
     std::size_t visibleVolumes = 0;
+    std::size_t submittedTerrainPatches = 0;
     std::size_t submittedMeshes = 0;
     std::size_t submittedVertices = 0;
     std::size_t submittedIndices = 0;
@@ -27,7 +28,8 @@ struct SceneCaptureStats
 };
 
 // Read-only snapshot of currently decoded, visible, non-rigged LLVolumeFace
-// geometry from the main viewer thread. UVs/PBR/alpha/avatars/terrain/skin are
+// geometry and heightfield terrain patches from the main viewer thread.
+// UVs/PBR/alpha/avatars/skin are
 // NOT yet supported. No GL calls or graphics-state mutations occur here.
 // The returned world frame is consumable by Renderer::renderWorldFrame(...).
 WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
