@@ -30,7 +30,6 @@ CHECKS={
  ),
  "lldrawpoolterrain.cpp":(
   'if (use_textures || !gSavedSettings.getBOOL("KAMIPBREnabled"))',
-  'sShader = &gDeferredTerrainProgram;',
  ),
  "llviewercontrol.cpp":(
   'handleKAMIPBREnabled(const LLSD& newvalue)',
@@ -59,6 +58,8 @@ def integrated():
         s=(VIEW/path).read_text(encoding="utf-8-sig")
         for part in required:
             assert part in s, (path,part)
+    terrain=(VIEW/"lldrawpoolterrain.cpp").read_text(encoding="utf-8-sig")
+    assert 'sShader = &gDeferredTerrainProgram;' in terrain
     root=ET.parse(VIEW/"app_settings/settings_blackdragon.xml").getroot().find("map")
     pairs=list(root)
     entries={}
