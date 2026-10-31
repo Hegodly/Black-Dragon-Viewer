@@ -99,7 +99,7 @@ replace_one(PIPE,
         (F32)sourceBuffer->getWidth() / kami_out_width,
         (F32)sourceBuffer->getHeight() / kami_out_height);
     const S32 kami_samples_per_axis = kami_ratio < 1.05f ? 1 :
-        (kami_ratio >= 3.75f ? 4 : (kami_ratio >= 1.75f ? 3 : 2));
+        (kami_ratio >= 2.75f ? 4 : (kami_ratio >= 1.75f ? 3 : 2));
     gDeferredPostNoDoFNoiseProgram.uniform2f(kami_present_res,
         kami_out_width, kami_out_height);
     gDeferredPostNoDoFNoiseProgram.uniform1i(kami_grid, kami_samples_per_axis);'''
@@ -122,7 +122,7 @@ extra = '''            // Source buffer size alone does not prove a higher-quali
                 (F32)gpu_height / (F32)kami_output_h);
             if (kami_source_ratio >= 1.05f)
             {
-                const S32 grid = kami_source_ratio >= 3.75f ? 4 :
+                const S32 grid = kami_source_ratio >= 2.75f ? 4 :
                     (kami_source_ratio >= 1.75f ? 3 : 2);
                 resolution_status += llformat(" Output %u x %u, %dx%d SSAA resolve.",
                     kami_output_w, kami_output_h, grid, grid);
