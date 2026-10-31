@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
     paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
@@ -27,6 +27,8 @@ jobs:
         run: python3 kami/performance/validate-config-inputs.py
       - name: Enforce neutral native PBR quality and no optional default post passes
         run: python3 kami/renderer/verify-neutral-baseline.py
+      - name: Verify true 1440p GPU-resolution sizing and patch syntax
+        run: python3 kami/renderer/verify-true-1440p.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
       - name: Validate every KAMI and Kombatant Python integration script
@@ -221,6 +223,12 @@ jobs:
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
+      - name: Integrate true 1440p core world buffers without altering UI resolution
+        shell: pwsh
+        run: python kami/renderer/enable-true-1440p.py
+      - name: Verify native QHD allocations, UI choices and GPU readout wiring
+        shell: pwsh
+        run: python kami/renderer/verify-true-1440p.py --integrated
       - name: Verify all five preset quality levels and native 4K/8K FPS contracts
         shell: pwsh
         run: python kami/performance/verify-preset-contracts.py
