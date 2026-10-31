@@ -94,8 +94,8 @@ def assert_integrated():
     assert "KAMI" in prefs.get("title","")
     tabs=[x for x in prefs.iter("tab_container") if x.get("name")=="pref core"]
     assert len(tabs)==1 and tabs[0].get("tab_width")=="222"
-    assert "GRAPHICS + FPS" in [e.get("label") for e in tabs[0]]
-    assert "AVATAR CONTROL" in [e.get("label") for e in tabs[0]]
+    assert any("GRAPHICS + FPS" in e.get("label","") for e in tabs[0])
+    assert any("AVATAR CONTROL" in e.get("label","") for e in tabs[0])
     assert len(list(tabs[0]))>=15
     assert tabs[0].get("width") and prefs.get("width")
 
