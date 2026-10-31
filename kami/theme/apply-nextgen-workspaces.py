@@ -129,7 +129,7 @@ for title, left, top, buttons in groups:
         })
 
 text("kami_workspaces_footer",
-     "FIRE GARDEN  /  WORLD  /  CREATOR  /  SYSTEM",
+     "BEYOND REALITY  |  Built on Black Dragon by NiranV Dean",
      26, 558, 700, 23, font="SansSerifSmall",
      color="0.59 0.67 0.72 1")
 workspace_file = XUI / "floater_kami_workspaces.xml"
