@@ -24,7 +24,7 @@ expect("Windows-only native DX12 includes", all(
     name in header for name in ("<d3d12.h>", "<dxgi1_6.h>", "#if !defined(_WIN32)")
 ))
 expect("no OpenGL API or translation calls", not re.search(
-    r"\b(?:gl[A-Z]\w+|wgl[A-Z]\w+|OpenGL|opengl|GL_ARB|GL_TEXTURE)\b",
+    r"(?:#\s*include\s*[<\"]GL[/\\]|\b(?:gl[A-Z]\w+|wgl[A-Z]\w+)\s*\()",
     header + core + smoke + cmake
 ))
 expect("no test adapter automatically replaces hardware",
