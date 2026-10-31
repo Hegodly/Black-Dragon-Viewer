@@ -241,7 +241,14 @@
           function="Floater.ToggleOrBringToFront"
           parameter="my_scripts"/>
       </menu_item_call>
-
+        <menu_item_call
+         label="Stop Following Avatar"
+         name="KamiStopFollowingGlobal">
+            <menu_item_call.on_click
+             function="Avatar.KamiStopFollowingGlobal"/>
+            <menu_item_call.on_enable
+             function="Avatar.KamiCanStopFollowing"/>
+        </menu_item_call>
 
         <menu_item_separator/>
 
