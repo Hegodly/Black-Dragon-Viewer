@@ -17,6 +17,7 @@ VIEW=R/"indra/newview"
 SETTINGS=VIEW/"app_settings/settings_blackdragon.xml"
 CTRL=VIEW/"llviewercontrol.cpp"
 VOLUME=VIEW/"llvovolume.cpp"
+OBJECT=VIEW/"llviewerobject.cpp"
 PIPE=VIEW/"pipeline.cpp"
 ALPHA=VIEW/"lldrawpoolalpha.cpp"
 TERRAIN=VIEW/"lldrawpoolterrain.cpp"
@@ -100,6 +101,16 @@ replace_one(VOLUME,
                     facep->setTexture(LLRender::EMISSIVE_MAP, nullptr);
                 }
                 if (is_pbr)''')
+# Also stop eagerly requesting four additional PBR GPU textures for objects
+# while the renderer is in legacy mode. They will be requested again when ON.
+replace_one(OBJECT,
+'''    if (mat != nullptr)
+    {
+        mat->mBaseColorTexture = fetch_texture''',
+'''    if (mat != nullptr && gSavedSettings.getBOOL("KAMIPBREnabled"))
+    {
+        mat->mBaseColorTexture = fetch_texture''')
+
 # In OFF, use pre-PBR alpha, fullbright, normal and specular pool selection.
 replace_n(VOLUME,
 '''LLGLTFMaterial* gltf_mat = te->getGLTFRenderMaterial();''',
