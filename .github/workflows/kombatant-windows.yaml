@@ -9,9 +9,9 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, feature/kami-dx12-embedded-viewer-build]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -80,6 +80,9 @@ jobs:
         run: |
           git apply --check kombatant.patch
           git apply kombatant.patch
+      - name: Verify D3D12 is linked into actual Windows viewer build
+        shell: pwsh
+        run: python kami/dx12/verify-viewer-link.py
       - name: Verify native Audio Lab is integrated before compilation
         shell: pwsh
         run: python kami/audio/verify-audio-lab.py
@@ -351,6 +354,15 @@ jobs:
       - name: Finalize KAMI-only portable branding and verify runtime completeness
         shell: pwsh
         run: python kami/packaging/finalize-kami-standalone.py
+      - name: Execute real native D3D12 GPU test inside staged KAMIViewer
+        shell: pwsh
+        run: |
+          $viewer = Join-Path 'build-vc170-64/newview/Release' 'KAMIViewer.exe'
+          if (-not (Test-Path $viewer)) { throw 'KAMIViewer.exe missing' }
+          & $viewer --kami-dx12-warp-test
+          if ($LASTEXITCODE -ne 0) { throw "Embedded D3D12 WARP render/readback failed with exit $LASTEXITCODE" }
+          Write-Host 'PASS: native D3D12 GPU pixel test executed from KAMIViewer.exe'
+
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5
