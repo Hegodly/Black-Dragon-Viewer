@@ -37,6 +37,8 @@ def source():
         "getParamValue(MAX_EFFECT)",
         "AvatarPhysics",
         "Physics Status / Diagnostics",
+        'if (lod_factor > 0.f &&',
+        'gSavedSettings.getBOOL("KAMIPhysicsProtectSelf")',
     ):
         assert token in s, ("Missing native physics readiness detector", token)
     assert '"KAMIAvatarPhysicsAdaptive", false' in adaptive
@@ -54,6 +56,8 @@ def integrated():
         'bool hasConfiguredEffect()',
         'getParamValue(MAX_EFFECT) > 0.0001f',
         'gAgentWearables.getWearableCount(LLWearableType::WT_PHYSICS)',
+        'if (lod_factor > 0.f &&',
+        'gSavedSettings.getBOOL("KAMIPhysicsProtectSelf")',
         'KAMIPhysicsStats::recordSelfEffects(configured_effects, update_visuals)',
         'current.self_visual_updates',
         'NO PHYSICS LAYER WORN',
