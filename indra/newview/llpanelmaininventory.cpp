@@ -39,6 +39,7 @@
 #include "llnotificationsutil.h"
 
 #include <cctype>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -2061,7 +2062,7 @@ void LLPanelMainInventory::onKamiSmartSort()
     std::ostringstream preview;
     for (const auto& entry : *plan)
     {
-        preview << "\\n" << entry.first << " (" << entry.second.size() << "): ";
+        preview << "\n" << entry.first << " (" << entry.second.size() << "): ";
         size_t shown = 0;
         for (const LLUUID& id : entry.second)
         {
@@ -2109,6 +2110,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 
     const std::string command_name = userdata.asString();
 
+    if (command_name == "kami_smart_sort")
+    {
+        onKamiSmartSort();
+        return;
+    }
     if (command_name == "new_window")
     {
         newWindow();
