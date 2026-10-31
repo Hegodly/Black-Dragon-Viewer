@@ -73,6 +73,14 @@ def integrated():
     assert "gPipeline.mMainRT.screen.getWidth()" in display
     assert "gPipeline.mMainRT.screen.getHeight()" in display
     assert "RenderResolutionMultiplier" in pipeline  # native render scale remains available
+    assert "const bool needsGlowComposite = sRenderGlow ||" in pipeline
+    assert "if (needsGlowComposite)" in pipeline
+    assert "RenderNumColors > 2U" in pipeline  # 1 and 2 are neutral in shader
+
+    general = ET.parse(ROOT / "indra/newview/app_settings/settings.xml").getroot().find("map")
+    assert general is not None
+    cas = field(general, "RenderCASSharpness")
+    assert field(cas, "Value").text == "0.0", "Native QHD base should not sharpen twice"
 
     # Keep the final display at window pixel dimensions, for a full scene
     # rather than a cropped QHD viewport on smaller monitors.
