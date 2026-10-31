@@ -1,0 +1,29 @@
+name: KAMI Quality-Locked FPS Benchmark Contracts
+
+on:
+  push:
+    branches: [feature/kami-quality-locked-performance]
+    paths:
+      - 'kami/performance/benchmark_quality_locked.py'
+      - 'kami/performance/test_benchmark_quality_locked.py'
+      - 'kami/performance/QUALITY_LOCKED_FPS_OVERHAUL.md'
+      - '.github/workflows/kami-quality-locked-fps.yaml'
+  pull_request:
+    branches: [feature/kami-visible-qhd-4k-8k]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Validate KAMI benchmark script syntax
+        run: python -m py_compile kami/performance/benchmark_quality_locked.py kami/performance/test_benchmark_quality_locked.py
+      - name: Reject mismatched visual quality and verify real FPS metrics
+        run: python -m unittest kami/performance/test_benchmark_quality_locked.py
