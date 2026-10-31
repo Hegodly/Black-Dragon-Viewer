@@ -35,6 +35,38 @@ in vec2 vary_fragcoord;
 
 uniform float chroma_str;
 
+// KAMI: an actual area resolve when the 3D scene was rendered above the
+// physical viewer window resolution. UI and HUD are drawn separately at
+// native window pixels; this filter applies to the world texture only.
+uniform vec2 kami_present_resolution;
+uniform int kami_resolve_grid;
+
+vec4 kamiResolveSupersampledWorld(vec2 uv)
+{
+    if (kami_resolve_grid <= 1)
+        return texture(diffuseRect, uv);
+
+    // 2x2 for modest supersampling, 3x3 for ~2x+, 4x4 for ~4x+.
+    // A footprint covers exactly one output pixel, not one source texel.
+    // Multi-tap integration avoids single-point bilinear downsampling
+    // ignoring most 4K/8K source detail.
+    vec2 footprint = 1.0 / max(kami_present_resolution, vec2(1.0));
+    vec4 sum = vec4(0.0);
+    for (int y = 0; y < 4; ++y)
+    {
+        for (int x = 0; x < 4; ++x)
+        {
+            if (x >= kami_resolve_grid || y >= kami_resolve_grid)
+                continue;
+            vec2 jitter = (vec2(x, y) + vec2(0.5)) /
+                float(kami_resolve_grid) - vec2(0.5);
+            sum += texture(diffuseRect, clamp(uv + jitter * footprint,
+                                            vec2(0.0), vec2(1.0)));
+        }
+    }
+    return sum / float(kami_resolve_grid * kami_resolve_grid);
+}
+
 //=================================
 // borrowed noise from:
 //  <https://www.shadertoy.com/view/4dS3Wd>
@@ -78,7 +110,7 @@ vec3 clampHDRRange(vec3 color);
 
 void main()
 {
-    vec4 diff = texture(diffuseRect, vary_fragcoord.xy);
+    vec4 diff = kamiResolveSupersampledWorld(vary_fragcoord.xy);
 #if HAS_DOF_CHROMA == 0
     vec3 col = diff.rgb;
 
