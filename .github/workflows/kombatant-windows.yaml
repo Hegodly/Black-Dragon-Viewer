@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
     paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
@@ -45,6 +45,8 @@ jobs:
         run: python3 kami/renderer/test-supersample-glsl.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
+      - name: Verify avatar physics wearable and motion status source contracts
+        run: python3 kami/physics/verify-visible-physics-detection.py
       - name: Validate every KAMI and Kombatant Python integration script
         shell: pwsh
         run: python -m compileall -q kami kombatant
@@ -243,6 +245,12 @@ jobs:
       - name: Verify all six real Smart Avatar Physics optimizations and performance stats
         shell: pwsh
         run: python kami/physics/verify-smart-avatar-physics.py
+      - name: Integrate actual avatar physics wearable and visible-spring diagnostics
+        shell: pwsh
+        run: python kami/physics/fix-visible-physics-detection.py
+      - name: Verify true avatar physics layer/spring readiness and opt-in throttling
+        shell: pwsh
+        run: python kami/physics/verify-visible-physics-detection.py --integrated
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
