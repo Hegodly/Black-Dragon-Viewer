@@ -43,6 +43,7 @@
 #include <initializer_list>
 #include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include "llinventoryfunctions.h"
 #include "llinventorygallery.h"
