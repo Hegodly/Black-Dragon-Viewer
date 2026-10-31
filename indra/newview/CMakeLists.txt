@@ -2091,7 +2091,9 @@ if (WINDOWS)
         "${KAMI_DX12_DIR}/KamiDx12World.cpp"
         "${KAMI_DX12_DIR}/KamiDx12Renderer.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.h")
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_live_preview.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_live_preview.h")
     # Keep the standalone D3D12 translation unit isolated from legacy GL PCH.
     set_source_files_properties(
         "${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
