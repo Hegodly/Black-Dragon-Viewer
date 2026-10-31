@@ -52,8 +52,7 @@ proprietary trademarks owned by others, or third-party license requirements.
 """
 README = """KAMI VIEWER  |  BEYOND REALITY
 
-KAMIViewer.exe is the only KAMI viewer launcher.
-Start-KAMI.cmd is an optional wrapper that launches the same executable.
+KAMIViewer.exe is the ONLY launcher. Open it directly. No CMD, BAT or PowerShell feature installers are required.
 Keep app_settings/, skins/, character/, fonts/, DLLs, and helper programs
 beside KAMIViewer.exe. They are REQUIRED dependencies, not clutter.
 
@@ -66,8 +65,8 @@ render options remain part of the shipped user interface. KAMI branding
 does not remove upstream project licensing or developer credit.
 
 See KAMI-CREDITS.txt and licenses.txt for source/third-party attributions.
-Use the supplied personal soundtrack installer only with audio that you
-have the right to use. A copyrighted soundtrack is NOT included.
+Choose personal login music directly in the KAMI login interface.
+User MP3s are stored in local Windows user data, never redistributed.
 """
 
 
@@ -133,15 +132,20 @@ def finalize(out: Path) -> list[str]:
     settings.write_text(content, encoding="utf-8")
     ET.parse(settings)
 
-    # Remove stale root-only launcher script content if it tries to delete
-    # the source build file: previous start script manipulated old binaries.
-    start = out / "Start-KAMI.cmd"
-    start.write_bytes(
-        b'@echo off\r\n'
-        b'cd /d "%~dp0"\r\n'
-        b'if not exist "KAMIViewer.exe" (echo KAMIViewer.exe missing. & pause & exit /b 1)\r\n'
-        b'start "" "KAMIViewer.exe"\r\n'
-    )
+    # Release readiness means there are no first-run feature installers.
+    # Unknown root scripts abort packaging rather than being silently deleted.
+    # Build scripts belong in the source repository, not the portable output.
+    scripts = sorted(f.name for f in out.iterdir() if f.is_file() and
+        (f.suffix.casefold() in (".cmd", ".bat", ".ps1") or
+         f.name.casefold().startswith("install-")))
+    if scripts:
+        raise RuntimeError("User-facing installer/launcher scripts found in standalone release: " +
+                           ", ".join(scripts))
+    login_source = (out / "skins/default/xui/en/panel_login.xml").read_text(encoding="utf-8-sig")
+    assert 'name="kami_login_music_browse"' in login_source, (
+        "KAMI personal music must be selectable from the native login UI")
+    assert not list(out.rglob("Install-GShade-Assets.ps1"))
+    assert not list(out.rglob("Install-KAMI-Login-Music.cmd"))
     (out / "KAMI-CREDITS.txt").write_text(CREDITS, encoding="utf-8")
     (out / "KAMI-README.txt").write_text(README, encoding="utf-8")
 
