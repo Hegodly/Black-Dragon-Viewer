@@ -74,6 +74,9 @@
 #include "lluuid.h"
 #include "llversioninfo.h"
 #include "llviewercamera.h"
+#ifdef KAMI_HAS_NATIVE_DX12
+#include "kami_dx12_live_preview.h"
+#endif
 #include "llviewercontrol.h"
 #include "llviewernetwork.h"
 #include "llviewerobjectlist.h"
@@ -441,6 +444,14 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 	LLAppViewer* app_viewer = LLAppViewer::instance();
 	LLViewerCamera* viewer_cam = LLViewerCamera::getInstance();
 	LLSceneMonitor* scene_monitor = LLSceneMonitor::getInstance();
+#ifdef KAMI_HAS_NATIVE_DX12
+    // Preview is a separate native D3D12 DXGI window; normal SL world/UI
+    // remains OpenGL until feature parity is implemented and validated.
+    if (!for_snapshot && viewer_cam)
+    {
+        kamiDX12LivePreviewTick(*viewer_cam);
+    }
+#endif
 
     gSnapshot = for_snapshot;
 
