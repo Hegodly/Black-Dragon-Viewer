@@ -37,6 +37,10 @@ def source():
         "getParamValue(MAX_EFFECT)",
         "AvatarPhysics",
         "Physics Status / Diagnostics",
+        'const F32 area_for_this_setting = llclamp(',
+        '1400.f*(1.f-lod_factor), 0.f, 32.f',
+        'pixel_area >= 64.f ? 0.00025f',
+        'is_self ? 0.00004f',
         'if (lod_factor > 0.f &&',
         'gSavedSettings.getBOOL("KAMIPhysicsProtectSelf")',
     ):
@@ -58,6 +62,10 @@ def integrated():
         'gAgentWearables.getWearableCount(LLWearableType::WT_PHYSICS)',
         'if (lod_factor > 0.f &&',
         'gSavedSettings.getBOOL("KAMIPhysicsProtectSelf")',
+        'const F32 area_for_this_setting = llclamp(',
+        '1400.f*(1.f-lod_factor), 0.f, 32.f',
+        'pixel_area >= 64.f ? 0.00025f',
+        'is_self ? 0.00004f',
         'KAMIPhysicsStats::recordSelfEffects(configured_effects, update_visuals)',
         'current.self_visual_updates',
         'NO PHYSICS LAYER WORN',
@@ -86,6 +94,12 @@ def integrated():
             fields=list(lst[i+1])
             defaults={fields[j].text: fields[j+1].text for j in range(0,len(fields),2)}
     assert defaults.get("Value")=="0", "Remote physics optimization must be opt-in for visible physics"
+    quality=(R/"indra/newview/kami_quality_presets.h").read_text(encoding="utf-8-sig")
+    perf=(R/"indra/newview/kami_performance_mode.h").read_text(encoding="utf-8-sig")
+    assert 'set("RenderAvatarPhysicsLODFactor"' not in quality, (
+        "Quality presets must not hide body physics movements")
+    assert '"RenderAvatarPhysicsLODFactor"' not in perf, (
+        "Performance Mode must not override avatar physics detail")
     print("PASS integrated source + real UI: physics mode, layer awareness, motion results and safe optimizer default")
 
 def main():
