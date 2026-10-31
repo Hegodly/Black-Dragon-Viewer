@@ -264,6 +264,7 @@ protected:
 	bool isActionEnabled(const LLSD& command_name);
 	bool isActionChecked(const LLSD& userdata);
 	void onCustomAction(const LLSD& command_name);
+    void onKamiSmartSort();
 	bool handleDragAndDropToTrash(bool drop, EDragAndDropType cargo_type, EAcceptance* accept);
 
     bool isActionVisible(const LLSD& userdata);

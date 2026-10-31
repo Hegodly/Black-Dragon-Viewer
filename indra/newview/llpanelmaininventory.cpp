@@ -36,6 +36,13 @@
 #include "lldndbutton.h"
 #include "llfilepicker.h"
 #include "llinventorybridge.h"
+#include "llnotificationsutil.h"
+
+#include <cctype>
+#include <initializer_list>
+#include <map>
+#include <memory>
+#include <sstream>
 #include "llinventoryfunctions.h"
 #include "llinventorygallery.h"
 #include "llinventorymodelbackgroundfetch.h"
@@ -72,6 +79,128 @@ const std::string ALL_ITEMS("All Items");
 const std::string RECENT_ITEMS("Recent Items");
 const std::string WORN_ITEMS("Worn Items");
 const std::string FAVORITES("Favorites");
+
+
+// Kami Smart Sort V1 only makes conservative, local, name-based suggestions.
+// Inventory items do not contain a reliable "mesh is shoes/hair/jewelry" tag.
+namespace
+{
+using KamiSortPlan = std::map<std::string, std::vector<LLUUID>>;
+constexpr size_t KAMI_SORT_MAX_ITEMS_PER_RUN = 100;
+
+bool kami_has_word(const std::string& source, const std::string& word)
+{
+    size_t start = 0;
+    while ((start = source.find(word, start)) != std::string::npos)
+    {
+        const size_t end = start + word.size();
+        const bool left_ok = start == 0 || !std::isalnum(static_cast<unsigned char>(source[start - 1]));
+        const bool right_ok = end == source.size() || !std::isalnum(static_cast<unsigned char>(source[end]));
+        if (left_ok && right_ok) return true;
+        ++start;
+    }
+    return false;
+}
+
+bool kami_has_any_word(const std::string& text, std::initializer_list<const char*> words)
+{
+    for (const char* word : words)
+    {
+        if (kami_has_word(text, word)) return true;
+    }
+    return false;
+}
+
+std::string kami_smart_sort_bucket(const LLViewerInventoryItem* item)
+{
+    if (!item || item->getIsLinkType()) return "";
+
+    // Metadata may be misleading, so unknown mesh objects MUST stay in place.
+    std::string text = item->getName() + " " + item->getDescription();
+    LLStringUtil::toLower(text);
+    switch (item->getInventoryType())
+    {
+        case LLInventoryType::IT_TEXTURE:
+        case LLInventoryType::IT_SNAPSHOT: return "Textures & Images";
+        case LLInventoryType::IT_SOUND: return "Sounds";
+        case LLInventoryType::IT_LSL: return "Scripts";
+        case LLInventoryType::IT_NOTECARD: return "Notecards";
+        case LLInventoryType::IT_LANDMARK: return "Landmarks";
+        case LLInventoryType::IT_ANIMATION: return "Animations";
+        case LLInventoryType::IT_GESTURE: return "Gestures";
+        case LLInventoryType::IT_MATERIAL: return "Materials";
+        case LLInventoryType::IT_SETTINGS: return "Environment & Settings";
+        case LLInventoryType::IT_WEARABLE: return "Wearables";
+        case LLInventoryType::IT_OBJECT:
+        case LLInventoryType::IT_ATTACHMENT:
+        case LLInventoryType::IT_MESH:
+            if (kami_has_any_word(text, {"hair", "wig", "wigs", "braids", "dreads", "locs", "hairbase", "waves", "ponytail"})) return "Hair";
+            if (kami_has_any_word(text, {"shoe", "shoes", "sneaker", "sneakers", "boots", "heels", "jordans", "jordan", "footwear"})) return "Footwear";
+            if (kami_has_any_word(text, {"cuban", "chain", "chains", "necklace", "pendant", "earring", "earrings", "bracelet", "ring", "rings", "jewelry", "grillz"})) return "Jewelry";
+            if (kami_has_any_word(text, {"hoodie", "shirt", "shirts", "pants", "jeans", "jacket", "coat", "dress", "sweater", "shorts", "outfit"})) return "Clothing";
+            if (kami_has_any_word(text, {"chair", "sofa", "couch", "table", "bed", "desk", "furniture"})) return "Furniture";
+            if (kami_has_any_word(text, {"car", "cars", "vehicle", "motorcycle", "bike", "truck"})) return "Vehicles";
+            return ""; // Uncertain object: never move it.
+        default: return "";
+    }
+}
+
+LLUUID kami_find_normal_folder(const LLUUID& parent_id, const std::string& name)
+{
+    LLInventoryModel::cat_array_t* folders = nullptr;
+    LLInventoryModel::item_array_t* items = nullptr;
+    gInventory.getDirectDescendentsOf(parent_id, folders, items);
+    if (folders)
+    {
+        for (const auto& folder : *folders)
+        {
+            if (folder && folder->getName() == name && folder->getPreferredType() == LLFolderType::FT_NONE)
+            {
+                return folder->getUUID();
+            }
+        }
+    }
+    return LLUUID::null;
+}
+
+void kami_move_sorted_items(const LLUUID& original_root, const LLUUID& target_folder,
+                            const std::string& bucket, const std::vector<LLUUID>& item_ids)
+{
+    if (target_folder.isNull() || !gInventory.getCategory(target_folder)) return;
+    for (const LLUUID& id : item_ids)
+    {
+        LLViewerInventoryItem* item = gInventory.getItem(id);
+        if (!item || item->getParentUUID() != original_root || item->getIsLinkType()) continue;
+        if (!item->getPermissions().allowOperationBy(PERM_COPY, gAgent.getID(), gAgent.getGroupID())) continue;
+        if (kami_smart_sort_bucket(item) != bucket) continue;
+        gInventory.changeItemParent(item, target_folder, true);
+    }
+}
+
+void kami_run_sort_plan(const LLUUID& original_root, const LLUUID& container_id,
+                       const std::shared_ptr<KamiSortPlan>& plan)
+{
+    if (!gInventory.getCategory(container_id)) return;
+    for (const auto& entry : *plan)
+    {
+        const std::string bucket = entry.first;
+        const std::vector<LLUUID> item_ids = entry.second;
+        const LLUUID existing = kami_find_normal_folder(container_id, bucket);
+        if (existing.notNull())
+        {
+            kami_move_sorted_items(original_root, existing, bucket, item_ids);
+        }
+        else
+        {
+            gInventory.createNewCategory(container_id, LLFolderType::FT_NONE, bucket,
+                [original_root, bucket, item_ids](const LLUUID& created_id)
+                {
+                    kami_move_sorted_items(original_root, created_id, bucket, item_ids);
+                });
+        }
+    }
+}
+} // anonymous namespace
 
 static LLPanelInjector<LLPanelMainInventory> t_inventory("panel_main_inventory");
 
@@ -176,6 +305,7 @@ LLPanelMainInventory::LLPanelMainInventory(const LLPanel::Params& p)
 bool LLPanelMainInventory::postBuild()
 {
     gInventory.addObserver(this);
+    childSetAction("kami_smart_sort_btn", boost::bind(&LLPanelMainInventory::onKamiSmartSort, this));
 
     mFilterTabs = getChild<LLTabContainer>("inventory filter tabs");
     mFilterTabs->setCommitCallback(boost::bind(&LLPanelMainInventory::onFilterSelected, this));
@@ -1882,6 +2012,98 @@ void LLPanelMainInventory::saveTexture(const LLSD& userdata)
     }
 }
 
+
+void LLPanelMainInventory::onKamiSmartSort()
+{
+    const LLUUID root_id = gInventory.getRootFolderID();
+    if (root_id.isNull() || !gInventory.isInventoryUsable() || !gInventory.isCategoryComplete(root_id))
+    {
+        if (root_id.notNull()) gInventory.fetchDescendentsOf(root_id);
+        LLSD args;
+        args["MESSAGE"] = "Kami Smart Sort: your inventory is still loading. Please try again when My Inventory has finished loading.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+
+    LLInventoryModel::cat_array_t* folders = nullptr;
+    LLInventoryModel::item_array_t* items = nullptr;
+    gInventory.getDirectDescendentsOf(root_id, folders, items);
+    if (!items) return;
+
+    auto plan = std::make_shared<KamiSortPlan>();
+    S32 skipped = 0;
+    size_t movable = 0;
+    for (const auto& item_ptr : *items)
+    {
+        const LLViewerInventoryItem* item = item_ptr.get();
+        if (!item || item->getIsLinkType() ||
+            !item->getPermissions().allowOperationBy(PERM_COPY, gAgent.getID(), gAgent.getGroupID()))
+        {
+            ++skipped;
+            continue;
+        }
+        const std::string bucket = kami_smart_sort_bucket(item);
+        if (bucket.empty() || movable >= KAMI_SORT_MAX_ITEMS_PER_RUN)
+        {
+            ++skipped;
+            continue;
+        }
+        (*plan)[bucket].push_back(item->getUUID());
+        ++movable;
+    }
+
+    if (movable == 0)
+    {
+        LLSD args;
+        args["MESSAGE"] = "Kami Smart Sort found no confidently classified loose items under My Inventory. Existing folders, links, no-copy items, and uncertain objects were left untouched.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+
+    std::ostringstream preview;
+    for (const auto& entry : *plan)
+    {
+        preview << "\n" << entry.first << " (" << entry.second.size() << "): ";
+        size_t shown = 0;
+        for (const LLUUID& id : entry.second)
+        {
+            if (shown >= 2) break;
+            const LLViewerInventoryItem* item = gInventory.getItem(id);
+            if (item)
+            {
+                if (shown) preview << ", ";
+                preview << item->getName().substr(0, 45);
+                ++shown;
+            }
+        }
+        if (entry.second.size() > shown) preview << ", ...";
+    }
+    LLSD args;
+    args["COUNT"] = static_cast<S32>(movable);
+    args["SKIPPED"] = skipped;
+    args["DETAILS"] = preview.str();
+    LLNotificationsUtil::add("KamiSmartSortPreview", args, LLSD(),
+        [root_id, plan](const LLSD& notification, const LLSD& response) -> bool
+        {
+            if (LLNotificationsUtil::getSelectedOption(notification, response) != 0) return false;
+            if (gInventory.getRootFolderID() != root_id || !gInventory.isInventoryUsable()) return false;
+            const LLUUID existing = kami_find_normal_folder(root_id, "Kami Smart Sort");
+            if (existing.notNull())
+            {
+                kami_run_sort_plan(root_id, existing, plan);
+            }
+            else
+            {
+                gInventory.createNewCategory(root_id, LLFolderType::FT_NONE, "Kami Smart Sort",
+                    [root_id, plan](const LLUUID& created_id)
+                    {
+                        if (created_id.notNull()) kami_run_sort_plan(root_id, created_id, plan);
+                    });
+            }
+            return false;
+        });
+}
+
 void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 {
     if (!isActionEnabled(userdata))
@@ -1889,6 +2111,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
 
     const std::string command_name = userdata.asString();
 
+    if (command_name == "kami_smart_sort")
+    {
+        onKamiSmartSort();
+        return;
+    }
     if (command_name == "new_window")
     {
         newWindow();
