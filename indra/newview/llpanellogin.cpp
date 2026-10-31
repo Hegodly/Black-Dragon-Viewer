@@ -66,9 +66,10 @@
 #include "llglheaders.h"
 #include "llpanelloginlistener.h"
 #include "llsliderctrl.h"
+#include "llfilepicker.h"
 
-// KAMI Login Soundtrack: optional, user-supplied Windows MP3.
-// Public builds include an installer but never redistribute the recording.
+// KAMI Login Soundtrack: built into the native Windows viewer.
+// Users choose their own local MP3 directly in the login interface.
 #if LL_WINDOWS
 #include <windows.h>
 #include <mmsystem.h>
@@ -107,6 +108,16 @@ void kamiSetLoginMusicVolume(int volume)
             LL_WARNS("KAMI Login Audio") << "Windows MCI volume error: " << (U32)err << LL_ENDL;
     }
 }
+std::filesystem::path kamiLocalMusicPath()
+{
+    wchar_t local[MAX_PATH] = {};
+    DWORD length = ::GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    if (!length || length >= MAX_PATH)
+        return {};
+    return std::filesystem::path(local) / L"KAMIViewer" / L"UserMedia" /
+           L"KAMI-login.mp3";
+}
+
 void kamiMusicError(const char* action, MCIERROR err)
 {
     gKamiMusicStatus = std::string("MP3 playback failed (Windows audio error ") +
@@ -128,12 +139,24 @@ void kamiStartLoginMusic()
         gKamiMusicStatus = "Could not locate KAMIViewer.exe for soundtrack.";
         return;
     }
-    std::filesystem::path file =
-        std::filesystem::path(exe).parent_path() / L"KAMI-login.mp3";
+    // Personal media is stored in a writable folder, not Program Files.
+    // Also honor earlier portable users who already added KAMI-login.mp3.
+    const std::filesystem::path user_music = kamiLocalMusicPath();
     std::error_code ec;
-    if (!std::filesystem::is_regular_file(file, ec))
+    std::filesystem::path file;
+    if (!user_music.empty() && std::filesystem::is_regular_file(user_music, ec))
+        file = user_music;
+    else
     {
-        gKamiMusicStatus = "Missing KAMI-login.mp3: use Install-KAMI-Login-Music.cmd";
+        ec.clear();
+        const std::filesystem::path portable_music =
+            std::filesystem::path(exe).parent_path() / L"KAMI-login.mp3";
+        if (std::filesystem::is_regular_file(portable_music, ec))
+            file = portable_music;
+    }
+    if (file.empty())
+    {
+        gKamiMusicStatus = "Optional soundtrack: choose your MP3 in KAMI.";
         return;
     }
 
@@ -480,6 +503,8 @@ LLPanelLogin::LLPanelLogin(const LLRect &rect,
 #if LL_WINDOWS
     LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");
     soundtrack->setCommitCallback(boost::bind(&LLPanelLogin::onKamiLoginMusicToggle, this));
+    getChild<LLButton>("kami_login_music_browse")->setCommitCallback(
+        boost::bind(&LLPanelLogin::onKamiLoginMusicBrowse, this));
     LLSliderCtrl* volume = getChild<LLSliderCtrl>("kami_login_music_volume");
     volume->setValue(35);
     volume->setCommitCallback(boost::bind(&LLPanelLogin::onKamiLoginMusicVolume, this));
@@ -1012,6 +1037,55 @@ void LLPanelLogin::onKamiLoginMusicToggle()
         kamiStopLoginMusic();
 #endif
 }
+void LLPanelLogin::onKamiLoginMusicBrowse()
+{
+#if LL_WINDOWS
+    // A native picker replaces the old CMD/PowerShell soundtrack installer.
+    // Never redistribute the selected music or write into program files.
+    if (!LLFilePicker::instance().getOpenFile(LLFilePicker::FFLOAD_ALL))
+        return;
+    const std::string selected = LLFilePicker::instance().getFirstFile();
+    if (selected.empty())
+        return;
+    const std::filesystem::path source = std::filesystem::u8path(selected);
+    if (_wcsicmp(source.extension().c_str(), L".mp3") != 0)
+    {
+        gKamiMusicStatus = "Please choose an MP3 file.";
+        return;
+    }
+    const std::filesystem::path destination = kamiLocalMusicPath();
+    if (destination.empty())
+    {
+        gKamiMusicStatus = "Windows user media directory unavailable.";
+        return;
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(destination.parent_path(), ec);
+    if (ec)
+    {
+        gKamiMusicStatus = "Could not create the KAMI music directory.";
+        return;
+    }
+    ec.clear();
+    if (!std::filesystem::equivalent(source, destination, ec) || ec)
+    {
+        ec.clear();
+        std::filesystem::copy_file(source, destination,
+            std::filesystem::copy_options::overwrite_existing, ec);
+        if (ec)
+        {
+            gKamiMusicStatus = "Could not save your MP3 in KAMI user media.";
+            return;
+        }
+    }
+    kamiStopLoginMusic();
+    if (gKamiMusicEnabled)
+        kamiStartLoginMusic();
+    else
+        gKamiMusicStatus = "Personal MP3 selected; playback is disabled.";
+#endif
+}
+
 void LLPanelLogin::onKamiLoginMusicVolume()
 {
 #if LL_WINDOWS

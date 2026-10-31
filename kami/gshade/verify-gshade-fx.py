@@ -32,12 +32,17 @@ workflow=read(".github/workflows/kombatant-windows.yaml")
 check("no embedded runtime build/integration",
       all(name not in workflow for name in (
           "apply-private-mxao.py","apply-gshade-compat.py","build-runtime.ps1")))
-check("external assets have a build staging step",
-      "stage-external-assets.ps1" in workflow and
-      (R/"kami/gshade/stage-external-assets.ps1").is_file())
-check("external asset installation helper is available",
-      (R/"kami/gshade/Install-GShade-Assets.ps1").is_file() and
-      "Install-GShade-Assets.ps1" in read("kami/packaging/stage-portable-data.py"))
+stage=read("kami/packaging/stage-portable-data.py")
+check("optional FX source staged directly as part of portable build",
+      "stage-portable-data.py" in workflow and
+      "fx_src = R / 'kami/gshade/effects'" in stage and
+      "fx_dst = out / 'KAMI-FX'" in stage)
+check("no GShade/FX user feature installer in portable release",
+      "stage-external-assets.ps1" not in workflow and
+      "Install-GShade-Assets.ps1" not in workflow and
+      "Install-GShade-Assets.ps1" in stage and
+      "for old_script in" in stage and
+      "finalize-kami-standalone.py" in workflow)
 check("viewer does not load a GShade/MXAO runtime",
       "configurePrivateMXAO" not in read("indra/llwindow/llwindow.h") and
       "configureGShade" not in read("indra/llwindow/llwindow.h") and
@@ -54,10 +59,10 @@ removed={
 }
 check("no broken internal MXAO/GShade controls",
       not any(node.get("name") in removed for node in ui.iter()))
-check("GShade source and external presets remain packaged",
-      all(name in read("kami/gshade/stage-external-assets.ps1")
-          for name in ("KAMI-FX.fx","FireGarden.ini","Cinematic.ini","Clean4K.ini")))
+check("GShade-compatible source and presets staged by Python only",
+      all(name in stage for name in
+          ("KAMI-FX.fx","FireGarden.ini","Cinematic.ini","Clean4K.ini","FX-LICENSE.txt")))
 check("private and embedded runtime flags not in final settings",
       "<key>KAMIMXAO</key>" not in read("indra/newview/app_settings/settings_blackdragon.xml") and
       "<key>KAMIGShadeCompatibility</key>" not in read("indra/newview/app_settings/settings_blackdragon.xml"))
-print("External-only GShade FX checks passed; requires manual runtime verification.")
+print("Optional external FX resources verified as source-only; native KAMI needs no GShade injector or feature installers.")
