@@ -117,6 +117,12 @@ public:
     static bool canTeleportTo(const LLUUID& id);
     static void teleportTo(const LLUUID& id);
 
+    // Kami: follow a nearby visible avatar using existing viewer autopilot.
+    static bool canFollowAvatar(const LLUUID& id);
+    static void followAvatar(const LLUUID& id);
+    static bool isFollowingAvatar();
+    static void stopFollowingAvatar();
+
     /**
      * Give money to the avatar.
      */
