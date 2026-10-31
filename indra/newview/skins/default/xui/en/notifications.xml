@@ -182,6 +182,25 @@ No tutorial is currently available.
 
   <notification
    icon="alertmodal.tga"
+   name="KamiSmartSortPreview"
+   type="alertmodal">
+Kami Smart Sort - Preview
+
+This will MOVE [COUNT] confidently classified loose inventory items into category folders inside My Inventory / Kami Smart Sort.
+
+Proposed changes:
+[DETAILS]
+
+Left untouched: [SKIPPED] loose items, all existing folders, outfit links and no-copy items.
+
+No items will be deleted. Classification is based on item metadata, not verified mesh geometry. Confirm before organizing.
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Organize" />
+  </notification>
+  <notification
+   icon="alertmodal.tga"
    name="GenericAlert"
    type="alertmodal">
 [MESSAGE]
