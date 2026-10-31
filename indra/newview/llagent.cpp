@@ -1762,6 +1762,10 @@ void LLAgent::startAutoPilotGlobal(
         return;
     }
 
+    // Any new ordinary autopilot command (click-to-walk, sit, etc.) supersedes follow.
+    // startFollowPilot() assigns mLeaderID only AFTER this method completes.
+    mLeaderID = LLUUID::null;
+
     // Are there any pending callbacks from previous auto pilot requests?
     if (mAutoPilotFinishedCallback)
     {
@@ -1876,13 +1880,11 @@ void LLAgent::setAutoPilotTargetGlobal(const LLVector3d &target_global)
 //-----------------------------------------------------------------------------
 void LLAgent::startFollowPilot(const LLUUID &leader_id, bool allow_flying, F32 stop_distance)
 {
-    mLeaderID = leader_id;
-    if (mLeaderID.isNull() || mLeaderID == gAgent.getID()) return;
+    if (leader_id.isNull() || leader_id == gAgent.getID()) return;
 
-    LLViewerObject* object = gObjectList.findObject(mLeaderID);
+    LLViewerObject* object = gObjectList.findObject(leader_id);
     if (!object || object->isDead() || !object->asAvatar())
     {
-        mLeaderID = LLUUID::null;
         return;
     }
 
@@ -1894,6 +1896,10 @@ void LLAgent::startFollowPilot(const LLUUID &leader_id, bool allow_flying, F32 s
                          stop_distance,
                          0.03f,         // rotation_threshold
                          allow_flying);
+    if (mAutoPilot)
+    {
+        mLeaderID = leader_id;
+    }
 }
 
 //-----------------------------------------------------------------------------
