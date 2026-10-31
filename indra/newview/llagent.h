@@ -612,6 +612,7 @@ public:
                                          F32 stop_distance = 0.f, F32 rotation_threshold = 0.03f,
                                          bool allow_flying = true);
     void            startFollowPilot(const LLUUID &leader_id, bool allow_flying = true, F32 stop_distance = 0.5f);
+    bool            isFollowingAvatar() const { return mAutoPilot && mLeaderID.notNull(); }
     void            stopAutoPilot(bool user_cancel = false);
     void            setAutoPilotTargetGlobal(const LLVector3d &target_global);
     void            autoPilot(F32 *delta_yaw);          // Autopilot walking action, angles in radians
