@@ -37,6 +37,42 @@ replace(CPP,
             dynamic_cast<LLVOAvatarSelf*>(mCharacter) != nullptr)
             lod_factor = 1.f;''')
 
+# The inherited physics LOD calculation has a 1400-pixel area threshold
+# at low detail and a motion-change threshold as high as 0.4. That can run
+# spring simulations yet skip every actual visual mesh update for nearby
+# residents. Keep explicit LOD=0 as OFF, but guarantee practical near-avatar
+# visual refresh when physics is enabled. No new GPU passes or mesh data.
+replace(CPP,
+'''        const F32 area_for_max_settings = 0.0;
+        const F32 area_for_min_settings = 1400.0;
+        const F32 area_for_this_setting = area_for_max_settings + (area_for_min_settings-area_for_max_settings)*(1.0f-lod_factor);
+            const F32 pixel_area = sqrtf(mCharacter->getPixelArea());
+
+        const bool is_self = (dynamic_cast<LLVOAvatarSelf *>(mCharacter) != NULL);
+        if ((pixel_area > area_for_this_setting) || is_self)
+        {
+            const F32 position_diff_local = llabs(mPositionLastUpdate_local-position_new_local_clamped);
+            const F32 min_delta = (1.0001f-lod_factor)*0.4f;''',
+'''        const bool is_self =
+            dynamic_cast<LLVOAvatarSelf*>(mCharacter) != nullptr;
+        const F32 pixel_area = sqrtf(llmax(0.f, mCharacter->getPixelArea()));
+        // Original low-LOD cutoff can reach 1400 pixels, effectively
+        // hiding physics on avatars even at conversational distance.
+        // Do not update truly tiny remote avatars, or use LOD=0.
+        const F32 area_for_this_setting = llclamp(
+            1400.f*(1.f-lod_factor), 0.f, 32.f);
+        if ((pixel_area > area_for_this_setting) || is_self)
+        {
+            const F32 position_diff_local =
+                llabs(mPositionLastUpdate_local-position_new_local_clamped);
+            // Avoid "simulation running / never visually moving" caused by
+            // extremely high display LOD deltas. Own body is always fluid;
+            // near remote avatars get precise motion; distant avatars
+            // can still use coarser visual updates.
+            const F32 min_delta = is_self ? 0.00004f :
+                (pixel_area >= 64.f ? 0.00025f :
+                 llmin((1.0001f-lod_factor)*0.4f, 0.005f));''')
+
 # Display the real local wearable state from the existing native outfit
 # system, not guessed from the presence of animation code or object render.
 replace(CPP, '#include "llagentcamera.h"',
