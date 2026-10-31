@@ -23,6 +23,20 @@ def replace(path,old,new):
     if n!=1:raise RuntimeError(f"{path.name}: expected one anchor, got {n}: {old[:96]!r}")
     path.write_text(s.replace(old,new,1),encoding="utf-8")
 
+# The original "Protect My Avatar" control only protected self when
+# Smart Physics was ON, while graphics quality presets could lower self
+# spring visual update thresholds. Respect the explicit master OFF/LOD zero,
+# but ensure "protect self" does what the UI promises at nonzero LOD.
+replace(CPP,
+'''if (gSavedSettings.getBOOL("KAMIPhysicsSmart") &&
+            gSavedSettings.getBOOL("KAMIPhysicsProtectSelf") &&
+            dynamic_cast<LLVOAvatarSelf*>(mCharacter) != nullptr)
+            lod_factor = 1.f;''',
+'''if (lod_factor > 0.f &&
+            gSavedSettings.getBOOL("KAMIPhysicsProtectSelf") &&
+            dynamic_cast<LLVOAvatarSelf*>(mCharacter) != nullptr)
+            lod_factor = 1.f;''')
+
 # Display the real local wearable state from the existing native outfit
 # system, not guessed from the presence of animation code or object render.
 replace(CPP, '#include "llagentcamera.h"',
