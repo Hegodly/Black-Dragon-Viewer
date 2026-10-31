@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Finalize a portable, user-facing KAMI Viewer distribution.
+
+Runs after KAMIViewer.exe is copied from the old internal build target.
+Never delete required runtime dependencies or upstream licensing/credits.
+The internal settings_blackdragon.xml name must be kept until its C++
+runtime readers and config migration are changed and tested.
+"""
+from __future__ import annotations
+import argparse
+import hashlib
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+KAMI_EXE = "KAMIViewer.exe"
+LEGACY_ROOT = {
+    "blackdragon-bin.exe", "blackdragon-bin.pdb",
+    "blackdragonviewer.exe", "blackdragon.exe",
+    "blackdragonviewer.pdb", "blackdragon.pdb",
+}
+REQUIRED = [
+    "app_settings/settings.xml",
+    "app_settings/settings_blackdragon.xml",
+    "app_settings/contributors-source.txt",
+    "skins/default/xui/en/panel_login.xml",
+    "skins/default/xui/en/floater_preferences.xml",
+    "skins/default/xui/en/floater_kami_workspaces.xml",
+    "skins/default/xui/en/menu_viewer.xml",
+    "skins/default/textures/windows/kami_fire_garden.jpg",
+    "skins/default/textures/windows/kami_logo.jpg",
+    "licenses.txt",
+]
+CREDITS = """KAMI Viewer | Beyond Reality
+An independent Windows Second Life-compatible viewer.
+
+KAMI is built on the open-source Black Dragon Viewer created by NiranV Dean,
+and the upstream Second Life Viewer developed by Linden Lab and its
+contributors. Thank you to these developers and the open-source community.
+
+KAMI is an independently maintained fork. It is NOT affiliated with or
+endorsed by NiranV Dean or Linden Lab.
+
+Licensing and third-party notices:
+- licenses.txt (runtime distribution licenses and third-party notices)
+- app_settings/contributors-source.txt (source contributor credits)
+- The full viewer source repository, with its original copyright and
+  license headers, must remain available in accordance with the applicable
+  open-source license obligations.
+
+Rebranding must not erase copyright history, upstream attribution,
+proprietary trademarks owned by others, or third-party license requirements.
+"""
+README = """KAMI VIEWER  |  BEYOND REALITY
+
+KAMIViewer.exe is the only KAMI viewer launcher.
+Start-KAMI.cmd is an optional wrapper that launches the same executable.
+Keep app_settings/, skins/, character/, fonts/, DLLs, and helper programs
+beside KAMIViewer.exe. They are REQUIRED dependencies, not clutter.
+
+This is an independent Second Life-compatible Windows viewer, not a
+separate virtual-world server or grid. Access and asset upload still follow
+the simulator's rules.
+
+KAMI's Fire Garden theme, native Workspaces, Control Deck, resolution and
+render options remain part of the shipped user interface. KAMI branding
+does not remove upstream project licensing or developer credit.
+
+See KAMI-CREDITS.txt and licenses.txt for source/third-party attributions.
+Use the supplied personal soundtrack installer only with audio that you
+have the right to use. A copyrighted soundtrack is NOT included.
+"""
+
+
+def verify_ui(out: Path) -> None:
+    def xml(path: str):
+        return ET.parse(out / path).getroot()
+
+    login = xml("skins/default/xui/en/panel_login.xml")
+    login_named = {n.get("name"): n for n in login.iter() if n.get("name")}
+    assert login_named.get("kami_fire_garden") is not None, "KAMI Fire Garden login missing"
+    assert login_named["kami_fire_garden"].get("image_name") == "KAMI_FireGarden"
+    assert login_named.get("kami_login_title") is not None
+    assert "K A M I" in (login_named["kami_login_title"].text or "")
+    assert not list(login.iter("web_browser")), "Legacy streaming login browser shipped"
+
+    menu = xml("skins/default/xui/en/menu_viewer.xml")
+    tops = [n for n in menu if n.tag == "menu"]
+    assert any(n.get("name") == "KAMI_Workspaces" for n in tops), "Workspaces menu missing"
+    brand = [n for n in tops if n.get("name") == "Me"]
+    assert len(brand) == 1 and brand[0].get("label") == "KAMI"
+    assert all(n.get("label", "").lower() != "dragon" for n in tops), \
+        "Old Black Dragon top-level navigation branding survived"
+
+    hub = xml("skins/default/xui/en/floater_kami_workspaces.xml")
+    assert hub.get("name") == "kami_workspaces"
+    assert len([n for n in hub.iter("button")]) == 12, "KAMI native Workspaces actions missing"
+    prefs = xml("skins/default/xui/en/floater_preferences.xml")
+    assert prefs.get("title", "").startswith("KAMI"), "Preferences not branded"
+    ET.parse(out / "app_settings/settings_blackdragon.xml")
+    ET.parse(out / "app_settings/settings.xml")
+
+
+def finalize(out: Path) -> list[str]:
+    out = out.resolve()
+    if not (out / KAMI_EXE).is_file() or (out / KAMI_EXE).stat().st_size < 4:
+        raise RuntimeError("KAMIViewer.exe missing or empty; refuse to publish release")
+    for relative in REQUIRED:
+        if not (out / relative).is_file():
+            raise RuntimeError(f"Required native runtime or license missing: {relative}")
+
+    # Delete ONLY known obsolete launcher/debug artifacts at the package root.
+    # Do not use rglob('*blackdragon*'): internal assets or settings may still
+    # be referenced by native C++ code and are essential to launch KAMI.
+    removed = []
+    for f in out.iterdir():
+        if f.is_file() and f.name.lower() in LEGACY_ROOT:
+            f.unlink()
+            removed.append(f.name)
+    orphan = [f.name for f in out.iterdir()
+              if f.is_file() and "blackdragon" in f.name.casefold()]
+    if orphan:
+        raise RuntimeError("Unclassified old-brand root files; review before release: " +
+                           ", ".join(sorted(orphan)))
+
+    # These texts are user-facing on the old vendor's settings page. Update
+    # *descriptions* without touching setting keys, types, paths or credits.
+    settings = out / "app_settings/settings_blackdragon.xml"
+    content = settings.read_text(encoding="utf-8-sig")
+    content = content.replace("<!-- Black Dragon Debugs -->",
+                              "<!-- KAMI Viewer compatibility settings -->")
+    content = content.replace("taskbar icon of Black Dragon",
+                              "taskbar icon of KAMI Viewer")
+    settings.write_text(content, encoding="utf-8")
+    ET.parse(settings)
+
+    # Remove stale root-only launcher script content if it tries to delete
+    # the source build file: previous start script manipulated old binaries.
+    start = out / "Start-KAMI.cmd"
+    start.write_bytes(
+        b'@echo off\r\n'
+        b'cd /d "%~dp0"\r\n'
+        b'if not exist "KAMIViewer.exe" (echo KAMIViewer.exe missing. & pause & exit /b 1)\r\n'
+        b'start "" "KAMIViewer.exe"\r\n'
+    )
+    (out / "KAMI-CREDITS.txt").write_text(CREDITS, encoding="utf-8")
+    (out / "KAMI-README.txt").write_text(README, encoding="utf-8")
+
+    verify_ui(out)
+
+    # A deterministic manifest helps compare artifacts without claiming FPS
+    # or launch success from a file-only test.
+    asset = out / "skins/default/xui/en/menu_viewer.xml"
+    manifest = (
+        "KAMI | FINAL PORTABLE ASSET VERIFICATION\n"
+        "Viewer executable: KAMIViewer.exe\n"
+        "Old vendor launchers: 0\n"
+        f"Menu SHA256: {hashlib.sha256(asset.read_bytes()).hexdigest()}\n"
+        "Runtime compatibility config: app_settings/settings_blackdragon.xml (required)\n"
+        "Windows launch and in-world avatar/graphics QA: NOT inferred from file checks\n"
+        f"Deleted obsolete root launchers: {len(removed)}\n"
+    )
+    (out / "KAMI-PORTABLE-VALIDATION.txt").write_text(manifest, encoding="utf-8")
+    print(f"PASS: KAMI standalone portable package validated; "
+          f"removed {len(removed)} obsolete root launchers.")
+    return removed
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", default="build-vc170-64/newview/Release")
+    opts = parser.parse_args()
+    source_root = Path(__file__).resolve().parents[2]
+    final = source_root / opts.output
+    finalize(final)
+
+
+if __name__ == "__main__":
+    main()
