@@ -1982,6 +1982,17 @@ void LLAgent::autoPilot(F32 *delta_yaw)
 
         F32 target_dist = direction.magVec();
 
+        // Hold a comfortable distance without spinning or ending follow.
+        // On later frames the avatar can move outside this radius again.
+        if (isFollowingAvatar() && target_dist <= mAutoPilotStopDistance)
+        {
+            mAutoPilotNoProgressFrameCount = 0;
+            mAutoPilotTargetDist = target_dist;
+            *delta_yaw = 0.f;
+            setControlFlags(AGENT_CONTROL_STOP);
+            return;
+        }
+
         if (isFollowingAvatar() && (target_dist <= mAutoPilotStopDistance + 1.f ||
                                     getVelocity().magVecSquared() > 0.09f))
         {
