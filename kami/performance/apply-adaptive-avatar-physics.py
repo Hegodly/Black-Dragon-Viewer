@@ -128,26 +128,10 @@ ET.indent(doc,space=" ")
 doc.write(ui,encoding="utf-8",xml_declaration=True)
 ET.parse(settings);ET.parse(ui)
 
-# Quality levels and Performance Mode affect this *native* LOD control too.
-# Preserve the user's exact FPS cap and existing KAMI manual resolution.
-quality=R/"indra/newview/kami_quality_presets.h"
-s=quality.read_text(encoding="utf-8")
-anchor='''        set("RenderAvatarLODFactor", avatarLOD[q]);'''
-assert s.count(anchor)==1
-s=s.replace(anchor,anchor+'''
-        // Preserve avatar physics switch; choose physics detail only.
-        static const F32 physicsLOD[] = {0.20f,0.40f,0.60f,0.80f,1.00f};
-        set("RenderAvatarPhysicsLODFactor", physicsLOD[q]);''')
-quality.write_text(s,encoding="utf-8")
-mode=R/"indra/newview/kami_performance_mode.h"
-s=mode.read_text(encoding="utf-8")
-assert s.count('        "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors",')==1
-s=s.replace('        "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors",',
-            '        "RenderAvatarLODFactor", "RenderAvatarPhysicsLODFactor", "RenderAvatarMaxNonImpostors",',1)
-assert s.count('            atMostF32("RenderAvatarLODFactor", 0.5f);')==1
-s=s.replace('            atMostF32("RenderAvatarLODFactor", 0.5f);',
-            '            atMostF32("RenderAvatarLODFactor", 0.5f);\\n            atMostF32("RenderAvatarPhysicsLODFactor", 0.2f);'.replace("\\n","\n"),1)
-mode.write_text(s,encoding="utf-8")
+# Physics visual update fidelity must not be lowered by FPS or graphics
+# presets. The native AvatarPhysics and RenderAvatarPhysicsLODFactor remain
+# independently controllable by the resident. KAMI performance optimization
+# applies to *explicitly opt-in* distant-avatar scheduling only.
 
 assert 'KAMIAvatarPhysicsAdaptive' in cpp.read_text(encoding="utf-8")
-print("Adaptive remote avatar body physics installed; self full rate, near full, mid 18Hz, distant 6Hz; native physics LOD respects quality/Performance presets.")
+print("Optional adaptive avatar physics installed; FPS presets do NOT override visible physics LOD. Own avatar retains original motion fidelity.")
