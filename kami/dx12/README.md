@@ -66,6 +66,26 @@ heap caching, PBR and UI are not yet implemented. The prototype caps a frame
 at 256 small meshes and 32 MiB of per-frame upload memory; do not call it
 production-performance-ready.
 
+## DX12-03 experimental live Second Life scene bridge
+
+A new C++ bridge inside the Windows viewer now reads actual decoded Second
+Life geometry without OpenGL buffer readbacks:
+
+- Visible non-rigged, opaque volume/prims and meshes from LLVolumeFace
+- Live terrain heightfield patches via LLSurfacePatch::getPointAgent()
+- Scale/rotation/translation and current viewer camera transform and frustum
+- Native HLSL-compatible D3D depth 0..1 projection and indexed triangles
+- Strict memory and object limits (256 meshes, 64 terrain patches, 32 MiB),
+  no automatic per-frame geometry capture and no GL state manipulation
+
+The bridge returns WorldFrame input for Renderer::renderWorldFrame(). It is
+**not yet the actual frame loop**: no Second Life world graphics have been
+switched from OpenGL. Terrain is flat-colored for development; it lacks
+terrain-layer textures, adjacent LOD seam stitching, water, EEP lighting.
+Avatar skinning, wearable materials, PBR, alpha, texture streaming, etc.
+remain to be migrated. A successful source/C++ build of this bridge does NOT
+prove live-region rendering or establish performance parity.
+
 ## NOT implemented yet
 
 The standalone smoke renderer **does not render Second Life**. The OpenGL

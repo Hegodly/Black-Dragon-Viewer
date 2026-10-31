@@ -21,11 +21,16 @@ check("compiled in same viewer target", 'target_sources(${VIEWER_BINARY_NAME} PR
 check("native Windows D3D12 linked", 'target_link_libraries(${VIEWER_BINARY_NAME} d3d12 dxgi d3dcompiler)' in cmake)
 check("native indexed world pass linked into viewer",
       "${KAMI_DX12_DIR}/KamiDx12World.cpp" in cmake)
+check("real Second Life scene bridge compiled in viewer",
+      "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.cpp" in cmake and
+      "${CMAKE_CURRENT_SOURCE_DIR}/kami_dx12_scene_bridge.h" in cmake)
 check("opt-in DX12 GPU test compiled into startup", '#include "KamiDx12Renderer.h"' in startup
       and 'nativeDx12.renderOffscreenSmokeTest(128, 128)' in startup
       and 'kamiDx12WarpTest || kamiDx12HardwareTest' in startup)
 check("no diagnostic GPU load on normal viewer start",
-      "if (kamiDx12WarpTest || kamiDx12HardwareTest)" in startup)
+      "if (kamiDx12WarpTest || kamiDx12HardwareTest ||" in startup and
+      "kamiWorldWarpTest || kamiWorldHardwareTest)" in startup and
+      "if (!nativeDx12.initialize(kamiDx12WarpTest || kamiWorldWarpTest))" in startup)
 check("Windows build executes embedded DX12 rasterization",
       'Execute real native D3D12 GPU test inside staged KAMIViewer' in workflow
       and '--kami-dx12-warp-test' in workflow)
