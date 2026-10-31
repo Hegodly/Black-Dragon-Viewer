@@ -52,6 +52,13 @@ int wmain(int argc, wchar_t** argv)
         }
         std::wcout << L"PASS hardware-API offscreen GPU triangle/readback "
                    << dimension << L"x" << dimension << L'\n';
+        if (!renderer.renderWorldOffscreenTest(dimension, dimension))
+        {
+            failure(renderer, "native indexed world geometry + depth-buffer readback");
+            return 9;
+        }
+        std::wcout << L"PASS native DX12 indexed 3D meshes, MVP, depth occlusion "
+                   << dimension << L"x" << dimension << L'\n';
     }
     if (visibleWindow)
     {
@@ -92,6 +99,21 @@ int wmain(int argc, wchar_t** argv)
             failure(renderer, "DX12 resize/present");
             DestroyWindow(hwnd);
             return 8;
+        }
+        kami::dx12::WorldFrame world;
+        kami::dx12::WorldMesh mesh;
+        mesh.vertices = {
+            {{-0.75f, -0.75f, 0.3f}, {1.f, 0.2f, 0.1f, 1.f}},
+            {{ 0.00f,  0.75f, 0.3f}, {1.f, 0.2f, 0.1f, 1.f}},
+            {{ 0.75f, -0.75f, 0.3f}, {1.f, 0.2f, 0.1f, 1.f}}
+        };
+        mesh.indices = {0, 1, 2};
+        world.meshes.push_back(std::move(mesh));
+        if (!renderer.renderWorldFrame(world, true))
+        {
+            failure(renderer, "DX12 indexed world frame presentation");
+            DestroyWindow(hwnd);
+            return 10;
         }
         renderer.shutdown();
         DestroyWindow(hwnd);
