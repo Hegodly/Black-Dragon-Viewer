@@ -392,7 +392,7 @@ width="510">
    disabled_control="MuteAudio"
    follows="left|top"
    height="14"
-   increment="0.5"
+   increment="0.01"
    initial_value="0.02"
    max_val="1"
    min_val="0"
@@ -837,7 +837,7 @@ width="510">
     name="kami_audio_lab_panel"
     label="Kami Audio Lab"
     follows="top|left|right"
-    height="302"
+    height="360"
     width="492"
     left="1"
     top_pad="16"
@@ -966,6 +966,29 @@ width="510">
       decimal_digits="2"
       show_text="true"
       can_edit_text="true"/>
+     <text
+      name="kami_audio_quality_label"
+      layout="topleft"
+      left="10"
+      top_pad="10"
+      height="18"
+      width="247">
+      Audio Resampling (restart required):
+     </text>
+     <combo_box
+      name="kami_audio_quality"
+      control_name="KamiAudioResamplerQuality"
+      label="Processing quality"
+      layout="topleft"
+      left="272"
+      top_delta="-3"
+      width="208"
+      height="22"
+      tool_tip="FMOD resampler: Linear is fast, Cubic improves interpolation quality, Spline uses more CPU. Restart Kami to apply.">
+       <combo_box.item name="performance" label="Performance (Linear)" value="0"/>
+       <combo_box.item name="balanced" label="Balanced (Cubic)" value="1"/>
+       <combo_box.item name="quality" label="Cinematic (Spline)" value="2"/>
+     </combo_box>
      <text
       name="kami_audio_lab_note"
       layout="topleft"
