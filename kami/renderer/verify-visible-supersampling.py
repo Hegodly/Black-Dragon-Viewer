@@ -15,14 +15,14 @@ SHADER = R / "indra/newview/app_settings/shaders/class1/deferred/postDeferredNoD
 
 def grid(source_width, source_height, window_width, window_height):
     ratio = min(source_width / window_width, source_height / window_height)
-    return 1 if ratio < 1.05 else (4 if ratio >= 3.75 else (3 if ratio >= 1.75 else 2))
+    return 1 if ratio < 1.05 else (4 if ratio >= 2.75 else (3 if ratio >= 1.75 else 2))
 
 def integrated():
     cpp = (R / "indra/newview/pipeline.cpp").read_text(encoding="utf-8")
     disp = (R / "indra/newview/llviewerdisplay.cpp").read_text(encoding="utf-8")
     for snippet in ("kami_present_resolution", "kami_resolve_grid",
                     "uniform1i(kami_grid, kami_samples_per_axis)",
-                    "uniform2f(kami_present_res", "kami_ratio >= 3.75f",
+                    "uniform2f(kami_present_res", "kami_ratio >= 2.75f",
                     "sourceBuffer->getWidth() / kami_out_width"):
         assert snippet in cpp, snippet
     assert "gDeferredPostNoDoFNoiseProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, sourceBuffer)" in cpp
