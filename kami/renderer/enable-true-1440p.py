@@ -134,6 +134,44 @@ replace_one(
         gSavedSettings.setU32("KombatantRenderWidth", 0);'''
 )
 
+# Avoid a full native-QHD copy pass when Glow, Sepia, Greyscale and
+# Posterization are all disabled. This shader normally combines glow and
+# optional color effects; with all four neutral it is an identity operation.
+# Preserve the original path whenever one of those effects is enabled.
+replace_one(
+    PIPELINE,
+    '''    generateGlow(&mPostPingMap);
+
+    LLRenderTarget* sourceBuffer = &mPostPingMap;
+    LLRenderTarget* targetBuffer = &mPostPongMap;
+
+    //BD - Volumetric Lighting
+    renderVolumetric(sourceBuffer, sourceBuffer);
+    
+    combineGlow(sourceBuffer, targetBuffer);
+    std::swap(sourceBuffer, targetBuffer);''',
+    '''    // The combine-glow shader is an identity copy when all four features
+    // are neutral. Avoid an unnecessary full-QHD GPU read/write and glow clear.
+    // RenderNumColors <= 2 is neutral in glowcombineF.glsl.
+    const bool needsGlowComposite = sRenderGlow ||
+        RenderGreyscaleStrength > 0.f || RenderSepiaStrength > 0.f ||
+        RenderNumColors > 2U;
+    if (needsGlowComposite)
+        generateGlow(&mPostPingMap);
+
+    LLRenderTarget* sourceBuffer = &mPostPingMap;
+    LLRenderTarget* targetBuffer = &mPostPongMap;
+
+    // Preserve independent volumetric lighting behavior.
+    renderVolumetric(sourceBuffer, sourceBuffer);
+
+    if (needsGlowComposite)
+    {
+        combineGlow(sourceBuffer, targetBuffer);
+        std::swap(sourceBuffer, targetBuffer);
+    }'''
+)
+
 # Report ACTUAL framebuffer allocation, rather than the dropdown choice.
 # If the requested QHD world buffer isn't 1440 high, say so explicitly.
 replace_one(
