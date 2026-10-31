@@ -19,12 +19,16 @@ for name in ('featuretable.txt','cube.dae'):
 shutil.copyfile(source/'licenses-win32.txt',out/'licenses.txt')
 # Keep source attribution available in the portable copy.
 shutil.copyfile(R/'doc/contributions.txt',out/'app_settings/contributors-source.txt')
-# Ship only a local installer, never the copyrighted MP3 recording.
-for installer in ('Install-KAMI-Login-Music.ps1', 'Install-KAMI-Login-Music.cmd'):
-  shutil.copyfile(R/'kami/theme'/installer, out/installer)
-assert (out/'Install-KAMI-Login-Music.ps1').is_file()
-assert (out/'Install-KAMI-Login-Music.cmd').is_file()
-assert not (out/'KAMI-login.mp3').exists(), 'Public portable package must not include copyrighted audio'
+# The KAMI login soundtrack chooser is compiled into LLPanelLogin and
+# stores user-selected MP3s in LOCALAPPDATA, not in this release ZIP.
+# Do not ship installers or a copyrighted recording.
+assert not (out/'KAMI-login.mp3').exists(), 'Release may not redistribute personal soundtrack'
+for old_script in ('Install-KAMI-Login-Music.ps1',
+                   'Install-KAMI-Login-Music.cmd',
+                   'Install-GShade-Assets.ps1', 'Start-KAMI.cmd'):
+    stale = out / old_script
+    if stale.exists():
+        stale.unlink()
 
 required=['app_settings/settings.xml','app_settings/settings_blackdragon.xml','app_settings/shaders/class3/deferred/softenLightF.glsl','character/avatar_skeleton.xml','skins/default/xui/en/panel_login.xml','skins/default/textures/windows/kami_fire_garden.jpg','skins/default/textures/windows/kami_logo.jpg','featuretable.txt','cube.dae']
 for name in required:assert (out/name).is_file(),f'Incomplete portable data: {name}'
@@ -43,8 +47,17 @@ fire_ui=[
 ]
 for name in fire_ui:
  assert (out/name).is_file(), f'Missing approved in-world Fire Garden skin asset: {name}'
-# Ship KAMI-authored shader assets and a safe copier for installation
-# through a user's separate, externally installed GShade/ReShade runtime.
+# Package original KAMI-authored FX *source* as optional external-runtime
+# compatibility material, NOT as an installed GShade/ReShade feature.
+# Core native renderer and KAMI controls already belong to the executable.
+# Copy build-time assets directly; no user-facing installer script.
+fx_src = R / 'kami/gshade/effects'
+fx_dst = out / 'KAMI-FX'
+(fx_dst/'Shaders').mkdir(parents=True, exist_ok=True)
+shutil.copyfile(fx_src/'KAMI-FX.fx', fx_dst/'Shaders/KAMI-FX.fx')
+for preset in ('FireGarden.ini','Cinematic.ini','Clean4K.ini','FX-LICENSE.txt'):
+    shutil.copyfile(fx_src/preset, fx_dst/preset)
+shutil.copyfile(R/'kami/gshade/README.md', out/'KAMI-GSHADE-EXTERNAL-SETUP.md')
 external_fx=[
  'KAMI-FX/Shaders/KAMI-FX.fx',
  'KAMI-FX/FireGarden.ini',
@@ -52,7 +65,6 @@ external_fx=[
  'KAMI-FX/Clean4K.ini',
  'KAMI-FX/FX-LICENSE.txt',
  'KAMI-GSHADE-EXTERNAL-SETUP.md',
- 'Install-GShade-Assets.ps1',
 ]
 for name in external_fx:
  assert (out/name).is_file(), f'Missing external GShade/ReShade asset: {name}'
@@ -80,7 +92,7 @@ assert named.get('kami_login_title') is not None and 'K A M I' in (named['kami_l
 assert named.get('kami_login_subtitle') is not None and 'B E Y O N D' in (named['kami_login_subtitle'].text or ''), 'KAMI tagline missing'
 assert named.get('kami_login_music_controls') is not None, 'Login soundtrack controls missing'
 assert named.get('kami_login_music_status') is not None, 'Music error/status label missing from login'
-assert (out/'Install-KAMI-Login-Music.cmd').read_text(encoding='utf-8').find('Install-KAMI-Login-Music.ps1')>=0, 'MP3 installer command missing'
+assert named.get('kami_login_music_browse') is not None, 'Built-in native MP3 chooser missing'
 
 assert not any(node.tag=='web_browser' for node in login.iter()), 'Legacy remote video/browser still present'
 assert not any(node.get('name') in ('login_stack','login_bg') for node in login.iter()), 'Legacy Black Dragon login layer still present'
@@ -100,5 +112,5 @@ assert (out/'skins/default/textures/windows/startup_logo.png').stat().st_size>40
 print('Approved KAMI Beyond Reality login artwork and layout verified in portable release.')
 print(f'Runtime assets staged and validated: {out}')
 
-# Repair overlays can be extracted directly over an existing portable folder.
-(out/'Start-KAMI.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\nif not exist "KAMIViewer.exe" (echo Extract this repair into the folder containing KAMIViewer.exe. & pause & exit /b 1)\r\nif exist "blackdragon-bin.exe" del "blackdragon-bin.exe"\r\nstart "" "KAMIViewer.exe"\r\n',encoding='ascii')
+# KAMI is a self-contained application: users run KAMIViewer.exe directly.
+# No Start-KAMI.cmd, feature installer, or post-extraction script is packaged.
