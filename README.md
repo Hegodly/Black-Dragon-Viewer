@@ -14,4 +14,4 @@ This is a **development build**, not a tested public release. The Windows viewer
 
 Based on the [Black Dragon Viewer](https://github.com/NiranV/Black-Dragon-Viewer) and the [Second Life Viewer open-source codebase](https://wiki.secondlife.com/wiki/Open_Source_Portal). Preserve all existing source licenses, copyright notices, and third-party credits. KAMI Viewer is not affiliated with or endorsed by Linden Lab.
 
-For source licensing, see [LICENSE](LICENSE), [doc/LGPL-license.txt](doc/LGPL-license.txt), and the other original files in [doc](doc).
+For source licensing, see the unchanged [GNU LGPL 2.1 license](LICENSE), the [KAMI licensing and attribution notice](KAMI-LICENSING.txt), [doc/LGPL-license.txt](doc/LGPL-license.txt), and the other original files in [doc](doc). The KAMI notice does not override file-specific licenses or grant rights to third-party artwork, music, SDKs, or trademarks.
