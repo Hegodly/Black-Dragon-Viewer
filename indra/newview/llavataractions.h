@@ -113,6 +113,10 @@ public:
      */
     static void showOnMap(const LLUUID& id);
 
+    // Kami: teleport near an avatar whose position is known to the viewer.
+    static bool canTeleportTo(const LLUUID& id);
+    static void teleportTo(const LLUUID& id);
+
     /**
      * Give money to the avatar.
      */
