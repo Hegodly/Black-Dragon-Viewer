@@ -490,7 +490,7 @@
     <button
      name="kami_smart_sort_btn"
      label="Smart Sort"
-     tool_tip="Preview Kami's inventory organization suggestions; no items move without approval."
+     tool_tip="Choose Smart Sort by Category, Creator or Store; preview and approve before any move."
      follows="top|right"
      layout="topleft"
      left="184"
