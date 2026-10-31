@@ -21,7 +21,7 @@ new='''    // KAMI: Keep self-avatar physics fully responsive. Reduce the CPU co
     // avatars. Each spring continues with the actual elapsed dt when run,
     // and the upstream solver already substeps dt for stability.
     static LLCachedControl<bool> adaptive_physics(gSavedSettings,
-                                                  "KAMIAvatarPhysicsAdaptive", true);
+                                                  "KAMIAvatarPhysicsAdaptive", false);
     // Smart mode owns update cadence when enabled; never stack both limiters.
     if (adaptive_physics && !gSavedSettings.getBOOL("KAMIPhysicsSmart") &&
         dynamic_cast<LLVOAvatarSelf*>(mCharacter) == nullptr)
@@ -75,7 +75,7 @@ settings=R/"indra/newview/app_settings/settings_blackdragon.xml"
 doc=ET.parse(settings);root=doc.getroot().find("map")
 assert root is not None
 specs=[
- ("KAMIAvatarPhysicsAdaptive","Boolean","integer","1","Optimize remote avatar body physics at lower rates as they become visually smaller; keep self full rate."),
+ ("KAMIAvatarPhysicsAdaptive","Boolean","integer","0","Optimize remote avatar body physics at lower rates as they become visually smaller; keep self full rate."),
  ("KAMIAvatarPhysicsNearPixels","F32","real","70","At this pixel-square-root area or greater remote avatars run full physics."),
  ("KAMIAvatarPhysicsDistantPixels","F32","real","28","Below this size remote avatars use the far physics update rate."),
  ("KAMIAvatarPhysicsMidHz","S32","integer","18","Remote avatar physics update rate for middle sized avatars, independent of FPS cap."),
@@ -110,7 +110,7 @@ checkbox=ET.Element("check_box",{
  "name":"kami_adaptive_avatar_physics",
  "control_name":"KAMIAvatarPhysicsAdaptive",
  "enabled_control":"AvatarPhysics",
- "label":"Optimize distant avatar body physics (keep my physics full speed)",
+ "label":"Optimize distant avatars (optional; own physics stays full speed)",
  "height":"17","layout":"topleft","left":"10","top_pad":"8","width":"450",
  "tool_tip":"Throttles calculations only on distant/small OTHER avatars. Your avatar remains full physics. Does not affect scripted mesh/hair physics or simulator dynamics. Optional; compare FPS and motion smoothness."
 })
