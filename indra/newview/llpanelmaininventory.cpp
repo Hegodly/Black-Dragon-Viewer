@@ -152,7 +152,7 @@ LLUUID kami_find_normal_folder(const LLUUID& parent_id, const std::string& name)
     gInventory.getDirectDescendentsOf(parent_id, folders, items);
     if (folders)
     {
-        for (const auto* folder : *folders)
+        for (const auto& folder : *folders)
         {
             if (folder && folder->getName() == name && folder->getPreferredType() == LLFolderType::FT_NONE)
             {
@@ -2018,7 +2018,7 @@ void LLPanelMainInventory::onKamiSmartSort()
     const LLUUID root_id = gInventory.getRootFolderID();
     if (root_id.isNull() || !gInventory.isInventoryUsable() || !gInventory.isCategoryComplete(root_id))
     {
-        gInventory.fetchDescendentsOf(root_id);
+        if (root_id.notNull()) gInventory.fetchDescendentsOf(root_id);
         LLSD args;
         args["MESSAGE"] = "Kami Smart Sort: your inventory is still loading. Please try again when My Inventory has finished loading.";
         LLNotificationsUtil::add("GenericAlert", args);
@@ -2033,8 +2033,9 @@ void LLPanelMainInventory::onKamiSmartSort()
     auto plan = std::make_shared<KamiSortPlan>();
     S32 skipped = 0;
     size_t movable = 0;
-    for (const LLViewerInventoryItem* item : *items)
+    for (const auto& item_ptr : *items)
     {
+        const LLViewerInventoryItem* item = item_ptr.get();
         if (!item || item->getIsLinkType() ||
             !item->getPermissions().allowOperationBy(PERM_COPY, gAgent.getID(), gAgent.getGroupID()))
         {
