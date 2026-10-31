@@ -51,11 +51,11 @@ FMOD::ChannelGroup *LLAudioEngine_FMODSTUDIO::mChannelGroups[LLAudioEngine::AUDI
 LLAudioEngine_FMODSTUDIO::LLAudioEngine_FMODSTUDIO(bool enable_profiler, U32 resampler_quality)
 	: mInited(false),
 	mWindGen(NULL),
+	mWindDSPDesc(NULL),
 	mWindDSP(NULL),
 	mSystem(NULL),
 	mEnableProfiler(enable_profiler),
-	mResamplerQuality(resampler_quality),
-	mWindDSPDesc(NULL)
+	mResamplerQuality(resampler_quality)
 {
 }
 
