@@ -46,7 +46,7 @@ vec4 kamiResolveSupersampledWorld(vec2 uv)
     if (kami_resolve_grid <= 1)
         return texture(diffuseRect, uv);
 
-    // 2x2 for modest supersampling, 3x3 for ~2x+, 4x4 for ~4x+.
+    // 2x2 for modest supersampling, 3x3 for ~2x+, 4x4 for ~3x+.
     // A footprint covers exactly one output pixel, not one source texel.
     // Multi-tap integration avoids single-point bilinear downsampling
     // ignoring most 4K/8K source detail.
