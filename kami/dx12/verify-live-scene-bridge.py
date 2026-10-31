@@ -24,6 +24,15 @@ check("capture real decoded Second Life LLVolumeFace data",
           "getPCode() != LL_PCODE_VOLUME", "object->getVolumeConst()",
           "volume->getVolumeFace(faceNumber)", "face.mPositions[vertex].getF32ptr()",
           "mesh.indices.push_back(value)")))
+check("capture actual Second Life terrain heightfields",
+      all(token in source for token in (
+          "LLViewerObject::LL_VO_SURFACE_PATCH", "terrain->getPatch()",
+          "LLSurfacePatch", "patch->getSurface()", "patch->getDataZ()",
+          "patch->isHeightsGenerated()", "patch->getRenderStride()",
+          "patch->getPointAgent(x * stride, y * stride)",
+          "mesh.indices.push_back(next)", "stats.submittedTerrainPatches++",
+          "kMaxTerrainPatches = 64")) and
+      "submittedTerrainPatches" in header)
 check("capture actual camera projection and object transforms",
       all(token in source for token in (
           "camera.getOrigin()", "camera.getLeftAxis()", "camera.getUpAxis()",
