@@ -7,6 +7,9 @@
 #include "llviewercamera.h"
 #include "lltextureentry.h"
 #include "llvolume.h"
+#include "llvosurfacepatch.h"
+#include "llsurfacepatch.h"
+#include "llsurface.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,6 +20,7 @@ namespace kami::dx12 {
 namespace {
 
 constexpr std::size_t kMaxMeshes = 256;
+constexpr std::size_t kMaxTerrainPatches = 64;
 constexpr std::size_t kMaxGeometryBytes = 32u * 1024u * 1024u;
 constexpr S32 kMaxPerFaceVertices = 1 << 20;
 constexpr S32 kMaxPerFaceIndices = 1 << 21;
@@ -53,6 +57,99 @@ std::array<float, 16> d3dPerspective(const LLViewerCamera& camera)
     };
 }
 
+// Capture a real decoded Second Life heightfield patch as D3D12 index geometry.
+// Terrain paint, neighboring-patch LOD edge stitching and texture blending
+// require separate implementations; this is an untextured GPU world geometry pass.
+bool appendTerrainPatch(const LLSurfacePatch* patch,
+                        const LLViewerCamera& camera,
+                        const LLVector3& origin, const LLVector3& right,
+                        const LLVector3& up, const LLVector3& forward,
+                        const std::array<float, 16>& projection,
+                        WorldFrame& scene, SceneCaptureStats& stats,
+                        std::size_t& uploadedBytes)
+{
+    if (!patch || !patch->getSurface() || !patch->getDataZ() ||
+        !patch->isHeightsGenerated())
+        return false;
+    if (stats.submittedTerrainPatches >= kMaxTerrainPatches)
+        return false;
+
+    const S32 patchWidth = patch->getSurface()->getGridsPerPatchEdge();
+    if (patchWidth < 2 || patchWidth > 64)
+        return false;
+    const U32 stride = std::max(1u, patch->getRenderStride());
+    if (stride > static_cast<U32>(patchWidth) ||
+        patchWidth % static_cast<S32>(stride) != 0)
+        return false;
+    const U32 segments = static_cast<U32>(patchWidth) / stride;
+    if (segments < 1u)
+        return false;
+
+    const LLVector3 center =
+        patch->getPointAgent(static_cast<U32>(patchWidth / 2),
+                             static_cast<U32>(patchWidth / 2));
+    const F32 radius = patchWidth * patch->getSurface()->getMetersPerGrid() * 1.5f;
+    if (!finite3(center) || !camera.sphereInFrustum(center, radius))
+        return false;
+
+    const std::size_t vertexCount = (segments + 1u) * (segments + 1u);
+    const std::size_t indexCount = segments * segments * 6u;
+    const std::size_t bytes = vertexCount * sizeof(WorldVertex) +
+                              indexCount * sizeof(std::uint32_t);
+    if (scene.meshes.size() >= kMaxMeshes ||
+        bytes > kMaxGeometryBytes - uploadedBytes)
+    {
+        stats.hitBudget = true;
+        return false;
+    }
+
+    WorldMesh mesh;
+    mesh.worldViewProjection = projection;
+    mesh.vertices.reserve(vertexCount);
+    mesh.indices.reserve(indexCount);
+    for (U32 y = 0; y <= segments; ++y)
+    {
+        for (U32 x = 0; x <= segments; ++x)
+        {
+            const LLVector3 world = patch->getPointAgent(x * stride, y * stride);
+            if (!finite3(world))
+                return false;
+            const LLVector3 relative = world - origin;
+            WorldVertex vertex;
+            vertex.position = {
+                dot3(relative, right),
+                dot3(relative, up),
+                dot3(relative, forward)
+            };
+            vertex.color = {0.22f, 0.42f, 0.18f, 1.f};
+            mesh.vertices.push_back(vertex);
+        }
+    }
+
+    for (U32 y = 0; y < segments; ++y)
+    {
+        for (U32 x = 0; x < segments; ++x)
+        {
+            const U32 row = y * (segments + 1u) + x;
+            const U32 next = row + segments + 1u;
+            mesh.indices.push_back(row);
+            mesh.indices.push_back(row + 1u);
+            mesh.indices.push_back(next);
+            mesh.indices.push_back(row + 1u);
+            mesh.indices.push_back(next + 1u);
+            mesh.indices.push_back(next);
+        }
+    }
+
+    stats.submittedVertices += mesh.vertices.size();
+    stats.submittedIndices += mesh.indices.size();
+    stats.submittedMeshes++;
+    stats.submittedTerrainPatches++;
+    uploadedBytes += bytes;
+    scene.meshes.push_back(std::move(mesh));
+    return true;
+}
+
 } // namespace
 
 WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
@@ -80,8 +177,20 @@ WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
     {
         LLViewerObject* object = gObjectList.getObject(objectNumber);
         ++results.visitedObjects;
-        if (!object || object->isDead() ||
-            object->getPCode() != LL_PCODE_VOLUME ||
+        if (!object || object->isDead())
+            continue;
+
+        if (object->getPCode() == LLViewerObject::LL_VO_SURFACE_PATCH)
+        {
+            LLVOSurfacePatch* terrain = static_cast<LLVOSurfacePatch*>(object);
+            appendTerrainPatch(terrain->getPatch(), camera, origin,
+                               right, up, forward, projection,
+                               scene, results, uploadedBytes);
+            if (results.hitBudget) break;
+            continue;
+        }
+
+        if (object->getPCode() != LL_PCODE_VOLUME ||
             object->getAvatarAncestor())
             continue; // Avatar attachments require a separate skinned pass.
 
