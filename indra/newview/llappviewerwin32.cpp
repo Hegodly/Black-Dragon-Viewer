@@ -35,6 +35,10 @@
 
 #include "llappviewerwin32.h"
 
+#ifdef KAMI_HAS_NATIVE_DX12
+#include "KamiDx12Renderer.h"
+#endif
+
 #include "llgl.h"
 #include "res/resource.h" // *FIX: for setting gIconResource.
 
@@ -424,6 +428,31 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
                      PWSTR     pCmdLine,
                      int       nCmdShow)
 {
+#ifdef KAMI_HAS_NATIVE_DX12
+    // Native D3D12 backend is part of the KAMIViewer.exe Windows binary.
+    // Explicit DX12-only diagnostic path, without initializing legacy GL
+    // or launching the viewer. No device probing on normal SL startup.
+    const std::wstring kamiDx12Arguments = pCmdLine ? pCmdLine : L"";
+    const bool kamiDx12WarpTest = kamiDx12Arguments == L"--kami-dx12-warp-test";
+    const bool kamiDx12HardwareTest = kamiDx12Arguments == L"--kami-dx12-hardware-test";
+    if (kamiDx12WarpTest || kamiDx12HardwareTest)
+    {
+        kami::dx12::Renderer nativeDx12;
+        if (!nativeDx12.initialize(kamiDx12WarpTest))
+        {
+            OutputDebugStringA(nativeDx12.error().c_str());
+            return 61;
+        }
+        if (!nativeDx12.renderOffscreenSmokeTest(128, 128))
+        {
+            OutputDebugStringA(nativeDx12.error().c_str());
+            return 62;
+        }
+        nativeDx12.shutdown();
+        return 0;
+    }
+#endif
+
     // Call Tracy first thing to have it allocate memory
     // https://github.com/wolfpld/tracy/issues/196
     LL_PROFILER_FRAME_END;
