@@ -435,10 +435,13 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
     const std::wstring kamiDx12Arguments = pCmdLine ? pCmdLine : L"";
     const bool kamiDx12WarpTest = kamiDx12Arguments == L"--kami-dx12-warp-test";
     const bool kamiDx12HardwareTest = kamiDx12Arguments == L"--kami-dx12-hardware-test";
-    if (kamiDx12WarpTest || kamiDx12HardwareTest)
+    const bool kamiWorldWarpTest = kamiDx12Arguments == L"--kami-dx12-world-warp-test";
+    const bool kamiWorldHardwareTest = kamiDx12Arguments == L"--kami-dx12-world-hardware-test";
+    if (kamiDx12WarpTest || kamiDx12HardwareTest ||
+        kamiWorldWarpTest || kamiWorldHardwareTest)
     {
         kami::dx12::Renderer nativeDx12;
-        if (!nativeDx12.initialize(kamiDx12WarpTest))
+        if (!nativeDx12.initialize(kamiDx12WarpTest || kamiWorldWarpTest))
         {
             OutputDebugStringA(nativeDx12.error().c_str());
             return 61;
@@ -447,6 +450,14 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
         {
             OutputDebugStringA(nativeDx12.error().c_str());
             return 62;
+        }
+        if (kamiWorldWarpTest || kamiWorldHardwareTest)
+        {
+            if (!nativeDx12.renderWorldOffscreenTest(128, 128))
+            {
+                OutputDebugStringA(nativeDx12.error().c_str());
+                return 63;
+            }
         }
         nativeDx12.shutdown();
         return 0;

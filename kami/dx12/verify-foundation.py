@@ -9,6 +9,7 @@ import re
 
 HERE = Path(__file__).resolve().parent
 header = (HERE / "KamiDx12Renderer.h").read_text(encoding="utf-8")
+world = (HERE / "KamiDx12World.cpp").read_text(encoding="utf-8")
 core = (HERE / "KamiDx12Renderer.cpp").read_text(encoding="utf-8")
 smoke = (HERE / "KamiDx12Smoke.cpp").read_text(encoding="utf-8")
 cmake = (HERE / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -25,7 +26,7 @@ expect("Windows-only native DX12 includes", all(
 ))
 expect("no OpenGL API or translation calls", not re.search(
     r"(?:#\s*include\s*[<\"]GL[/\\]|\b(?:gl[A-Z]\w+|wgl[A-Z]\w+)\s*\()",
-    header + core + smoke + cmake
+    header + core + world + smoke + cmake
 ))
 expect("no test adapter automatically replaces hardware",
        "if (warpForTesting)" in core
@@ -53,4 +54,17 @@ expect("native D3D12 SDK libs, no GL libraries",
        "d3d12 dxgi d3dcompiler" in cmake
        and not re.search(r"\b(?:OpenGL::GL|opengl32|glew|glfw)\b", cmake, re.I))
 
-print("Kami DX12-01 native foundation source contracts PASS")
+expect("indexed world scene GPU pipeline exists",
+       all(token in world for token in (
+           "D3D12_DEPTH_WRITE_MASK_ALL", "D3D12_COMPARISON_FUNC_LESS",
+           "DXGI_FORMAT_D32_FLOAT", "IASetVertexBuffers", "IASetIndexBuffer",
+           "DrawIndexedInstanced", "SetGraphicsRoot32BitConstants", "CreateCommittedResource")))
+expect("per-backbuffer GPU resource lifetime preserved",
+       "frameUploads_[index].clear()" in world and
+       "frameFenceValues_[index] = fence;" in world)
+expect("world pass runs in native Windows CTest",
+       "KamiDx12World.cpp" in cmake and
+       "renderer.renderWorldOffscreenTest" in smoke)
+expect("world GPU readback detects depth and indexed mesh",
+       "redOccludesBlue" in world and "blackClear" in world)
+print("Kami DX12-01+02 native indexed world pass source contracts PASS")

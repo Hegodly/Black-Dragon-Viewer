@@ -19,6 +19,8 @@ def check(name, ok):
 check("compiled in same viewer target", 'target_sources(${VIEWER_BINARY_NAME} PRIVATE' in cmake
       and '${KAMI_DX12_DIR}/KamiDx12Renderer.cpp' in cmake)
 check("native Windows D3D12 linked", 'target_link_libraries(${VIEWER_BINARY_NAME} d3d12 dxgi d3dcompiler)' in cmake)
+check("native indexed world pass linked into viewer",
+      "${KAMI_DX12_DIR}/KamiDx12World.cpp" in cmake)
 check("opt-in DX12 GPU test compiled into startup", '#include "KamiDx12Renderer.h"' in startup
       and 'nativeDx12.renderOffscreenSmokeTest(128, 128)' in startup
       and 'kamiDx12WarpTest || kamiDx12HardwareTest' in startup)
@@ -27,4 +29,7 @@ check("no diagnostic GPU load on normal viewer start",
 check("Windows build executes embedded DX12 rasterization",
       'Execute real native D3D12 GPU test inside staged KAMIViewer' in workflow
       and '--kami-dx12-warp-test' in workflow)
+check("native DX12 world depth & indexed test in staged viewer",
+      "nativeDx12.renderWorldOffscreenTest(128, 128)" in startup and
+      "--kami-dx12-world-warp-test" in workflow)
 print("KAMI DX12 embedded build wiring: PASS. SL world still uses existing renderer.")

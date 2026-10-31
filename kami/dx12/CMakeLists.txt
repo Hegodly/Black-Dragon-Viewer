@@ -5,7 +5,7 @@ if(NOT WIN32)
     message(FATAL_ERROR "Kami DX12 is a native Windows-only renderer. No OpenGL fallback.")
 endif()
 
-add_library(kami_dx12_native STATIC KamiDx12Renderer.cpp KamiDx12Renderer.h)
+add_library(kami_dx12_native STATIC KamiDx12Renderer.cpp KamiDx12World.cpp KamiDx12Renderer.h)
 target_compile_features(kami_dx12_native PUBLIC cxx_std_17)
 target_compile_definitions(kami_dx12_native PUBLIC
     WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)

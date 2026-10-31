@@ -469,6 +469,12 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
 void Renderer::shutdown() noexcept
 {
     if (queue_ && fence_ && fenceEvent_) flush();
+    for (auto& uploads : frameUploads_) uploads.clear();
+    worldDepth_.Reset();
+    worldDepthHeap_.Reset();
+    worldPipeline_.Reset();
+    worldRootSignature_.Reset();
+    worldDepthWidth_ = worldDepthHeight_ = 0;
     for (auto& target : targets_) target.Reset();
     rtvHeap_.Reset();
     swapChain_.Reset();

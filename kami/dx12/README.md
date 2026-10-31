@@ -46,6 +46,26 @@ slowed by probing or initializing a second graphics device. The current viewer
 still uses the existing OpenGL renderer for its actual world and UI until every
 rendering subsystem is migrated and verified under D3D12.
 
+## DX12-02 prototype: actual indexed world-geometry rendering
+
+A native D3D12 indexed mesh renderer has been added in `KamiDx12World.cpp`.
+This path draws arbitrary CPU-supplied triangle meshes with per-mesh
+world-view-projection matrices, per-vertex color, a D32 depth buffer, index
+validation, a bounded upload memory budget and per-frame GPU-fence-protected
+resource lifetimes. The native viewport/RTV can display these meshes, and
+the WARP/MSVC test renders overlapping meshes, reads actual BGRA pixels and
+verifies the nearest surface wins the hardware depth test.
+
+The `KAMIViewer.exe --kami-dx12-world-warp-test` diagnostic runs this renderer
+from inside the real viewer executable without booting the existing viewer.
+No OpenGL translation layer is involved. This is a genuine step toward
+world rendering, but it does **not** pull Second Life regions, terrain,
+avatars or material textures from the live viewer. World/rigged mesh scene
+extraction, UVs and textures, draw batching, texture residency, GPU default
+heap caching, PBR and UI are not yet implemented. The prototype caps a frame
+at 256 small meshes and 32 MiB of per-frame upload memory; do not call it
+production-performance-ready.
+
 ## NOT implemented yet
 
 The standalone smoke renderer **does not render Second Life**. The OpenGL

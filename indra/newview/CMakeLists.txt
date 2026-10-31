@@ -2088,9 +2088,12 @@ if (WINDOWS)
     set(KAMI_DX12_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../kami/dx12")
     target_sources(${VIEWER_BINARY_NAME} PRIVATE
         "${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
+        "${KAMI_DX12_DIR}/KamiDx12World.cpp"
         "${KAMI_DX12_DIR}/KamiDx12Renderer.h")
     # Keep the standalone D3D12 translation unit isolated from legacy GL PCH.
-    set_source_files_properties("${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
+    set_source_files_properties(
+        "${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
+        "${KAMI_DX12_DIR}/KamiDx12World.cpp"
         PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
     target_include_directories(${VIEWER_BINARY_NAME} PRIVATE "${KAMI_DX12_DIR}")
     target_link_libraries(${VIEWER_BINARY_NAME} d3d12 dxgi d3dcompiler)
