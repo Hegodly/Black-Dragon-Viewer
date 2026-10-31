@@ -2089,6 +2089,9 @@ if (WINDOWS)
     target_sources(${VIEWER_BINARY_NAME} PRIVATE
         "${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
         "${KAMI_DX12_DIR}/KamiDx12Renderer.h")
+    # Keep the standalone D3D12 translation unit isolated from legacy GL PCH.
+    set_source_files_properties("${KAMI_DX12_DIR}/KamiDx12Renderer.cpp"
+        PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
     target_include_directories(${VIEWER_BINARY_NAME} PRIVATE "${KAMI_DX12_DIR}")
     target_link_libraries(${VIEWER_BINARY_NAME} d3d12 dxgi d3dcompiler)
     target_compile_definitions(${VIEWER_BINARY_NAME} PRIVATE KAMI_HAS_NATIVE_DX12=1)
