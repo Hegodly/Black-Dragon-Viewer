@@ -28,7 +28,8 @@ class PortableTests(unittest.TestCase):
         (self.root/"app_settings/settings.xml").write_text("<llsd><map/></llsd>",encoding="utf-8")
         (self.root/"skins/default/xui/en/panel_login.xml").write_text(
           "<panel><icon name='kami_fire_garden' image_name='KAMI_FireGarden'/>"
-          "<text name='kami_login_title'>K A M I</text></panel>",encoding="utf-8")
+          "<text name='kami_login_title'>K A M I</text>"
+          "<button name='kami_login_music_browse'/></panel>",encoding="utf-8")
         (self.root/"skins/default/xui/en/menu_viewer.xml").write_text(
           "<menu_bar><menu name='Me' label='KAMI'/>"
           "<menu name='KAMI_Workspaces' label='KAMI WORKSPACES'/></menu_bar>",
@@ -52,8 +53,9 @@ class PortableTests(unittest.TestCase):
         self.assertNotIn("Black Dragon", (self.root/"app_settings/settings_blackdragon.xml").read_text())
         self.assertIn("NiranV Dean",(self.root/"KAMI-CREDITS.txt").read_text())
         self.assertIn("licenses.txt",(self.root/"KAMI-README.txt").read_text())
-        self.assertIn("KAMIViewer.exe",(self.root/"Start-KAMI.cmd").read_text())
-        self.assertNotIn("blackdragon",(self.root/"Start-KAMI.cmd").read_text().lower())
+        self.assertFalse((self.root/"Start-KAMI.cmd").exists())
+        self.assertFalse((self.root/"Install-KAMI-Login-Music.cmd").exists())
+        self.assertTrue((self.root/"KAMIViewer.exe").exists())
 
     def test_dont_delete_unknown_app_or_runtime_dependency(self):
         # An unknown old-branded file must STOP release. Blind deletion could
@@ -62,6 +64,16 @@ class PortableTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"Unclassified"):
             module.finalize(self.root)
         self.assertTrue((self.root/"blackdragon-custom-runtime.dll").exists())
+
+    def test_dont_release_any_first_run_setup_scripts(self):
+        for name in ("Install-GShade-Assets.ps1", "Start-KAMI.cmd",
+                     "Install-KAMI-Login-Music.cmd"):
+            path = self.root / name
+            path.write_text("@echo off", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "scripts found"):
+                module.finalize(self.root)
+            self.assertTrue(path.exists())
+            path.unlink()
 
     def test_dont_release_incomplete_package(self):
         (self.root/"licenses.txt").unlink()
