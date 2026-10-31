@@ -11,6 +11,7 @@ header = (root / "indra/newview/kami_dx12_live_preview.h").read_text("utf-8-sig"
 display = (root / "indra/newview/llviewerdisplay.cpp").read_text("utf-8-sig")
 cmake = (root / "indra/newview/CMakeLists.txt").read_text("utf-8-sig")
 settings = (root / "indra/newview/app_settings/settings.xml").read_text("utf-8-sig")
+world_menu = (root / "indra/newview/skins/default/xui/en/menu_viewer.xml").read_text("utf-8-sig")
 
 def check(label, condition):
     if not condition:
@@ -45,6 +46,11 @@ check("render call only after real viewer display starts",
       "kamiDX12LivePreviewTick(*viewer_cam)" in display
       and "#ifdef KAMI_HAS_NATIVE_DX12" in display
       and "if (!for_snapshot && viewer_cam)" in display)
+check("World menu allows manual preview ON/OFF",
+      'label="Native DX12 Scene Preview (Experimental)"' in world_menu
+      and 'control="KamiDX12LivePreview"' in world_menu
+      and 'function="ToggleControl"' in world_menu
+      and 'parameter="KamiDX12LivePreview"' in world_menu)
 check("compiled into actual Windows viewer not a batch installer",
       "kami_dx12_live_preview.cpp" in cmake
       and "kami_dx12_live_preview.h" in cmake)
