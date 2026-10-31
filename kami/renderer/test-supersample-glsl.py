@@ -128,7 +128,7 @@ one(location(prog,b"diffuseRect"),0)
 one(location(prog,b"depthMap"),0)
 two(location(prog,b"screen_res"),SW,SH)
 two(location(prog,b"kami_present_resolution"),OW,OH)
-one(location(prog,b"chroma_str"),0)
+gl("Uniform1f",None,I,F)(location(prog,b"chroma_str"),0.0)
 read=gl("ReadPixels",None,I,I,I,I,U,U,P)
 
 def draw(grid):
