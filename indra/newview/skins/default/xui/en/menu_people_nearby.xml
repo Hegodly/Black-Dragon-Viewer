@@ -46,6 +46,24 @@ name="Nearby People Context Menu">
 	function="Avatar.EnableItem"
 	parameter="can_teleport_to"/>
 	</menu_item_call>
+    <menu_item_call
+     label="Follow Avatar"
+     name="kami_follow_avatar">
+        <menu_item_call.on_click
+         function="Avatar.KamiFollowAvatar"/>
+        <menu_item_call.on_enable
+         function="Avatar.EnableItem"
+         parameter="can_follow_avatar"/>
+    </menu_item_call>
+    <menu_item_call
+     label="Stop Following"
+     name="kami_stop_following">
+        <menu_item_call.on_click
+         function="Avatar.KamiStopFollowing"/>
+        <menu_item_call.on_enable
+         function="Avatar.EnableItem"
+         parameter="is_following_avatar"/>
+    </menu_item_call>
 	<menu_item_call
 	label="Request Posing Permissions"
 	name="request_posing">
