@@ -8,6 +8,11 @@ on:
 
 jobs:
   cla:
+    # Linden Lab's upstream CLA signs into a private secondlife/cla-signatures
+    # repository with SHARED_CLA_TOKEN. That token is not available to forks.
+    # Run this *upstream-only* gate only in the official Second Life viewer repo.
+    # Independent forks retain all LGPL/third-party licensing duties.
+    if: github.repository == 'secondlife/viewer'
     name: Check CLA
     runs-on: ubuntu-latest
     steps:
