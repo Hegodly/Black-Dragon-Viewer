@@ -71,6 +71,7 @@
 #include "llviewernetwork.h" //LLGridManager
 #include "llviewerparcelmgr.h"
 #include "llviewerregion.h"
+#include "llworld.h"
 #include "lltrans.h"
 #include "llcallingcard.h"
 #include "llslurl.h"            // IDEVO
@@ -497,6 +498,92 @@ void LLAvatarActions::hideProfile(const LLUUID& avatar_id)
     {
         floater->closeFloater();
     }
+}
+
+// Kami: use positions supplied by avatars or the nearby-region map.
+// This is only a viewer-side destination lookup, not a location request to SL.
+namespace
+{
+bool getNearbyAvatarTeleportPosition(const LLUUID& id, LLVector3d& position)
+{
+    if (id.isNull() || id == gAgent.getID())
+    {
+        return false;
+    }
+
+    uuid_vec_t avatar_ids;
+    std::vector<LLVector3d> positions;
+    LLWorld* world = LLWorld::getInstance();
+    world->getAvatars(&avatar_ids, &positions, gAgent.getPositionGlobal());
+
+    for (size_t i = 0; i < avatar_ids.size() && i < positions.size(); ++i)
+    {
+        if (avatar_ids[i] != id)
+        {
+            continue;
+        }
+
+        LLVector3d candidate = positions[i];
+        // Coarse map updates clamp altitude to 1020 m. Require a live avatar
+        // object for a precise high-altitude position, rather than TP blindly.
+        if (candidate.mdV[VZ] >= 1020.0)
+        {
+            LLViewerObject* avatar = gObjectList.findObject(id);
+            if (!avatar || avatar->isDead())
+            {
+                return false;
+            }
+            candidate = avatar->getPositionGlobal();
+        }
+
+        if (!world->getRegionFromPosGlobal(candidate))
+        {
+            return false;
+        }
+        position = candidate;
+        return true;
+    }
+    return false;
+}
+} // namespace
+
+// static
+bool LLAvatarActions::canTeleportTo(const LLUUID& id)
+{
+    LLVector3d position;
+    return getNearbyAvatarTeleportPosition(id, position);
+}
+
+// static
+void LLAvatarActions::teleportTo(const LLUUID& id)
+{
+    LLVector3d position;
+    if (!getNearbyAvatarTeleportPosition(id, position))
+    {
+        LLNotificationsUtil::add("KamiTeleportToAvatarNotPossible");
+        return;
+    }
+
+    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal(position);
+    if (!region)
+    {
+        LLNotificationsUtil::add("KamiTeleportToAvatarNotPossible");
+        return;
+    }
+
+    // Land two meters toward the region center, not on top of the resident.
+    // Keep their altitude; region landing rules may still redirect the TP.
+    LLVector3d inward = position - region->getCenterGlobal();
+    inward.mdV[VZ] = 0.0;
+    if (inward.normalize() > 0.0)
+    {
+        position -= inward * 2.0;
+    }
+    else
+    {
+        position.mdV[VY] += 2.0;
+    }
+    gAgent.teleportViaLocation(position);
 }
 
 // static

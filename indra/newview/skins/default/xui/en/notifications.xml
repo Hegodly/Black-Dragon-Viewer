@@ -13253,4 +13253,11 @@ Allow them to pose you?
           name="okignore"
           yestext="OK"/>
   </notification>
+
+  <notification
+   icon="notify.tga"
+   name="KamiTeleportToAvatarNotPossible"
+   type="notify">
+    Teleport To is not available because the viewer does not have a reliable position for this resident. Try again when they appear in Nearby People.
+  </notification>
 </notifications>
