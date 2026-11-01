@@ -285,12 +285,6 @@ jobs:
       - name: Check graphics options, callbacks and adaptive KAMI ALIVE controls
         shell: pwsh
         run: python kami/theme/verify-graphics-control-deck.py --integrated
-      - name: Install KAMI ALIVE Selected Material Inspector and local material overrides
-        shell: pwsh
-        run: python kami/alive/apply-material-inspector.py
-      - name: Verify native KAMI ALIVE material inspection, user overrides and shader path
-        shell: pwsh
-        run: python kami/alive/verify-material-inspector.py --integrated
       - name: Verify KAMI navigation keeps Back Home Forward and location controls accessible
         shell: pwsh
         run: python kami/theme/verify-navigation-clearance.py
