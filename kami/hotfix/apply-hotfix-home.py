@@ -73,7 +73,7 @@ label("kami_hotfix_info",
       "Full-release Kami Home will keep your Second Life session connected.",
       30, 182, 555, 28)
 label("kami_hotfix_info2",
-      "Compatible hotfixes will apply at Home. Native updates require restart.",
+      "Optimization hotfixes: no restart. Feature updates may require one.",
       30, 210, 555, 26)
 label("kami_hotfix_beta",
       "Preview only. No forced logout, patch download, or installation.",
