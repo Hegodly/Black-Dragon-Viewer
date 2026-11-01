@@ -48,8 +48,8 @@ def assert_native():
     assert "Floater.Show" in source
     assert "kami_workspaces" in source
     assert "KAMI  |  WORKSPACES" in source
-    assert "KAMI_LegacyOptions" in source
-    assert 'world.iter("menu_item_check")' in source
+    assert 'MarketplaceListings must remain reachable from the Me menu' in source
+    assert 'The original World menu must remain under Me' in source
     for button,target in ACTION_TARGETS.items():
         assert re.search(r'\b'+re.escape(button)+r'\b',header),button
         assert '"'+target+'"' in header, target
@@ -86,8 +86,11 @@ def assert_integrated():
     assert link[0].find("menu_item_call.on_click").get("parameter")=="kami_workspaces"
     assert link[0].find("menu_item_call.on_click").get("function")=="Floater.Show"
     assert menu.get("bg_visible")=="true"
-    # The new UI owns the original menu controls without making cloned items.
-    world=[x for x in nav[0] if x.tag=="menu" and x.get("name")=="World"]
+    # Native startup performs parent-relative lookups under Me.
+    me=[x for x in menu if x.tag=="menu" and x.get("name")=="Me"]
+    assert len(me)==1
+    assert len([x for x in me[0].iter() if x.get("name")=="MarketplaceListings"])==1
+    world=[x for x in me[0] if x.tag=="menu" and x.get("name")=="World"]
     assert len(world)==1
     preview=[x for x in world[0].iter("menu_item_check")
              if x.get("name")=="Kami DX12 Live Preview"]
@@ -97,13 +100,9 @@ def assert_integrated():
     assert check is not None and check.get("control")=="KamiDX12LivePreview"
     assert click is not None and click.get("function")=="ToggleControl"
     assert click.get("parameter")=="KamiDX12LivePreview"
-    legacy=[x for x in nav[0] if x.tag=="menu" and x.get("name")=="KAMI_LegacyOptions"]
-    assert len(legacy)==1 and len(list(legacy[0]))>=10
-    assert any(x.get("name")=="BuildTools" for x in legacy[0])
-    assert any(x.get("name")=="Help" for x in legacy[0])
-    me=[x for x in menu if x.tag=="menu" and x.get("name")=="Me"]
-    assert len(me)==1
-    assert not any(child.tag=="menu" for child in me[0])
+    assert any(x.get("name")=="BuildTools" for x in me[0])
+    assert any(x.get("name")=="Help" for x in me[0])
+    assert not any(x.tag=="menu" for x in nav[0])
     # Original menu IDs and callbacks remain unique, including the DX12 toggle.
     assert len([x for x in menu.iter("menu") if x.get("name")=="World"])==1
     assert len([x for x in menu.iter("menu") if x.get("name")=="BuildTools"])==1
