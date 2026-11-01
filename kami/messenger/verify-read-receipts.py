@@ -38,7 +38,12 @@ def integrated():
         assert mark in header,mark
     proc=read(src+"llimprocessing.cpp")
     assert 'LLKamiReadReceipts::instance().incoming(' in proc
-    assert 'dialog == IM_NOTHING_SPECIAL && !from_group' in proc
+    assert 'const bool kami_direct_im =' in proc
+    assert 'dialog == IM_NOTHING_SPECIAL ||' in proc
+    assert 'dialog == IM_SESSION_SEND && kami_session &&' in proc
+    assert 'kami_session->isP2PSessionType()' in proc
+    assert 'if (kami_direct_im && !from_group &&' in proc
+    assert 'LLIMMgr::computeSessionID(dialog, from_id)' in proc
     im=read(src+"llimview.cpp")
     assert 'LLKamiReadReceipts::isControl(utf8_text)' in im
     assert 'LLKamiReadReceipts::visibleText(utf8_text)' in im
