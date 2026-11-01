@@ -175,6 +175,19 @@ assert len(seen) >= 3 or expected_prior.issubset(already_themed), (
     f"KAMI Graphics: missing both legacy and KAMI-styled separators ({len(seen)})"
 )
 
+# The new 159px hero card and expanded native controls require additional
+# vertical scroll content. Expand the *real container*, not just a test limit,
+# so Session Recovery and the lower legacy controls cannot be clipped.
+panel_height = sum(int(node.get("height", "0")) for node in stack
+                   if node.tag == "layout_panel")
+stack.set("height", str(max(int(stack.get("height", "0")), panel_height + 96)))
+scroll_panels = [node for node in root.iter("panel")
+                 if node.get("name") == "gfx_scroll_panel"]
+assert len(scroll_panels) == 1, "KAMI Graphics: scroll content panel missing"
+scroll_panel = scroll_panels[0]
+scroll_panel.set("height", str(max(int(scroll_panel.get("height", "0")),
+                                   int(stack.get("height")) + 32)))
+
 # Replace glyph-heavy legacy reset captions; do not change Pref.Default.
 reset_count = 0
 for button in root.iter("button"):
