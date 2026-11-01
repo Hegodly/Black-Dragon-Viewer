@@ -344,6 +344,26 @@
                </layout_stack>
             </layout_panel>
             <layout_panel
+             name="kami_messenger_status_panel"
+             layout="topleft"
+             follows="left|top|right"
+             auto_resize="false"
+             background_visible="true"
+             bg_alpha_color="0.06 0.10 0.17 0.92"
+             height="22">
+                <text
+                 name="kami_messenger_status_text"
+                 layout="topleft"
+                 follows="left|top|right"
+                 left="8"
+                 right="-8"
+                 top="2"
+                 height="18"
+                 font="SansSerifSmall"
+                 text_color="0.68 0.86 1 1"
+                 mouse_opaque="false">CONNECTING | Waiting for Second Life to initialize this conversation.</text>
+            </layout_panel>
+            <layout_panel
              name="body_panel"
              follows="all"
              height="300"

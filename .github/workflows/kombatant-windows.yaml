@@ -9,9 +9,9 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, fix/kami-beta-dx12-warp-crash-diagnostics, fix/kami-beta-dx12-embedded-entrypoint, fix/kami-remove-legacy-avatar-lighting, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, fix/kami-beta-dx12-warp-crash-diagnostics, fix/kami-beta-dx12-embedded-entrypoint, fix/kami-remove-legacy-avatar-lighting, fix/kami-navigation-controls-overlap, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/alive/**, kami/messenger/**, kami/inventory/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -25,8 +25,28 @@ jobs:
         run: python3 kami/framegen/test-shaders.py
       - name: Verify KAMI Audio Lab native controls and engine bindings
         run: python3 kami/audio/verify-audio-lab.py
+      - name: Preflight KAMI ALIVE integration, shaders and frame governor
+        run: python3 kami/alive/verify-kami-alive.py
+      - name: Preflight KAMI ALIVE material inspector script
+        run: python3 kami/alive/verify-material-inspector.py
+      - name: Preflight KAMI ALIVE visual profile source safety
+        run: python3 kami/alive/verify-alive-visual-profiles.py
+      - name: Preflight KAMI Messenger session and UI contract
+        run: python3 kami/messenger/verify-kami-messenger.py
+      - name: Preflight KAMI Messenger opt-in read receipt protocol
+        run: python3 kami/messenger/verify-read-receipts.py
+      - name: Preflight Brand Folder Sort integration source
+        run: python3 kami/inventory/verify-brand-folder-sort.py
+      - name: Preflight KAMI Demo Deleter script safety checks
+        run: python3 kami/inventory/verify-demo-cleanup.py
+      - name: Preflight ALIVE selected-material scanner and local override
+        run: python3 kami/alive/verify-material-inspector.py
+      - name: Preflight KAMI Graphics Control Deck source
+        run: python3 kami/theme/verify-graphics-control-deck.py
       - name: Validate both modern and legacy keyboard LLSD before Windows build
         run: python3 kami/performance/validate-config-inputs.py
+      - name: Verify KAMI WASD startup migration source safeguards
+        run: python3 kami/performance/verify-wasd-startup.py
       - name: Enforce neutral native PBR quality and no optional default post passes
         run: python3 kami/renderer/verify-neutral-baseline.py
       - name: Verify true 1440p GPU-resolution sizing and patch syntax
@@ -35,6 +55,8 @@ jobs:
         run: python3 kami/renderer/verify-gpu-detection.py
       - name: Verify KAMI next-generation native Workspaces theme source
         run: python3 kami/theme/verify-nextgen-workspaces.py
+      - name: Verify KAMI graphics modernization source
+        run: python3 kami/theme/verify-graphics-panel.py
       - name: Test standalone packaging and preserve source licenses
         run: python3 -m unittest discover -s kami/packaging -p 'test_finalize_kami_standalone.py'
       - name: Enforce no CMD installers and native KAMI login music in source
@@ -249,6 +271,39 @@ jobs:
       - name: Verify KAMI native Workspaces and preserve original creator tools
         shell: pwsh
         run: python kami/theme/verify-nextgen-workspaces.py --integrated
+      - name: Install KAMI ALIVE material response and frame-time governor
+        shell: pwsh
+        run: python kami/alive/apply-kami-alive.py
+      - name: Verify KAMI ALIVE native shader, menu and frame-budget integration
+        shell: pwsh
+        run: python kami/alive/verify-kami-alive.py --integrated
+      - name: Integrate ALIVE material inspector and local PBR manual preview
+        shell: pwsh
+        run: python kami/alive/apply-material-inspector.py
+      - name: Verify material inspector native selected-face controls
+        shell: pwsh
+        run: python kami/alive/verify-material-inspector.py --integrated
+      - name: Integrate KAMI ALIVE native skin, eyes, gem, fabric and leather profiles
+        shell: pwsh
+        run: python kami/alive/apply-alive-visual-profiles.py
+      - name: Verify KAMI ALIVE profile shaders, baked avatars and user selection
+        shell: pwsh
+        run: python kami/alive/verify-alive-visual-profiles.py --integrated
+      - name: Modernize legacy Graphics tab as KAMI rendering control deck
+        shell: pwsh
+        run: python kami/theme/modernize-graphics-panel.py
+      - name: Verify refreshed Graphics tab preserves native settings
+        shell: pwsh
+        run: python kami/theme/verify-graphics-panel.py --integrated
+      - name: Redesign legacy Graphics tab as native KAMI Control Deck
+        shell: pwsh
+        run: python kami/theme/modernize-graphics-control-deck.py
+      - name: Check graphics options, callbacks and adaptive KAMI ALIVE controls
+        shell: pwsh
+        run: python kami/theme/verify-graphics-control-deck.py --integrated
+      - name: Verify KAMI navigation keeps Back Home Forward and location controls accessible
+        shell: pwsh
+        run: python kami/theme/verify-navigation-clearance.py
       - name: Verify KAMI four signature feature engines, controls and telemetry
         shell: pwsh
         run: python kami/signature/verify-signature-features.py
@@ -270,6 +325,9 @@ jobs:
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
+      - name: Verify automatic legacy WASD migration on startup
+        shell: pwsh
+        run: python kami/performance/verify-wasd-startup.py
       - name: Integrate true 1440p core world buffers without altering UI resolution
         shell: pwsh
         run: python kami/renderer/enable-true-1440p.py
@@ -303,6 +361,27 @@ jobs:
       - name: Verify adaptive avatar physics and actual hardware performance telemetry
         shell: pwsh
         run: python kami/performance/verify-physics-and-monitor.py
+      - name: Verify KAMI Messenger UI and SL IM interoperability
+        shell: pwsh
+        run: python kami/messenger/verify-kami-messenger.py
+      - name: Integrate opt-in Kami-to-Kami read acknowledgments
+        shell: pwsh
+        run: python kami/messenger/apply-read-receipts.py
+      - name: Verify native Kami read receipts, consent and real IM hooks
+        shell: pwsh
+        run: python kami/messenger/verify-read-receipts.py --integrated
+      - name: Apply KAMI Smart Sort brand-folder grouping to native inventory
+        shell: pwsh
+        run: python kami/inventory/apply-brand-folder-sort.py
+      - name: Verify Brand Folder Sort inventory moves, guarded actions and UI
+        shell: pwsh
+        run: python kami/inventory/verify-brand-folder-sort.py --integrated
+      - name: Integrate KAMI Demo Deleter inventory Trash preview
+        shell: pwsh
+        run: python kami/inventory/apply-demo-cleanup.py
+      - name: Verify KAMI Demo Deleter native controls and guarded Trash moves
+        shell: pwsh
+        run: python kami/inventory/verify-demo-cleanup.py --integrated
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py

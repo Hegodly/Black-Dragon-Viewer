@@ -315,7 +315,7 @@ index 0000000..7bc10b0
 +        mSaved = LLSD();
 +        for (const char* name : {"KombatantNativeFX", "KombatantSaturation",
 +             "KombatantContrast", "KombatantVignette", "RenderCASSharpness",
-+             "RenderExposure", "RenderGlow", "RenderGlowStrength",
++             "RenderExposure",
 +             "RenderDeferredSSAO", "RenderDepthOfField"})
 +        {
 +            if (auto control = gSavedSettings.getControl(name)) mSaved[name] = control->getValue();
@@ -419,8 +419,8 @@ index 0000000..7198554
 +        put("RenderAvatarMaxNonImpostors", LLSD(crowded ? 4 : cinema ? 12 : 8));
 +        put("RenderAvatarMaxComplexity", LLSD(crowded ? 100000 : cinema ? 250000 : 150000));
 +        put("RenderResolutionDivisor", LLSD(1));
-+        put("RenderGlow", LLSD(!crowded));
-+        put("RenderGlowStrength", LLSD(cinema ? 0.12 : 0.05));
++        // KAMI modes do not toggle renderer glow.
++        // KAMI modes do not change renderer glow strength.
 +        put("RenderTonemapType", LLSD(0)); // Existing Khronos Neutral mapper.
 +        put("RenderTonemapMix", LLSD(1.0));
 +        put("RenderChromaStrength", LLSD(0.0));
@@ -432,7 +432,7 @@ index 0000000..7198554
 +        put("ExodusRenderVignette", vignette);
 +        getChild<LLButton>("restore")->setEnabled(true);
 +        getChild<LLTextBox>("status")->setText(LLStringExplicit(cinema ?
-+            "Cinematic active: shadows, ambient occlusion and subtle bloom." : crowded ?
++            "Cinematic active: shadows and ambient occlusion." : crowded ?
 +            "Crowded Area active: shorter view and fewer full-detail avatars." :
 +            "Everyday active: balanced lighting and shorter draw distance."));
 +    }
@@ -695,10 +695,10 @@ index 0000000..333a9b6
 + <slider name="vignette" label="Vignette" control_name="KombatantVignette" left="24" top="172" width="512" height="20" label_width="150" min_val="0" max_val="1" increment="0.05" decimal_digits="2" />
 + <slider name="exposure" label="Exposure" control_name="RenderExposure" left="24" top="204" width="512" height="20" label_width="150" min_val="0.5" max_val="4" increment="0.05" decimal_digits="2" />
 + <slider name="sharpness" label="Sharpening (CAS)" control_name="RenderCASSharpness" left="24" top="236" width="512" height="20" label_width="150" min_val="0" max_val="1" increment="0.05" decimal_digits="2" />
-+ <check_box name="bloom" label="Bloom" control_name="RenderGlow" left="24" top="272" width="160" height="22" />
-+ <check_box name="ao" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="190" top="272" width="180" height="22" />
-+ <check_box name="dof" label="Depth of field" control_name="RenderDepthOfField" left="380" top="272" width="156" height="22" />
-+ <slider name="bloom_strength" label="Bloom strength" control_name="RenderGlowStrength" left="24" top="308" width="512" height="20" label_width="150" min_val="0" max_val="0.5" increment="0.01" decimal_digits="2" />
++ <!-- Removed KAMI bloom toggle. -->
++ <check_box name="ao" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="24" top="272" width="220" height="22" />
++ <check_box name="dof" label="Depth of field" control_name="RenderDepthOfField" left="280" top="272" width="220" height="22" />
++ <!-- Removed KAMI bloom strength slider. -->
 + <button name="restore_fx" label="Restore native settings from when this panel opened" left="24" top="344" width="512" height="28" />
 + <text name="shader_heading" left="24" top="392" width="512" height="24" font="SansSerifLarge">GShade / ReShade presets</text>
 + <check_box name="shader_enable" label="Enable shader effects (this session)" control_name="KombatantShaderFX" left="24" top="428" width="512" height="22" />
@@ -726,8 +726,8 @@ index 0000000..b0ff2b4
 + <text name="status" left="24" top="164" width="412" height="40" wrap="true">Your current graphics settings are unchanged.</text>
 + <check_box name="focus_blur" label="Depth of field" control_name="RenderDepthOfField" left="24" top="216" width="190" height="22" />
 + <check_box name="ambient" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="238" top="216" width="198" height="22" />
-+ <check_box name="bloom" label="Bloom" control_name="RenderGlow" left="24" top="246" width="190" height="22" />
-+ <button name="advanced" label="Effects / GShade presets" left="238" top="244" width="198" height="26">
++ <!-- Removed Bloom from Studio. -->
++ <button name="advanced" label="Effects / GShade presets" left="24" top="244" width="412" height="26">
 +  <button.commit_callback function="Floater.Show" parameter="kombatant_effects" />
 + </button>
 + <button name="restore" label="Restore previous settings" left="24" top="292" width="412" height="30" />
@@ -809,7 +809,7 @@ index 0000000..1a5e8e7
 +
 +Open Kombatant > Effects / GShade presets, or use the Effects button in Studio.
 +
-+Native effects use the viewer renderer: exposure, CAS sharpening, bloom, AO,
++Native effects use the viewer renderer: exposure, CAS sharpening, AO,
 +depth of field, and new saturation/contrast/vignette grading. Color grading has
 +its own bypass. Restore returns all native controls to their values at panel open.
 +
@@ -880,14 +880,14 @@ index 0000000..81e722e
 +| Probe detail | Static | Static + dynamic | Static |
 +| Full-detail avatar limit | 8 | 12 | 4 |
 +| Avatar complexity limit | 150,000 | 250,000 | 100,000 |
-+| Bloom strength | 0.05 | 0.12 | 0.05 (bloom off) |
++| Glow | Not modified | Not modified | Not modified |
 +
 +Both picture modes use the existing Khronos Neutral tone mapper. Cinematic adds
 +subtle vignette. Chromatic aberration is disabled. Depth of field starts off and
 +is available as an optional toggle. Existing region lighting and materials still
 +control the scene's appearance. These are renderer settings, not a new renderer.
 +
-+The panel has Bloom, Ambient Occlusion and Depth of Field toggles, access to full
++The panel has Ambient Occlusion and Depth of Field toggles, access to full
 +Preferences, and a Restore Previous Settings button. Restore captures only the
 +settings changed by a mode, immediately before the first mode switch. It remains
 +available during this viewer session, not after restarting. Normal viewer
@@ -937,7 +937,7 @@ index 0000000..81e722e
 +3. Open Studio, switch every mode, close/reopen Studio, and verify Restore.
 +4. Compare rendered scenes in the same region with the same camera, environment,
 +   avatars and resolution. Record FPS, frame time and VRAM in all three modes.
-+5. Check PBR materials, projectors, AO, bloom, vignette and optional depth of field.
++5. Check PBR materials, projectors, AO, vignette and optional depth of field.
 +6. Check login, inventory, chat, voice, audio, media, uploads, snapshots and exit.
 +7. Review packaging identifiers, icons, installer behavior and third-party viewer
 +   distribution requirements before publishing. Preserve upstream attribution.
@@ -1247,7 +1247,7 @@ index e7c9b13..80aac83 100644
 +       <slider name="kd_vignette" label="Vignette" control_name="KombatantVignette" left="12" top="212" width="465" height="20" label_width="160" min_val="0" max_val="1" increment="0.05" decimal_digits="2" />
 +       <slider name="kd_exposure" label="Exposure" control_name="RenderExposure" left="12" top="240" width="465" height="20" label_width="160" min_val="0.5" max_val="4" increment="0.05" decimal_digits="2" />
 +       <slider name="kd_sharpness" label="Sharpening (CAS)" control_name="RenderCASSharpness" left="12" top="268" width="465" height="20" label_width="160" min_val="0" max_val="1" increment="0.05" decimal_digits="2" />
-+       <slider name="kd_glow" label="Bloom strength" control_name="RenderGlowStrength" left="12" top="296" width="465" height="20" label_width="160" min_val="0" max_val="0.5" increment="0.01" decimal_digits="2" />
++       <!-- KAMI Bloom strength slider removed. -->
 +       <check_box name="kd_friends" label="Show friends only (and yourself)" control_name="RenderAvatarFriendsOnly" left="12" top="326" width="465" height="22" tool_tip="Hide non-friend avatars. Animesh remains visible. Resets on restart." />
 +       <button name="kd_effects" label="Effects / GShade presets" left="12" top="360" width="228" height="26">
 +        <button.commit_callback function="Floater.Show" parameter="kombatant_effects" />
@@ -1288,7 +1288,7 @@ diff --git a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml 
 +       <check_box name="kd_ssr_enabled" label="Screen-space reflections" control_name="RenderScreenSpaceReflections" left="12" top="398" width="465" height="22" />
 +       <check_box name="kd_ao_enabled" label="Ambient occlusion" control_name="RenderDeferredSSAO" left="12" top="426" width="465" height="22" />
 +       <check_box name="kd_dof_enabled" label="Depth of field" control_name="RenderDepthOfField" left="12" top="454" width="465" height="22" />
-+       <check_box name="kd_bloom_enabled" label="Bloom" control_name="RenderGlow" left="12" top="482" width="465" height="22" />
++       <!-- Nonfunctional KAMI Bloom switch removed. -->
 +       <slider name="kd_chroma" label="Chromatic aberration" control_name="RenderChromaStrength" left="12" top="510" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.01" decimal_digits="2" />
 +       <slider name="kd_ao_strength" label="AO strength" control_name="RenderSSAOEffect" left="12" top="538" width="465" height="20" label_width="190" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
 +       <slider name="kd_reflection_steps" label="SSR ray iterations" control_name="RenderScreenSpaceReflectionIterations" left="12" top="566" width="465" height="20" label_width="190" min_val="1" max_val="64" increment="1" decimal_digits="0" />
@@ -1316,10 +1316,10 @@ diff --git a/indra/newview/llfloaterpreference.cpp b/indra/newview/llfloaterpref
 +        gSavedSettings.setU32("RenderFSAAType", q == 0 ? 1 : 2);
 +        gSavedSettings.setS32("RenderShadowDetail", q == 0 ? 0 : q < 3 ? 1 : 2);
 +        gSavedSettings.setBOOL("RenderDeferredSSAO", q >= 2);
-+        gSavedSettings.setBOOL("RenderGlow", q >= 1);
++        // Leave renderer glow unchanged by quality presets.
 +        gSavedSettings.setBOOL("RenderScreenSpaceReflections", q >= 3);
 +        gSavedSettings.setS32("RenderReflectionProbeDetail", q >= 3 ? 1 : 0);
-+        gSavedSettings.setF32("RenderGlowStrength", q >= 4 ? 0.12f : 0.05f);
++        // Leave renderer glow strength unchanged by quality presets.
 +        const F32 object_lod[] = {1.f, 1.5f, 2.f, 3.f, 4.f};
 +        gSavedSettings.setF32("RenderVolumeLODFactor", object_lod[q]);
 +        gSavedSettings.setF32("RenderTreeLODFactor", object_lod[q]);
@@ -1434,7 +1434,7 @@ diff --git a/indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml 
         <combo_box name="kd_resolution" control_name="KombatantRenderWidth" left="12" top="60" width="465" height="24">
 @@ -87,9 +87,63 @@
         <check_box name="kd_dof_enabled" label="Depth of field" control_name="RenderDepthOfField" left="12" top="454" width="465" height="22" />
-        <check_box name="kd_bloom_enabled" label="Bloom" control_name="RenderGlow" left="12" top="482" width="465" height="22" />
+        <!-- Nonfunctional KAMI Bloom switch removed. -->
         <slider name="kd_chroma" label="Chromatic aberration" control_name="RenderChromaStrength" left="12" top="510" width="465" height="20" label_width="190" min_val="0" max_val="1" increment="0.01" decimal_digits="2" />
 -       <slider name="kd_ao_strength" label="AO strength" control_name="RenderSSAOEffect" left="12" top="538" width="465" height="20" label_width="190" min_val="0" max_val="2" increment="0.05" decimal_digits="2" />
 -       <slider name="kd_reflection_steps" label="SSR ray iterations" control_name="RenderScreenSpaceReflectionIterations" left="12" top="566" width="465" height="20" label_width="190" min_val="1" max_val="64" increment="1" decimal_digits="0" />

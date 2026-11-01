@@ -92,6 +92,9 @@ public:
     static bool toggle(const LLUUID& session_id);
 
     void sessionInitReplyReceived(const LLUUID& im_session_id);
+    // Local IM session state only; not a delivered/read confirmation.
+    void updateKAMIMessengerStatus();
+    void setKAMIMessengerTimedOut();
 
     // get new messages from LLIMModel
     /*virtual*/ void updateMessages();
@@ -190,6 +193,7 @@ private:
     LLFrameTimer mOtherTypingTimer;
 
     bool mSessionInitialized;
+    bool mKAMIMessengerTimedOut = false;
     LLSD mQueuedMsgsForInit;
 
     uuid_vec_t mInvitedParticipants;

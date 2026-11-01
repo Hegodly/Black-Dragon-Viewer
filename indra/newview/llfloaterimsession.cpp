@@ -30,6 +30,7 @@
 
 #include "lldraghandle.h"
 #include "llnotificationsutil.h"
+#include "lltextbox.h"
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -325,6 +326,7 @@ void LLFloaterIMSession::sendMsg(const std::string& msg)
         mQueuedMsgsForInit.append(utf8_text);
     }
 
+    updateKAMIMessengerStatus();
     updateMessages();
 }
 
@@ -386,6 +388,37 @@ void LLFloaterIMSession::initIMFloater()
     }
 }
 
+// KAMI Messenger reports SL session initialization, never delivery/read.
+void LLFloaterIMSession::updateKAMIMessengerStatus()
+{
+    LLTextBox* status = findChild<LLTextBox>("kami_messenger_status_text", true);
+    if (!status) return;
+
+    if (mKAMIMessengerTimedOut)
+    {
+        status->setText("TIMED OUT | SL did not confirm this session. Check before resending.");
+    }
+    else if (mSessionInitialized)
+    {
+        status->setText("SESSION READY | SL session initialized. Delivery/read status unavailable.");
+    }
+    else if (mQueuedMsgsForInit.size() > 0)
+    {
+        status->setText(llformat("CONNECTING | %d message(s) queued locally, not yet sent.",
+                                 (S32)mQueuedMsgsForInit.size()));
+    }
+    else
+    {
+        status->setText("CONNECTING | Waiting for Second Life to initialize this conversation.");
+    }
+}
+
+void LLFloaterIMSession::setKAMIMessengerTimedOut()
+{
+    mKAMIMessengerTimedOut = true;
+    updateKAMIMessengerStatus();
+}
+
 //virtual
 bool LLFloaterIMSession::postBuild()
 {
@@ -412,6 +445,7 @@ bool LLFloaterIMSession::postBuild()
     //see LLFloaterIMPanel for how it is done (IB)
 
     initIMFloater();
+    updateKAMIMessengerStatus();
 
     return result;
 }
@@ -831,6 +865,7 @@ bool LLFloaterIMSession::toggle(const LLUUID& session_id)
 void LLFloaterIMSession::sessionInitReplyReceived(const LLUUID& im_session_id)
 {
     mSessionInitialized = true;
+    mKAMIMessengerTimedOut = false;
 
     //will be different only for an ad-hoc im session
     if (mSessionID != im_session_id)
@@ -856,6 +891,7 @@ void LLFloaterIMSession::sessionInitReplyReceived(const LLUUID& im_session_id)
 
         mQueuedMsgsForInit.clear();
     }
+    updateKAMIMessengerStatus();
 }
 
 void LLFloaterIMSession::updateMessages()

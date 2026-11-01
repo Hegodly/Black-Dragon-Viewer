@@ -64,7 +64,21 @@ verify("Fire Garden native UI images staged", all((R / ("indra/newview/skins/def
 verify("obsolete Native Graphics Lab and Studio menu entries removed", not any(n.get("name") in {"Kombatant Effects","Kombatant Studio"} for n in ET.parse(R/"indra/newview/skins/default/xui/en/menu_viewer.xml").getroot().iter()))
 verify("obsolete Native Graphics Lab and Studio XUI removed", not (R/"indra/newview/skins/default/xui/en/floater_kombatant_effects.xml").exists() and not (R/"indra/newview/skins/default/xui/en/floater_kombatant_studio.xml").exists())
 verify("Fire Garden core graphics base kit present", (R/"indra/newview/skins/default/KAMI-BASE-GRAPHICS-KIT.txt").is_file())
-verify("KAMI core graphics heading visible", "KAMI CORE GRAPHICS" in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
+# KAMI's redesigned Graphics Control Deck replaces the old "KAMI CORE GRAPHICS"
+# header. Verify the actual native XUI controls rather than a retired caption.
+graphics = ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot()
+graphics_controls = {node.get("name"): node for node in graphics.iter() if node.get("name")}
+graphics_labels = {(node.text or "").strip() for node in graphics.iter("text")}
+verify("KAMI graphics control deck heading and live ALIVE controls visible",
+       graphics.get("label") == "KAMI Graphics" and
+       "KAMI  |  GRAPHICS CONTROL DECK" in graphics_labels and
+       "kami_graphics_intro_card" in graphics_controls and
+       graphics_controls.get("kami_alive_enabled") is not None and
+       graphics_controls["kami_alive_enabled"].get("control_name") == "KAMIAliveEnabled" and
+       graphics_controls.get("kami_alive_strength") is not None and
+       graphics_controls["kami_alive_strength"].get("control_name") == "KAMIAliveStrength" and
+       all(section in graphics_controls for section in
+           ("title_layout_panel", "deferred_layout", "post_layout")))
 verify("all remaining source-video toggles retained", "40 original interactive" in read("indra/newview/skins/default/KAMI-BASE-GRAPHICS-KIT.txt"))
 verify("obsolete Native Graphics Lab and Studio C++ registration removed", '"kombatant_effects"' not in read("indra/newview/llviewerfloaterreg.cpp") and '"kombatant_studio"' not in read("indra/newview/llviewerfloaterreg.cpp"))
 verify("all five quality presets use actual render settings", 'KAMIQuality::apply(chosen)' in read("indra/newview/llfloaterpreference.cpp") and 'RenderAvatarMaxNonImpostors' in read("indra/newview/kami_quality_presets.h"))

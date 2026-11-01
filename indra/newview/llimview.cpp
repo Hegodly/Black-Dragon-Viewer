@@ -123,6 +123,12 @@ bool LLSessionTimeoutTimer::tick()
     LLIMModel::LLIMSession* session = LLIMModel::getInstance()->findIMSession(mSessionId);
     if (session && !session->mSessionInitialized)
     {
+        // Show the local failure state before the normal Second Life dialog.
+        // Do not auto-retry or duplicate messages after a timeout.
+        if (LLFloaterIMSession* floater = LLFloaterIMSession::findInstance(mSessionId))
+        {
+            floater->setKAMIMessengerTimedOut();
+        }
         gIMMgr->showSessionStartError("session_initialization_timed_out_error", mSessionId);
     }
     return true;

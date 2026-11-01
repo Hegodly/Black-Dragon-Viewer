@@ -20,7 +20,7 @@ reg.write_text(s,encoding="utf-8")
 ui=R/"indra/newview/skins/default/xui/en/floater_kami_hardware_monitor.xml"
 floater=ET.Element("floater",{
  "name":"kami_hardware_monitor","title":"KAMI | PERFORMANCE MONITOR",
- "width":"410","height":"386","min_width":"380","min_height":"340",
+ "width":"410","height":"488","min_width":"380","min_height":"488",
  "layout":"topleft","save_rect":"true","reuse_instance":"true","can_close":"true",
  "can_resize":"false","bg_alpha_color":"0.035 0.055 0.085 0.96",
 })
@@ -53,6 +53,18 @@ ET.SubElement(floater,"text",{
  "name":"kami_hw_note","left":"20","top":"339","width":"366","height":"42",
  "wrap":"true","text_color":"0.67 0.75 0.86 1"
 }).text="Only samples while visible. GPU counters may be unavailable or differ from total GPU activity."
+ET.SubElement(floater,"check_box",{
+ "name":"kami_hw_dx12_scene_preview",
+ "label":"DX12 Scene Preview (Experimental)",
+ "control_name":"KamiDX12LivePreview",
+ "left":"20","top":"398","width":"370","height":"24",
+ "tool_tip":"Toggle the experimental native DirectX 12 scene preview window. The main viewer continues using OpenGL."
+})
+ET.SubElement(floater,"text",{
+ "name":"kami_hw_dx12_preview_note",
+ "left":"20","top":"432","width":"365","height":"42",
+ "wrap":"true","text_color":"0.67 0.75 0.86 1"
+}).text="Opens a separate DX12 scene preview after login. Does not switch the main world renderer."
 ET.indent(floater,space=" ")
 ET.ElementTree(floater).write(ui,encoding="utf-8",xml_declaration=True)
 

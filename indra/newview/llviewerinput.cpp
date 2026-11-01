@@ -1490,70 +1490,160 @@ bool LLViewerInput::exportBindingsXML(const std::string& filename)
 //BD - Custom Keyboard Layout
 S32 LLViewerInput::loadBindingsSettings(const std::string& filename)
 {
-	LLSD settings;
-	llifstream infile;
+    LLSD settings;
+    llifstream infile;
+    infile.open(filename);
+    if (!infile.is_open())
+    {
+        LL_WARNS("Settings") << "Cannot find file " << filename << " to load." << LL_ENDL;
+        return false;
+    }
 
-	infile.open(filename);
-	if (!infile.is_open())
-	{
-		LL_WARNS("Settings") << "Cannot find file " << filename << " to load." << LL_ENDL;
-		return false;
-	}
+    // Preserve native LLSD array and legacy multi-document records.
+    // Buffer once so we can recognize the exact old Q/E-turn, A/D-strafe
+    // profile before installing any bindings; never rewrite user files.
+    std::vector<LLSD> records;
+    while (LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(settings, infile))
+    {
+        if (settings.isArray())
+        {
+            for (LLSD::array_const_iterator item = settings.beginArray();
+                 item != settings.endArray(); ++item)
+            {
+                records.push_back(*item);
+            }
+        }
+        else
+        {
+            records.push_back(settings);
+        }
+        settings.clear();
+    }
+    infile.close();
 
-	// Accept both the single-document LLSD array (current format) and the
-	// legacy multi-document format used by older Black Dragon installations.
-	// Keeping the latter readable protects resident keyboard customizations.
-	S32 loaded_bindings = 0;
-	auto bind_record = [this, &loaded_bindings](const LLSD& record)
-	{
-		if (!record.isMap() || !record["function"].isString()
-			|| record["function"].asString().empty() || !record["mode"].isInteger()
-			|| !record["key"].isDefined() || !record["mask"].isDefined())
-		{
-			LL_WARNS("Settings") << "Skipping incomplete keyboard binding." << LL_ENDL;
-			return;
-		}
-		const S32 mode = record["mode"].asInteger();
-		if (mode < 0 || mode >= 5)
-		{
-			LL_WARNS("Settings") << "Skipping keyboard binding with invalid mode " << mode << LL_ENDL;
-			return;
-		}
-		KEY key = 0;
-		EMouseClickType mouse = CLICK_NONE;
-		MASK mask = MASK_NONE;
-		LLKeyboard::keyFromString(record["key"], &key);
-		LLKeyboard::maskFromString(record["mask"], &mask);
-		if (record["mouse"].isDefined())
-		{
-			mouse = static_cast<EMouseClickType>(record["mouse"].asInteger());
-		}
-		bindControl(mode, key, mouse, mask, record["function"].asString());
-		++loaded_bindings;
-		LL_DEBUGS("Settings") << "Binding key " << key << " + " << mask
-			<< " and mouse " << mouse << LL_ENDL;
-	};
+    // Third-person mode 0 is the usual walking camera, not mouselook or
+    // vehicle controls. Respect customized profiles unless all six stock
+    // legacy keys match (including W/S and Q/E). Treat duplicates as custom.
+    auto legacy_key = [&records](const char* key, const char* action)
+    {
+        S32 matches = 0;
+        for (const LLSD& record : records)
+        {
+            if (!record.isMap() || !record["mode"].isInteger() ||
+                record["mode"].asInteger() != 0 ||
+                record["key"].asString() != key ||
+                record["mask"].asString() != "NONE" ||
+                (record["mouse"].isDefined() &&
+                 record["mouse"].asInteger() != CLICK_NONE))
+            {
+                continue;
+            }
+            ++matches;
+            if (record["function"].asString() != action)
+            {
+                return false;
+            }
+        }
+        return matches == 1;
+    };
 
-	while (LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(settings, infile))
-	{
-		if (settings.isArray())
-		{
-			for (LLSD::array_const_iterator item = settings.beginArray();
-				 item != settings.endArray(); ++item)
-			{
-				bind_record(*item);
-			}
-		}
-		else
-		{
-			bind_record(settings);
-		}
-		settings.clear();
-	}
-	infile.close();
-	return loaded_bindings > 0;
+    const bool migrate_legacy_wasd =
+        legacy_key("W", "push_forward") &&
+        legacy_key("S", "push_backward") &&
+        legacy_key("A", "slide_left") &&
+        legacy_key("D", "slide_right") &&
+        legacy_key("Q", "turn_left") &&
+        legacy_key("E", "turn_right");
+
+    // Arrow keys use the same walk/turn pattern. Only migrate the exact
+    // unmodified legacy arrow-strafe profile; custom arrow layouts are kept.
+    const bool migrate_legacy_arrows =
+        legacy_key("Up", "push_forward") &&
+        legacy_key("Down", "push_backward") &&
+        legacy_key("Left", "slide_left") &&
+        legacy_key("Right", "slide_right") &&
+        legacy_key("Q", "turn_left") &&
+        legacy_key("E", "turn_right") &&
+        legacy_key("A", "slide_left") &&
+        legacy_key("D", "slide_right");
+
+    if (migrate_legacy_wasd)
+    {
+        for (LLSD& record : records)
+        {
+            if (record.isMap() && record["mode"].asInteger() == 0 &&
+                record["mask"].asString() == "NONE")
+            {
+                if (record["key"].asString() == "A")
+                {
+                    record["function"] = "turn_left";
+                }
+                else if (record["key"].asString() == "D")
+                {
+                    record["function"] = "turn_right";
+                }
+            }
+        }
+        LL_INFOS("InitInfo") << "KAMI applied WASD walking/turning to the "
+            "legacy default keyboard layout (custom controls preserved)."
+            << LL_ENDL;
+    }
+
+    if (migrate_legacy_arrows)
+    {
+        for (LLSD& record : records)
+        {
+            if (record.isMap() && record["mode"].asInteger() == 0 &&
+                record["mask"].asString() == "NONE")
+            {
+                if (record["key"].asString() == "Left")
+                {
+                    record["function"] = "turn_left";
+                }
+                else if (record["key"].asString() == "Right")
+                {
+                    record["function"] = "turn_right";
+                }
+            }
+        }
+        LL_INFOS("InitInfo") << "KAMI applied arrow-key walking/turning to the "
+            "legacy default keyboard layout (custom controls preserved)."
+            << LL_ENDL;
+    }
+
+    S32 loaded_bindings = 0;
+    for (const LLSD& record : records)
+    {
+        if (!record.isMap() || !record["function"].isString() ||
+            record["function"].asString().empty() || !record["mode"].isInteger() ||
+            !record["key"].isDefined() || !record["mask"].isDefined())
+        {
+            LL_WARNS("Settings") << "Skipping incomplete keyboard binding." << LL_ENDL;
+            continue;
+        }
+        const S32 mode = record["mode"].asInteger();
+        if (mode < 0 || mode >= 5)
+        {
+            LL_WARNS("Settings") << "Skipping keyboard binding with invalid mode "
+                << mode << LL_ENDL;
+            continue;
+        }
+        KEY key = 0;
+        EMouseClickType mouse = CLICK_NONE;
+        MASK mask = MASK_NONE;
+        LLKeyboard::keyFromString(record["key"], &key);
+        LLKeyboard::maskFromString(record["mask"], &mask);
+        if (record["mouse"].isDefined())
+        {
+            mouse = static_cast<EMouseClickType>(record["mouse"].asInteger());
+        }
+        bindControl(mode, key, mouse, mask, record["function"].asString());
+        ++loaded_bindings;
+        LL_DEBUGS("Settings") << "Binding key " << key << " + " << mask
+            << " and mouse " << mouse << LL_ENDL;
+    }
+    return loaded_bindings > 0;
 }
-
 
 EKeyboardMode LLViewerInput::getMode() const
 {
