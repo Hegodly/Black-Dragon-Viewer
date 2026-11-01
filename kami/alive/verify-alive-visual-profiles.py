@@ -18,7 +18,7 @@ checks=(
     "kamiAliveApplyProfile", "kamiAlivePolishedRoughness",
     "gDeferredAvatarProgram", "gDeferredAvatarEyesProgram",
     "kamiAvatarEyesF.glsl", "profile_switch_changed",
-    "mKAMIAliveManualMode", "local.size() < 512",
+    "overrides[material_key]", "local.size() < 512",
 )
 for q in checks:
     # Source references are intentional. Unrelated profile names are never
@@ -27,7 +27,7 @@ for q in checks:
         continue
     assert q in src,q
 assert "glFinish(" not in src and "glReadPixels(" not in src
-assert "uniform sampler2D" not in src
+assert "gl_FragCoord" not in src
 def read(x):return (R/x).read_text(encoding="utf-8-sig")
 def integrated():
     base="indra/newview/"
