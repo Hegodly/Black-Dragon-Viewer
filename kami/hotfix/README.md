@@ -1,71 +1,88 @@
-# KAMI Hotfix Home — NBA 2K-style update flow
+# KAMI Hotfix Home — in-session, NBA 2K-style patch experience
 
-## Product behavior (full-release target)
-1. The viewer checks an HTTPS release feed periodically and on login. It may
-   *display* an available update while in Second Life, but it must not replace
-   executables or forcibly disconnect an active resident.
-2. Non-disruptive notification: **UPDATE REQUIRED — return to Kami Home to apply**.
-   Use a non-blocking notice until the resident chooses to finish their session.
-3. When the resident explicitly chooses **Return to Home**, safely save local
-   preferences, prompt about unsaved work, and end the session normally.
-4. The trusted updater downloads only changed files to a staging directory,
-   verifies a pinned publisher signature (not just a hash from the same server),
-   checks exact allowed paths, and atomically applies the patch when the viewer
-   executable is no longer running.
-5. Show progress in the Home/login experience. Restart or relaunch only when
-   native code/DLLs change; supported data-only hotfixes may be reloaded safely.
-6. On health-check failure, restore the previous version automatically and show
-   a useful rollback report. Preserve user settings, textures and account data.
-7. Provide **Hotfix History**, a manual **Check for Updates** action, and
-   per-channel controls: Stable, Beta and Experimental. Honor explicit opt-in
-   for Beta and Experimental.
+## Non-negotiable product behavior
+**Return to Kami Home MUST NOT log the resident out of Second Life.**
+Kami Home is an *in-viewer application overlay/state*, NOT the login page.
+The avatar, region connection, message pumps, session tokens and normal
+connection liveness remain active while Home is displayed. Returning to World
+closes the Home overlay and shows the existing in-world session instantly.
+Do not call any logout, disconnect, teleport, login-reset or shutdown path
+while entering or exiting Home. Maintain normal network handling while Home is
+open and avoid freezing the rendering/event loops.
 
-## Patch formats
-- **Live config hotfix:** signed, schema-validated setting/feature flag or
-  shader parameter allowlist. Only change reloadable values; do not override
-  user graphics preferences or claim to increase FPS without benchmarks.
-- **Asset hotfix:** verified changed files. Apply at Home with no active world
-  session; refresh viewer caches only if necessary.
-- **Native renderer hotfix:** verified DLL/EXE replacements after full exit,
-  followed by restart and health check. No in-place changes to loaded binaries.
+## Desired update flow for full 1.0
+1. After an opt-in update check, show a non-disruptive in-world notice:
+   **UPDATE REQUIRED — Return to Kami Home to apply this optimization**.
+   Do not auto-disconnect an avatar or interrupt unsaved creative work.
+2. **Return to Home** opens a full-screen Fire Garden shell OVER the live
+   viewer session. Display the connection state, patch notes and progress.
+   World network/event processing stays alive. The avatar remains in-world;
+   provide **Return to World** after a compatible hotfix completes.
+3. Download only changed patch files into bounded, versioned staging.
+   Verify the publisher signature, file hashes, allowed paths and quota.
+4. Only **explicitly supported hot-reloadable config, shader parameters and
+   safe asset changes** can be applied within this live session. If an asset
+   is in use, defer replacement; never overwrite GPU/CPU-loaded assets.
+5. Apply a compatible patch transactionally, verify it, then offer
+   **Return to World** without logging in again. On failure, rollback and
+   preserve the resident's connected session.
+6. For a patch that changes KAMIViewer.exe, native DLLs, renderer code or
+   other loaded binaries, **a full process restart is unavoidable**. Queue
+   it and clearly label **Restart required**. Never promise an in-session
+   binary hotfix or silently log the user out. The user chooses when to exit.
+7. Show Hotfix History and manual Check for Updates. Channels are Stable,
+   Beta and Experimental with explicit consent for preview channels.
 
-## Required manifest fields
+## Patch classes
+- **Live optimization**: signed, schema-validated *allowlisted* performance
+  parameters, GPU feature presets and safe shader constants that the engine
+  has explicit hot-reload support for. Preserve user settings and existing
+  graphics preferences. Use measurable frame pacing/VRAM improvements.
+- **Safe data patch**: a small, signed asset update only if the asset has
+  explicit hot-reload support, references are safely invalidated, and no
+  conflicting or unsaved operations exist. Otherwise stage it for the next
+  restart with clear notice; stay connected while staging.
+- **Binary patch**: downloadable deltas can be staged in Home while connected,
+  but replace EXE/DLL files only via a separate trusted updater *after the
+  viewer process exits*. Requires a user-approved restart and reconnection.
+
+## Release manifest (design)
 `schema_version`, `channel`, `from_build`, `to_build`, `min_os`,
-`requires_restart`, `release_notes`, `sequence`, `files` (relative path,
-compressed size, final size, SHA-256) and `signature` (key ID + detached
-publisher signature over canonical manifest bytes). Reject absent or unknown
-signatures and downgrade/replay attempts. Never embed signing *private* keys
-in a viewer or repository. Key rotation requires independent authorization.
+`requires_restart`, `release_notes`, `sequence`, `files` (relative
+path, compressed size, final size, SHA-256) and `signature` (key ID + a
+detached publisher signature over canonical manifest bytes).
+Reject stale/replayed manifests, unknown signatures, and unsafe downgrades.
+Private signing keys NEVER belong in the client or source.
 
-## Security invariants
-- HTTPS with proper trust validation; pinned application-layer signing keys
-- No arbitrary script execution, updater shell commands or unsigned plugins
-- Allowlisted relative paths only, no traversal, symlink/reparse-point escapes,
-  user-data overwrite, or writes into grid/inventory/Second Life caches
-- Bounded patch size, disk-space preflight, atomic rename and rollbacks
-- Process/session lock: the in-world viewer may download/cache packages, but
-  cannot modify its own EXE, shaders in use or loaded libraries
-- Explicit safety valve to disable auto-download/checks and roll back
-- No server-controlled changes to security/privacy/anti-RLV permissions
+## Safety constraints
+- HTTPS and publisher-signature verification, not HTTPS alone
+- Bounded downloads; verify before applying; atomic staging and rollback
+- Strict path allowlist, no traversal or symlink/reparse-point escapes
+- No arbitrary commands, dynamically downloaded native code while in session,
+  unreviewed plugins or privileged changes to user permissions
+- Never overwrite personal settings, credentials, inventory or SL cache
+- Don't automatically disconnect, teleport, suppress network processing or
+  change voice/chat privacy behavior to enter Home
+- Connection health indicator while Home is up; if the SL session drops for
+  external reasons, report the real state without pretending it remains online
+- Offline/error fallback to existing live viewer; Home can always close
+- Respect Second Life viewer policy, user consent and existing third-party
+  licensing and notices
 
-## Implemented in this branch
-- Native KAMI Fire Garden **Hotfix Center (Preview)** accessible in the
-  Workspaces menu, compiled into the Windows viewer after theme integration
-- A real Close action; no non-functional Apply or Return to Home button
-- Feature kept **off**: no network check, unverified patch installer, auto
-  logout, forced update, or changes to in-world performance
-- Source and integrated XUI/C++ preflight tests to avoid packaging a
-  misleading update experience
+## Prototype actually implemented on this feature branch
+- A native Fire Garden **Hotfix Center (Preview)** accessible from Workspaces
+- A working Close action that does not change the user's world session
+- No live update feed, install code, forced logout, external updater,
+  "Update Required" modal or full-screen Home shell yet
+- Source/integration tests to avoid presenting a nonfunctional updater as real
 
-## Still required before 1.0
-- Signed feed and trusted delivery backend
-- Native update controller and secure Windows off-process patch broker
-- Safe logout-to-Home transition and unsaved-work handling
-- Download, verify, stage, install, restart and automatic rollback
-- Patch history, detailed error reporting and beta cohort testing
-- Failure injection tests: disconnect, disk full, corrupt files, mismatched
-  signatures, malicious filenames, viewer crash, half-applied patch
+## Remaining for the full release
+- Actual connected-session, full-screen Home shell and Return to World flow
+- Safe handling for unsaved edits and active dialogs while entering Home
+- Signed feed, update controller, safe reload and staged binary broker
+- Deferred restart messaging for binary patches, not an in-session DLL swap
+- History, rollback, release-channel selection and failure-injection tests
+- Long-running in-world tests for timeouts, idle disconnections, chat/voice
+  visibility, avatar state and real streaming/decode frame times
 
-Do not enable UPDATE REQUIRED until all these mechanisms are tested.
-Do not merge this prototype into an existing beta release just because its
-compile succeeds.
+Do not advertise this prototype as a deployed hotfix service.
