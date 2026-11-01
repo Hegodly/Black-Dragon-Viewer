@@ -360,7 +360,22 @@ jobs:
       - name: Finalize KAMI-only portable branding and verify runtime completeness
         shell: pwsh
         run: python kami/packaging/finalize-kami-standalone.py
+      - name: Capture native crash dumps from DX12 diagnostics
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'kami-dx12-forensics'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $wer = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps'
+          foreach ($exe in @('KAMIViewer.exe', 'kami_dx12_smoke.exe')) {
+            $key = Join-Path $wer $exe
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -Path $key -Name DumpFolder -Value $dir -PropertyType ExpandString -Force | Out-Null
+            New-ItemProperty -Path $key -Name DumpType -Value 1 -PropertyType DWord -Force | Out-Null
+            New-ItemProperty -Path $key -Name DumpCount -Value 2 -PropertyType DWord -Force | Out-Null
+          }
+
       - name: Execute real native D3D12 GPU test inside staged KAMIViewer
+        id: viewer_dx12
         shell: pwsh
         run: |
           $release = (Resolve-Path 'build-vc170-64/newview/Release').Path
@@ -395,6 +410,50 @@ jobs:
           Write-Host 'PASS: native D3D12 GPU pixel test executed from KAMIViewer.exe'
           Invoke-KamiDx12Test -Flag '--kami-dx12-world-warp-test' -Description 'Native D3D12 indexed world/depth render'
           Write-Host 'PASS: native D3D12 indexed mesh, camera transform and occlusion test inside KAMIViewer.exe'
+
+      - name: Isolate native D3D12 renderer from GUI viewer startup
+        if: ${{ failure() && steps.viewer_dx12.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'kami-dx12-forensics'
+          $result = Join-Path $dir 'standalone-result.txt'
+          try {
+            cmake -S kami/dx12 -B build-kami-dx12-forensic -G 'Visual Studio 17 2022' -A x64
+            if ($LASTEXITCODE -ne 0) { throw "Standalone DX12 configure failed: $LASTEXITCODE" }
+            cmake --build build-kami-dx12-forensic --config Release --parallel 2
+            if ($LASTEXITCODE -ne 0) { throw "Standalone DX12 compile failed: $LASTEXITCODE" }
+            $exe = (Resolve-Path 'build-kami-dx12-forensic/Release/kami_dx12_smoke.exe').Path
+            $proc = Start-Process -FilePath $exe -ArgumentList '--warp --offscreen' -WorkingDirectory $dir -PassThru -RedirectStandardOutput (Join-Path $dir 'standalone-stdout.txt') -RedirectStandardError (Join-Path $dir 'standalone-stderr.txt')
+            if (-not $proc.WaitForExit(90000)) {
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              throw 'Standalone D3D12 WARP test timed out'
+            }
+            "Standalone renderer test exit: $($proc.ExitCode)" | Out-File $result
+          } catch {
+            "Standalone renderer test failure: $_" | Out-File $result
+          }
+
+      - name: Capture KAMI viewer DX12 crash events and trace
+        if: ${{ failure() && steps.viewer_dx12.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'kami-dx12-forensics'
+          $trace = 'build-vc170-64/newview/Release/kami-dx12-smoke.trace'
+          if (Test-Path $trace) { Copy-Item $trace (Join-Path $dir 'viewer-last-dx12-operation.txt') }
+          $events = Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-20)} -MaxEvents 100 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match 'KAMIViewer.exe|kami_dx12_smoke.exe' } |
+            Select-Object TimeCreated, ProviderName, Id, Message | Format-List | Out-String
+          $events | Out-File (Join-Path $dir 'windows-crash-events.txt')
+          Get-ChildItem -Path $dir | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+
+      - name: Preserve KAMI DX12 crash diagnostics
+        if: ${{ failure() && steps.viewer_dx12.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kami-dx12-warp-crash-diagnostics
+          path: ${{ runner.temp }}/kami-dx12-forensics/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Cache downloaded libraries
         if: always()
