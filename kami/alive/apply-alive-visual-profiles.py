@@ -182,8 +182,10 @@ for path in (opaque,gltf):
         metal_weight = 1.0;
     if (kami_alive_material_override > 1.5)
         metal_weight = 0.0;""")
-splice(opaque, "uniform sampler2D diffuseMap;  //always in sRGB space",
-       profile_glsl+"\nuniform sampler2D diffuseMap;  //always in sRGB space")
+# The opaque shader has TWO diffuseMap declarations (world and HUD).
+# Insert beside the unique ALIVE roughness function, not a shared sampler.
+splice(opaque, "    return mix(roughness, polished, blend);\n}",
+       "    return mix(roughness, polished, blend);\n}\n"+profile_glsl)
 splice(gltf, "uniform int gltf_material_id;",profile_glsl+"\nuniform int gltf_material_id;")
 splice(opaque,
     "    spec.g = kamiAlivePolishedRoughness(spec.g, spec.b);\n",
