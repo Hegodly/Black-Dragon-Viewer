@@ -791,7 +791,12 @@ bool LLFloaterIMSession::getVisible()
 
 void LLFloaterIMSession::setFocus(bool focus)
 {
-    if (focus && !hasFocus()) LL_INFOS("KamiChatOpen") << "Conversation opened: " << mSessionID << LL_ENDL;
+    // Diagnostic: opening this local conversation does not prove a remote read.
+    if (focus && !hasFocus() && mSessionID.notNull())
+    {
+        LL_INFOS("KamiChatOpen") << "Local conversation opened: " << mSessionID << LL_ENDL;
+        LLNotificationsUtil::add("KamiChatOpenedDiagnostic");
+    }
     LLFloaterIMSessionTab::setFocus(focus);
 
     //When in DND mode, remove stored IM notifications
