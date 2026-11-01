@@ -415,7 +415,7 @@ jobs:
           Write-Host 'PASS: native D3D12 indexed mesh, camera transform and occlusion test inside KAMIViewer.exe'
 
       - name: Isolate native D3D12 renderer from GUI viewer startup
-        if: ${{ failure() && steps.viewer_dx12.outcome == 'failure' }}
+        if: ${{ always() && (steps.viewer_dx12.outcome == 'success' || steps.viewer_dx12.outcome == 'failure') }}
         shell: pwsh
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'kami-dx12-forensics'
@@ -432,12 +432,17 @@ jobs:
               throw 'Standalone D3D12 WARP test timed out'
             }
             "Standalone renderer test exit: $($proc.ExitCode)" | Out-File $result
+            if ($proc.ExitCode -ne 0) {
+              throw "Standalone D3D12 WARP test exited with code $($proc.ExitCode)"
+            }
+            Write-Host 'PASS: standalone native D3D12 WARP renderer executed and returned 0'
           } catch {
             "Standalone renderer test failure: $_" | Out-File $result
+            throw
           }
 
       - name: Capture KAMI viewer DX12 crash events and trace
-        if: ${{ failure() && steps.viewer_dx12.outcome == 'failure' }}
+        if: ${{ always() && (steps.viewer_dx12.outcome == 'success' || steps.viewer_dx12.outcome == 'failure') }}
         shell: pwsh
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'kami-dx12-forensics'
@@ -447,13 +452,19 @@ jobs:
             Where-Object { $_.Message -match 'KAMIViewer.exe|kami_dx12_smoke.exe' } |
             Select-Object TimeCreated, ProviderName, Id, Message | Format-List | Out-String
           $events | Out-File (Join-Path $dir 'windows-crash-events.txt')
+          $dumps = @(Get-ChildItem -Path $dir -Filter 'KAMIViewer.exe*.dmp' -File -ErrorAction SilentlyContinue)
+          if ($dumps.Count -gt 0) {
+            Get-ChildItem -Path $dir | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+            throw "Embedded KAMI DX12 test produced $($dumps.Count) unexpected Windows crash dump(s)"
+          }
+          Write-Host 'PASS: native viewer DX12 test did not generate a local crash dump'
           Get-ChildItem -Path $dir | Select-Object Name, Length | Format-Table | Out-String | Write-Host
 
-      - name: Preserve KAMI DX12 crash diagnostics
-        if: ${{ failure() && steps.viewer_dx12.outcome == 'failure' }}
+      - name: Preserve KAMI DX12 validation and crash diagnostics
+        if: ${{ always() && (steps.viewer_dx12.outcome == 'success' || steps.viewer_dx12.outcome == 'failure') }}
         uses: actions/upload-artifact@v4
         with:
-          name: kami-dx12-warp-crash-diagnostics
+          name: kami-dx12-warp-validation-diagnostics
           path: ${{ runner.temp }}/kami-dx12-forensics/
           if-no-files-found: warn
           retention-days: 7
