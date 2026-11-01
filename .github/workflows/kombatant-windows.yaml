@@ -236,6 +236,9 @@ jobs:
       - name: Apply approved Fire Garden theme across all native KAMI windows
         shell: pwsh
         run: python kami/theme/apply-fire-garden-ui.py
+      - name: Verify checkbox glyph sizing and native label geometry
+        shell: pwsh
+        run: python kami/theme/test-checkbox-sizing.py
       - name: Remove obsolete Native Graphics Lab and KAMI Photo Studio UI
         shell: pwsh
         run: python kami/stability/remove-native-lab-studio.py
