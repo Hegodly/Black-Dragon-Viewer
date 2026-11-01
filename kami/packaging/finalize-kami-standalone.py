@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 KAMI_EXE = "KAMIViewer.exe"
 LEGACY_ROOT = {
     "blackdragon-bin.exe", "blackdragon-bin.pdb",
+    "blackdragon-bin.exp", "blackdragon-bin.lib", "blackdragon-bin.map",
     "blackdragonviewer.exe", "blackdragon.exe",
     "blackdragonviewer.pdb", "blackdragon.pdb",
 }
