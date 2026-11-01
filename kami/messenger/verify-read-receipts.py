@@ -52,7 +52,7 @@ def integrated():
               'getChild<LLCheckBoxCtrl>("kami_read_receipts_optin")',
               'getChild<LLButton>("kami_read_receipts_request")',
               'LLKamiReadReceipts::instance().wrapOutgoing(',
-              'acknowledgeOpened(mOtherParticipantUUID, mSessionID)',
+              'acknowledgeOpened(mOtherParticipantUUID, mSessionID, mDialog)',
               'label += " | " + LLKamiReadReceipts::instance().status('):
         assert k in session,k
     assert "mKAMIRRLastRevision" in read(src+"llfloaterimsession.h")
