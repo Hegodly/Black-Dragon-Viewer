@@ -21,7 +21,8 @@ assert "class KAMIHotfixCenter final : public LLFloater" in header
 assert "closeFloater();" in header
 assert "setClickedCallback" in header
 assert 'LLFloaterReg::showInstance' not in header  # no fake install action
-assert "NOT YET ENABLED" in src and "No download, forced logout" in src
+assert "NOT YET ENABLED" in src and "No forced logout" in src
+assert "keep your Second Life session connected" in src
 assert "floater_kami_hotfix_home.xml" in src
 assert "Kami.HotfixHome" in src
 assert "Floater.Show" in src
