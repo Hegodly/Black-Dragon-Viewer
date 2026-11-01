@@ -174,6 +174,37 @@ for label,key,parameter in [
     ET.SubElement(item, "menu_item_call.on_click", {
         "function": "Floater.Show", "parameter": parameter,
     })
+# Reuse the exact existing legacy XML controls instead of cloning them.
+# Reparenting retains callbacks, toggle-state bindings, names and shortcuts,
+# and avoids duplicate registrations/accelerators in the new menu.
+legacy_menus = [item for item in list(me[0]) if item.tag == "menu"]
+world_menus = [item for item in legacy_menus if item.get("name") == "World"]
+assert len(world_menus) == 1, "Expected one original World menu"
+world = world_menus[0]
+assert any(
+    item.get("name") == "Kami DX12 Live Preview"
+    for item in world.iter("menu_item_check")
+), "Original experimental DX12 preview control is missing"
+
+# Put World directly in Workspaces so the DX12 test is two menu levels away.
+ET.SubElement(new, "menu_item_separator")
+me[0].remove(world)
+new.append(world)
+
+# Other original categories are grouped compactly under one cascading menu.
+# Their real controls move; none is duplicated or reimplemented.
+legacy = ET.SubElement(new, "menu", {
+    "label": "LEGACY OPTIONS", "name": "KAMI_LegacyOptions",
+    "create_jump_keys": "true", "tear_off": "false",
+})
+for item in legacy_menus:
+    if item is world:
+        continue
+    me[0].remove(item)
+    legacy.append(item)
+assert len(legacy) == len(legacy_menus) - 1
+assert not any(child.tag == "menu" for child in me[0])
+
 root.insert(0, new)
 root.set("bg_visible", "true")
 menu_after = [
