@@ -9,9 +9,9 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview, feature/kami-hotfix-home]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**, kami/hotfix/**]
 permissions:
   contents: read
 jobs:
@@ -35,6 +35,8 @@ jobs:
         run: python3 kami/renderer/verify-gpu-detection.py
       - name: Verify KAMI next-generation native Workspaces theme source
         run: python3 kami/theme/verify-nextgen-workspaces.py
+      - name: Validate KAMI Hotfix Home prototype source (no updater enabled)
+        run: python3 kami/hotfix/verify-hotfix-home.py
       - name: Test standalone packaging and preserve source licenses
         run: python3 -m unittest discover -s kami/packaging -p 'test_finalize_kami_standalone.py'
       - name: Enforce no CMD installers and native KAMI login music in source
@@ -249,6 +251,12 @@ jobs:
       - name: Verify KAMI native Workspaces and preserve original creator tools
         shell: pwsh
         run: python kami/theme/verify-nextgen-workspaces.py --integrated
+      - name: Install native KAMI Hotfix Home (preview only; update service off)
+        shell: pwsh
+        run: python kami/hotfix/apply-hotfix-home.py
+      - name: Verify native KAMI Hotfix Home XUI and source safety
+        shell: pwsh
+        run: python kami/hotfix/verify-hotfix-home.py --integrated
       - name: Verify KAMI four signature feature engines, controls and telemetry
         shell: pwsh
         run: python kami/signature/verify-signature-features.py
