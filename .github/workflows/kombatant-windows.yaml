@@ -33,6 +33,8 @@ jobs:
         run: python3 kami/messenger/verify-kami-messenger.py
       - name: Preflight Brand Folder Sort integration source
         run: python3 kami/inventory/verify-brand-folder-sort.py
+      - name: Preflight KAMI Demo Deleter script safety checks
+        run: python3 kami/inventory/verify-demo-cleanup.py
       - name: Preflight ALIVE selected-material scanner and local override
         run: python3 kami/alive/verify-material-inspector.py
       - name: Preflight KAMI Graphics Control Deck source
@@ -358,6 +360,12 @@ jobs:
       - name: Verify Brand Folder Sort inventory moves, guarded actions and UI
         shell: pwsh
         run: python kami/inventory/verify-brand-folder-sort.py --integrated
+      - name: Integrate KAMI Demo Deleter inventory Trash preview
+        shell: pwsh
+        run: python kami/inventory/apply-demo-cleanup.py
+      - name: Verify KAMI Demo Deleter native controls and guarded Trash moves
+        shell: pwsh
+        run: python kami/inventory/verify-demo-cleanup.py --integrated
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
