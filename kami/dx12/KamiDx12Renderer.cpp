@@ -3,6 +3,7 @@
 #include <d3dcompiler.h>
 #include <algorithm>
 #include <cstring>
+#include <cwchar>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -11,6 +12,23 @@ using Microsoft::WRL::ComPtr;
 
 namespace kami::dx12 {
 namespace {
+// Trace only explicit test executions. Normal Second Life sessions never
+// create a diagnostic file. Breadcrumbs survive Windows access violations.
+void traceDx12Smoke(const char* stage) noexcept
+{
+    const wchar_t* cmd = GetCommandLineW();
+    if (!cmd || (!std::wcsstr(cmd, L"--kami-dx12-") &&
+                 !std::wcsstr(cmd, L"--warp")))
+        return;
+    HANDLE out = CreateFileW(L"kami-dx12-smoke.trace", FILE_APPEND_DATA,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                             OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (out == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    WriteFile(out, stage, static_cast<DWORD>(std::strlen(stage)), &written, nullptr);
+    WriteFile(out, "\r\n", 2, &written, nullptr);
+    CloseHandle(out);
+}
 D3D12_RESOURCE_BARRIER transition(ID3D12Resource* resource,
                                   D3D12_RESOURCE_STATES before,
                                   D3D12_RESOURCE_STATES after)
@@ -66,15 +84,18 @@ bool Renderer::fail(const char* what, HRESULT result)
 
 bool Renderer::initialize(bool warpForTesting)
 {
+    traceDx12Smoke("initialize: begin");
     shutdown();
     error_.clear();
 
+    traceDx12Smoke("initialize: CreateDXGIFactory2");
     HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory_));
     if (FAILED(hr)) return fail("CreateDXGIFactory2", hr);
 
     ComPtr<IDXGIAdapter1> selected;
     if (warpForTesting)
     {
+        traceDx12Smoke("initialize: EnumWarpAdapter");
         hr = factory_->EnumWarpAdapter(IID_PPV_ARGS(&selected));
         if (FAILED(hr)) return fail("EnumWarpAdapter (test-only)", hr);
     }
@@ -103,6 +124,7 @@ bool Renderer::initialize(bool warpForTesting)
 
     if (!device_)
     {
+        traceDx12Smoke("initialize: D3D12CreateDevice");
         hr = D3D12CreateDevice(selected.Get(), D3D_FEATURE_LEVEL_11_0,
                               IID_PPV_ARGS(&device_));
         if (FAILED(hr)) return fail("D3D12CreateDevice", hr);
@@ -113,6 +135,7 @@ bool Renderer::initialize(bool warpForTesting)
 
     D3D12_COMMAND_QUEUE_DESC queueDesc{};
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    traceDx12Smoke("initialize: CreateCommandQueue");
     hr = device_->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&queue_));
     if (FAILED(hr)) return fail("CreateCommandQueue", hr);
 
@@ -123,6 +146,7 @@ bool Renderer::initialize(bool warpForTesting)
         if (FAILED(hr)) return fail("CreateCommandAllocator", hr);
     }
 
+    traceDx12Smoke("initialize: CreateCommandList");
     hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
                                     allocators_[0].Get(), nullptr,
                                     IID_PPV_ARGS(&commandList_));
@@ -130,6 +154,7 @@ bool Renderer::initialize(bool warpForTesting)
     hr = commandList_->Close();
     if (FAILED(hr)) return fail("Close initial command list", hr);
 
+    traceDx12Smoke("initialize: CreateFence");
     hr = device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_));
     if (FAILED(hr)) return fail("CreateFence", hr);
     fenceEvent_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
@@ -141,6 +166,7 @@ bool Renderer::initialize(bool warpForTesting)
         DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof(tearing))))
         allowTearing_ = tearing == TRUE;
 
+    traceDx12Smoke("initialize: makePipeline");
     return makePipeline();
 }
 
@@ -149,15 +175,18 @@ bool Renderer::makePipeline()
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};
     rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     ComPtr<ID3DBlob> signature, diagnostics;
+    traceDx12Smoke("pipeline: SerializeRootSignature");
     HRESULT hr = D3D12SerializeRootSignature(
         &rootDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &diagnostics);
     if (FAILED(hr)) return fail("D3D12SerializeRootSignature", hr);
+    traceDx12Smoke("pipeline: CreateRootSignature");
     hr = device_->CreateRootSignature(0, signature->GetBufferPointer(),
                                       signature->GetBufferSize(),
                                       IID_PPV_ARGS(&rootSignature_));
     if (FAILED(hr)) return fail("CreateRootSignature", hr);
 
     ComPtr<ID3DBlob> vs, ps;
+    traceDx12Smoke("pipeline: CompileShaders");
     hr = D3DCompile(kShader, std::strlen(kShader), "KamiDx12Smoke.hlsl",
                     nullptr, nullptr, "VSMain", "vs_5_1",
                     D3DCOMPILE_ENABLE_STRICTNESS, 0, &vs, &diagnostics);
@@ -184,6 +213,7 @@ bool Renderer::makePipeline()
     pso.NumRenderTargets = 1;
     pso.RTVFormats[0] = kColorFormat;
     pso.SampleDesc.Count = 1;
+    traceDx12Smoke("pipeline: CreateGraphicsPipelineState");
     hr = device_->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&pipeline_));
     if (FAILED(hr)) return fail("CreateGraphicsPipelineState", hr);
     return true;
@@ -382,6 +412,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     D3D12_CLEAR_VALUE clearValue{};
     clearValue.Format = kColorFormat;
     clearValue.Color[3] = 1.f;
+    traceDx12Smoke("offscreen: CreateRenderTarget");
     ComPtr<ID3D12Resource> target;
     HRESULT hr = device_->CreateCommittedResource(
         &defaultHeap, D3D12_HEAP_FLAG_NONE, &rtDesc,
@@ -393,6 +424,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     heapDesc.NumDescriptors = 1;
     ComPtr<ID3D12DescriptorHeap> heap;
+    traceDx12Smoke("offscreen: CreateRTVHeap");
     hr = device_->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&heap));
     if (FAILED(hr)) return fail("Create offscreen RTV heap", hr);
     const auto rtv = heap->GetCPUDescriptorHandleForHeapStart();
@@ -417,6 +449,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     D3D12_HEAP_PROPERTIES readbackHeap{};
     readbackHeap.Type = D3D12_HEAP_TYPE_READBACK;
     ComPtr<ID3D12Resource> readback;
+    traceDx12Smoke("offscreen: CreateReadbackBuffer");
     hr = device_->CreateCommittedResource(
         &readbackHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
         D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback));
@@ -425,6 +458,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     if (!waitForFrame(0)) return false;
     hr = allocators_[0]->Reset();
     if (FAILED(hr)) return fail("Offscreen allocator reset", hr);
+    traceDx12Smoke("offscreen: RecordCommands");
     hr = commandList_->Reset(allocators_[0].Get(), pipeline_.Get());
     if (FAILED(hr)) return fail("Offscreen command-list reset", hr);
     if (!encodeScene(target.Get(), rtv, width, height,
@@ -443,6 +477,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     hr = commandList_->Close();
     if (FAILED(hr)) return fail("Offscreen command-list close", hr);
     ID3D12CommandList* lists[] = {commandList_.Get()};
+    traceDx12Smoke("offscreen: SubmitAndWait");
     queue_->ExecuteCommandLists(1, lists);
     if (!flush()) return false;
 
@@ -452,6 +487,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     hr = readback->Map(0, &readRange, &mapped);
     if (FAILED(hr)) return fail("Readback Map", hr);
     const auto* bytes = static_cast<const unsigned char*>(mapped);
+    traceDx12Smoke("offscreen: ReadPixels");
     const SIZE_T middle = static_cast<SIZE_T>(height / 2) *
                               footprint.Footprint.RowPitch +
                           static_cast<SIZE_T>(width / 2) * 4u;
@@ -461,6 +497,7 @@ bool Renderer::renderOffscreenSmokeTest(UINT width, UINT height)
     const bool cornerBlack = bytes[0] < 5 && bytes[1] < 5 && bytes[2] < 5;
     D3D12_RANGE writtenRange{0, 0};
     readback->Unmap(0, &writtenRange);
+    traceDx12Smoke("offscreen: VerifyResult");
     if (!centerColored || !cornerBlack)
         return fail("DX12 pixel readback mismatch (triangle not rendered)", E_FAIL);
     return true;
