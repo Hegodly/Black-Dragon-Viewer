@@ -50,7 +50,7 @@ def integrated_check():
     bindings = Counter(e.get("control_name") for e in panel.iter()
                        if e.tag in ("check_box", "slider", "combo_box"))
     for setting in ("RenderVSyncEnable", "RenderFarClip", "RenderAvatarLODFactor",
-                    "RenderDisableVintageMode", "RenderShadowResolutionScale",
+                    "RenderDisableVintageMode", "RenderShadowDetail",
                     "KAMIAliveEnabled", "KAMIAliveStrength"):
         assert bindings[setting] >= 1, f"Control lost: {setting}"
     print("PASS Graphics Control Deck integrated: Kami graphics header, original accordions/controls and ALIVE settings")
