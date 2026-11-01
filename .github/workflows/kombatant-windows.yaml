@@ -31,6 +31,8 @@ jobs:
         run: python3 kami/theme/verify-graphics-control-deck.py
       - name: Validate both modern and legacy keyboard LLSD before Windows build
         run: python3 kami/performance/validate-config-inputs.py
+      - name: Verify KAMI WASD startup migration source safeguards
+        run: python3 kami/performance/verify-wasd-startup.py
       - name: Enforce neutral native PBR quality and no optional default post passes
         run: python3 kami/renderer/verify-neutral-baseline.py
       - name: Verify true 1440p GPU-resolution sizing and patch syntax
@@ -289,6 +291,9 @@ jobs:
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
+      - name: Verify automatic legacy WASD migration on startup
+        shell: pwsh
+        run: python kami/performance/verify-wasd-startup.py
       - name: Integrate true 1440p core world buffers without altering UI resolution
         shell: pwsh
         run: python kami/renderer/enable-true-1440p.py
