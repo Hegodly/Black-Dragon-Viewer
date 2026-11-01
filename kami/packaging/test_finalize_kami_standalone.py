@@ -75,6 +75,25 @@ class PortableTests(unittest.TestCase):
             self.assertTrue(path.exists())
             path.unlink()
 
+    def test_remove_only_two_known_stale_staging_scripts(self):
+        # Exact scripts observed in the October 31 portable packaging failure.
+        for name in ("Start-Without-RTX.cmd", "copy_touched.bat"):
+            (self.root / name).write_text("@echo off", encoding="utf-8")
+        removed = module.finalize(self.root)
+        self.assertEqual(set(removed), {"Start-Without-RTX.cmd", "copy_touched.bat"})
+        self.assertFalse((self.root / "Start-Without-RTX.cmd").exists())
+        self.assertFalse((self.root / "copy_touched.bat").exists())
+        self.assertTrue((self.root / "KAMIViewer.exe").exists())
+
+    def test_unknown_root_script_still_blocks_release_after_cleanup(self):
+        (self.root / "Start-Without-RTX.cmd").write_text("@echo off", encoding="utf-8")
+        unexpected = self.root / "Another-Staging-Script.bat"
+        unexpected.write_text("@echo off", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "Another-Staging-Script.bat"):
+            module.finalize(self.root)
+        self.assertFalse((self.root / "Start-Without-RTX.cmd").exists())
+        self.assertTrue(unexpected.exists())
+
     def test_dont_release_incomplete_package(self):
         (self.root/"licenses.txt").unlink()
         with self.assertRaisesRegex(RuntimeError,"license"):
