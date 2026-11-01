@@ -1,0 +1,118 @@
+name: Audit KAMI 500 MB and 400 MB release archives
+
+on:
+  push:
+    branches: [audit/kami-500mb-vs-400mb-archives]
+    paths: [.github/workflows/kami-archive-diff.yaml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  archive-audit:
+    name: File-by-file content comparison (no rebuild)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Fetch both archived KAMI Windows packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/kami-old" "$RUNNER_TEMP/kami-new"
+          gh run download 41226515173 -R "${{ github.repository }}" -n kami-viewer-windows-release-output -D "$RUNNER_TEMP/kami-old"
+          gh run download 41308951888 -R "${{ github.repository }}" -n kami-viewer-windows-release-output -D "$RUNNER_TEMP/kami-new"
+          echo "Both artifacts extracted for a read-only inventory."
+      - name: Compare exact paths, sizes and SHA256 hashes
+        env:
+          OLD: ${{ runner.temp }}/kami-old
+          NEW: ${{ runner.temp }}/kami-new
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          def manifest(directory):
+              root = Path(directory)
+              result = {}
+              for file in root.rglob("*"):
+                  if not file.is_file():
+                      continue
+                  h = hashlib.sha256()
+                  with file.open("rb") as f:
+                      for block in iter(lambda: f.read(1024 * 1024), b""):
+                          h.update(block)
+                  key = file.relative_to(root).as_posix()
+                  result[key] = {"size": file.stat().st_size, "sha256": h.hexdigest()}
+              return result
+
+          before = manifest(os.environ["OLD"])
+          after = manifest(os.environ["NEW"])
+          removed = sorted(set(before) - set(after), key=lambda n: before[n]["size"], reverse=True)
+          added = sorted(set(after) - set(before), key=lambda n: after[n]["size"], reverse=True)
+          changed = sorted((p for p in before.keys() & after.keys() if before[p] != after[p]),
+                           key=lambda p: abs(before[p]["size"] - after[p]["size"]), reverse=True)
+          same = sorted(p for p in before.keys() & after.keys() if before[p] == after[p])
+          suffixes = {}
+          for label, paths, data in (("removed", removed, before), ("added", added, after)):
+              c = Counter()
+              for p in paths:
+                  c[Path(p).suffix.lower() or "(none)"] += data[p]["size"]
+              suffixes[label] = dict(c.most_common(20))
+          old_size = sum(v["size"] for v in before.values())
+          new_size = sum(v["size"] for v in after.values())
+          report = {
+              "sources": {"old_run": 41226515173, "new_run": 41308951888},
+              "summary": {
+                  "old_file_count": len(before),
+                  "new_file_count": len(after),
+                  "old_uncompressed_bytes": old_size,
+                  "new_uncompressed_bytes": new_size,
+                  "uncompressed_bytes_delta": new_size-old_size,
+                  "removed_file_count": len(removed),
+                  "added_file_count": len(added),
+                  "changed_file_count": len(changed),
+                  "identical_file_count": len(same),
+                  "removed_file_bytes": sum(before[n]["size"] for n in removed),
+                  "added_file_bytes": sum(after[n]["size"] for n in added)
+              },
+              "removed_files": [{"path": n, **before[n]} for n in removed],
+              "added_files": [{"path": n, **after[n]} for n in added],
+              "changed_files": [{"path": n, "old_size": before[n]["size"],
+                                  "new_size": after[n]["size"],
+                                  "old_sha256": before[n]["sha256"], "new_sha256": after[n]["sha256"]}
+                                 for n in changed],
+              "removed_bytes_by_extension": suffixes["removed"],
+              "added_bytes_by_extension": suffixes["added"],
+              "root_executables_before": [n for n in sorted(before) if "/" not in n and n.lower().endswith(".exe")],
+              "root_executables_after": [n for n in sorted(after) if "/" not in n and n.lower().endswith(".exe")]
+          }
+          dest = Path(os.environ["RUNNER_TEMP"]) / "kami-500mb-versus-400mb-file-diff.json"
+          dest.write_text(json.dumps(report, indent=2), encoding="utf-8")
+          for key, val in report["summary"].items():
+              print(f"{key}: {val}")
+          print("ROOT EXE BEFORE", report["root_executables_before"])
+          print("ROOT EXE AFTER", report["root_executables_after"])
+          print("TOP 40 REMOVED FILES BY SIZE")
+          for n in removed[:40]:
+              print(f"REMOVED {before[n]['size']:>12} {n}")
+          print("TOP 40 ADDED FILES BY SIZE")
+          for n in added[:40]:
+              print(f"ADDED {after[n]['size']:>12} {n}")
+          print("TOP 20 CHANGED FILES BY ABS SIZE DELTA")
+          for n in changed[:20]:
+              print(f"CHANGED {before[n]['size']:>12} -> {after[n]['size']:>12} {n}")
+          if not before or not after:
+              raise RuntimeError("An artifact was empty; refusing to produce misleading comparison.")
+          PY
+      - name: Upload detailed comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kami-old-vs-new-complete-file-diff
+          path: ${{ runner.temp }}/kami-500mb-versus-400mb-file-diff.json
+          retention-days: 7
