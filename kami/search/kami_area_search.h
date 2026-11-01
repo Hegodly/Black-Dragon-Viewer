@@ -109,11 +109,11 @@ public:
     bool postBuild() override
     {
         mList=getChild<LLScrollListCtrl>("results");
-        getChild<LLButton>("refresh")->setClickedCallback([this](){refresh();});
-        getChild<LLButton>("stop")->setClickedCallback([this](){mScanning=false; rebuild();});
-        getChild<LLButton>("filter")->setClickedCallback([this](){rebuild();});
-        getChild<LLButton>("focus")->setClickedCallback([this](){locate(true);});
-        getChild<LLButton>("beacon")->setClickedCallback([this](){locate(false);});
+        getChild<LLButton>("refresh")->setClickedCallback([this](LLUICtrl*, const LLSD&){refresh();});
+        getChild<LLButton>("stop")->setClickedCallback([this](LLUICtrl*, const LLSD&){mScanning=false; rebuild();});
+        getChild<LLButton>("filter")->setClickedCallback([this](LLUICtrl*, const LLSD&){rebuild();});
+        getChild<LLButton>("focus")->setClickedCallback([this](LLUICtrl*, const LLSD&){locate(true);});
+        getChild<LLButton>("beacon")->setClickedCallback([this](LLUICtrl*, const LLSD&){locate(false);});
         return true;
     }
     void onOpen(const LLSD&) override { refresh(); }
