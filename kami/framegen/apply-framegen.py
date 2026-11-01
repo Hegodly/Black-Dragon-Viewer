@@ -39,10 +39,12 @@ edit(p,'        LL_INFOS() << "Shutting down GL..." << LL_ENDL;','''        LL_I
         KAMIFrameGen::generator().release();
 #endif''')
 p='indra/newview/app_settings/settings_blackdragon.xml'
-edit(p,'<map>\n  <key>KAMIAvatarFillStrength</key>','''<map>
-  <key>KAMIFrameGeneration</key>
+# Keep frame-generation settings independent of experimental avatar lighting.
+# That retired feature is no longer installed; use the stable KAMI auto-tune
+# settings entry instead of referring to a deleted control.
+edit(p,'  <key>KAMIAutoTune</key>','''  <key>KAMIFrameGeneration</key>
   <map><key>Comment</key><string>Experimental native optical-flow frame interpolation. Not DLSS or FSR. Adds latency and may distort moving UI. Off by default; bypassed below 30 real FPS, on stalls, and above 4096 pixels per axis.</string><key>Persist</key><integer>0</integer><key>Type</key><string>Boolean</string><key>Value</key><integer>0</integer></map>
-  <key>KAMIAvatarFillStrength</key>''')
+  <key>KAMIAutoTune</key>''')
 p='indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml'
 s=(R/p).read_text();start=s.index('<layout_panel name="kombatant_display_quick"');end=s.index('</layout_panel>',start)
 a=s[start:end].replace('height="3910" auto_resize="false"','height="4100" auto_resize="false"')
