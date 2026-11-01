@@ -21,6 +21,26 @@ Do not relabel a restart-required patch as an optimization hotfix. Feature
 updates may prompt for an optional, explicitly user-approved restart; no
 forced logout during the resident's active Second Life session.
 
+## In-viewer push notification experience
+- Use the viewer's **native, non-modal notification/toast framework**, not
+  Windows OS notifications or modal dialog boxes.
+- The future trusted update controller notifies the UI ONLY after it verifies
+  a publisher-signed, restart-free optimization manifest and release channel.
+- Title: **KAMI OPTIMIZATION AVAILABLE**; include a verified short version.
+  Actions: **View details** (opens Kami Hotfix Center without logging out)
+  and **Later** (dismisses for the moment). The resident can continue using
+  Second Life normally.
+- The final 1.0 flow will add **Return to Kami Home** from those details.
+  Do not display a Return to Home install button until the connected-session
+  Home experience and signed installer actually exist.
+- Do not steal keyboard focus, teleport, disconnect, or repeatedly spam.
+  Dedupe by verified update version for the current session; store a persistent
+  dismiss/snooze policy in the later production controller. Keep alerts
+  available through Hotfix History/notification center when dismissed.
+- Native `notify` notification template and a `notifyVerifiedHotfix()`
+  hook are source-integrated in this prototype, but currently **nothing
+  invokes them** because no verified update feed exists.
+
 ## Desired update flow for full 1.0
 1. After an opt-in update check, show a non-disruptive in-world notice:
    **UPDATE REQUIRED — Return to Kami Home to apply this optimization**.
@@ -86,14 +106,18 @@ Private signing keys NEVER belong in the client or source.
 ## Prototype actually implemented on this feature branch
 - A native Fire Garden **Hotfix Center (Preview)** accessible from Workspaces
 - A working Close action that does not change the user's world session
+- Native viewer notification template with View details / Later buttons
+- Verified-only (currently uncalled) C++ notification helper, deduped by
+  release version; View details opens the Hotfix Center without logout
 - No live update feed, install code, forced logout, external updater,
-  "Update Required" modal or full-screen Home shell yet
+  functioning "Update Required" trigger or full-screen Home shell yet
 - Source/integration tests to avoid presenting a nonfunctional updater as real
 
 ## Remaining for the full release
 - Actual connected-session, full-screen Home shell and Return to World flow
 - Safe handling for unsaved edits and active dialogs while entering Home
-- Signed feed, update controller, safe reload and staged binary broker
+- Signed feed, update controller, UI-thread notification dispatch, safe
+  reload and staged binary broker
 - Enforce release-type policy: restart-free optimization hotfixes versus
   separately scheduled, restart-eligible feature updates
 - History, rollback, release-channel selection and failure-injection tests
