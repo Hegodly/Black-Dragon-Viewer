@@ -125,7 +125,7 @@ public:
         return wire.substr(0, at);
     }
 
-    void request(const LLUUID& peer, const LLUUID& session)
+    void request(const LLUUID& peer, const LLUUID& session, EInstantMessage transportDialog)
     {
         resetAccountIfNeeded();
         if (!enabled() || peer.isNull() || peer == gAgent.getID() ||
@@ -139,7 +139,7 @@ public:
         ++mRevision;
 
         LLIMModel::sendMessage(frame("HELLO", nonce),
-                               session, peer, IM_NOTHING_SPECIAL);
+                               session, peer, transportDialog);
     }
 
     std::string wrapOutgoing(const LLUUID& peer, const std::string& text)
@@ -162,7 +162,7 @@ public:
     // Returns true for consumed control packets (never add these to SL chat).
     // For a normal tagged message, strips metadata IN PLACE and returns false.
     bool incoming(const LLUUID& peer, const LLUUID& session,
-                  std::string& text, bool permitted)
+                  std::string& text, bool permitted, EInstantMessage transportDialog)
     {
         resetAccountIfNeeded();
         std::string verb;
@@ -183,7 +183,7 @@ public:
                 {
                     mLastInboundHello[peer] = id;
                     LLIMModel::sendMessage(frame("HELLO_ACK", id),
-                                           session, peer, IM_NOTHING_SPECIAL);
+                                           session, peer, transportDialog);
                 }
             }
             else if (verb == "HELLO_ACK")
@@ -231,7 +231,7 @@ public:
     }
 
     // Called when a P2P chat is foregrounded. Never send on mere arrival.
-    bool acknowledgeOpened(const LLUUID& peer, const LLUUID& session)
+    bool acknowledgeOpened(const LLUUID& peer, const LLUUID& session, EInstantMessage transportDialog)
     {
         resetAccountIfNeeded();
         if (!enabled() || mVerified.find(peer) == mVerified.end()) return false;
@@ -243,7 +243,7 @@ public:
         mPendingRead.erase(pending); // exactly once, no repeat sending
         ++mRevision;
         LLIMModel::sendMessage(frame("SEEN", id),
-                               session, peer, IM_NOTHING_SPECIAL);
+                               session, peer, transportDialog);
         return true;
     }
 
@@ -350,11 +350,19 @@ splice(im_proc, '#include "llimview.h"', '#include "llimview.h"\n#include "llkam
 splice(im_proc, "    chat.mMuted = is_muted;\n",
 """    // KAMI read receipts are P2P only; never touch group/object/system IM.
     // Server-authored from_id is used as peer identity. Mutes block replies.
-    if (dialog == IM_NOTHING_SPECIAL && !from_group &&
+    // Modern WebRTC P2P chats use IM_SESSION_SEND, the same outer dialog
+    // as groups. Require an existing typed P2P session before touching it.
+    const LLIMModel::LLIMSession* kami_session =
+        LLIMModel::getInstance()->findIMSession(session_id);
+    const bool kami_direct_im =
+        dialog == IM_NOTHING_SPECIAL ||
+        (dialog == IM_SESSION_SEND && kami_session &&
+         kami_session->isP2PSessionType());
+    if (kami_direct_im && !from_group &&
         from_id.notNull() && to_id == gAgent.getID())
     {
         if (LLKamiReadReceipts::instance().incoming(
-                from_id, session_id, message, !is_muted))
+                from_id, session_id, message, !is_muted, dialog))
             return;
     }
 
@@ -391,7 +399,7 @@ splice(floater,
     }""",
 """    if (mSessionInitialized)
     {
-        const std::string wire = mDialog == IM_NOTHING_SPECIAL ?
+        const std::string wire = mIsP2PChat ?
             LLKamiReadReceipts::instance().wrapOutgoing(mOtherParticipantUUID, utf8_text) :
             utf8_text;
         LLIMModel::sendMessage(wire, mSessionID, mOtherParticipantUUID, mDialog);
@@ -406,8 +414,8 @@ splice(floater,
 """void LLFloaterIMSession::setFocus(bool focus)
 {
     LLFloaterIMSessionTab::setFocus(focus);
-    if (focus && getVisible() && mDialog == IM_NOTHING_SPECIAL)
-        LLKamiReadReceipts::instance().acknowledgeOpened(mOtherParticipantUUID, mSessionID);
+    if (focus && getVisible() && mIsP2PChat)
+        LLKamiReadReceipts::instance().acknowledgeOpened(mOtherParticipantUUID, mSessionID, mDialog);
 """)
 splice(floater,
 """    if (visible && isInVisibleChain())
@@ -419,8 +427,8 @@ splice(floater,
     {
         sIMFloaterShowedSignal(mSessionID);
         updateMessages();
-        if (hasFocus() && mDialog == IM_NOTHING_SPECIAL)
-            LLKamiReadReceipts::instance().acknowledgeOpened(mOtherParticipantUUID, mSessionID);
+        if (hasFocus() && mIsP2PChat)
+            LLKamiReadReceipts::instance().acknowledgeOpened(mOtherParticipantUUID, mSessionID, mDialog);
     }""")
 splice(floater,
 """void LLFloaterIMSession::draw()
@@ -435,8 +443,8 @@ splice(floater,
     {
         mKAMIRRLastRevision = rr.revision();
         mKAMIRRLastEnabled = rr.enabled();
-        if (getVisible() && hasFocus() && mDialog == IM_NOTHING_SPECIAL)
-            rr.acknowledgeOpened(mOtherParticipantUUID, mSessionID);
+        if (getVisible() && hasFocus() && mIsP2PChat)
+            rr.acknowledgeOpened(mOtherParticipantUUID, mSessionID, mDialog);
         updateKAMIMessengerStatus();
     }
 
@@ -445,10 +453,10 @@ splice(floater,
 splice(floater, "//virtual\nbool LLFloaterIMSession::postBuild()",
 """void LLFloaterIMSession::onKAMIRequestReceipts()
 {
-    if (mDialog != IM_NOTHING_SPECIAL || !mSessionInitialized ||
+    if (!mIsP2PChat || !mSessionInitialized ||
         mOtherParticipantUUID.isNull())
         return;
-    LLKamiReadReceipts::instance().request(mOtherParticipantUUID, mSessionID);
+    LLKamiReadReceipts::instance().request(mOtherParticipantUUID, mSessionID, mDialog);
     updateKAMIMessengerStatus();
 }
 
@@ -469,7 +477,7 @@ splice(floater,
         updateKAMIMessengerStatus();
     });
     LLButton* receipt_request = getChild<LLButton>("kami_read_receipts_request");
-    receipt_request->setEnabled(mDialog == IM_NOTHING_SPECIAL);
+    receipt_request->setEnabled(mIsP2PChat);
     receipt_request->setClickedCallback(boost::bind(&LLFloaterIMSession::onKAMIRequestReceipts, this));
 
     setDocked(true);""")
@@ -512,7 +520,7 @@ newstatus = """void LLFloaterIMSession::updateKAMIMessengerStatus()
     else
         label = "SL SESSION READY | Not a delivery confirmation";
 
-    if (mDialog == IM_NOTHING_SPECIAL)
+    if (mIsP2PChat)
         label += " | " + LLKamiReadReceipts::instance().status(mOtherParticipantUUID);
     status->setText(label);
 }
