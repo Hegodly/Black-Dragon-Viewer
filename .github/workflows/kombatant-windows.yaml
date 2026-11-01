@@ -31,6 +31,8 @@ jobs:
         run: python3 kami/alive/verify-material-inspector.py
       - name: Preflight KAMI ALIVE visual profile source safety
         run: python3 kami/alive/verify-alive-visual-profiles.py
+      - name: Preflight KAMIVIEWER user-data branding integration
+        run: python3 kami/branding/verify-userdata-branding.py
       - name: Preflight KAMI Messenger session and UI contract
         run: python3 kami/messenger/verify-kami-messenger.py
       - name: Preflight KAMI Messenger opt-in read receipt protocol
@@ -150,6 +152,12 @@ jobs:
       - name: Apply KAMI Viewer logo and identity
         shell: pwsh
         run: python kami/branding/apply-branding.py
+      - name: Use KAMIVIEWER data and diagnostic paths
+        shell: pwsh
+        run: python kami/branding/apply-userdata-branding.py
+      - name: Verify paired viewer and crash-reporter paths
+        shell: pwsh
+        run: python kami/branding/verify-userdata-branding.py --integrated
       - name: Apply static Beyond Reality fire-garden theme
         shell: pwsh
         run: python kami/theme/apply-static-theme.py
