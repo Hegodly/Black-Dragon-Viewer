@@ -213,13 +213,25 @@ Creator: loose items by creator ID
 Store Items: loose items by inferred name prefix
 
 Every move requires a separate preview and confirmation.""")
-replace_once(N,'      <button index="2" name="ByStore" text="Store"/>\n      <button index="3" name="Cancel" text="Cancel" default="true"/>',
-             '      <button index="2" name="ByStore" text="Store Items"/>\n      <button index="3" name="ByBrandFolders" text="Brand Folders"/>\n      <button index="4" name="Cancel" text="Cancel" default="true"/>')
-notice="""  <notification
-   icon="alertmodal.tga"
-   name="KamiSmartSortFolderPreview"
-   type="alertmodal">
-KAMI Smart Sort - Brand Folders Preview
+# Patch notification structure semantically. Earlier workflow scripts may
+# reindent XML, so exact newline/indentation matching here is unsafe.
+tree=ET.parse(N)
+root=tree.getroot()
+modes=[x for x in root.iter("notification") if x.get("name")=="KamiSmartSortChooseMode"]
+previews=[x for x in root.iter("notification") if x.get("name")=="KamiSmartSortPreview"]
+assert len(modes)==len(previews)==1
+form=modes[0].find("form")
+buttons=list(form.iter("button"))
+assert [b.get("index") for b in buttons]==["0","1","2","3"]
+assert buttons[2].get("name")=="ByStore" and buttons[3].get("name")=="Cancel"
+buttons[2].set("text","Store Items")
+buttons[3].set("index","4")
+form.insert(list(form).index(buttons[3]),
+            ET.Element("button",{"index":"3","name":"ByBrandFolders",
+                                 "text":"Brand Folders"}))
+notice=ET.Element("notification",{"icon":"alertmodal.tga",
+    "name":"KamiSmartSortFolderPreview","type":"alertmodal"})
+notice.text="""KAMI Smart Sort - Brand Folders Preview
 
 Move [COUNT] product folders into uppercase bracketed brand folders directly under My Inventory.
 
@@ -232,14 +244,11 @@ Skipped / unrecognized: [SKIPPED] folders.
 Only original folders move. Their names, nested folders and items are preserved.
 System folders and anything outside the top level are untouched.
 Nothing is deleted. Confirm before editing your SL inventory.
-    <usetemplate
-     name="okcancelbuttons"
-     notext="Cancel"
-     yestext="Organize Folders"/>
-  </notification>
-"""
-replace_once(N,'  <notification\n   icon="alertmodal.tga"\n   name="KamiSmartSortPreview"',
-             notice+'  <notification\n   icon="alertmodal.tga"\n   name="KamiSmartSortPreview"')
+    """
+ET.SubElement(notice,"usetemplate",{"name":"okcancelbuttons",
+                                    "notext":"Cancel","yestext":"Organize Folders"})
+root.insert(list(root).index(previews[0]),notice)
+tree.write(N,encoding="utf-8",xml_declaration=True)
 replace_once(M,"Kami Smart Sort (Category / Creator / Store)...","Kami Smart Sort (Brand Folders / Items)...")
 replace_once(P,"Choose Smart Sort by Category, Creator or Store; preview and approve before any move.",
              "Group existing [Store] product folders or sort loose items. Preview and approve before moving.")
