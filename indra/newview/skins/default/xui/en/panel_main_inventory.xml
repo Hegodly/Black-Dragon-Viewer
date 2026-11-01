@@ -487,6 +487,16 @@
     </menu_item_call>
     </menu>
 				</menu_bar>
+    <button
+     name="kami_smart_sort_btn"
+     label="Smart Sort"
+     tool_tip="Choose Smart Sort by Category, Creator or Store; preview and approve before any move."
+     follows="top|right"
+     layout="topleft"
+     left="184"
+     top="0"
+     width="99"
+     height="19" />
             <panel
      follows="top|left"
      halign="center"

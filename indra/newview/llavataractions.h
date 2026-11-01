@@ -113,6 +113,16 @@ public:
      */
     static void showOnMap(const LLUUID& id);
 
+    // Kami: teleport near an avatar whose position is known to the viewer.
+    static bool canTeleportTo(const LLUUID& id);
+    static void teleportTo(const LLUUID& id);
+
+    // Kami: follow a visible nearby avatar using ordinary SL movement.
+    static bool canFollowAvatar(const LLUUID& id);
+    static void followAvatar(const LLUUID& id);
+    static bool isFollowingAvatar();
+    static void stopFollowingAvatar();
+
     /**
      * Give money to the avatar.
      */

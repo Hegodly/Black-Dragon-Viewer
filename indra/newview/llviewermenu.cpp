@@ -10806,6 +10806,9 @@ void initialize_menus()
 	view_listener_t::addMenu(new LLObjectRefreshTextures(), "Object.RefreshTextures");
 
 //	//BD - Save/Load Camera Position
+    // Kami Follow Avatar can always be stopped from the top-level World menu.
+    commit.add("World.KamiStopFollowing", boost::bind(&LLAvatarActions::stopFollowingAvatar));
+    enable.add("World.KamiCanStopFollowing", boost::bind(&LLAvatarActions::isFollowingAvatar));
 	commit.add("World.SaveCamera", boost::bind(&LLAgentCamera::saveCamera, &gAgentCamera));
 	commit.add("World.LoadCamera", boost::bind(&LLAgentCamera::loadSavedCamera, &gAgentCamera));
 

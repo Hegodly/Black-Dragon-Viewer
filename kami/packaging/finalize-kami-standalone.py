@@ -15,9 +15,14 @@ import xml.etree.ElementTree as ET
 KAMI_EXE = "KAMIViewer.exe"
 LEGACY_ROOT = {
     "blackdragon-bin.exe", "blackdragon-bin.pdb",
+    "blackdragon-bin.exp", "blackdragon-bin.lib", "blackdragon-bin.map",
     "blackdragonviewer.exe", "blackdragon.exe",
     "blackdragonviewer.pdb", "blackdragon.pdb",
 }
+# Known build/legacy helper scripts copied to the release root by staging.
+# These are not viewer runtime dependencies and must NOT ship to residents.
+# Keep this allowlist narrow: unknown root scripts still fail validation.
+OBSOLETE_ROOT_SCRIPTS = {"start-without-rtx.cmd", "copy_touched.bat"}
 REQUIRED = [
     "app_settings/settings.xml",
     "app_settings/settings_blackdragon.xml",
@@ -131,6 +136,14 @@ def finalize(out: Path) -> list[str]:
                               "taskbar icon of KAMI Viewer")
     settings.write_text(content, encoding="utf-8")
     ET.parse(settings)
+
+    # Remove only two confirmed legacy/build helper scripts left by staging.
+    # Unknown scripts still abort release rather than being silently removed.
+    # Do not recurse: this only cleans the portable package root.
+    for f in out.iterdir():
+        if f.is_file() and f.name.casefold() in OBSOLETE_ROOT_SCRIPTS:
+            f.unlink()
+            removed.append(f.name)
 
     # Release readiness means there are no first-run feature installers.
     # Unknown root scripts abort packaging rather than being silently deleted.

@@ -182,6 +182,47 @@ No tutorial is currently available.
 
   <notification
    icon="alertmodal.tga"
+   name="KamiSmartSortChooseMode"
+   type="alertmodal">
+Kami Smart Sort
+
+Choose how to organize loose items directly under My Inventory:
+
+Category: item type and conservative name matches
+Creator: the item's creator ID
+Store: an inferred brand prefix in the item name
+
+No inventory changes will happen until you review and confirm the next screen.
+    <form>
+      <button index="0" name="ByCategory" text="Category"/>
+      <button index="1" name="ByCreator" text="Creator"/>
+      <button index="2" name="ByStore" text="Store"/>
+      <button index="3" name="Cancel" text="Cancel" default="true"/>
+    </form>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   name="KamiSmartSortPreview"
+   type="alertmodal">
+Kami Smart Sort - Preview: [MODE]
+
+Organize [COUNT] confidently grouped loose inventory items into My Inventory / Kami Smart Sort / [MODE].
+
+Proposed groups:
+[DETAILS]
+
+Skipped: [SKIPPED] loose items. Existing folders, links and no-copy items will not be moved.
+
+[LIMITATION]
+
+No items will be deleted. Confirm before organizing.
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Organize" />
+  </notification>
+  <notification
+   icon="alertmodal.tga"
    name="GenericAlert"
    type="alertmodal">
 [MESSAGE]
@@ -13252,5 +13293,31 @@ Allow them to pose you?
           ignoretext="Image Upload Resized"
           name="okignore"
           yestext="OK"/>
+  </notification>
+
+  <notification
+   icon="notify.tga"
+   name="KamiTeleportToAvatarNotPossible"
+   type="notify">
+    Teleport To is not available because the viewer does not have a reliable position for this resident. Try again when they appear in Nearby People.
+  </notification>
+  <!-- Kami Follow Avatar: this is a local movement convenience, not teleportation. -->
+  <notification
+    icon="notify.tga"
+    name="KamiFollowAvatarStarted"
+    type="notify">
+    Following this avatar. Use World &gt; Stop Following Avatar, or press movement controls, to stop. Kami will remain about 3m away and will not teleport after them.
+  </notification>
+  <notification
+    icon="notify.tga"
+    name="KamiFollowAvatarNotPossible"
+    type="notify">
+    Follow Avatar requires a nearby, currently visible resident and an available standing avatar. Get closer or stand up and try again.
+  </notification>
+  <notification
+    icon="notify.tga"
+    name="KamiFollowAvatarStopped"
+    type="notify">
+    Stopped following the avatar.
   </notification>
 </notifications>

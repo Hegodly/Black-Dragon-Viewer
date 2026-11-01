@@ -35,6 +35,9 @@
 #include "llviewercamera.h"
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
+#include "llwindow.h"
+
+#include <set>
 #include "llvoiceclient.h"
 #include "llviewermedia.h"
 #include "llviewerregion.h"
@@ -407,6 +410,8 @@ void init_audio()
     audio_update_volume(true);
 }
 
+static F32 sKamiAudioDuckingGain = 1.f;
+
 void audio_update_volume(bool force_update)
 {
     static LLCachedControl<F32> master_volume(gSavedSettings, "AudioLevelMaster");
@@ -414,7 +419,11 @@ void audio_update_volume(bool force_update)
     static LLCachedControl<bool> mute_when_minimized(gSavedSettings, "MuteWhenMinimized");
     bool mute_audio = mute_audio_setting();
 
-    if (!gViewerWindow->getActive() && mute_when_minimized())
+    // Unfocused is NOT the same as minimized (Alt-Tab should not mute sound).
+    const bool window_minimized = gViewerWindow && gViewerWindow->getWindow() &&
+                                  gViewerWindow->getWindow()->getMinimized();
+    const bool mute_for_minimize = window_minimized && mute_when_minimized();
+    if (mute_for_minimize)
     {
         mute_audio = true;
     }
@@ -426,18 +435,21 @@ void audio_update_volume(bool force_update)
 
         gAudiop->setMasterGain (master_volume());
 
-        const F32 AUDIO_LEVEL_DOPPLER = 1.f;
-        gAudiop->setDopplerFactor(AUDIO_LEVEL_DOPPLER);
+        // KAMI AUDIO LAB: controls are real FMOD/OpenAL 3D audio parameters.
+        // These do not claim to enable HRTF or simulation of sound occlusion.
+        static LLCachedControl<F32> kami_doppler(gSavedSettings, "KamiAudioDopplerFactor");
+        static LLCachedControl<F32> kami_rolloff(gSavedSettings, "KamiAudioWorldRolloff");
+        const F32 doppler = llclamp(kami_doppler(), 0.f, 2.f);
+        const F32 rolloff = llclamp(kami_rolloff(), 0.25f, 3.f);
+        gAudiop->setDopplerFactor(doppler);
 
         if (!LLViewerCamera::getInstance()->cameraUnderWater())
         {
-            const F32 AUDIO_LEVEL_ROLLOFF = 1.f;
-            gAudiop->setRolloffFactor(AUDIO_LEVEL_ROLLOFF);
+            gAudiop->setRolloffFactor(rolloff);
         }
         else
         {
-            const F32 AUDIO_LEVEL_UNDERWATER_ROLLOFF = 5.f;
-            gAudiop->setRolloffFactor(AUDIO_LEVEL_UNDERWATER_ROLLOFF);
+            gAudiop->setRolloffFactor(rolloff * 5.f);
         }
 
         bool progress_view_visible = gViewerWindow->getShowProgress();
@@ -480,14 +492,68 @@ void audio_update_volume(bool force_update)
 
         F32 fade_volume = LLViewerAudio::getInstance()->getFadeVolume();
 
-        F32 music_volume = mute_volume * master_volume * al_music() * fade_volume;
+        // KAMI AUDIO LAB: scan remote voice activity at most five times per
+        // second; smoothly fade music (and optionally media) without touching
+        // the independent voice volume or disrupting user-selected mute states.
+        static LLCachedControl<bool> kami_duck_music(gSavedSettings, "KamiAudioDuckMusicOnVoice");
+        static LLCachedControl<bool> kami_duck_media(gSavedSettings, "KamiAudioDuckMediaOnVoice");
+        static LLCachedControl<F32> kami_duck_level(gSavedSettings, "KamiAudioDuckingLevel");
+        static LLFrameTimer duck_scan_timer;
+        static bool remote_voice_speaking = false;
+        static F32 duck_mix = 1.f;
+        if (!kami_duck_music() && !kami_duck_media())
+        {
+            remote_voice_speaking = false;
+            duck_mix = 1.f;
+        }
+        else
+        {
+            if (duck_scan_timer.getElapsedTimeF32() >= 0.20f)
+            {
+                duck_scan_timer.reset();
+                remote_voice_speaking = false;
+                if (LLVoiceClient::instanceExists() &&
+                    LLVoiceClient::getInstance()->voiceEnabled() &&
+                    !gSavedSettings.getBOOL("MuteVoice") && !mute_audio)
+                {
+                    std::set<LLUUID> participants;
+                    LLVoiceClient::getInstance()->getParticipantList(participants);
+                    // Bound the per-frame work for large group calls.
+                    size_t scanned = 0;
+                    for (const LLUUID& id : participants)
+                    {
+                        if (++scanned > 64) break;
+                        if (id != gAgent.getID() &&
+                            LLVoiceClient::getInstance()->getIsSpeaking(id))
+                        {
+                            remote_voice_speaking = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            const F32 target = remote_voice_speaking
+                ? llclamp(kami_duck_level(), 0.15f, 1.f) : 1.f;
+            const F32 dt = llclamp(LLFrameTimer::getFrameDeltaTimeF32(), 0.f, 0.1f);
+            const F32 response = target < duck_mix ? 8.f : 2.5f;
+            duck_mix += (target - duck_mix) * llmin(1.f, dt * response);
+        }
+
+        sKamiAudioDuckingGain = duck_mix;
+        const F32 music_duck_gain = kami_duck_music() ? duck_mix : 1.f;
+        F32 music_volume = mute_volume * master_volume * al_music() * fade_volume * music_duck_gain;
         gAudiop->setInternetStreamGain (mute_music() ? 0.f : music_volume);
     }
 
     // Streaming Media
     static LLCachedControl<bool> media_muted(gSavedSettings, "MuteMedia");
     static LLCachedControl<F32> media_volume(gSavedSettings, "AudioLevelMedia");
-    LLViewerMedia::getInstance()->setVolume( media_muted() ? 0.0f : (mute_volume * master_volume() * media_volume()));
+    // Separate opt-in media ducking; ordinary video/audio stays unaffected by default.
+    static LLCachedControl<bool> kami_duck_media_out(gSavedSettings, "KamiAudioDuckMediaOnVoice");
+    // Music and media share one smoothed gain computed during audio mixing.
+    const F32 media_duck_gain = kami_duck_media_out() ? sKamiAudioDuckingGain : 1.f;
+    LLViewerMedia::getInstance()->setVolume(media_muted() ? 0.0f :
+        (mute_volume * master_volume() * media_volume() * media_duck_gain));
 
     // Voice, this is parametric singleton, it gets initialized when ready
     if (LLVoiceClient::instanceExists())
@@ -498,16 +564,11 @@ void audio_update_volume(bool force_update)
         F32 voice_volume = mute_volume * master_volume() * voice_volume_setting();
         LLVoiceClient *voice_inst = LLVoiceClient::getInstance();
         voice_inst->setVoiceVolume(voice_mute() ? 0.f : voice_volume);
-        voice_inst->setMicGain(voice_mute() ? 0.f : voice_mic_setting());
+        // Muting incoming voice must never silently mute the microphone.
+        voice_inst->setMicGain(voice_mic_setting());
 
-        if (!gViewerWindow->getActive() && mute_when_minimized())
-        {
-            voice_inst->setMuteMic(true);
-        }
-        else
-        {
-            voice_inst->setMuteMic(false);
-        }
+        static LLCachedControl<bool> kami_mic_mute(gSavedSettings, "KamiAudioMuteMicrophone");
+        voice_inst->setMuteMic(kami_mic_mute() || mute_for_minimize);
     }
 }
 

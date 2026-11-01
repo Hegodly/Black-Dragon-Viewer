@@ -23,7 +23,11 @@ expect("two adaptive physics limiters never run simultaneously",
        'adaptive_physics && !gSavedSettings.getBOOL("KAMIPhysicsSmart")' in physics)
 expect("no per-avatar pixel-area square root in physics hot path",
        'const F32 area = llmax(0.f, mCharacter->getPixelArea());' in physics and
+       'const F32 pixel_area = llmax(0.f, mCharacter->getPixelArea());' in physics and
        'sqrtf(llmax(0.f, mCharacter->getPixelArea()))' not in physics)
+expect("visible avatar physics uses equivalent squared pixel thresholds",
+       'pixel_area > area_for_this_setting * area_for_this_setting' in physics and
+       'pixel_area >= 64.f * 64.f' in physics)
 expect("self-avatar physics remains fully responsive",
        'dynamic_cast<LLVOAvatarSelf*>(mCharacter) == nullptr' in physics)
 expect("native body physics six original springs retained",
@@ -46,10 +50,10 @@ for name,ctrl in (("AvatarPhysics","AvatarPhysics"),
            len(matches)==1 and matches[0].get("control_name")==ctrl)
 expect("existing avatar physics LOD dropdown still present",
        any(x.get("control_name")=="RenderAvatarPhysicsLODFactor" and x.tag=="combo_box" for x in ui.iter()))
-expect("quality levels manage actual physics detail",
-       'set("RenderAvatarPhysicsLODFactor", physicsLOD[q]);' in read("indra/newview/kami_quality_presets.h"))
-expect("Performance Mode keeps physics settings reversible",
-       '"RenderAvatarPhysicsLODFactor"' in read("indra/newview/kami_performance_mode.h"))
+expect("quality presets cannot suppress visible avatar physics motion",
+       'set("RenderAvatarPhysicsLODFactor"' not in read("indra/newview/kami_quality_presets.h"))
+expect("Performance Mode does not throttle body motion via hidden LOD changes",
+       '"RenderAvatarPhysicsLODFactor"' not in read("indra/newview/kami_performance_mode.h"))
 
 reg=read("indra/newview/llviewerfloaterreg.cpp")
 monitor=read("indra/newview/kami_hardware_monitor.h")

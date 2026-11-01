@@ -1,0 +1,37 @@
+name: KAMI DX12 native renderer foundation
+
+on:
+  push:
+    branches:
+      - feature/kami-dx12-renderer-foundation
+    paths:
+      - 'kami/dx12/**'
+      - '.github/workflows/kami-dx12-foundation.yaml'
+  pull_request:
+    paths:
+      - 'kami/dx12/**'
+      - '.github/workflows/kami-dx12-foundation.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-dx12-rasterizer:
+    name: Compile and execute native D3D12 shaders / pixel readback
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify actual D3D12 integration, no OpenGL calls
+        shell: pwsh
+        run: python kami/dx12/verify-foundation.py
+      - name: Configure Windows 11 SDK / MSVC DX12 backend
+        shell: pwsh
+        run: cmake -S kami/dx12 -B build/kami-dx12 -G "Visual Studio 17 2022" -A x64
+      - name: Compile native hardware DX12 and software-WARP test binary
+        shell: pwsh
+        run: cmake --build build/kami-dx12 --config Release --parallel 2
+      - name: Run GPU pixel-level validation through D3D12 WARP
+        shell: pwsh
+        run: ctest --test-dir build/kami-dx12 -C Release --output-on-failure

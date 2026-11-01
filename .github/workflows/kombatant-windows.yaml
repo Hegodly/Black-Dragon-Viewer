@@ -9,9 +9,9 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -23,6 +23,8 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri
       - name: Execute shipped frame-generation shaders on Mesa
         run: python3 kami/framegen/test-shaders.py
+      - name: Verify KAMI Audio Lab native controls and engine bindings
+        run: python3 kami/audio/verify-audio-lab.py
       - name: Validate both modern and legacy keyboard LLSD before Windows build
         run: python3 kami/performance/validate-config-inputs.py
       - name: Enforce neutral native PBR quality and no optional default post passes
@@ -43,8 +45,12 @@ jobs:
         run: python3 kami/renderer/verify-true-pbr-off.py
       - name: Run KAMI's real final postprocess GLSL on headless Mesa
         run: python3 kami/renderer/test-supersample-glsl.py
+      - name: Verify Kami Follow Avatar user controls and movement safety
+        run: python3 kami/avatars/verify-follow-avatar.py
       - name: Validate Smart Avatar Physics source-patch and test syntax
         run: python3 -m py_compile kami/physics/apply-smart-avatar-physics.py kami/physics/verify-smart-avatar-physics.py
+      - name: Verify avatar physics wearable and motion status source contracts
+        run: python3 kami/physics/verify-visible-physics-detection.py
       - name: Validate every KAMI and Kombatant Python integration script
         shell: pwsh
         run: python -m compileall -q kami kombatant
@@ -74,6 +80,18 @@ jobs:
         run: |
           git apply --check kombatant.patch
           git apply kombatant.patch
+      - name: Verify D3D12 is linked into actual Windows viewer build
+        shell: pwsh
+        run: python kami/dx12/verify-viewer-link.py
+      - name: Validate real Second Life volume mesh to native DX12 scene bridge
+        shell: pwsh
+        run: python kami/dx12/verify-live-scene-bridge.py
+      - name: Validate native D3D12 live-scene preview and safe FPS cap
+        shell: pwsh
+        run: python kami/dx12/verify-live-preview.py
+      - name: Verify native Audio Lab is integrated before compilation
+        shell: pwsh
+        run: python kami/audio/verify-audio-lab.py
       - name: Preflight native LLSD settings and keyboard records
         shell: pwsh
         run: python kami/performance/validate-config-inputs.py
@@ -243,6 +261,12 @@ jobs:
       - name: Verify all six real Smart Avatar Physics optimizations and performance stats
         shell: pwsh
         run: python kami/physics/verify-smart-avatar-physics.py
+      - name: Integrate actual avatar physics wearable and visible-spring diagnostics
+        shell: pwsh
+        run: python kami/physics/fix-visible-physics-detection.py
+      - name: Verify true avatar physics layer/spring readiness and opt-in throttling
+        shell: pwsh
+        run: python kami/physics/verify-visible-physics-detection.py --integrated
       - name: Validate KAMI Firestorm-style WASD movement defaults
         shell: pwsh
         run: python kami/performance/validate-wasd-controls.py
@@ -336,6 +360,42 @@ jobs:
       - name: Finalize KAMI-only portable branding and verify runtime completeness
         shell: pwsh
         run: python kami/packaging/finalize-kami-standalone.py
+      - name: Execute real native D3D12 GPU test inside staged KAMIViewer
+        shell: pwsh
+        run: |
+          $release = (Resolve-Path 'build-vc170-64/newview/Release').Path
+          $viewer = Join-Path $release 'KAMIViewer.exe'
+          if (-not (Test-Path $viewer -PathType Leaf)) { throw 'KAMIViewer.exe missing' }
+
+          # KAMIViewer.exe uses the Windows GUI subsystem. PowerShell's '&'
+          # may return before the GUI process exits and leave LASTEXITCODE
+          # unset, causing a false failure. Wait on the actual process and
+          # inspect its exit code instead, with a hard timeout.
+          function Invoke-KamiDx12Test {
+            param([string] $Flag, [string] $Description)
+            Write-Host "Running KAMI DX12 diagnostic: $Flag"
+            $process = Start-Process -FilePath $viewer -ArgumentList $Flag -WorkingDirectory $release -PassThru
+            try {
+              if (-not $process.WaitForExit(120000)) {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                throw "$Description timed out after 120 seconds"
+              }
+              $exitCode = $process.ExitCode
+              Write-Host "KAMI DX12 diagnostic $Flag exited with code $exitCode"
+              if ($exitCode -ne 0) {
+                throw "$Description failed with process exit code $exitCode"
+              }
+            }
+            finally {
+              $process.Dispose()
+            }
+          }
+
+          Invoke-KamiDx12Test -Flag '--kami-dx12-warp-test' -Description 'Embedded D3D12 WARP render/readback'
+          Write-Host 'PASS: native D3D12 GPU pixel test executed from KAMIViewer.exe'
+          Invoke-KamiDx12Test -Flag '--kami-dx12-world-warp-test' -Description 'Native D3D12 indexed world/depth render'
+          Write-Host 'PASS: native D3D12 indexed mesh, camera transform and occlusion test inside KAMIViewer.exe'
+
       - name: Cache downloaded libraries
         if: always()
         uses: actions/cache/save@v5

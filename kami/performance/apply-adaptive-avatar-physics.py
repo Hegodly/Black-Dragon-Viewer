@@ -21,7 +21,7 @@ new='''    // KAMI: Keep self-avatar physics fully responsive. Reduce the CPU co
     // avatars. Each spring continues with the actual elapsed dt when run,
     // and the upstream solver already substeps dt for stability.
     static LLCachedControl<bool> adaptive_physics(gSavedSettings,
-                                                  "KAMIAvatarPhysicsAdaptive", true);
+                                                  "KAMIAvatarPhysicsAdaptive", false);
     // Smart mode owns update cadence when enabled; never stack both limiters.
     if (adaptive_physics && !gSavedSettings.getBOOL("KAMIPhysicsSmart") &&
         dynamic_cast<LLVOAvatarSelf*>(mCharacter) == nullptr)
@@ -75,7 +75,7 @@ settings=R/"indra/newview/app_settings/settings_blackdragon.xml"
 doc=ET.parse(settings);root=doc.getroot().find("map")
 assert root is not None
 specs=[
- ("KAMIAvatarPhysicsAdaptive","Boolean","integer","1","Optimize remote avatar body physics at lower rates as they become visually smaller; keep self full rate."),
+ ("KAMIAvatarPhysicsAdaptive","Boolean","integer","0","Optimize remote avatar body physics at lower rates as they become visually smaller; keep self full rate."),
  ("KAMIAvatarPhysicsNearPixels","F32","real","70","At this pixel-square-root area or greater remote avatars run full physics."),
  ("KAMIAvatarPhysicsDistantPixels","F32","real","28","Below this size remote avatars use the far physics update rate."),
  ("KAMIAvatarPhysicsMidHz","S32","integer","18","Remote avatar physics update rate for middle sized avatars, independent of FPS cap."),
@@ -110,7 +110,7 @@ checkbox=ET.Element("check_box",{
  "name":"kami_adaptive_avatar_physics",
  "control_name":"KAMIAvatarPhysicsAdaptive",
  "enabled_control":"AvatarPhysics",
- "label":"Optimize distant avatar body physics (keep my physics full speed)",
+ "label":"Optimize distant avatars (optional; own physics stays full speed)",
  "height":"17","layout":"topleft","left":"10","top_pad":"8","width":"450",
  "tool_tip":"Throttles calculations only on distant/small OTHER avatars. Your avatar remains full physics. Does not affect scripted mesh/hair physics or simulator dynamics. Optional; compare FPS and motion smoothness."
 })
@@ -128,26 +128,10 @@ ET.indent(doc,space=" ")
 doc.write(ui,encoding="utf-8",xml_declaration=True)
 ET.parse(settings);ET.parse(ui)
 
-# Quality levels and Performance Mode affect this *native* LOD control too.
-# Preserve the user's exact FPS cap and existing KAMI manual resolution.
-quality=R/"indra/newview/kami_quality_presets.h"
-s=quality.read_text(encoding="utf-8")
-anchor='''        set("RenderAvatarLODFactor", avatarLOD[q]);'''
-assert s.count(anchor)==1
-s=s.replace(anchor,anchor+'''
-        // Preserve avatar physics switch; choose physics detail only.
-        static const F32 physicsLOD[] = {0.20f,0.40f,0.60f,0.80f,1.00f};
-        set("RenderAvatarPhysicsLODFactor", physicsLOD[q]);''')
-quality.write_text(s,encoding="utf-8")
-mode=R/"indra/newview/kami_performance_mode.h"
-s=mode.read_text(encoding="utf-8")
-assert s.count('        "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors",')==1
-s=s.replace('        "RenderAvatarLODFactor", "RenderAvatarMaxNonImpostors",',
-            '        "RenderAvatarLODFactor", "RenderAvatarPhysicsLODFactor", "RenderAvatarMaxNonImpostors",',1)
-assert s.count('            atMostF32("RenderAvatarLODFactor", 0.5f);')==1
-s=s.replace('            atMostF32("RenderAvatarLODFactor", 0.5f);',
-            '            atMostF32("RenderAvatarLODFactor", 0.5f);\\n            atMostF32("RenderAvatarPhysicsLODFactor", 0.2f);'.replace("\\n","\n"),1)
-mode.write_text(s,encoding="utf-8")
+# Physics visual update fidelity must not be lowered by FPS or graphics
+# presets. The native AvatarPhysics and RenderAvatarPhysicsLODFactor remain
+# independently controllable by the resident. KAMI performance optimization
+# applies to *explicitly opt-in* distant-avatar scheduling only.
 
 assert 'KAMIAvatarPhysicsAdaptive' in cpp.read_text(encoding="utf-8")
-print("Adaptive remote avatar body physics installed; self full rate, near full, mid 18Hz, distant 6Hz; native physics LOD respects quality/Performance presets.")
+print("Optional adaptive avatar physics installed; FPS presets do NOT override visible physics LOD. Own avatar retains original motion fidelity.")

@@ -38,6 +38,33 @@ name="Nearby People Context Menu">
 	parameter="can_offer_teleport"/>
 	</menu_item_call>
 	<menu_item_call
+	label="Teleport To"
+	name="teleport_to">
+	<menu_item_call.on_click
+	function="Avatar.TeleportToNearby"/>
+	<menu_item_call.on_enable
+	function="Avatar.EnableItem"
+	parameter="can_teleport_to"/>
+	</menu_item_call>
+	<menu_item_call
+	label="Follow Avatar"
+	name="follow_avatar">
+	<menu_item_call.on_click
+	function="Avatar.FollowNearby"/>
+	<menu_item_call.on_enable
+	function="Avatar.EnableItem"
+	parameter="can_follow_avatar"/>
+	</menu_item_call>
+	<menu_item_call
+	label="Stop Following"
+	name="stop_following">
+	<menu_item_call.on_click
+	function="Avatar.StopFollowingNearby"/>
+	<menu_item_call.on_enable
+	function="Avatar.EnableItem"
+	parameter="can_stop_following"/>
+	</menu_item_call>
+	<menu_item_call
 	label="Request Posing Permissions"
 	name="request_posing">
 	<menu_item_call.on_click
