@@ -1,0 +1,72 @@
+name: KAMI iPhone preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/kami-iphone]
+    paths: ['mobile/ios/**', '.github/workflows/kami-ios.yaml']
+permissions:
+  contents: read
+concurrency:
+  group: kami-ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  iphone:
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile/ios
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - name: Generate native Xcode project
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodebuild -version
+          xcodegen generate
+      - name: Select available iPhone simulator
+        run: |
+          xcrun simctl list devices available --json > devices.json
+          python3 - <<'PY'
+          import json, os
+          devices=json.load(open('devices.json'))['devices']
+          candidates=[d for runtime,ds in devices.items() if 'iOS' in runtime for d in ds if d.get('isAvailable') and 'iPhone' in d['name']]
+          if not candidates: raise SystemExit('No available iPhone simulator runtime')
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('KAMI_SIMULATOR='+candidates[0]['udid']+'\n')
+          PY
+      - name: Build and test on iPhone simulator without developer membership
+        run: |
+          set -o pipefail
+          xcodebuild test -project KAMI.xcodeproj -scheme KAMI -destination "platform=iOS Simulator,id=$KAMI_SIMULATOR" -derivedDataPath build -resultBundlePath TestResults.xcresult 2>&1 | tee simulator-build.log
+      - name: Launch preview and capture screenshot
+        run: |
+          xcrun simctl boot "$KAMI_SIMULATOR" || true
+          xcrun simctl bootstatus "$KAMI_SIMULATOR" -b
+          xcrun simctl install "$KAMI_SIMULATOR" build/Build/Products/Debug-iphonesimulator/KAMI.app
+          xcrun simctl launch "$KAMI_SIMULATOR" com.kamiviewer.ios
+          sleep 5
+          xcrun simctl io "$KAMI_SIMULATOR" screenshot KAMI-iPhone-preview.png
+      - name: Compile unsigned iPhone device application
+        run: |
+          set -o pipefail
+          xcodebuild build -project KAMI.xcodeproj -scheme KAMI -configuration Release -destination 'generic/platform=iOS' -derivedDataPath device-build CODE_SIGNING_ALLOWED=NO 2>&1 | tee device-build.log
+          ditto -c -k --keepParent device-build/Build/Products/Release-iphoneos/KAMI.app KAMI-unsigned-device.zip
+          ditto -c -k --keepParent build/Build/Products/Debug-iphonesimulator/KAMI.app KAMI-simulator.zip
+      - name: Preserve preview builds and screenshot
+        uses: actions/upload-artifact@v6
+        with:
+          name: KAMI-iPhone-development-preview
+          path: |
+            mobile/ios/KAMI-unsigned-device.zip
+            mobile/ios/KAMI-simulator.zip
+            mobile/ios/KAMI-iPhone-preview.png
+          if-no-files-found: error
+      - name: Preserve test results and compiler logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: KAMI-iPhone-build-diagnostics
+          path: |
+            mobile/ios/*build.log
+            mobile/ios/TestResults.xcresult
+          if-no-files-found: ignore
