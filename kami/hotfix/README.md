@@ -10,6 +10,17 @@ Do not call any logout, disconnect, teleport, login-reset or shutdown path
 while entering or exiting Home. Maintain normal network handling while Home is
 open and avoid freezing the rendering/event loops.
 
+## Release policy: only feature updates may require a restart
+**Optimization hotfixes MUST be restart-free and must preserve the connected
+Second Life session.** No optimization hotfix may modify KAMIViewer.exe,
+native DLLs, or any currently loaded executable module. An optimization
+requiring rebuilt native code, process exit, a new renderer DLL or another
+non-hot-reloadable change MUST be deferred to a scheduled **feature update**
+(or a separately labeled emergency maintenance release requiring consent).
+Do not relabel a restart-required patch as an optimization hotfix. Feature
+updates may prompt for an optional, explicitly user-approved restart; no
+forced logout during the resident's active Second Life session.
+
 ## Desired update flow for full 1.0
 1. After an opt-in update check, show a non-disruptive in-world notice:
    **UPDATE REQUIRED — Return to Kami Home to apply this optimization**.
@@ -26,10 +37,11 @@ open and avoid freezing the rendering/event loops.
 5. Apply a compatible patch transactionally, verify it, then offer
    **Return to World** without logging in again. On failure, rollback and
    preserve the resident's connected session.
-6. For a patch that changes KAMIViewer.exe, native DLLs, renderer code or
-   other loaded binaries, **a full process restart is unavoidable**. Queue
-   it and clearly label **Restart required**. Never promise an in-session
-   binary hotfix or silently log the user out. The user chooses when to exit.
+6. If a proposed patch requires changing KAMIViewer.exe, native DLLs,
+   renderer code or other loaded binaries, it is **NOT an optimization hotfix**.
+   Reclassify it as a feature release and stage it for a later explicitly
+   approved restart. Never advertise it as restart-free, and never silently
+   disconnect an active resident.
 7. Show Hotfix History and manual Check for Updates. Channels are Stable,
    Beta and Experimental with explicit consent for preview channels.
 
@@ -42,9 +54,11 @@ open and avoid freezing the rendering/event loops.
   explicit hot-reload support, references are safely invalidated, and no
   conflicting or unsaved operations exist. Otherwise stage it for the next
   restart with clear notice; stay connected while staging.
-- **Binary patch**: downloadable deltas can be staged in Home while connected,
-  but replace EXE/DLL files only via a separate trusted updater *after the
-  viewer process exits*. Requires a user-approved restart and reconnection.
+- **Feature update (separate release channel/event)**: native binaries and
+  non-reloadable renderer changes may be downloaded and staged while the
+  resident remains connected, but must NOT be applied as a live hotfix.
+  An explicitly user-approved restart/reconnection is required to replace
+  running EXE/DLLs. The resident can defer this until convenient.
 
 ## Release manifest (design)
 `schema_version`, `channel`, `from_build`, `to_build`, `min_os`,
@@ -80,7 +94,8 @@ Private signing keys NEVER belong in the client or source.
 - Actual connected-session, full-screen Home shell and Return to World flow
 - Safe handling for unsaved edits and active dialogs while entering Home
 - Signed feed, update controller, safe reload and staged binary broker
-- Deferred restart messaging for binary patches, not an in-session DLL swap
+- Enforce release-type policy: restart-free optimization hotfixes versus
+  separately scheduled, restart-eligible feature updates
 - History, rollback, release-channel selection and failure-injection tests
 - Long-running in-world tests for timeouts, idle disconnections, chat/voice
   visibility, avatar state and real streaming/decode frame times
