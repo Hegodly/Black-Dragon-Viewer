@@ -363,13 +363,37 @@ jobs:
       - name: Execute real native D3D12 GPU test inside staged KAMIViewer
         shell: pwsh
         run: |
-          $viewer = Join-Path 'build-vc170-64/newview/Release' 'KAMIViewer.exe'
-          if (-not (Test-Path $viewer)) { throw 'KAMIViewer.exe missing' }
-          & $viewer --kami-dx12-warp-test
-          if ($LASTEXITCODE -ne 0) { throw "Embedded D3D12 WARP render/readback failed with exit $LASTEXITCODE" }
+          $release = (Resolve-Path 'build-vc170-64/newview/Release').Path
+          $viewer = Join-Path $release 'KAMIViewer.exe'
+          if (-not (Test-Path $viewer -PathType Leaf)) { throw 'KAMIViewer.exe missing' }
+
+          # KAMIViewer.exe uses the Windows GUI subsystem. PowerShell's '&'
+          # may return before the GUI process exits and leave LASTEXITCODE
+          # unset, causing a false failure. Wait on the actual process and
+          # inspect its exit code instead, with a hard timeout.
+          function Invoke-KamiDx12Test {
+            param([string] $Flag, [string] $Description)
+            Write-Host "Running KAMI DX12 diagnostic: $Flag"
+            $process = Start-Process -FilePath $viewer -ArgumentList $Flag -WorkingDirectory $release -PassThru
+            try {
+              if (-not $process.WaitForExit(120000)) {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                throw "$Description timed out after 120 seconds"
+              }
+              $exitCode = $process.ExitCode
+              Write-Host "KAMI DX12 diagnostic $Flag exited with code $exitCode"
+              if ($exitCode -ne 0) {
+                throw "$Description failed with process exit code $exitCode"
+              }
+            }
+            finally {
+              $process.Dispose()
+            }
+          }
+
+          Invoke-KamiDx12Test -Flag '--kami-dx12-warp-test' -Description 'Embedded D3D12 WARP render/readback'
           Write-Host 'PASS: native D3D12 GPU pixel test executed from KAMIViewer.exe'
-          & $viewer --kami-dx12-world-warp-test
-          if ($LASTEXITCODE -ne 0) { throw "Native D3D12 indexed world/depth render failed: $LASTEXITCODE" }
+          Invoke-KamiDx12Test -Flag '--kami-dx12-world-warp-test' -Description 'Native D3D12 indexed world/depth render'
           Write-Host 'PASS: native D3D12 indexed mesh, camera transform and occlusion test inside KAMIViewer.exe'
 
       - name: Cache downloaded libraries
