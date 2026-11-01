@@ -27,10 +27,10 @@ def splice(path, old, new):
 settings = V / "app_settings/settings.xml"
 entries = """  <key>KAMIAliveAvatarSkinEnabled</key>
   <map>
-    <key>Comment</key><string>Optional gentle baked-avatar skin light wrap. No true SSS, no mesh changes.</string>
+    <key>Comment</key><string>Opt-in baked-avatar light wrap (may affect non-skin surfaces on this shader). No real SSS.</string>
     <key>Persist</key><integer>1</integer>
     <key>Type</key><string>Boolean</string>
-    <key>Value</key><integer>1</integer>
+    <key>Value</key><integer>0</integer>
   </map>
   <key>KAMIAliveAvatarEyesEnabled</key>
   <map>
