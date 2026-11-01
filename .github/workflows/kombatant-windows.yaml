@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, fix/kami-beta-dx12-warp-crash-diagnostics, fix/kami-beta-dx12-embedded-entrypoint, fix/kami-remove-legacy-avatar-lighting, fix/kami-navigation-controls-overlap, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, fix/kami-beta-dx12-warp-crash-diagnostics, fix/kami-beta-dx12-embedded-entrypoint, fix/kami-remove-legacy-avatar-lighting, fix/kami-navigation-controls-overlap, feature/kami-imessage-messenger, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
     paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/alive/**, kami/messenger/**, kami/inventory/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
@@ -35,6 +35,8 @@ jobs:
         run: python3 kami/messenger/verify-kami-messenger.py
       - name: Preflight KAMI Messenger opt-in read receipt protocol
         run: python3 kami/messenger/verify-read-receipts.py
+      - name: Execute Kami receipt protocol and messaging integration tests
+        run: python3 kami/messenger/test-imessage-style.py
       - name: Preflight Brand Folder Sort integration source
         run: python3 kami/inventory/verify-brand-folder-sort.py
       - name: Preflight KAMI Demo Deleter script safety checks
@@ -370,6 +372,12 @@ jobs:
       - name: Verify native Kami read receipts, consent and real IM hooks
         shell: pwsh
         run: python kami/messenger/verify-read-receipts.py --integrated
+      - name: Integrate native Kami chat bubbles and sender read notifications
+        shell: pwsh
+        run: python kami/messenger/apply-imessage-style.py
+      - name: Verify integrated Kami messaging layout and receipt guards
+        shell: pwsh
+        run: python kami/messenger/test-imessage-style.py --integrated
       - name: Apply KAMI Smart Sort brand-folder grouping to native inventory
         shell: pwsh
         run: python kami/inventory/apply-brand-folder-sort.py
