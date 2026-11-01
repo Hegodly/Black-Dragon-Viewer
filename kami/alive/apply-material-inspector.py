@@ -1,223 +1,254 @@
 #!/usr/bin/env python3
-"""KAMI ALIVE v0.2 - explicit, user-triggered local material inspection.
+"""KAMI ALIVE phase 1b: selected-face material inspector + local manual overrides.
 
-Native menu actions inspect loaded PBR texture entries on a selected object
-and allow an in-memory preview/bypass on its loaded PBR material instance.
-No automatic inventory scan, new texture download, network call or render pass.
-Applied after kami/alive/apply-kami-alive.py on Windows CI.
+Run after apply-kami-alive.py and both modern Graphics-tab scripts.
+This integrates a *real* native selection inspection command and persistent
+local per-material-class controls. Only existing loaded GLTF/PBR material data
+is inspected, never server asset contents or remote inventories.
+
+Do NOT label non-PBR surfaces compatible: current enhancement is polished PBR
+roughness only. A manual 'polished metal' choice never edits SL material data.
 """
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-ROOT=Path(__file__).resolve().parents[2]
-VIEW=ROOT/"indra/newview"
-XUI=VIEW/"skins/default/xui/en/menu_viewer.xml"
-SHADERS=VIEW/"app_settings/shaders/class1"
+ROOT = Path(__file__).resolve().parents[2]
+V = ROOT / "indra/newview"
+XUI = V / "skins/default/xui/en"
 
-def patch(path,old,new):
-    text=path.read_text(encoding="utf-8-sig")
-    count=text.count(old)
-    if count!=1:
-        raise RuntimeError(f"KAMI ALIVE material inspector anchor mismatch {path}: {count}")
-    path.write_text(text.replace(old,new,1),encoding="utf-8")
 
-# Preserve the working KAMI Workspaces menu, including the phase-1 toggle.
-tree=ET.parse(XUI)
-root=tree.getroot()
-workspaces=[m for m in root if m.tag=="menu" and m.get("name")=="KAMI_Workspaces"]
-if len(workspaces)!=1:
-    raise RuntimeError("KAMI Workspaces menu must be installed before Material Inspector")
-workspace=workspaces[0]
-if any(x.get("name")=="KAMI_Alive_Inspect" for x in root.iter()):
-    raise RuntimeError("KAMI ALIVE Material Inspector already integrated")
-actions=[
-    ("KAMI_Alive_Inspect","Check selected material compatibility","KAMI.AliveInspect"),
-    ("KAMI_Alive_Metal","Preview selected PBR as polished metal","KAMI.AliveMetal"),
-    ("KAMI_Alive_Bypass","Exclude selected PBR from ALIVE","KAMI.AliveBypass"),
-    ("KAMI_Alive_Auto","Restore automatic material response","KAMI.AliveAuto"),
-]
-toggle=[i for i,e in enumerate(workspace) if e.get("name")=="KAMI_Alive_Toggle"]
-if len(toggle)!=1:
-    raise RuntimeError("KAMI ALIVE beta menu toggle missing")
-position=toggle[0]+1
-for name,label,callback in actions:
-    item=ET.Element("menu_item_call", {"name":name,"label":label,"layout":"topleft"})
-    ET.SubElement(item,"menu_item_call.on_click",{"function":callback})
-    workspace.insert(position,item)
-    position+=1
-ET.indent(tree,space=" ")
-tree.write(XUI,encoding="utf-8",xml_declaration=True)
-ET.parse(XUI)
+def splice(path, old, new):
+    text = path.read_text(encoding="utf-8-sig")
+    matches = text.count(old)
+    if matches != 1:
+        raise RuntimeError(f"KAMI ALIVE inspector integration drift {path}: {matches} anchors")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-# The extra scalar is set from the material's *existing draw bind*. It is
-# not a shader recompile, geometry/texture mutation or per-frame scan.
-material_h=VIEW/"llfetchedgltfmaterial.h"
-patch(material_h,
-    "    void bind(LLViewerTexture* media_tex = nullptr);\n",
-    """    void bind(LLViewerTexture* media_tex = nullptr);
 
-    // KAMI ALIVE in-memory preview for this loaded PBR instance.
-    // 0=automatic, +1=polished-metal preview, -1=exclude.
-    // May affect other faces sharing this material instance. Never serialized.
-    S8 mKAMIAliveOverride = 0;
+settings = V / "app_settings/settings.xml"
+setting_entry = """  <key>KAMIAliveMaterialOverrides</key>
+  <map>
+    <key>Comment</key>
+    <string>Local only: PBR material hash to mode (-1 standard, 0 auto, 1 polished metal). Shared identical PBR materials are affected equally; no SL server update.</string>
+    <key>Persist</key><integer>1</integer>
+    <key>Type</key><string>LLSD</string>
+    <key>Value</key><map/>
+  </map>
+  <key>KAMIAliveOverrideRevision</key>
+  <map>
+    <key>Comment</key><string>Revision counter to lazily refresh per-material cached override only when user edits it.</string>
+    <key>Persist</key><integer>0</integer>
+    <key>Type</key><string>S32</string>
+    <key>Value</key><integer>0</integer>
+  </map>
+"""
+splice(settings, "  <key>ImporterDebugVerboseLogging</key>", setting_entry + "  <key>ImporterDebugVerboseLogging</key>")
+ET.parse(settings)
+
+menu = XUI / "menu_viewer.xml"
+tree = ET.parse(menu)
+root = tree.getroot()
+workspace = [x for x in root if x.tag == "menu" and x.get("name") == "KAMI_Workspaces"]
+assert len(workspace) == 1, "KAMI native Workspaces not installed"
+work = workspace[0]
+assert not any(x.get("name") == "KAMI_Alive_Inspect" for x in root.iter())
+for name, label, callback in (
+    ("KAMI_Alive_Inspect", "ALIVE  /  INSPECT SELECTED PBR FACES", "Kami.Alive.Inspect"),
+    ("KAMI_Alive_Auto", "ALIVE  /  MATERIAL MODE: AUTOMATIC", "Kami.Alive.Auto"),
+    ("KAMI_Alive_Metal", "ALIVE  /  MATERIAL MODE: POLISHED METAL", "Kami.Alive.Metal"),
+    ("KAMI_Alive_Standard", "ALIVE  /  MATERIAL MODE: STANDARD", "Kami.Alive.Standard"),
+):
+    item = ET.SubElement(work, "menu_item_call", {
+        "name": name, "label": label, "layout": "topleft",
+    })
+    ET.SubElement(item, "menu_item_call.on_click", {"function": callback})
+ET.indent(tree, space=" ")
+tree.write(menu, encoding="utf-8", xml_declaration=True)
+
+# Implement local-only session display and stable PBR-material signatures.
+# Lookups on the render path are revision-cached per fetched material instance:
+# no per-frame inventory walking, shader rebuild, GPU stalls, or new FBOs.
+mat_h = V / "llfetchedgltfmaterial.h"
+splice(mat_h,
+    "    bool isFetching() const { return mFetching; }\n",
+    """    // KAMI ALIVE local material override cache; keyed by material content hash.
+    // Revised only when the user changes an override, not every render frame.
+    S32 mKAMIAliveCachedRevision = -1;
+    F32 mKAMIAliveManualMode = 0.f;
+
+    bool isFetching() const { return mFetching; }
 """)
-material_cpp=VIEW/"llfetchedgltfmaterial.cpp"
-patch(material_cpp,
-    "    LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;\n",
-    """    LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
-    // Existing PBR batch material binding - no new draw calls/passes.
-    static LLStaticHashedString sKAMIAliveOverride("kami_alive_override_mode");
-    shader->uniform1f(sKAMIAliveOverride, (F32)mKAMIAliveOverride);
+
+mat_cpp = V / "llfetchedgltfmaterial.cpp"
+splice(mat_cpp, '#include "llfetchedgltfmaterial.h"\n',
+    '#include "llfetchedgltfmaterial.h"\n#include "llviewercontrol.h"\n')
+splice(mat_cpp,
+    "    LLGLTFMaterial::operator =(rhs);\n",
+    """    LLGLTFMaterial::operator =(rhs);
+    // A material's identity can change after assignment or fetching.
+    mKAMIAliveCachedRevision = -1;
+    mKAMIAliveManualMode = 0.f;
+""")
+splice(mat_cpp,
+    "        shader->uniform1f(LLShaderMgr::METALLIC_FACTOR, mMetallicFactor);\n",
+    """        shader->uniform1f(LLShaderMgr::METALLIC_FACTOR, mMetallicFactor);
+
+        // Cheap in the normal path. Resolve expensive content hash and LLSD map
+        // only when this material instance first appears or the local map changes.
+        static LLStaticHashedString sKAMIAliveManualMode("kami_alive_material_override");
+        const S32 revision = gSavedSettings.getS32("KAMIAliveOverrideRevision");
+        if (mKAMIAliveCachedRevision != revision)
+        {
+            mKAMIAliveManualMode = 0.f;
+            const LLSD overrides = gSavedSettings.getLLSD("KAMIAliveMaterialOverrides");
+            if (overrides.isMap() && overrides.size() > 0)
+            {
+                const std::string material_key = getHash().asString();
+                if (overrides.has(material_key))
+                {
+                    mKAMIAliveManualMode =
+                        llclamp((F32)overrides[material_key].asInteger(), -1.f, 1.f);
+                }
+            }
+            mKAMIAliveCachedRevision = revision;
+        }
+        shader->uniform1f(sKAMIAliveManualMode, mKAMIAliveManualMode);
 """)
 
-# A deterministic, bounded material response; non-PBR remains untouched.
-# Phase-1 automatic factors are still respected. Opt-in override can preview
-# a metal response even if factors would make automatic matching ambiguous.
-old_shader="""uniform float kami_alive_amount;
+shader_snippet = """uniform float kami_alive_amount;
+uniform float kami_alive_material_override;
 float kamiAlivePolishedRoughness(float roughness, float metallic)
 {
     float metal_weight = clamp((metallic - 0.68) * 3.125, 0.0, 1.0);
-    float smooth_weight = clamp((0.48 - roughness) * 3.3333, 0.0, 1.0);
-    float blend = metal_weight * smooth_weight * clamp(kami_alive_amount, 0.0, 1.0);
-    float polished = min(roughness, max(0.07, roughness * 0.72));
-    return mix(roughness, polished, blend);
-}
+    if (kami_alive_material_override > 0.5)
+        metal_weight = 1.0;
+    if (kami_alive_material_override < -0.5)
+        metal_weight = 0.0;
 """
-new_shader="""uniform float kami_alive_amount;
-uniform float kami_alive_override_mode;
-void kamiAliveAdaptPBR(inout vec3 orm)
+for path in (
+    V / "app_settings/shaders/class1/deferred/pbropaqueF.glsl",
+    V / "app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl",
+):
+    splice(path,
+        """uniform float kami_alive_amount;
+float kamiAlivePolishedRoughness(float roughness, float metallic)
 {
-    float gain = clamp(kami_alive_amount, 0.0, 1.0);
-    // -1 means no ALIVE treatment, even when automatic factors match.
-    if (gain < 0.001 || kami_alive_override_mode < -0.5)
-        return;
+    float metal_weight = clamp((metallic - 0.68) * 3.125, 0.0, 1.0);
+""", shader_snippet)
 
-    float forced_metal = step(0.5, kami_alive_override_mode);
-    float auto_metal = clamp((orm.b - 0.68) * 3.125, 0.0, 1.0);
-    float auto_smooth = clamp((0.48 - orm.g) * 3.3333, 0.0, 1.0);
-    float weight = gain * mix(auto_metal * auto_smooth, 1.0, forced_metal);
-    float polished = min(orm.g, max(0.07, orm.g * 0.72));
-    orm.g = mix(orm.g, polished, weight);
-    // Only the user-directed preview can nudge the original metallic
-    // response; default detection never changes the metallic channel.
-    orm.b = mix(orm.b, max(orm.b, 0.82), forced_metal * gain * 0.9);
-}
-"""
-for file_name in ("deferred/pbropaqueF.glsl","gltf/pbrmetallicroughnessF.glsl"):
-    path=SHADERS/file_name
-    patch(path,old_shader,new_shader)
-    if "pbropaque" in file_name:
-        patch(path,"    spec.g = kamiAlivePolishedRoughness(spec.g, spec.b);\n",
-              "    kamiAliveAdaptPBR(spec);\n")
-    else:
-        patch(path,"    orm.g = kamiAlivePolishedRoughness(orm.g, orm.b);\n",
-              "    kamiAliveAdaptPBR(orm);\n")
-
-menu=VIEW/"llviewermenu.cpp"
-patch(menu,
-    '#include "llfloaterreg.h"\n',
-    '#include "llfloaterreg.h"\n#include "llfetchedgltfmaterial.h" // KAMI ALIVE local material inspector\n')
-
-# The inspector is triggered by user interaction only; capped at 8 selected
-# objects/64 faces to protect busy regions. TE factors are inexpensive CPU
-# metadata, but an ORM texture can vary per pixel: do not say "guaranteed."
-inspector=r"""
-// KAMI ALIVE v0.2. Local, selection-driven material inspector.
-// Deliberately no inventory traversal, GPU readback, texture download or
-// simulator updates. An override is held only on the fetched material in RAM.
-void kami_alive_material_action(const std::string& action)
+# Inspector actions are intentionally on-demand menu clicks (not a
+# per-frame scanner), work on a bounded number of selected loaded PBR faces,
+# and use SystemMessage rather than a new native floater/third-party UI.
+code = r"""
+// KAMI ALIVE: conservative client-side material inspection / mode override.
+// A material hash identifies a *material*, not an item of clothing; the same
+// content hash on multiple objects will share the selected local override.
+static void kamiAliveMaterialCommand(S32 mode)
 {
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    S32 seen_objects=0, seen_faces=0, pbr_faces=0, candidates=0;
-    S32 uncertain=0, standard=0, changed=0, pending=0;
-    std::string report = "KAMI ALIVE | Selected Material Inspector\n";
-
-    for (LLObjectSelection::valid_iterator it=selection->valid_begin();
-         it!=selection->valid_end() && seen_objects<8 && seen_faces<64; ++it)
+    if (selection.isNull())
     {
-        LLSelectNode* node=*it;
-        LLViewerObject* object=node ? node->getObject() : nullptr;
+        LLSD args;
+        args["MESSAGE"] = "KAMI ALIVE: Select an object or its face in Edit mode first.";
+        LLNotificationsUtil::add("SystemMessage", args);
+        return;
+    }
+
+    LLSD local = gSavedSettings.getLLSD("KAMIAliveMaterialOverrides");
+    if (!local.isMap()) local = LLSD::emptyMap();
+
+    std::string report = "KAMI ALIVE  |  Selected Material Inspector\n";
+    report += "Current beta: polished PBR response only. Skin, eyes and cloth are not yet enhanced.\n";
+    S32 inspected = 0;
+    S32 eligible = 0;
+    S32 changed = 0;
+    S32 non_pbr = 0;
+    S32 capped = 0;
+    // Limit menu work so selecting thousands of objects doesn't hitch.
+    const S32 max_faces = 96;
+    for (LLObjectSelection::valid_iterator iter = selection->valid_begin();
+         iter != selection->valid_end() && inspected + non_pbr < max_faces; ++iter)
+    {
+        LLSelectNode* node = *iter;
+        LLViewerObject* object = node ? node->getObject() : nullptr;
         if (!object || object->isDead()) continue;
-        ++seen_objects;
-        const S32 nfaces=llmin((S32)object->getNumTEs(), 255);
-        bool has_face_mask=false;
-        for (S32 face=0;face<nfaces;++face)
+        const S32 te_count = llmin((S32)object->getNumTEs(), max_faces);
+        bool face_selected = false;
+        for (S32 face = 0; face < te_count; ++face)
         {
-            if (node->isTESelected((U8)face)) {has_face_mask=true;break;}
+            if (node->isTESelected((U8)face)) face_selected = true;
         }
-        for (S32 face=0;face<nfaces && seen_faces<64;++face)
+        for (S32 face = 0; face < te_count && inspected + non_pbr < max_faces; ++face)
         {
-            if (has_face_mask && !node->isTESelected((U8)face)) continue;
-            ++seen_faces;
-            LLTextureEntry* te=object->getTE((U8)face);
-            LLFetchedGLTFMaterial* mat=te
-                ? dynamic_cast<LLFetchedGLTFMaterial*>(te->getGLTFRenderMaterial())
-                : nullptr;
-            if (!mat)
+            if (face_selected && !node->isTESelected((U8)face)) continue;
+            LLTextureEntry* te = object->getTE((U8)face);
+            if (!te || !te->getGLTFRenderMaterial())
             {
-                if (object->getRenderMaterialID((U8)face).notNull()) ++pending;
-                else ++standard;
+                ++non_pbr;
                 continue;
             }
+            LLGLTFMaterial* material = te->getGLTFRenderMaterial();
+            ++inspected;
+            const bool could_be_metal =
+                material->mMetallicFactor > 0.68f &&
+                material->mRoughnessFactor < 0.48f;
+            if (could_be_metal) ++eligible;
 
-            ++pbr_faces;
-            const bool orm=mat->mMetallicRoughnessTexture.notNull();
-            const bool metal_factor=(mat->mMetallicFactor>0.68f);
-            const bool smooth_factor=(mat->mRoughnessFactor<0.48f);
-            // ORM textures can change roughness/metal per texel. Factor-only
-            // screening cannot guarantee a particular pixel will qualify.
-            const bool candidate=(metal_factor && smooth_factor);
-            if (candidate) ++candidates;
-            else if (metal_factor && orm) ++uncertain;
-
-            if (action=="metal") {mat->mKAMIAliveOverride=1;++changed;}
-            else if (action=="bypass") {mat->mKAMIAliveOverride=-1;++changed;}
-            else if (action=="auto") {mat->mKAMIAliveOverride=0;++changed;}
-
-            if (action=="inspect" && pbr_faces<=12)
+            const std::string key = material->getHash().asString();
+            const S32 prior = local.has(key) ? local[key].asInteger() : 0;
+            if (mode != 99 && (mode == 0 || mode == 1 || mode == -1) &&
+                prior != mode && local.size() < 512)
             {
-                const char* eligibility =
-                    mat->mKAMIAliveOverride<0 ? "Excluded manually" :
-                    mat->mKAMIAliveOverride>0 ? "Metal preview selected" :
-                    candidate ? (orm ? "Candidate (ORM texel dependent)" : "Eligible by factors") :
-                    (metal_factor && orm ? "Possible (ORM-dependent)" : "Standard PBR");
-                report += llformat("Face %d: metal %.2f / rough %.2f | %s\n",
-                     face, mat->mMetallicFactor, mat->mRoughnessFactor,
-                     eligibility);
+                local[key] = mode;
+                ++changed;
+            }
+            if (inspected <= 8)
+            {
+                report += llformat("Face %d: PBR %s | metallic factor %.2f, roughness factor %.2f | %s\n",
+                    face,
+                    could_be_metal ? "candidate" : "limited / unknown",
+                    material->mMetallicFactor,
+                    material->mRoughnessFactor,
+                    (mode == 99 ? (prior == 1 ? "Metal override" :
+                                    prior == -1 ? "Standard override" : "Auto")
+                                : (mode == 1 ? "Metal override requested" :
+                                   mode == -1 ? "Standard requested" : "Auto requested")));
             }
         }
     }
-    if (seen_faces==0)
+    if (inspected + non_pbr >= max_faces) capped = 1;
+    if (mode != 99 && changed > 0)
     {
-        report += "Select an object or individual face in Edit first.\n";
+        gSavedSettings.setLLSD("KAMIAliveMaterialOverrides", local);
+        gSavedSettings.setS32("KAMIAliveOverrideRevision",
+                             gSavedSettings.getS32("KAMIAliveOverrideRevision") + 1);
     }
-    else
-    {
-        report += llformat("Inspected %d faces (%d PBR, %d standard, %d loading).\n",
-                           seen_faces,pbr_faces,standard,pending);
-        report += llformat("Auto factor candidates: %d; other possible: %d.\n",
-                           candidates,uncertain);
-        if (action!="inspect")
-        {
-            report += llformat("Updated %d PBR faces in viewer memory only.\n",changed);
-            if (changed==0) report += "No loaded PBR materials to override.\n";
-        }
-        report += "ORM maps may change metal/roughness per pixel.\n";
-        report += "Preview affects all faces sharing the same loaded material.\n";
-        report += "No SL asset edits. Overrides reset when the viewer restarts.";
-    }
-    LLSD args; args["MESSAGE"]=report;
-    LLNotificationsUtil::add("SystemMessage",args);
-}
 
+    if (inspected == 0 && non_pbr == 0)
+        report += "No selected faces found. Select an object or a face and retry.\n";
+    report += llformat("PBR faces: %d  |  Candidate by scalar factors: %d  |  Non-PBR/unloaded: %d\n",
+                       inspected, eligible, non_pbr);
+    report += llformat("Local override changes: %d%s\n", changed,
+                       capped ? "  |  Scan capped at 96 faces" : "");
+    report += "A texture ORM map may change metallic/roughness per pixel. ";
+    report += "A candidate is not a guarantee of a visible ALIVE change.\n";
+    report += "Changes are local to this viewer, shared by identical PBR materials, ";
+    report += "and need KAMI ALIVE enabled in Graphics.";
+    LLSD args;
+    args["MESSAGE"] = report;
+    LLNotificationsUtil::add("SystemMessage", args);
+}
 """
-patch(menu,"void handle_test_male()\n",inspector+"void handle_test_male()\n")
-patch(menu,
+menu_cpp = V / "llviewermenu.cpp"
+splice(menu_cpp, "void handle_selected_material_info()\n{", code + "\nvoid handle_selected_material_info()\n{")
+splice(menu_cpp,
     '    commit.add("Object.Inspect", boost::bind(&handle_object_inspect));\n',
-    '''    commit.add("Object.Inspect", boost::bind(&handle_object_inspect));
-    commit.add("KAMI.AliveInspect", boost::bind(&kami_alive_material_action, std::string("inspect")));
-    commit.add("KAMI.AliveMetal", boost::bind(&kami_alive_material_action, std::string("metal")));
-    commit.add("KAMI.AliveBypass", boost::bind(&kami_alive_material_action, std::string("bypass")));
-    commit.add("KAMI.AliveAuto", boost::bind(&kami_alive_material_action, std::string("auto")));
-''')
-print("PASS KAMI ALIVE v0.2 inspector: native selected-face PBR metadata, local preview/bypass/auto, bounded 64-face scan.")
+    """    commit.add("Object.Inspect", boost::bind(&handle_object_inspect));
+    commit.add("Kami.Alive.Inspect", boost::bind(&kamiAliveMaterialCommand, 99));
+    commit.add("Kami.Alive.Auto", boost::bind(&kamiAliveMaterialCommand, 0));
+    commit.add("Kami.Alive.Metal", boost::bind(&kamiAliveMaterialCommand, 1));
+    commit.add("Kami.Alive.Standard", boost::bind(&kamiAliveMaterialCommand, -1));
+""")
+
+print("KAMI ALIVE material inspection integrated: 4 native menu commands, "
+      "persisted local per-material mode, 96-face scan cap, revision-cached shader override.")
