@@ -36,7 +36,7 @@
 #include "llappviewerwin32.h"
 
 #ifdef KAMI_HAS_NATIVE_DX12
-#include "KamiDx12Renderer.h"
+#include "KamiDx12Runner.h"
 #endif
 
 #include "llgl.h"
@@ -440,27 +440,12 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
     if (kamiDx12WarpTest || kamiDx12HardwareTest ||
         kamiWorldWarpTest || kamiWorldHardwareTest)
     {
-        kami::dx12::Renderer nativeDx12;
-        if (!nativeDx12.initialize(kamiDx12WarpTest || kamiWorldWarpTest))
-        {
-            OutputDebugStringA(nativeDx12.error().c_str());
-            return 61;
-        }
-        if (!nativeDx12.renderOffscreenSmokeTest(128, 128))
-        {
-            OutputDebugStringA(nativeDx12.error().c_str());
-            return 62;
-        }
-        if (kamiWorldWarpTest || kamiWorldHardwareTest)
-        {
-            if (!nativeDx12.renderWorldOffscreenTest(128, 128))
-            {
-                OutputDebugStringA(nativeDx12.error().c_str());
-                return 63;
-            }
-        }
-        nativeDx12.shutdown();
-        return 0;
+        // The native renderer owns its construction and destruction inside
+        // KamiDx12Renderer.cpp rather than crossing viewer PCH ABI settings.
+        // Both the real triangle readback and indexed-world depth tests remain.
+        return kami::dx12::runEmbeddedSmokeTest(
+            kamiDx12WarpTest || kamiWorldWarpTest,
+            kamiWorldWarpTest || kamiWorldHardwareTest);
     }
 #endif
 

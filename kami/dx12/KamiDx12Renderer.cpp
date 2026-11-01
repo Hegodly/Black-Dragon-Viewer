@@ -1,4 +1,5 @@
 #include "KamiDx12Renderer.h"
+#include "KamiDx12Runner.h"
 
 #include <d3dcompiler.h>
 #include <algorithm>
@@ -534,6 +535,43 @@ void Renderer::shutdown() noexcept
     width_ = height_ = 0;
     allowTearing_ = false;
     adapterName_.clear();
+}
+
+// Keep the native Renderer object inside the same compilation unit as its
+// implementation. This avoids relying on the viewer PCH's structure packing
+// and other C++ ABI settings when constructing and destroying DX12 objects.
+// A failure still returns nonzero; no WARP rendering checks are bypassed.
+int runEmbeddedSmokeTest(bool warpForTesting, bool testWorldDepth) noexcept
+{
+    try
+    {
+        traceDx12Smoke("embedded: entering native renderer");
+        Renderer renderer;
+        traceDx12Smoke("embedded: renderer constructed");
+        if (!renderer.initialize(warpForTesting))
+        {
+            OutputDebugStringA(renderer.error().c_str());
+            return 61;
+        }
+        if (!renderer.renderOffscreenSmokeTest(128, 128))
+        {
+            OutputDebugStringA(renderer.error().c_str());
+            return 62;
+        }
+        if (testWorldDepth && !renderer.renderWorldOffscreenTest(128, 128))
+        {
+            OutputDebugStringA(renderer.error().c_str());
+            return 63;
+        }
+        renderer.shutdown();
+        traceDx12Smoke("embedded: all DX12 tests passed");
+        return 0;
+    }
+    catch (...)
+    {
+        OutputDebugStringA("KAMI native DX12 diagnostic: unexpected C++ exception");
+        return 64;
+    }
 }
 
 } // namespace kami::dx12
