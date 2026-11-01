@@ -791,6 +791,7 @@ bool LLFloaterIMSession::getVisible()
 
 void LLFloaterIMSession::setFocus(bool focus)
 {
+    if (focus && !hasFocus()) LL_INFOS("KamiChatOpen") << "Conversation opened: " << mSessionID << LL_ENDL;
     LLFloaterIMSessionTab::setFocus(focus);
 
     //When in DND mode, remove stored IM notifications
