@@ -221,7 +221,7 @@ notice="""  <notification
    type="alertmodal">
 KAMI Smart Sort - Brand Folders Preview
 
-Move [COUNT] product folders into [BRAND] parent folders directly under My Inventory.
+Move [COUNT] product folders into uppercase bracketed brand folders directly under My Inventory.
 
 Proposed destination groups:
 [DETAILS]
