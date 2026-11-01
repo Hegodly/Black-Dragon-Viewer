@@ -1491,7 +1491,8 @@ bool LLViewerInput::exportBindingsXML(const std::string& filename)
 S32 LLViewerInput::loadBindingsSettings(const std::string& filename)
 {
     LLSD settings;
-    llifstream infile(filename);
+    llifstream infile;
+    infile.open(filename);
     if (!infile.is_open())
     {
         LL_WARNS("Settings") << "Cannot find file " << filename << " to load." << LL_ENDL;
