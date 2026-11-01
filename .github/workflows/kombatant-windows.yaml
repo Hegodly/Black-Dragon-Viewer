@@ -419,6 +419,18 @@ jobs:
       - name: Verify native settings and all legacy WASD keybindings
         shell: pwsh
         run: python kami/performance/validate-config-inputs.py
+      - name: Compact final graphics geometry and fix native scroll extents
+        shell: pwsh
+        run: python kami/theme/compact-graphics-layout.py
+      - name: Verify compact graphics and all eight collapse states
+        shell: pwsh
+        run: python kami/theme/test-compact-graphics.py
+      - name: Restrict receipt footer to real personal IM sessions
+        shell: pwsh
+        run: python kami/messenger/fix-conversation-scope.py
+      - name: Verify Nearby Chat and personal IM presentation scope
+        shell: pwsh
+        run: python kami/messenger/verify-conversation-scope.py
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
