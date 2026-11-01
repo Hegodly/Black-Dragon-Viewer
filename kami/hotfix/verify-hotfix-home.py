@@ -23,6 +23,10 @@ assert "setClickedCallback" in header
 assert 'LLFloaterReg::showInstance' not in header  # no fake install action
 assert "NOT YET ENABLED" in src and "No forced logout" in src
 assert "keep your Second Life session connected" in src
+assert "Optimization hotfixes: no restart. Feature updates may require one." in src
+policy = (HOTFIX / "README.md").read_text(encoding="utf-8")
+assert "Optimization hotfixes MUST be restart-free" in policy
+assert "non-hot-reloadable change MUST be deferred" in policy
 assert "floater_kami_hotfix_home.xml" in src
 assert "Kami.HotfixHome" in src
 assert "Floater.Show" in src
