@@ -15,6 +15,8 @@ def source_check():
     for phrase in ("kami_graphics_intro_card", "KAMIAliveEnabled",
                    "KAMIAliveStrength", "basic_expand", "advanced_expand",
                    "finetuning_expand", "original_controls",
+                   "Accordion_ArrowClosed_Off", "Accordion_ArrowOpened_Off",
+                   "Arrow_Down", "combo_box.drop_down_button",
                    "Pref.Default", "FRAME-TIME AWARE", "control_signature"):
         assert phrase in src, f"Missing graphics overhaul source: {phrase}"
     assert "glFinish(" not in src and "glReadPixels(" not in src
@@ -43,6 +45,13 @@ def integrated_check():
         callback = buttons[0].find("button.commit_callback")
         assert callback is not None and callback.get("function") == "Pref.Tab"
         assert callback.get("parameter") == panel_name
+        assert buttons[0].get("image_overlay") == "Accordion_ArrowClosed_Off"
+        assert buttons[0].get("image_overlay_selected") == "Accordion_ArrowOpened_Off"
+        assert buttons[0].get("image_overlay_alignment") == "right"
+    dropdowns = list(panel.iter("combo_box.drop_down_button"))
+    assert len(dropdowns) >= 30
+    assert all(a.get("image_overlay") == "Arrow_Down" for a in dropdowns)
+    assert all(a.get("image_overlay_alignment") == "center" for a in dropdowns)
     assert panel.get("label") == "KAMI Graphics"
     assert len([e for e in panel.iter("button") if e.get("name")=="default"
                 and e.get("label")=="RESET"]) >= 6

@@ -107,6 +107,13 @@ for section, button_name, caption in groups:
     button.set("image_selected", "PushButton_Selected")
     button.set("image_hover_unselected", "Toolbar_Middle_Over")
     button.set("image_hover_selected", "Toolbar_Middle_Over")
+    # Native viewer arrow assets provide a consistent, stateful chevron:
+    # right when closed, down when expanded. Keep the same toggle control
+    # and Pref.Tab callback, rather than adding a second clickable element.
+    button.set("image_overlay", "Accordion_ArrowClosed_Off")
+    button.set("image_overlay_selected", "Accordion_ArrowOpened_Off")
+    button.set("image_overlay_alignment", "right")
+    button.set("tool_tip", "Expand or collapse KAMI graphics settings")
     label = labels[0]
     label.text = caption
     label.set("width", "445")
@@ -115,6 +122,18 @@ for section, button_name, caption in groups:
     label.set("font", "SansSerifBold")
     label.set("text_color", "0.82 0.91 1 1")
     label.set("mouse_opaque", "false")
+
+# Modernize the existing combo-box arrows without replacing their item lists,
+# Ticker/default/warning icons, keyboard navigation, or saved-setting bindings.
+# The original transparent button hit target remains the same size and position.
+dropdown_arrows = 0
+for arrow in root.iter("combo_box.drop_down_button"):
+    arrow.set("image_overlay", "Arrow_Down")
+    arrow.set("image_overlay_alignment", "center")
+    dropdown_arrows += 1
+assert dropdown_arrows >= 30, (
+    f"KAMI Graphics: legacy dropdown arrows unexpectedly missing ({dropdown_arrows})"
+)
 
 # Existing subgroup separators become visual Kami navigation, keeping their
 # top_pad/position anchors so every following control remains where expected.
@@ -170,4 +189,4 @@ assert control_signature() == original_controls, "KAMI Graphics accidentally cha
 ET.indent(tree, space=" ")
 tree.write(P, encoding="utf-8", xml_declaration=True)
 ET.parse(P)
-print(f"PASS KAMI Graphics: {original_count} original interactive controls and {reset_count} reset callbacks preserved; 3 Kami accordions and ALIVE card installed.")
+print(f"PASS KAMI Graphics: {original_count} original interactive controls and {reset_count} reset callbacks preserved; 3 Kami chevron accordions, {dropdown_arrows} dropdown arrows and ALIVE card installed.")
