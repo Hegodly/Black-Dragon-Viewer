@@ -1554,6 +1554,18 @@ S32 LLViewerInput::loadBindingsSettings(const std::string& filename)
         legacy_key("Q", "turn_left") &&
         legacy_key("E", "turn_right");
 
+    // Arrow keys use the same walk/turn pattern. Only migrate the exact
+    // unmodified legacy arrow-strafe profile; custom arrow layouts are kept.
+    const bool migrate_legacy_arrows =
+        legacy_key("Up", "push_forward") &&
+        legacy_key("Down", "push_backward") &&
+        legacy_key("Left", "slide_left") &&
+        legacy_key("Right", "slide_right") &&
+        legacy_key("Q", "turn_left") &&
+        legacy_key("E", "turn_right") &&
+        legacy_key("A", "slide_left") &&
+        legacy_key("D", "slide_right");
+
     if (migrate_legacy_wasd)
     {
         for (LLSD& record : records)
@@ -1572,6 +1584,28 @@ S32 LLViewerInput::loadBindingsSettings(const std::string& filename)
             }
         }
         LL_INFOS("InitInfo") << "KAMI applied WASD walking/turning to the "
+            "legacy default keyboard layout (custom controls preserved)."
+            << LL_ENDL;
+    }
+
+    if (migrate_legacy_arrows)
+    {
+        for (LLSD& record : records)
+        {
+            if (record.isMap() && record["mode"].asInteger() == 0 &&
+                record["mask"].asString() == "NONE")
+            {
+                if (record["key"].asString() == "Left")
+                {
+                    record["function"] = "turn_left";
+                }
+                else if (record["key"].asString() == "Right")
+                {
+                    record["function"] = "turn_right";
+                }
+            }
+        }
+        LL_INFOS("InitInfo") << "KAMI applied arrow-key walking/turning to the "
             "legacy default keyboard layout (custom controls preserved)."
             << LL_ENDL;
     }
