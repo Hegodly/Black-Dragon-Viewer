@@ -306,6 +306,9 @@ jobs:
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
+      - name: Verify removed legacy avatar lighting stays absent
+        shell: pwsh
+        run: python kami/performance/verify-legacy-avatar-lighting-removed.py
       - name: Check neutral base renderer after all native graphics integration patches
         shell: pwsh
         run: python kami/renderer/verify-neutral-baseline.py
