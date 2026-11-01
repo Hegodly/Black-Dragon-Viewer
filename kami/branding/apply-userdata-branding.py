@@ -25,8 +25,15 @@ def patch(path, changes):
 
 
 viewer = "indra/newview/llappviewer.cpp"
+viewer_text = (ROOT / viewer).read_text(encoding="utf-8-sig")
+# The base Kombatant patch runs before branding in the Windows workflow.
+# Accept the pristine upstream fixture or that exact intermediate identity.
+old_app_names = [name for name in ("BlackDragon", "KombatantViewer")
+                 if f'gDirUtilp->initAppDirs("{name}");' in viewer_text]
+if len(old_app_names) != 1:
+    raise RuntimeError("Expected exactly one known pre-branding viewer data-root identity")
 patch(viewer, [
-    ('gDirUtilp->initAppDirs("BlackDragon");', 'gDirUtilp->initAppDirs("KAMIVIEWER");'),
+    (f'gDirUtilp->initAppDirs("{old_app_names[0]}");', 'gDirUtilp->initAppDirs("KAMIVIEWER");'),
     ('const std::string MARKER_FILE_NAME("BlackDragon.exec_marker");',
      'const std::string KAMIVIEWER_LOG_PREFIX("KAMIVIEWER_");\n'
      'const std::string MARKER_FILE_NAME("KAMIVIEWER.exec_marker");'),

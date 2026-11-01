@@ -11,7 +11,7 @@ recorded in viewer crash metadata. Legacy server metadata field names remain
 compatible. Daily-log cleanup derives the date offset from the new prefix
 length and skips malformed date filenames.
 
-Existing `%APPDATA%\BlackDragon` and its logs/settings are not moved, deleted,
+Existing `%APPDATA%\KombatantViewer` or `%APPDATA%\BlackDragon` logs/settings are not moved, deleted,
 or automatically copied. A new KAMIVIEWER data directory starts with fresh
 settings. Custom settings can be migrated separately after the startup problem
 is diagnosed. Builds already downloaded still write to their original paths.

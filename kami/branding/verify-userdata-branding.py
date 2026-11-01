@@ -2,6 +2,10 @@
 """Check the paired viewer/crash-reporter naming contracts after integration."""
 import argparse
 import ast
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +25,7 @@ if args.integrated:
     for text in (viewer, crash):
         assert 'initAppDirs("KAMIVIEWER")' in text
         assert 'initAppDirs("BlackDragon")' not in text
+        assert 'initAppDirs("KombatantViewer")' not in text
         for old in ('"BlackDragon.log"', '"BlackDragon.old"', '"BlackDragon.crash"'):
             assert old not in text
     assert 'const std::string KAMIVIEWER_LOG_PREFIX("KAMIVIEWER_")' in viewer
@@ -36,4 +41,23 @@ if args.integrated:
     assert '"KAMIVIEWERCrashReport"' in crash
     print("PASS integrated viewer/crash paths, daily prefix parsing, markers, cache and active-log metadata.")
 else:
-    print("PASS user-data branding integration syntax and build ordering.")
+    # Exercise the real earlier base patch, not just pristine source anchors.
+    with tempfile.TemporaryDirectory(prefix="kami-data-branding-") as tmp:
+        fixture = Path(tmp)
+        paths = (
+            "indra/newview/llappviewer.cpp", "indra/llcrashlogger/llcrashlogger.cpp",
+            "indra/llfilesystem/lldir.cpp", ".github/workflows/kombatant-windows.yaml",
+            "kami/branding/apply-userdata-branding.py", "kami/branding/verify-userdata-branding.py",
+        )
+        for name in paths:
+            target = fixture / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        subprocess.run([
+            "git", "apply", "--include=indra/newview/llappviewer.cpp",
+            "--include=indra/llcrashlogger/llcrashlogger.cpp",
+            "--include=indra/llfilesystem/lldir.cpp", str(ROOT / "kombatant.patch"),
+        ], cwd=fixture, check=True)
+        subprocess.run([sys.executable, str(fixture / "kami/branding/apply-userdata-branding.py")], check=True)
+        subprocess.run([sys.executable, str(fixture / "kami/branding/verify-userdata-branding.py"), "--integrated"], check=True)
+    print("PASS real base-patch to user-data-branding sequence and paired path contracts.")
