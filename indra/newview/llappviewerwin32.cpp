@@ -440,12 +440,16 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
     if (kamiDx12WarpTest || kamiDx12HardwareTest ||
         kamiWorldWarpTest || kamiWorldHardwareTest)
     {
-        // The native renderer owns its construction and destruction inside
-        // KamiDx12Renderer.cpp rather than crossing viewer PCH ABI settings.
-        // Both the real triangle readback and indexed-world depth tests remain.
-        return kami::dx12::runEmbeddedSmokeTest(
+        // This diagnostic runs before LLAppViewer is initialized. Returning
+        // normally from wWinMain invokes the full viewer CRT/static teardown,
+        // including subsystems that have not been initialized. The observed
+        // WARP trace reports success and THEN crashes during process exit.
+        // Terminate this diagnostic-only process directly after the real GPU
+        // readback and optional depth test. Preserve their exact exit status.
+        const int diagnosticExitCode = kami::dx12::runEmbeddedSmokeTest(
             kamiDx12WarpTest || kamiWorldWarpTest,
             kamiWorldWarpTest || kamiWorldHardwareTest);
+        ::ExitProcess(static_cast<UINT>(diagnosticExitCode));
     }
 #endif
 
