@@ -70,13 +70,13 @@ ET.SubElement(root, "view_border", {
 label("kami_hotfix_state", "HOTFIX SERVICE: NOT YET ENABLED", 30, 141, 548, 26,
       "SansSerifBold")
 label("kami_hotfix_info",
-      "The full-release hotfix flow will return you safely to Kami Home.",
+      "Full-release Kami Home will keep your Second Life session connected.",
       30, 182, 555, 28)
 label("kami_hotfix_info2",
-      "Verified patches will apply at Home, with rollback if verification fails.",
+      "Compatible hotfixes will apply at Home. Native updates require restart.",
       30, 210, 555, 26)
 label("kami_hotfix_beta",
-      "Beta preview only. No download, forced logout, or patch installation.",
+      "Preview only. No forced logout, patch download, or installation.",
       30, 245, 555, 27)
 ET.SubElement(root, "button", {
     "name": "kami_hotfix_close", "label": "CLOSE", "layout": "topleft",
