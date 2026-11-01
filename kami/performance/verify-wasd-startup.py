@@ -33,7 +33,11 @@ assert 'record["function"] = "turn_right";' in viewer
 assert 'record["mode"].asInteger() != 0' in viewer
 assert 'matches == 1;' in viewer
 assert "infile.close();" in viewer
-assert 'LLSDSerialize::toXML(records' not in viewer
+# Export is a separate function that legitimately serializes saved binds.
+# Only the loader/migration must avoid rewriting residents' controls.
+loader = viewer.split("S32 LLViewerInput::loadBindingsSettings(", 1)[1].split(
+    "EKeyboardMode LLViewerInput::getMode()", 1)[0]
+assert 'LLSDSerialize::toXML(records' not in loader
 assert "return loaded_bindings > 0;" in viewer
 for tag,mapping in (("third_person",{"W":"push_forward","A":"turn_left",
                                     "S":"push_backward","D":"turn_right",
