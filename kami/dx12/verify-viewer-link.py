@@ -34,7 +34,13 @@ check("opt-in DX12 GPU test compiled into startup", '#include "KamiDx12Runner.h"
 check("no diagnostic GPU load on normal viewer start",
       "if (kamiDx12WarpTest || kamiDx12HardwareTest ||" in startup and
       "kamiWorldWarpTest || kamiWorldHardwareTest)" in startup
-      and "return kami::dx12::runEmbeddedSmokeTest(" in startup)
+      and "const int diagnosticExitCode = kami::dx12::runEmbeddedSmokeTest(" in startup
+      and "::ExitProcess(static_cast<UINT>(diagnosticExitCode));" in startup)
+check("diagnostic success and failure bypass uninitialized viewer CRT teardown",
+      "::ExitProcess(static_cast<UINT>(diagnosticExitCode));" in startup
+      and "return kami::dx12::runEmbeddedSmokeTest(" not in startup
+      and "return 61;" in renderer and "return 62;" in renderer
+      and "return 63;" in renderer)
 check("renderer construction stays in native translation unit",
       "Renderer renderer;" in renderer
       and "Renderer nativeDx12;" not in startup
