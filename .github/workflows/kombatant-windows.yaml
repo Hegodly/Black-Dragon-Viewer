@@ -29,6 +29,8 @@ jobs:
         run: python3 kami/alive/verify-kami-alive.py
       - name: Preflight KAMI ALIVE material inspector script
         run: python3 kami/alive/verify-material-inspector.py
+      - name: Preflight KAMI ALIVE visual profile source safety
+        run: python3 kami/alive/verify-alive-visual-profiles.py
       - name: Preflight all KAMI ALIVE material profiles
         run: python3 kami/alive/verify-alive-profiles.py
       - name: Preflight KAMI Messenger session and UI contract
@@ -281,6 +283,12 @@ jobs:
       - name: Verify material inspector native selected-face controls
         shell: pwsh
         run: python kami/alive/verify-material-inspector.py --integrated
+      - name: Integrate KAMI ALIVE native skin, eyes, gem, fabric and leather profiles
+        shell: pwsh
+        run: python kami/alive/apply-alive-visual-profiles.py
+      - name: Verify KAMI ALIVE profile shaders, baked avatars and user selection
+        shell: pwsh
+        run: python kami/alive/verify-alive-visual-profiles.py --integrated
       - name: Install KAMI ALIVE skin, eye, gem, fabric and leather response
         shell: pwsh
         run: python kami/alive/apply-alive-profiles.py
