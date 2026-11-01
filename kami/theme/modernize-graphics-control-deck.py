@@ -161,7 +161,19 @@ for e in root.iter("text"):
         e.set("height", "17")
 # Some headers were already renamed by the preceding Kami Graphics pass.
 # Require a meaningful selection, not legacy labels that no longer exist.
-assert len(seen) >= 3, f"KAMI Graphics: found only {len(seen)} older separator headings"
+already_themed = {(e.text or "").strip() for e in root.iter("text")
+                  if e.get("name") == "separator_label"}
+# These headings are already styled in modernize-graphics-panel.py,
+# which runs immediately before this script. Accept that exact case.
+expected_prior = {
+    "TEXTURE MEMORY & STREAMING",
+    "SCENE DETAIL & MATERIAL QUALITY",
+    "FRAME PACING & AVATAR COMPLEXITY",
+    "LEGACY SHADER EFFECTS",
+}
+assert len(seen) >= 3 or expected_prior.issubset(already_themed), (
+    f"KAMI Graphics: missing both legacy and KAMI-styled separators ({len(seen)})"
+)
 
 # Replace glyph-heavy legacy reset captions; do not change Pref.Default.
 reset_count = 0
