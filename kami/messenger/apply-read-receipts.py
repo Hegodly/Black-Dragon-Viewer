@@ -1,385 +1,563 @@
 #!/usr/bin/env python3
-"""KAMI-to-KAMI beta: opt-in, per-chat read acknowledgments over existing SL IM.
+"""Integrate KAMI-to-KAMI, explicitly opt-in IM read acknowledgements.
 
-This protocol does NOT produce read receipts from other viewers. It sends an
-ordinary, legible invitation only when a user explicitly opts in, and sends
-private-format read acknowledgments only after a reciprocal invitation has been
-seen from that same avatar. Read is observed when the recipient actually views
-the conversation. No account-wide tracking, no server upload, no read inference
-from typing or session establishment. No out-of-band service required.
+Second Life has no general read-receipt API. A short in-band marker is only
+attached to a normal IM AFTER a Kami peer confirms support in a handshake.
+The receiving Kami viewer strips it before history / alerts, and sends a
+separate control IM only when the conversation is actually foregrounded.
 
-Limitations: consent lives only in viewer memory and must be renewed after
-relogin. Identical repeated message text is ambiguous (digest does not include
-a server message ID). A peer switching viewers may see the receipt protocol IM
-as text. This feature must remain off until both peers explicitly enable it.
+Plain SL IM stays unchanged for unverified viewers, group chats, long texts,
+muted users, and when the per-account opt-in is disabled. The visible "SEEN"
+means recipient's Kami client opened the chat -- NOT proof a human read it.
 """
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-ROOT=Path(__file__).resolve().parents[2]
-V=ROOT/"indra/newview"
+ROOT = Path(__file__).resolve().parents[2]
+V = ROOT / "indra/newview"
+XUI = V / "skins/default/xui/en"
 
-def replace_once(path, old, new):
-    s=path.read_text(encoding="utf-8-sig")
-    n=s.count(old)
-    if n!=1: raise RuntimeError(f"KAMI receipts anchor drift {path}: {n} for {old[:100]!r}")
-    path.write_text(s.replace(old,new,1),encoding="utf-8")
+def splice(path, old, new):
+    s = path.read_text(encoding="utf-8-sig")
+    count = s.count(old)
+    if count != 1:
+        raise RuntimeError(f"KAMI Messenger receipts source drift {path}: {count} anchors {old[:88]!r}")
+    path.write_text(s.replace(old, new, 1), encoding="utf-8")
 
-im_h=V/"llimview.h"
-expose=r"""
-// Optional, per-conversation KAMI-to-KAMI receipt handshake.
-// No Second Life read acknowledgment is claimed or synthesized.
-namespace KAMIReadReceipts
-{
-    bool observe(const LLUUID& session, const LLUUID& peer, const std::string& text);
-    bool enabled(const LLUUID& session, const LLUUID& peer);
-    void toggle(const LLUUID& session, const LLUUID& peer);
-    void outgoing(const LLUUID& session, const LLUUID& peer, const std::string& text);
-    void viewed(const LLUUID& session, const LLUUID& peer);
-    std::string label(const LLUUID& session, const LLUUID& peer);
-}
+settings = V / "app_settings/settings_per_account.xml"
+setting = """    <key>KAMIReadReceiptsEnabled</key>
+    <map>
+      <key>Comment</key>
+      <string>Opt-in per account: show and send client-acknowledged read receipts to supported Kami peers only. Off by default.</string>
+      <key>Persist</key><integer>1</integer>
+      <key>Type</key><string>Boolean</string>
+      <key>Value</key><integer>0</integer>
+    </map>
 """
-replace_once(im_h, "class LLIMModel :",expose+"\nclass LLIMModel :")
-im_cpp=V/"llimview.cpp"
-source=r"""
-// KAMI-to-KAMI read receipts beta: explicit two-person consent.
-// The opt-in invite is a readable ordinary IM; ordinary viewers can ignore it.
-// Receipt control messages are only emitted after BOTH have sent the invite.
-// A control message might still be visible if someone switches viewers after
-// consenting. NEVER hide content from any other viewer.
-namespace KAMIReadReceipts
+splice(settings, "    <key>AvatarHoverOffsetZ</key>", setting + "    <key>AvatarHoverOffsetZ</key>")
+ET.parse(settings)
+
+protocol = r"""/**
+ * @file llkamireadreceipts.h
+ * KAMI Messenger read acknowledgement v1: opt-in viewer-to-viewer IM protocol.
+ *
+ * Transport remains Second Life IM. There is NO server read receipt API.
+ * No online polling, web service, database, or device fingerprinting.
+ * HELLO is sent only by an explicit button action, once per request.
+ * MSG is tagged only after a HELLO_ACK matching the sent nonce.
+ * SEEN means the recipient's Kami viewer displayed/focused that session.
+ * Read receipts are NOT proof of human attention or delivery to other viewers.
+ *
+ * For unmodified clients the one-off HELLO is a plain textual protocol token;
+ * a later switch to a different viewer may show an old message's MSG suffix.
+ * This is why receipts default OFF and are restricted to consented P2P chats.
+ */
+#ifndef LL_KAMI_READ_RECEIPTS_H
+#define LL_KAMI_READ_RECEIPTS_H
+
+#include "lluuid.h"
+#include "llviewercontrol.h"
+#include "llagent.h"
+#include "llimview.h"
+
+#include <map>
+#include <string>
+
+class LLKamiReadReceipts
 {
-    static const std::string kInvite =
-        "KAMI Messenger: I opt in to read receipts for our conversation. "
-        "If you use KAMI, click Enable Receipts in this chat to opt in too.";
-    static const std::string kAckPrefix = "[KAMI_READ_V1] ";
-
-    struct State
+public:
+    static LLKamiReadReceipts& instance()
     {
-        LLUUID peer;
-        bool local = false;
-        bool peer_invited = false;
-        std::string inbound_digest;
-        std::string last_acked_digest;
-        std::string outgoing_digest;
-        bool read = false;
-    };
-    static std::map<LLUUID, State> sSessions;
+        static LLKamiReadReceipts sInstance;
+        return sInstance;
+    }
 
-    static State* getState(const LLUUID& session, const LLUUID& peer, bool create)
+    bool enabled() const
     {
-        if (session.isNull() || peer.isNull() || peer == gAgentID)
-            return nullptr;
-        auto it = sSessions.find(session);
-        if (it != sSessions.end())
+        return gSavedPerAccountSettings.getBOOL("KAMIReadReceiptsEnabled");
+    }
+
+    U32 revision() const { return mRevision; }
+
+    static std::string frame(const std::string& verb, const LLUUID& id)
+    {
+        return "[[KAMI-RR1|" + verb + "|" + id.asString() + "]]";
+    }
+
+    static bool parseFrame(const std::string& text, std::string& verb, LLUUID& id)
+    {
+        const std::string prefix("[[KAMI-RR1|");
+        if (text.compare(0, prefix.size(), prefix) != 0 ||
+            text.size() < prefix.size() + 4 + 36 + 3 ||
+            text.compare(text.size() - 2, 2, "]]") != 0)
+            return false;
+
+        const size_t mid = text.find('|', prefix.size());
+        if (mid == std::string::npos || mid + 1 + 36 + 2 != text.size())
+            return false;
+
+        const std::string token = text.substr(mid + 1, 36);
+        if (!id.set(token, false) || id.isNull() || id.asString() != token)
+            return false;
+
+        verb = text.substr(prefix.size(), mid - prefix.size());
+        return verb == "HELLO" || verb == "HELLO_ACK" ||
+               verb == "MSG" || verb == "SEEN";
+    }
+
+    static bool isControl(const std::string& text)
+    {
+        std::string verb;
+        LLUUID id;
+        return parseFrame(text, verb, id) && verb != "MSG";
+    }
+
+    static std::string visibleText(const std::string& wire)
+    {
+        const std::string marker("\n[[KAMI-RR1|MSG|");
+        const size_t at = wire.rfind(marker);
+        if (at == std::string::npos || at == 0) return wire;
+
+        std::string verb;
+        LLUUID id;
+        if (!parseFrame(wire.substr(at + 1), verb, id) || verb != "MSG")
+            return wire;
+        return wire.substr(0, at);
+    }
+
+    void request(const LLUUID& peer, const LLUUID& session)
+    {
+        resetAccountIfNeeded();
+        if (!enabled() || peer.isNull() || peer == gAgent.getID() ||
+            session.isNull()) return;
+
+        LLUUID nonce = LLUUID::generateNewID();
+        mPendingHello[peer] = nonce;
+        mVerified.erase(peer);
+        mLastSent.erase(peer);
+        mLastSeen.erase(peer);
+        ++mRevision;
+
+        LLIMModel::sendMessage(frame("HELLO", nonce),
+                               session, peer, IM_NOTHING_SPECIAL);
+    }
+
+    std::string wrapOutgoing(const LLUUID& peer, const std::string& text)
+    {
+        resetAccountIfNeeded();
+        if (!enabled() || mVerified.find(peer) == mVerified.end() ||
+            text.empty()) return text;
+
+        const LLUUID msg_id = LLUUID::generateNewID();
+        const std::string suffix = "\n" + frame("MSG", msg_id);
+        // Never truncate a normal IM just to add metadata.
+        if (text.size() + suffix.size() > 1023) return text;
+
+        mLastSent[peer] = msg_id;
+        mLastSeen.erase(peer);
+        ++mRevision;
+        return text + suffix;
+    }
+
+    // Returns true for consumed control packets (never add these to SL chat).
+    // For a normal tagged message, strips metadata IN PLACE and returns false.
+    bool incoming(const LLUUID& peer, const LLUUID& session,
+                  std::string& text, bool permitted)
+    {
+        resetAccountIfNeeded();
+        std::string verb;
+        LLUUID id;
+        if (parseFrame(text, verb, id) && verb != "MSG")
         {
-            return it->second.peer == peer ? &it->second : nullptr;
-        }
-        if (!create || sSessions.size() >= 128) return nullptr;
-        State& state = sSessions[session];
-        state.peer = peer;
-        return &state;
-    }
+            if (!enabled() || !permitted || peer.isNull() ||
+                peer == gAgent.getID() || session.isNull())
+                return true; // Never respond when not opted in or muted.
 
-    static std::string digest(const std::string& msg)
-    {
-        // Deterministic UUID digest of exact message text in this session.
-        // The grid has no user-visible stable unique IM message ID.
-        return LLUUID::generateNewID("KAMI_READ_V1:" + msg).asString();
-    }
-
-    bool enabled(const LLUUID& session, const LLUUID& peer)
-    {
-        State* state = getState(session, peer, false);
-        return state && state->local;
-    }
-
-    void toggle(const LLUUID& session, const LLUUID& peer)
-    {
-        State* state = getState(session, peer, true);
-        if (!state) return;
-        state->local = !state->local;
-        state->inbound_digest.clear();
-        state->last_acked_digest.clear();
-        state->outgoing_digest.clear();
-        state->read = false;
-        if (state->local)
-        {
-            // The user must knowingly initiate this visible invitation. Do
-            // not automatically probe strangers or other viewers.
-            LLIMModel::sendMessage(kInvite, session, peer, IM_NOTHING_SPECIAL);
-        }
-    }
-
-    void outgoing(const LLUUID& session, const LLUUID& peer, const std::string& text)
-    {
-        State* state = getState(session, peer, false);
-        if (!state || !state->local || !state->peer_invited ||
-            text == kInvite || text.compare(0, kAckPrefix.size(), kAckPrefix) == 0)
-            return;
-        state->outgoing_digest = digest(text);
-        state->read = false;
-    }
-
-    // Consume protocol ACK before it reaches normal chat/history/toasts.
-    // The sender must have explicitly opted in and observed a reciprocal
-    // invitation from the *same avatar* before accepting anything.
-    bool observe(const LLUUID& session, const LLUUID& peer, const std::string& text)
-    {
-        State* state = getState(session, peer, true);
-        if (!state) return false;
-        if (text == kInvite)
-        {
-            state->peer_invited = true;
-            return false; // Consent invitation is deliberately visible.
-        }
-        if (text.compare(0, kAckPrefix.size(), kAckPrefix) == 0)
-        {
-            if (!(state->local && state->peer_invited))
-                return false;
-            const std::string claimed = text.substr(kAckPrefix.size());
-            const bool valid = claimed.size() == 36 &&
-                LLUUID(claimed).notNull();
-            if (valid && !state->outgoing_digest.empty() &&
-                claimed == state->outgoing_digest)
+            if (verb == "HELLO")
             {
-                state->read = true;
-                if (LLFloaterIMSession* floater = LLFloaterIMSession::findInstance(session))
-                    floater->updateKAMIMessengerStatus();
+                // The peer explicitly requested a connection. The receiving
+                // resident has opted in via their own per-account toggle.
+                mVerified[peer] = true;
+                ++mRevision;
+                if (mLastInboundHello[peer] != id)
+                {
+                    mLastInboundHello[peer] = id;
+                    LLIMModel::sendMessage(frame("HELLO_ACK", id),
+                                           session, peer, IM_NOTHING_SPECIAL);
+                }
             }
-            // We recognize control packets only from the opted-in partner.
-            return valid;
+            else if (verb == "HELLO_ACK")
+            {
+                auto hello = mPendingHello.find(peer);
+                if (hello != mPendingHello.end() && hello->second == id)
+                {
+                    mPendingHello.erase(hello);
+                    mVerified[peer] = true;
+                    ++mRevision;
+                }
+            }
+            else if (verb == "SEEN")
+            {
+                auto sent = mLastSent.find(peer);
+                if (sent != mLastSent.end() && sent->second == id &&
+                    mVerified.find(peer) != mVerified.end())
+                {
+                    mLastSeen[peer] = id; // Validated match, not a guessed receipt.
+                    ++mRevision;
+                }
+            }
+            return true;
         }
-        if (state->local && state->peer_invited && !text.empty())
+
+        // Sanitization is useful even if this account turned receipts off
+        // after receiving a tagged IM: never leak a known marker into history.
+        const std::string clean = visibleText(text);
+        if (clean == text) return false;
+        text = clean;
+        if (enabled() && permitted && mVerified.find(peer) != mVerified.end() &&
+            !session.isNull())
         {
-            state->inbound_digest = digest(text);
+            const std::string marker("\n[[KAMI-RR1|MSG|");
+            const size_t at = clean.size();
+            if (at < 1023)
+            {
+                std::string op;
+                LLUUID received_id;
+                if (parseFrame(std::string(text.size() ? "" : "") +
+                               "", op, received_id)) {} // intentionally no-op
+            }
         }
         return false;
     }
 
-    void viewed(const LLUUID& session, const LLUUID& peer)
+    // Called when a P2P chat is foregrounded. Never send on mere arrival.
+    bool acknowledgeOpened(const LLUUID& peer, const LLUUID& session)
     {
-        State* state = getState(session, peer, false);
-        if (!state || !state->local || !state->peer_invited ||
-            state->inbound_digest.empty() ||
-            state->last_acked_digest == state->inbound_digest)
-            return;
-        state->last_acked_digest = state->inbound_digest;
-        LLIMModel::sendMessage(kAckPrefix + state->inbound_digest,
+        resetAccountIfNeeded();
+        if (!enabled() || mVerified.find(peer) == mVerified.end()) return false;
+        auto pending = mPendingRead.find(peer);
+        if (pending == mPendingRead.end() || pending->second.session != session)
+            return false;
+
+        const LLUUID id = pending->second.id;
+        mPendingRead.erase(pending); // exactly once, no repeat sending
+        ++mRevision;
+        LLIMModel::sendMessage(frame("SEEN", id),
                                session, peer, IM_NOTHING_SPECIAL);
+        return true;
     }
 
-    std::string label(const LLUUID& session, const LLUUID& peer)
+    std::string status(const LLUUID& peer) const
     {
-        const State* state = getState(session, peer, false);
-        if (!state || !state->local) return "Receipts: Off";
-        if (!state->peer_invited) return "Receipts: Waiting for peer";
-        if (!state->outgoing_digest.empty())
-            return state->read ? "READ (KAMI confirmed)" : "Read: Awaiting view";
-        return "Receipts: On (both opted in)";
+        if (!enabled()) return "Read receipts OFF";
+        if (mVerified.find(peer) == mVerified.end())
+        {
+            if (mPendingHello.find(peer) != mPendingHello.end())
+                return "Kami receipt invite sent";
+            return "Request Kami receipts";
+        }
+
+        auto sent = mLastSent.find(peer);
+        auto seen = mLastSeen.find(peer);
+        if (sent != mLastSent.end() && seen != mLastSeen.end() &&
+            sent->second == seen->second)
+            return "SEEN (peer opened chat)";
+        if (sent != mLastSent.end())
+            return "Sent; awaiting Seen";
+        return "Kami receipts READY";
     }
-}
+
+private:
+    struct Pending
+    {
+        LLUUID session;
+        LLUUID id;
+    };
+
+    void resetAccountIfNeeded()
+    {
+        const LLUUID account = gAgent.getID();
+        if (account == mAccount) return;
+        mAccount = account;
+        mPendingHello.clear();
+        mLastInboundHello.clear();
+        mVerified.clear();
+        mLastSent.clear();
+        mLastSeen.clear();
+        mPendingRead.clear();
+        ++mRevision;
+    }
+
+    LLUUID mAccount;
+    U32 mRevision = 0;
+    std::map<LLUUID, LLUUID> mPendingHello;
+    std::map<LLUUID, LLUUID> mLastInboundHello;
+    std::map<LLUUID, bool> mVerified;
+    std::map<LLUUID, LLUUID> mLastSent;
+    std::map<LLUUID, LLUUID> mLastSeen;
+    std::map<LLUUID, Pending> mPendingRead;
+};
+
+#endif // LL_KAMI_READ_RECEIPTS_H
 """
-replace_once(im_cpp, "// Add a message to a session.\nvoid LLIMMgr::addMessage(",source+"\n// Add a message to a session.\nvoid LLIMMgr::addMessage(")
-# Guard early against popups from ordinary P2P receipt packets.
-replace_once(im_cpp,
-"""    if (new_session_id.isNull())
+# Correctly retain exact wire marker for opened acknowledgment, and do not
+# accidentally call any packet parser on the stripped visible message.
+old = r"""        const std::string clean = visibleText(text);
+        if (clean == text) return false;
+        text = clean;
+        if (enabled() && permitted && mVerified.find(peer) != mVerified.end() &&
+            !session.isNull())
+        {
+            const std::string marker("\n[[KAMI-RR1|MSG|");
+            const size_t at = clean.size();
+            if (at < 1023)
+            {
+                std::string op;
+                LLUUID received_id;
+                if (parseFrame(std::string(text.size() ? "" : "") +
+                               "", op, received_id)) {} // intentionally no-op
+            }
+        }
+        return false;"""
+new = r"""        const std::string clean = visibleText(text);
+        if (clean == text) return false;
+        const std::string wire_marker = text.substr(clean.size() + 1);
+        text = clean;
+        if (enabled() && permitted && mVerified.find(peer) != mVerified.end() &&
+            !session.isNull())
+        {
+            std::string op;
+            LLUUID received_id;
+            if (parseFrame(wire_marker, op, received_id) && op == "MSG")
+            {
+                mPendingRead[peer] = {session, received_id};
+                ++mRevision;
+            }
+        }
+        return false;"""
+if protocol.count(old)!=1:
+    raise Error("Protocol marker replacement mismatch");
+protocol=protocol.replace(old,new);
+write_path = V / "llkamireadreceipts.h"
+if write_path.exists():
+    raise RuntimeError("KAMI read-receipt header already exists; refusing duplicate")
+write_path.write_text(protocol, encoding="utf-8")
+
+# Intercept P2P packets at the *central* incoming dispatch BEFORE local
+# notification/history/auto-DND so control frames cannot create ghost chats.
+im_proc = V / "llimprocessing.cpp"
+splice(im_proc, '#include "llimview.h"', '#include "llimview.h"\n#include "llkamireadreceipts.h"')
+splice(im_proc, "    chat.mMuted = is_muted;\n",
+"""    // KAMI read receipts are P2P only; never touch group/object/system IM.
+    // Server-authored from_id is used as peer identity. Mutes block replies.
+    if (dialog == IM_NOTHING_SPECIAL && !from_group &&
+        from_id.notNull() && to_id == gAgent.getID())
     {
-        //no session ID...compute new one
-        new_session_id = computeSessionID(dialog, other_participant_id);
+        if (LLKamiReadReceipts::instance().incoming(
+                from_id, session_id, message, !is_muted))
+            return;
     }
 
-    //*NOTE session_name is empty in case of incoming P2P sessions""",
-"""    if (new_session_id.isNull())
-    {
-        //no session ID...compute new one
-        new_session_id = computeSessionID(dialog, other_participant_id);
-    }
-    if (dialog == IM_NOTHING_SPECIAL &&
-        msg.compare(0, 15, "[KAMI_READ_V1] ") == 0 &&
-        KAMIReadReceipts::observe(new_session_id, other_participant_id, msg))
-        return; // Do not log, notify or display a recognized peer ACK.
+    chat.mMuted = is_muted;
+""")
 
-    //*NOTE session_name is empty in case of incoming P2P sessions""")
-# Central model catches IMs delivered by paths other than the legacy UDP
-# dispatcher and observes original message text without any new network hooks.
-replace_once(im_cpp,
-"""void LLIMModel::addMessage(const LLUUID& session_id, const std::string& from, const LLUUID& from_id,
-                           const std::string& utf8_text, bool log2file /* = true */, bool is_region_msg, /* = false */ U32 time_stamp /* = 0 */)
-{
-    if (gSavedSettings.getBOOL("TranslateChat")""",
-"""void LLIMModel::addMessage(const LLUUID& session_id, const std::string& from, const LLUUID& from_id,
-                           const std::string& utf8_text, bool log2file /* = true */, bool is_region_msg, /* = false */ U32 time_stamp /* = 0 */)
-{
-    LLIMSession* kami_session = findIMSession(session_id);
-    if (kami_session && kami_session->isP2PSessionType() && !is_region_msg &&
-        from_id.notNull() && from_id != gAgentID &&
-        kami_session->mOtherParticipantID == from_id &&
-        KAMIReadReceipts::observe(session_id, from_id, utf8_text))
-        return; // In-band receipt never reaches translation, history or notifications.
-    if (gSavedSettings.getBOOL("TranslateChat")""")
-# Close no gap in outgoing path; send only regular IMs, not queued/unsent.
-session_cpp=V/"llfloaterimsession.cpp"
-replace_once(session_cpp,
+# Preserve ordinary IM plaintext in our OWN history, even when wire metadata
+# is appended. The control frame should have no local chat bubble at all.
+model = V / "llimview.cpp"
+splice(model, '#include "llimview.h"', '#include "llimview.h"\n#include "llkamireadreceipts.h"')
+splice(model, """        gAgent.sendReliableMessage();
+    }
+
+    bool is_group_chat = false;""",
+"""        gAgent.sendReliableMessage();
+    }
+
+    // Control frames are sent as normal IMs but have no local chat echo.
+    if (LLKamiReadReceipts::isControl(utf8_text)) return;
+    const std::string visible_text = LLKamiReadReceipts::visibleText(utf8_text);
+
+    bool is_group_chat = false;""")
+splice(model, "LLIMModel::getInstance()->addMessage(im_session_id, user.getDisplayName(), gAgentID, utf8_text);",
+             "LLIMModel::getInstance()->addMessage(im_session_id, user.getDisplayName(), gAgentID, visible_text);")
+splice(model, 'history_echo += ": " + utf8_text;', 'history_echo += ": " + visible_text;')
+
+floater = V / "llfloaterimsession.cpp"
+splice(floater, '#include "llfloaterimsession.h"',
+       '#include "llfloaterimsession.h"\n#include "llkamireadreceipts.h"\n#include "llcheckboxctrl.h"')
+splice(floater,
 """    if (mSessionInitialized)
     {
         LLIMModel::sendMessage(utf8_text, mSessionID, mOtherParticipantUUID, mDialog);
     }""",
 """    if (mSessionInitialized)
     {
-        if (mIsP2PChat && mDialog == IM_NOTHING_SPECIAL)
-            KAMIReadReceipts::outgoing(mSessionID, mOtherParticipantUUID, utf8_text);
-        LLIMModel::sendMessage(utf8_text, mSessionID, mOtherParticipantUUID, mDialog);
+        const std::string wire = mDialog == IM_NOTHING_SPECIAL ?
+            LLKamiReadReceipts::instance().wrapOutgoing(mOtherParticipantUUID, utf8_text) :
+            utf8_text;
+        LLIMModel::sendMessage(wire, mSessionID, mOtherParticipantUUID, mDialog);
     }""")
-replace_once(session_cpp,
-"""            LLIMModel::sendMessage(iter->asString(), mSessionID,
-                mOtherParticipantUUID, mDialog);""",
-"""            if (mIsP2PChat && mDialog == IM_NOTHING_SPECIAL)
-                KAMIReadReceipts::outgoing(mSessionID, mOtherParticipantUUID, iter->asString());
-            LLIMModel::sendMessage(iter->asString(), mSessionID,
-                mOtherParticipantUUID, mDialog);""")
-# Receipt button is only actionable for a P2P, initialized session; activating
-# gives a visible invitation, and partner must opt in separately on their side.
-session_h=V/"llfloaterimsession.h"
-replace_once(session_h,"    void updateKAMIMessengerStatus();",
-             "    void updateKAMIMessengerStatus();\n    void toggleKAMIReadReceipts();\n    void maybeAcknowledgeKAMIRead();")
-read_methods=r"""
-void LLFloaterIMSession::toggleKAMIReadReceipts()
+
+# Acknowledge only on actual foreground-focus, never just arrival.
+splice(floater,
+"""void LLFloaterIMSession::setFocus(bool focus)
 {
-    if (!mSessionInitialized || !mIsP2PChat ||
-        mDialog != IM_NOTHING_SPECIAL || mOtherParticipantUUID.isNull())
+    LLFloaterIMSessionTab::setFocus(focus);
+""",
+"""void LLFloaterIMSession::setFocus(bool focus)
+{
+    LLFloaterIMSessionTab::setFocus(focus);
+    if (focus && getVisible() && mDialog == IM_NOTHING_SPECIAL)
+        LLKamiReadReceipts::instance().acknowledgeOpened(mOtherParticipantUUID, mSessionID);
+""")
+splice(floater,
+"""    if (visible && isInVisibleChain())
     {
-        LLSD args;
-        args["MESSAGE"] = "KAMI receipts require an initialized one-to-one SL conversation. Group chats and disconnected sessions are not supported.";
-        LLNotificationsUtil::add("GenericAlert", args);
-        return;
+        sIMFloaterShowedSignal(mSessionID);
+        updateMessages();
+    }""",
+"""    if (visible && isInVisibleChain())
+    {
+        sIMFloaterShowedSignal(mSessionID);
+        updateMessages();
+        if (hasFocus() && mDialog == IM_NOTHING_SPECIAL)
+            LLKamiReadReceipts::instance().acknowledgeOpened(mOtherParticipantUUID, mSessionID);
+    }""")
+splice(floater,
+"""void LLFloaterIMSession::draw()
+{
+    // add people who were added via dropPerson()""",
+"""void LLFloaterIMSession::draw()
+{
+    LLKamiReadReceipts& rr = LLKamiReadReceipts::instance();
+    // A cheap generation comparison; no IM traffic or scanning per frame.
+    if (mKAMIRRLastRevision != rr.revision() ||
+        mKAMIRRLastEnabled != rr.enabled())
+    {
+        mKAMIRRLastRevision = rr.revision();
+        mKAMIRRLastEnabled = rr.enabled();
+        if (getVisible() && hasFocus() && mDialog == IM_NOTHING_SPECIAL)
+            rr.acknowledgeOpened(mOtherParticipantUUID, mSessionID);
+        updateKAMIMessengerStatus();
     }
-    KAMIReadReceipts::toggle(mSessionID, mOtherParticipantUUID);
+
+    // add people who were added via dropPerson()""")
+# Provide explicit action in native UI. No unsolicited probes.
+splice(floater, "//virtual\nbool LLFloaterIMSession::postBuild()",
+"""void LLFloaterIMSession::onKAMIRequestReceipts()
+{
+    if (mDialog != IM_NOTHING_SPECIAL || !mSessionInitialized ||
+        mOtherParticipantUUID.isNull())
+        return;
+    LLKamiReadReceipts::instance().request(mOtherParticipantUUID, mSessionID);
     updateKAMIMessengerStatus();
 }
 
-void LLFloaterIMSession::maybeAcknowledgeKAMIRead()
-{
-    if (!mSessionInitialized || !mIsP2PChat || mDialog != IM_NOTHING_SPECIAL ||
-        mOtherParticipantUUID.isNull() || !isInVisibleChain())
-        return;
-    LLFloaterIMContainer* box = LLFloaterIMContainer::findInstance();
-    const bool active = hasFocus() ||
-        (box && box->getVisible() && box->hasFocus() &&
-         box->getSelectedSession() == mSessionID);
-    if (active)
-        KAMIReadReceipts::viewed(mSessionID, mOtherParticipantUUID);
-}
-
-"""
-replace_once(session_cpp, "// KAMI Messenger reports SL session initialization, never delivery/read.\nvoid LLFloaterIMSession::updateKAMIMessengerStatus()",
-             read_methods+"// KAMI Messenger reports SL session initialization and opt-in KAMI peer receipts.\nvoid LLFloaterIMSession::updateKAMIMessengerStatus()")
-# Keep separate connection statuses, display receipt state in own label.
-replace_once(session_cpp,
-"""    if (!status) return;
-
-    if (mKAMIMessengerTimedOut)""",
-"""    if (!status) return;
-
-    if (LLButton* receipts = findChild<LLButton>("kami_messenger_receipts_btn", true))
-    {
-        receipts->setLabel(KAMIReadReceipts::enabled(mSessionID, mOtherParticipantUUID)
-                           ? "Receipts: ON" : "Enable Receipts");
-        receipts->setEnabled(mSessionInitialized && mIsP2PChat);
-    }
-
-    if (mKAMIMessengerTimedOut)""")
-replace_once(session_cpp,
-"""        status->setText("SESSION READY | SL session initialized. Delivery/read status unavailable.");""",
-"""        status->setText("SESSION READY | " +
-            KAMIReadReceipts::label(mSessionID, mOtherParticipantUUID));""")
-replace_once(session_cpp,
+//virtual
+bool LLFloaterIMSession::postBuild()""")
+splice(floater,
 """    mInputEditor->setCommitCallback(boost::bind(onSendMsg, _1, this));
 
     setDocked(true);""",
 """    mInputEditor->setCommitCallback(boost::bind(onSendMsg, _1, this));
-    getChild<LLButton>("kami_messenger_receipts_btn")->setClickedCallback(
-        boost::bind(&LLFloaterIMSession::toggleKAMIReadReceipts, this));
+
+    // Per-account opt-in, OFF by default. The peer must opt in separately.
+    LLCheckBoxCtrl* receipt_optin = getChild<LLCheckBoxCtrl>("kami_read_receipts_optin");
+    receipt_optin->setValue(LLKamiReadReceipts::instance().enabled());
+    receipt_optin->setCommitCallback([this](LLUICtrl*, const LLSD& value)
+    {
+        gSavedPerAccountSettings.setBOOL("KAMIReadReceiptsEnabled", value.asBoolean());
+        updateKAMIMessengerStatus();
+    });
+    LLButton* receipt_request = getChild<LLButton>("kami_read_receipts_request");
+    receipt_request->setEnabled(mDialog == IM_NOTHING_SPECIAL);
+    receipt_request->setClickedCallback(boost::bind(&LLFloaterIMSession::onKAMIRequestReceipts, this));
 
     setDocked(true);""")
-replace_once(session_cpp,
-"""    else
+oldstatus = """void LLFloaterIMSession::updateKAMIMessengerStatus()
+{
+    LLTextBox* status = findChild<LLTextBox>("kami_messenger_status_text", true);
+    if (!status) return;
+
+    if (mKAMIMessengerTimedOut)
     {
-        LLFloaterReg::hideInstance("voice_call", mSessionID);
+        status->setText("TIMED OUT | SL did not confirm this session. Check before resending.");
+    }
+    else if (mSessionInitialized)
+    {
+        status->setText("SESSION READY | SL session initialized. Delivery/read status unavailable.");
+    }
+    else if (mQueuedMsgsForInit.size() > 0)
+    {
+        status->setText(llformat("CONNECTING | %d message(s) queued locally, not yet sent.",
+                                 (S32)mQueuedMsgsForInit.size()));
+    }
+    else
+    {
+        status->setText("CONNECTING | Waiting for Second Life to initialize this conversation.");
     }
 }
+"""
+newstatus = """void LLFloaterIMSession::updateKAMIMessengerStatus()
+{
+    LLTextBox* status = findChild<LLTextBox>("kami_messenger_status_text", true);
+    if (!status) return;
 
-void LLFloaterIMSession::onSendMsg(""",
-"""    else
-    {
-        LLFloaterReg::hideInstance("voice_call", mSessionID);
-    }
-    if (visible)
-        maybeAcknowledgeKAMIRead();
+    std::string label;
+    if (mKAMIMessengerTimedOut)
+        label = "TIMED OUT | SL did not confirm this IM session";
+    else if (!mSessionInitialized)
+        label = mQueuedMsgsForInit.size() > 0 ?
+            llformat("CONNECTING | %d queued locally, not sent", (S32)mQueuedMsgsForInit.size()) :
+            "CONNECTING | Waiting for Second Life";
+    else
+        label = "SL SESSION READY | Not a delivery confirmation";
+
+    if (mDialog == IM_NOTHING_SPECIAL)
+        label += " | " + LLKamiReadReceipts::instance().status(mOtherParticipantUUID);
+    status->setText(label);
 }
+"""
+splice(floater, oldstatus,newstatus)
 
-void LLFloaterIMSession::onSendMsg(""")
-replace_once(session_cpp,
-"""    // should not reset unread message counters if IM floater doesn't have focus""",
-"""    // should not reset unread message counters if IM floater doesn't have focus""") if False else None
-replace_once(session_cpp,
-"""    }
-}
+fh = V / "llfloaterimsession.h"
+splice(fh,
+"""    void setKAMIMessengerTimedOut();
+""",
+"""    void setKAMIMessengerTimedOut();
+    void onKAMIRequestReceipts();
+""")
+splice(fh,
+"""    bool mKAMIMessengerTimedOut = false;
+    LLSD mQueuedMsgsForInit;""",
+"""    bool mKAMIMessengerTimedOut = false;
+    U32 mKAMIRRLastRevision = 0;
+    bool mKAMIRRLastEnabled = false;
+    LLSD mQueuedMsgsForInit;""")
 
-void LLFloaterIMSession::reloadMessages(bool clean_messages""",
-"""    }
-    // Only acknowledge after message history has been appended and the
-    // conversation is actively visible/focused. Not on mere network receipt.
-    maybeAcknowledgeKAMIRead();
-    updateKAMIMessengerStatus();
-}
-
-void LLFloaterIMSession::reloadMessages(bool clean_messages""")
-replace_once(session_cpp,
-"""    if( im_session && im_session->mTextIMPossible && !self->mInputEditor->getReadOnly())
-    {
-        //in disconnected state IM input editor should be disabled
-        self->mInputEditor->setEnabled(!gDisconnected);
-    }
-}
-
-// static
-void LLFloaterIMSession::onInputEditorFocusLost""",
-"""    if( im_session && im_session->mTextIMPossible && !self->mInputEditor->getReadOnly())
-    {
-        //in disconnected state IM input editor should be disabled
-        self->mInputEditor->setEnabled(!gDisconnected);
-    }
-    self->maybeAcknowledgeKAMIRead();
-}
-
-// static
-void LLFloaterIMSession::onInputEditorFocusLost""")
-# Distinct visual button next to status. Do not alter existing chat/voice UI.
-ui=V/"skins/default/xui/en/floater_im_session.xml"
-replace_once(ui,
-"""                 right="-8"
-                 top="2"
-                 height="18"
-                 font="SansSerifSmall"
-                 text_color="0.68 0.86 1 1"
-                 mouse_opaque="false">CONNECTING | Waiting for Second Life to initialize this conversation.</text>""",
-"""                 right="-146"
-                 top="2"
-                 height="18"
-                 font="SansSerifSmall"
-                 text_color="0.68 0.86 1 1"
-                 mouse_opaque="false">CONNECTING | Waiting for Second Life to initialize this conversation.</text>
-                <button
-                 name="kami_messenger_receipts_btn"
-                 layout="topleft"
-                 follows="right|top"
-                 right="-4"
-                 top="1"
-                 height="20"
-                 width="137"
-                 label="Enable Receipts"
-                 tool_tip="Opt in for this session only. Sends a visible consent IM. Both people must opt in using KAMI for read acknowledgments."/>""")
-ET.parse(ui)
-
-print("Installed opt-in KAMI-to-KAMI read acknowledgments: per-session consent, incoming digest matching, only viewed-focused ACK, original SL transport.")
+session_xml = XUI / "floater_im_session.xml"
+xtree=ET.parse(session_xml)
+xroot=xtree.getroot()
+panels=[e for e in xroot.iter("layout_panel") if e.get("name")=="kami_messenger_status_panel"]
+assert len(panels)==1
+panel=panels[0]
+assert not any(e.get("name")=="kami_read_receipts_optin" for e in xroot.iter())
+panel.set("height","52")
+ET.SubElement(panel,"check_box",{
+    "name":"kami_read_receipts_optin",
+    "layout":"topleft","follows":"left|top",
+    "label":"Allow Kami read receipts",
+    "height":"20","width":"206","left":"8","top":"27",
+    "tool_tip":"Off by default. Each resident opts in separately. Only Kami-to-Kami P2P chats."
+})
+ET.SubElement(panel,"button",{
+    "name":"kami_read_receipts_request",
+    "label":"Request receipts",
+    "layout":"topleft","follows":"right|top",
+    "height":"22","width":"142","right":"-8","top":"25",
+    "tool_tip":"Send a single compatibility invitation to this resident. Non-Kami viewers may show the invitation as ordinary text."
+})
+ET.indent(xtree,space=" ")
+xtree.write(session_xml,encoding="utf-8",xml_declaration=True)
+ET.parse(session_xml)
+print("PASS: KAMI-to-KAMI opt-in receipts integrated into native P2P SL messaging.")
+print("Limitations: requires two Kami clients, active link, and an opened chat; marker may be visible in a different viewer.")
