@@ -13253,4 +13253,11 @@ Allow them to pose you?
           name="okignore"
           yestext="OK"/>
   </notification>
+  <!-- Local diagnostic only: this is not a remote read receipt. -->
+  <notification
+   icon="notifytip.tga"
+   name="KamiChatOpenedDiagnostic"
+   type="notifytip">
+Open and read
+  </notification>
 </notifications>
