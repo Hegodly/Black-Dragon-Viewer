@@ -33,6 +33,8 @@ jobs:
         run: python3 kami/alive/verify-alive-visual-profiles.py
       - name: Preflight KAMI Messenger session and UI contract
         run: python3 kami/messenger/verify-kami-messenger.py
+      - name: Preflight opt-in KAMI-to-KAMI receipt source
+        run: python3 kami/messenger/verify-read-receipts.py
       - name: Preflight Brand Folder Sort integration source
         run: python3 kami/inventory/verify-brand-folder-sort.py
       - name: Preflight KAMI Demo Deleter script safety checks
@@ -362,6 +364,12 @@ jobs:
       - name: Verify KAMI Messenger UI and SL IM interoperability
         shell: pwsh
         run: python kami/messenger/verify-kami-messenger.py
+      - name: Integrate opt-in KAMI-to-KAMI read confirmations into native IMs
+        shell: pwsh
+        run: python kami/messenger/apply-read-receipts.py
+      - name: Validate consent-gated KAMI receipts and original SL transport
+        shell: pwsh
+        run: python kami/messenger/verify-read-receipts.py --integrated
       - name: Apply KAMI Smart Sort brand-folder grouping to native inventory
         shell: pwsh
         run: python kami/inventory/apply-brand-folder-sort.py
