@@ -27,6 +27,8 @@ jobs:
         run: python3 kami/audio/verify-audio-lab.py
       - name: Preflight KAMI ALIVE integration, shaders and frame governor
         run: python3 kami/alive/verify-kami-alive.py
+      - name: Preflight ALIVE selected-material scanner and local override
+        run: python3 kami/alive/verify-material-inspector.py
       - name: Preflight KAMI Graphics Control Deck source
         run: python3 kami/theme/verify-graphics-control-deck.py
       - name: Validate both modern and legacy keyboard LLSD before Windows build
@@ -263,6 +265,12 @@ jobs:
       - name: Verify KAMI ALIVE native shader, menu and frame-budget integration
         shell: pwsh
         run: python kami/alive/verify-kami-alive.py --integrated
+      - name: Integrate ALIVE material inspector and local PBR manual preview
+        shell: pwsh
+        run: python kami/alive/apply-material-inspector.py
+      - name: Verify material inspector native selected-face controls
+        shell: pwsh
+        run: python kami/alive/verify-material-inspector.py --integrated
       - name: Modernize legacy Graphics tab as KAMI rendering control deck
         shell: pwsh
         run: python kami/theme/modernize-graphics-panel.py
