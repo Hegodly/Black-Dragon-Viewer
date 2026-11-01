@@ -105,4 +105,33 @@ ET.SubElement(item, "menu_item_call.on_click", {
 ET.indent(tree, space=" ")
 tree.write(menu, encoding="utf-8", xml_declaration=True)
 ET.parse(menu)
+
+# A native in-viewer toast, not a Windows notification, login message or
+# blocking alertmodal. The future signed feed may invoke it only after the
+# manifest has been verified; there is no timer or fake update trigger here.
+notice = XUI / "notifications.xml"
+original = notice.read_text(encoding="utf-8-sig")
+if original.count("</notifications>") != 1 or "KamiOptimizationHotfixAvailable" in original:
+    raise RuntimeError("Unsafe or duplicate KAMI hotfix notification template")
+fragment = """  <notification
+    icon="notify.tga"
+    name="KamiOptimizationHotfixAvailable"
+    persist="false"
+    type="notify">
+KAMI OPTIMIZATION AVAILABLE - [HOTFIX_VERSION]
+An optimization hotfix is ready. You can review it without leaving Second Life.
+    <form>
+      <button index="0" name="ViewDetails" text="View details"/>
+      <button index="1" name="Later" text="Later" default="true"/>
+    </form>
+  </notification>
+"""
+notice.write_text(
+    original.replace("</notifications>", fragment + "</notifications>", 1),
+    encoding="utf-8")
+notices = ET.parse(notice).getroot()
+template = [e for e in notices.findall("notification")
+            if e.get("name") == "KamiOptimizationHotfixAvailable"]
+assert len(template) == 1 and template[0].get("type") == "notify"
+print("PASS native in-viewer non-modal hotfix notification template integrated.")
 print("PASS KAMI native Hotfix Home preview installed; no live update service enabled.")
