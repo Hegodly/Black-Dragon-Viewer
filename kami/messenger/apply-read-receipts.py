@@ -88,7 +88,7 @@ public:
     {
         const std::string prefix("[[KAMI-RR1|");
         if (text.compare(0, prefix.size(), prefix) != 0 ||
-            text.size() < prefix.size() + 4 + 36 + 3 ||
+            text.size() < prefix.size() + 3 + 1 + 36 + 2 ||
             text.compare(text.size() - 2, 2, "]]") != 0)
             return false;
 
@@ -361,8 +361,11 @@ splice(im_proc, "    chat.mMuted = is_muted;\n",
     if (kami_direct_im && !from_group &&
         from_id.notNull() && to_id == gAgent.getID())
     {
+        // Legacy one-to-one IM can arrive without a server session UUID.
+        const LLUUID kami_conversation_id = session_id.notNull() ? session_id :
+            LLIMMgr::computeSessionID(dialog, from_id);
         if (LLKamiReadReceipts::instance().incoming(
-                from_id, session_id, message, !is_muted, dialog))
+                from_id, kami_conversation_id, message, !is_muted, dialog))
             return;
     }
 
