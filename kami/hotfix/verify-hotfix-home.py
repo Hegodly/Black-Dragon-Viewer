@@ -31,6 +31,13 @@ assert "floater_kami_hotfix_home.xml" in src
 assert "Kami.HotfixHome" in src
 assert "Floater.Show" in src
 assert "KAMI_Workspaces" in src
+assert "KamiOptimizationHotfixAvailable" in src and 'type="notify"' in src
+assert "notifyVerifiedHotfix" in header
+assert 'LLNotificationsUtil::add(' in header
+assert 'LLNotificationsUtil::getSelectedOption' in header
+assert 'LLFloaterReg::showInstance("kami_hotfix_home"' in header
+assert "View details" in src and "Later" in src
+assert 'No remote check, forced logout, download or install' in header
 
 if opt.integrated:
     h = (VIEW / "kami_hotfix_center.h").read_text(encoding="utf-8")
@@ -51,5 +58,14 @@ if opt.integrated:
     assert len(clicks) == 1
     assert clicks[0].get("function") == "Floater.Show"
     assert clicks[0].get("parameter") == "kami_hotfix_home"
+    alerts = ET.parse(XUI / "notifications.xml").getroot()
+    toast = [e for e in alerts.findall("notification")
+             if e.get("name") == "KamiOptimizationHotfixAvailable"]
+    assert len(toast) == 1
+    assert toast[0].get("type") == "notify"  # never blocking alertmodal
+    assert toast[0].get("persist") == "false"
+    buttons = list(toast[0].iter("button"))
+    assert [(b.get("name"), b.get("index"))
+            for b in buttons] == [("ViewDetails", "0"), ("Later", "1")]
 
 print("PASS KAMI Hotfix Home UI contracts", "integrated" if opt.integrated else "preflight")
