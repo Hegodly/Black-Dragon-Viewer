@@ -111,6 +111,18 @@ class PortableTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"license"):
             module.finalize(self.root)
 
+    def test_experimental_runtime_blocks_release_in_nested_folder(self):
+        directory = self.root / 'plugins'
+        directory.mkdir()
+        for name in ('KombatantRTX64.dll', 'NVNGX_DLSS.DLL', 'libxess.dll'):
+            with self.subTest(name=name):
+                path = directory / name
+                path.write_bytes(b'experimental')
+                with self.assertRaisesRegex(RuntimeError, 'Experimental runtime'):
+                    module.finalize(self.root)
+                self.assertTrue(path.exists())
+                path.unlink()
+
     def test_dont_release_obsolete_top_menu_brand(self):
         (self.root/"skins/default/xui/en/menu_viewer.xml").write_text(
           "<menu_bar><menu name='Me' label='Dragon'/>"

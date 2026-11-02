@@ -114,6 +114,12 @@ def verify_ui(out: Path) -> None:
 
 def finalize(out: Path) -> list[str]:
     out = out.resolve()
+    retired_runtimes = {'kombatantrtx64.dll', 'nvngx_dlss.dll', 'libxess.dll',
+                        'kamimxao64.dll', 'amd_fidelityfx_dx12.dll'}
+    unexpected = [p.name for p in out.rglob('*')
+                  if p.is_file() and p.name.casefold() in retired_runtimes]
+    if unexpected:
+        raise RuntimeError('Experimental runtime in release: ' + ', '.join(sorted(unexpected)))
     if not (out / KAMI_EXE).is_file() or (out / KAMI_EXE).stat().st_size < 4:
         raise RuntimeError("KAMIViewer.exe missing or empty; refuse to publish release")
     for relative in REQUIRED:

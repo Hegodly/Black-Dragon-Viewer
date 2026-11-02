@@ -88,7 +88,7 @@ groups = [
         ("hub_inventory", "INVENTORY", "Inventory window"),
         ("hub_places", "PLACES", "Saved and recent locations"),
         ("hub_map", "WORLD MAP", "World map"),
-        ("hub_world", "WORLD MENU", "World actions, Area Search and experimental DX12 preview"),
+        ("hub_world", "WORLD MENU", "World actions and Area Search"),
     ]),
     ("AVATAR", 408, 182, [
         ("hub_outfits", "OUTFITS", "Appearance and clothing"),
