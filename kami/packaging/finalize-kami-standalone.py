@@ -13,6 +13,12 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 KAMI_EXE = "KAMIViewer.exe"
+WORKSPACE_ACTIONS = {
+    "hub_inventory", "hub_places", "hub_map", "hub_world",
+    "hub_outfits", "hub_poser", "hub_pose_creator",
+    "hub_material", "hub_snapshot", "hub_camera",
+    "hub_preferences", "hub_hardware", "hub_toolbar",
+}
 LEGACY_ROOT = {
     "blackdragon-bin.exe", "blackdragon-bin.pdb",
     "blackdragon-bin.exp", "blackdragon-bin.lib", "blackdragon-bin.map",
@@ -97,7 +103,9 @@ def verify_ui(out: Path) -> None:
 
     hub = xml("skins/default/xui/en/floater_kami_workspaces.xml")
     assert hub.get("name") == "kami_workspaces"
-    assert len([n for n in hub.iter("button")]) == 12, "KAMI native Workspaces actions missing"
+    buttons = [n.get("name") for n in hub.iter("button")]
+    assert set(buttons) == WORKSPACE_ACTIONS and len(buttons) == len(set(buttons)), \
+        "KAMI native Workspaces actions missing, unexpected or duplicated"
     prefs = xml("skins/default/xui/en/floater_preferences.xml")
     assert prefs.get("title", "").startswith("KAMI"), "Preferences not branded"
     ET.parse(out / "app_settings/settings_blackdragon.xml")

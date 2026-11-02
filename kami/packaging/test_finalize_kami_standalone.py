@@ -36,9 +36,21 @@ class PortableTests(unittest.TestCase):
           encoding="utf-8")
         (self.root/"skins/default/xui/en/floater_preferences.xml").write_text(
           "<floater title='KAMI CONTROL DECK'/>",encoding="utf-8")
-        buttons="".join(f"<button name='action_{i}'/>" for i in range(12))
+        buttons="".join(f"<button name='{name}'/>" for name in sorted(module.WORKSPACE_ACTIONS))
         (self.root/"skins/default/xui/en/floater_kami_workspaces.xml").write_text(
           "<floater name='kami_workspaces'>"+buttons+"</floater>",encoding="utf-8")
+
+    def test_reject_missing_world_with_same_button_count(self):
+        path=self.root/"skins/default/xui/en/floater_kami_workspaces.xml"
+        path.write_text(path.read_text().replace("hub_world", "fake_world"))
+        with self.assertRaises(AssertionError):
+            module.verify_ui(self.root)
+
+    def test_reject_duplicate_workspace_action(self):
+        path=self.root/"skins/default/xui/en/floater_kami_workspaces.xml"
+        path.write_text(path.read_text().replace("hub_world", "hub_map"))
+        with self.assertRaises(AssertionError):
+            module.verify_ui(self.root)
 
     def test_clean_only_root_legacy_launcher(self):
         (self.root/"blackdragon-bin.exe").write_bytes(b"old")
