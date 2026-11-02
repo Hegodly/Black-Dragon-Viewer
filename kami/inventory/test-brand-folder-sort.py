@@ -90,3 +90,18 @@ int main(){
 with tempfile.TemporaryDirectory() as d:
  p=Path(d)/'sort.cpp';p.write_text(STUBS+parser+actual+TEST)
  binary=Path(d)/'sort';subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror',str(p),'-o',str(binary)],check=True);subprocess.run([str(binary)],check=True)
+
+# Exercise the real script sequence so shared patch anchors cannot drift apart.
+if 'BRAND_FOLDERS = 3' not in original:
+ with tempfile.TemporaryDirectory() as d:
+  root=Path(d)
+  for name in ['indra/newview/llpanelmaininventory.cpp',
+               'indra/newview/skins/default/xui/en/notifications.xml',
+               'indra/newview/skins/default/xui/en/menu_inventory_gear_default.xml',
+               'indra/newview/skins/default/xui/en/panel_main_inventory.xml']:
+   target=root/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/name,target)
+  for name in ['apply-brand-folder-sort.py','verify-brand-folder-sort.py','apply-demo-cleanup.py','verify-demo-cleanup.py']:
+   target=root/'kami/inventory'/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/'kami/inventory'/name,target)
+  for name,args in [('apply-brand-folder-sort.py',[]),('verify-brand-folder-sort.py',['--integrated']),('apply-demo-cleanup.py',[]),('verify-demo-cleanup.py',['--integrated'])]:
+   subprocess.run([__import__('sys').executable,str(root/'kami/inventory'/name)]+args,check=True)
+  print('PASS full Smart Sort + Demo Deleter integration sequence')
