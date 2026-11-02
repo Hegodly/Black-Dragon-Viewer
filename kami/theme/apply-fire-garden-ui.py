@@ -142,16 +142,36 @@ d.rounded_rectangle((9,6,23,25),radius=5,fill=(169,177,187,249),outline=(233,239
 thumb.save(WIN/"kami_fg_slider_thumb.png",optimize=True)
 
 def checkbox(name,checked):
-    img=Image.new("RGBA",(24,24),(0,0,0,0))
+    img=Image.new("RGBA",(18,18),(0,0,0,0))
     draw=ImageDraw.Draw(img)
-    draw.rounded_rectangle((2,2,21,21),radius=4,
+    draw.rounded_rectangle((1,1,16,16),radius=3,
         fill=(24,44,54,251) if checked else (16,17,20,245),
         outline=(*blue,255) if checked else (*silver,212),width=2)
     if checked:
-        draw.line(((6,12),(10,16),(18,7)),fill=(241,244,246,255),width=3,joint="curve")
+        draw.line(((4,9),(7,12),(13,5)),fill=(241,244,246,255),width=3,joint="curve")
     img.save(WIN/name,optimize=True)
 checkbox("kami_fg_checkbox_off.png",False)
 checkbox("kami_fg_checkbox_on.png",True)
+
+def fix_checkbox_scaling(xui):
+    # LLCheckBoxCtrl intentionally extends its button over the label for clicks.
+    # Draw the glyph at native size; never scale it to that expanded hit area.
+    paths = [xui / "widgets/check_box.xml"]
+    paths.extend(p for p in xui.rglob("*.xml") if p not in paths)
+    changed = 0
+    for path in paths:
+        tree = ET.parse(path)
+        nodes = list(tree.getroot().iter("check_box.check_button"))
+        if not nodes:
+            continue
+        for node in nodes:
+            node.set("scale_image", "false")
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+        changed += len(nodes)
+    assert changed, "Native checkbox widget defaults not found"
+    return changed
+
+fix_checkbox_scaling(SKIN / "xui/en")
 
 # Per-floater preferences artwork. Actual approved Fire Garden, obscured by
 # smoked glass; lower left has the brighter fire highlights, right stays

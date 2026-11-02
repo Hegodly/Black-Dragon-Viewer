@@ -75,6 +75,7 @@ public:
     // Early native world geometry path, using indexed triangles, transforms and
     // a real D3D12 depth buffer. Still missing SL scene extraction and materials.
     bool renderWorldFrame(const WorldFrame& scene, bool vsync = true);
+    bool worldFrameAvailable() const noexcept;
     bool renderWorldOffscreenTest(UINT width = 128, UINT height = 128);
     void shutdown() noexcept;
 

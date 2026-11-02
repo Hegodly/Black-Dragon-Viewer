@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <limits>
 #include <utility>
 
@@ -171,10 +172,16 @@ WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
         return scene;
     }
 
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2);
     const S32 count = gObjectList.getNumObjects();
     std::size_t uploadedBytes = 0;
     for (S32 objectNumber = 0; objectNumber < count; ++objectNumber)
     {
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            results.hitBudget = true;
+            break;
+        }
         LLViewerObject* object = gObjectList.getObject(objectNumber);
         ++results.visitedObjects;
         if (!object || object->isDead())
@@ -212,6 +219,11 @@ WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
         for (S32 faceNumber = 0; faceNumber < volume->getNumVolumeFaces(); ++faceNumber)
         {
             if (scene.meshes.size() >= kMaxMeshes)
+            {
+                results.hitBudget = true;
+                break;
+            }
+            if (std::chrono::steady_clock::now() >= deadline)
             {
                 results.hitBudget = true;
                 break;
@@ -261,6 +273,12 @@ WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
             bool valid = true;
             for (S32 vertex = 0; vertex < face.mNumVertices; ++vertex)
             {
+                if ((vertex & 255) == 0 && std::chrono::steady_clock::now() >= deadline)
+                {
+                    results.hitBudget = true;
+                    valid = false;
+                    break;
+                }
                 const F32* local = face.mPositions[vertex].getF32ptr();
                 if (!std::isfinite(local[0]) ||
                     !std::isfinite(local[1]) ||
@@ -295,6 +313,12 @@ WorldFrame captureLiveVolumeWorld(const LLViewerCamera& camera,
             if (!valid) continue;
             for (S32 index = 0; index < face.mNumIndices; ++index)
             {
+                if ((index & 255) == 0 && std::chrono::steady_clock::now() >= deadline)
+                {
+                    results.hitBudget = true;
+                    valid = false;
+                    break;
+                }
                 const U16 value = face.mIndices[index];
                 if (value >= face.mNumVertices)
                 {

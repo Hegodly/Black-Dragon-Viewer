@@ -9,9 +9,9 @@ on:
   pull_request:
     branches: [integration/kami-creator-studio-windows]
   push:
-    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, fix/kami-beta-dx12-warp-crash-diagnostics, fix/kami-beta-dx12-embedded-entrypoint, fix/kami-remove-legacy-avatar-lighting, fix/kami-navigation-controls-overlap, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
+    branches: [master, feature/display-graphics-controls, experimental/dlss-dxr, feature/fsr-xess-upscaling, branding/kami-viewer, feature/kami-native-performance, experimental/kami-optical-flow-framegen, fix/kami-mxao-install-4k-potato, integration/kami-creator-studio-windows, feature/kami-neutral-base-render, feature/kami-true-1440p-core, feature/kami-gpu-auto-detection, feature/kami-visible-qhd-4k-8k, feature/kami-nextgen-theme-workspaces, feature/kami-standalone-portable-cleanup, feature/kami-zero-setup-launch, feature/kami-pbr-compat-toggle, feature/kami-true-pbr-off-legacy, feature/kami-avatar-physics-detection-fix, fix/kami-beta-dx12-warp-crash-diagnostics, fix/kami-beta-dx12-embedded-entrypoint, fix/kami-remove-legacy-avatar-lighting, fix/kami-navigation-controls-overlap, feature/kami-imessage-messenger, feature/kami-dx12-embedded-viewer-build, feature/kami-dx12-live-scene-bridge, feature/kami-dx12-live-preview]
     # Engine and settings edits must rebuild; previously only kami/ scripts were watched.
-    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/alive/**, kami/messenger/**, kami/inventory/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
+    paths: [indra/newview/**, indra/llwindow/**, indra/cmake/**, kombatant.patch, .github/workflows/kombatant-windows.yaml, kombatant/upscale/**, kami/branding/**, kami/performance/**, kami/physics/**, kami/audio/**, kami/avatars/**, kami/cinematic/**, kami/rlv/**, kami/signature/**, kami/atmosphere/**, kami/recovery/**, kami/framegen/**, kami/preview/**, kami/mxao/**, kami/gshade/**, kami/theme/**, kami/alive/**, kami/messenger/**, kami/search/**, kami/inventory/**, kami/loading/**, kami/packaging/**, kami/renderer/**, kami/dx12/**, kami/rtx/**, kami/shadows/**, kami/stability/**]
 permissions:
   contents: read
 jobs:
@@ -31,12 +31,20 @@ jobs:
         run: python3 kami/alive/verify-material-inspector.py
       - name: Preflight KAMI ALIVE visual profile source safety
         run: python3 kami/alive/verify-alive-visual-profiles.py
+      - name: Preflight KAMIVIEWER user-data branding integration
+        run: python3 kami/branding/verify-userdata-branding.py
       - name: Preflight KAMI Messenger session and UI contract
         run: python3 kami/messenger/verify-kami-messenger.py
       - name: Preflight KAMI Messenger opt-in read receipt protocol
         run: python3 kami/messenger/verify-read-receipts.py
+      - name: Execute Kami receipt protocol and messaging integration tests
+        run: python3 kami/messenger/test-imessage-style.py
+      - name: Execute live Sent Delivered Read protocol tests
+        run: python3 kami/messenger/test-live-bubble-status.py
       - name: Preflight Brand Folder Sort integration source
         run: python3 kami/inventory/verify-brand-folder-sort.py
+      - name: Execute Smart Sort brand parsing and protected move tests
+        run: python3 kami/inventory/test-brand-folder-sort.py
       - name: Preflight KAMI Demo Deleter script safety checks
         run: python3 kami/inventory/verify-demo-cleanup.py
       - name: Preflight ALIVE selected-material scanner and local override
@@ -148,6 +156,12 @@ jobs:
       - name: Apply KAMI Viewer logo and identity
         shell: pwsh
         run: python kami/branding/apply-branding.py
+      - name: Use KAMIVIEWER data and diagnostic paths
+        shell: pwsh
+        run: python kami/branding/apply-userdata-branding.py
+      - name: Verify paired viewer and crash-reporter paths
+        shell: pwsh
+        run: python kami/branding/verify-userdata-branding.py --integrated
       - name: Apply static Beyond Reality fire-garden theme
         shell: pwsh
         run: python kami/theme/apply-static-theme.py
@@ -226,6 +240,9 @@ jobs:
       - name: Apply approved Fire Garden theme across all native KAMI windows
         shell: pwsh
         run: python kami/theme/apply-fire-garden-ui.py
+      - name: Verify checkbox glyph sizing and native label geometry
+        shell: pwsh
+        run: python kami/theme/test-checkbox-sizing.py
       - name: Remove obsolete Native Graphics Lab and KAMI Photo Studio UI
         shell: pwsh
         run: python kami/stability/remove-native-lab-studio.py
@@ -271,6 +288,12 @@ jobs:
       - name: Verify KAMI native Workspaces and preserve original creator tools
         shell: pwsh
         run: python kami/theme/verify-nextgen-workspaces.py --integrated
+      - name: Install native KAMI Area Search
+        shell: pwsh
+        run: python kami/search/apply-area-search.py
+      - name: Verify Area Search registration and startup-safe menu
+        shell: pwsh
+        run: python kami/search/test-area-search.py --integrated
       - name: Install KAMI ALIVE material response and frame-time governor
         shell: pwsh
         run: python kami/alive/apply-kami-alive.py
@@ -370,6 +393,12 @@ jobs:
       - name: Verify native Kami read receipts, consent and real IM hooks
         shell: pwsh
         run: python kami/messenger/verify-read-receipts.py --integrated
+      - name: Integrate native Kami chat bubbles and sender read notifications
+        shell: pwsh
+        run: python kami/messenger/apply-imessage-style.py
+      - name: Verify integrated Kami messaging layout and receipt guards
+        shell: pwsh
+        run: python kami/messenger/test-imessage-style.py --integrated
       - name: Apply KAMI Smart Sort brand-folder grouping to native inventory
         shell: pwsh
         run: python kami/inventory/apply-brand-folder-sort.py
@@ -394,6 +423,30 @@ jobs:
       - name: Verify native settings and all legacy WASD keybindings
         shell: pwsh
         run: python kami/performance/validate-config-inputs.py
+      - name: Compact final graphics geometry and fix native scroll extents
+        shell: pwsh
+        run: python kami/theme/compact-graphics-layout.py
+      - name: Verify compact graphics and all eight collapse states
+        shell: pwsh
+        run: python kami/theme/test-compact-graphics.py
+      - name: Restrict receipt footer to real personal IM sessions
+        shell: pwsh
+        run: python kami/messenger/fix-conversation-scope.py
+      - name: Verify Nearby Chat and personal IM presentation scope
+        shell: pwsh
+        run: python kami/messenger/verify-conversation-scope.py
+      - name: Integrate live message status beneath the outgoing bubble
+        shell: pwsh
+        run: python kami/messenger/apply-live-bubble-status.py
+      - name: Verify live bubble status and parse hotfix installer
+        shell: pwsh
+        run: |
+          python kami/messenger/test-live-bubble-status.py --integrated
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'kami/messenger/Install-KAMIHotfix.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Write-Error; exit 1 }
       - name: Fetch pinned AMD FSR and Intel XeSS SDKs
         shell: pwsh
         run: ./kombatant/upscale/build-upscalers.ps1
@@ -442,6 +495,9 @@ jobs:
       - name: Finalize KAMI-only portable branding and verify runtime completeness
         shell: pwsh
         run: python kami/packaging/finalize-kami-standalone.py
+      - name: Package compiled Windows hotfix with backup installer
+        shell: pwsh
+        run: python kami/messenger/package-live-hotfix.py build-vc170-64/newview/Release kami-hotfix/KAMI-Windows-Hotfix.zip
       - name: Capture native crash dumps from DX12 diagnostics
         shell: pwsh
         run: |
@@ -563,6 +619,14 @@ jobs:
             kombatant-build.log
             build-vc170-64/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: warn
+      - name: Preserve compiled hotfix installer package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAMI-Windows-Hotfix
+          path: kami-hotfix/KAMI-Windows-Hotfix.zip
+          if-no-files-found: error
+          retention-days: 7
       - name: Preserve compiled build output
         if: success()
         uses: actions/upload-artifact@v4

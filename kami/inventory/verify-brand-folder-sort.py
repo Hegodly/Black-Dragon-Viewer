@@ -10,11 +10,12 @@ for term in ("BRAND_FOLDERS = 3","kami_preview_brand_folders","kami_folder_brand
              "KamiSmartSortFolderPreview","gInventory.changeCategoryParent",
              "getPreferredType() != LLFolderType::FT_NONE",
              "getParentUUID() != root_id","KAMI_SORT_MAX_ITEMS_PER_RUN",
-             "if (++inspected > 500)"):
+             "if (++inspected > 500)", "kami_brand_scope_valid", "kami_choose_brand_scope",
+             "KamiSmartSortFolderScope", "selected_folder", "-Pretty Liars-"):
     assert term in src,term
 def integrated():
     c=(R/"indra/newview/llpanelmaininventory.cpp").read_text(encoding="utf-8-sig")
-    for term in ("BRAND_FOLDERS = 3", "kami_preview_brand_folders()",
+    for term in ("BRAND_FOLDERS = 3", "kami_preview_brand_folders(const LLUUID& root_id)",
                  "void kami_move_brand_folders(", "kami_brand_group_label(",
                  "gInventory.changeCategoryParent(folder, dest_id, false)",
                  "if (mode == KamiSortMode::BRAND_FOLDERS)",
@@ -30,6 +31,12 @@ def integrated():
     assert "Original folder" in (mode[0].text or "")
     for name in ("menu_inventory_gear_default.xml","panel_main_inventory.xml"):
         ET.parse(x/name)
+    scopes=[z for z in n.iter("notification") if z.get("name")=="KamiSmartSortFolderScope"]
+    assert len(scopes)==1
+    assert [z.get("index") for z in scopes[0].iter("button")]==["0","1","2"]
+    assert "[SOURCE]" in (preview[0].text or "")
+    assert "kami_choose_brand_scope(selected_folder);" in c
+    assert "!kami_brand_scope_valid(root_id)" in c
     print("PASS Brand Folder Sort: source code, preview, protected root move, four modes")
 p=argparse.ArgumentParser();p.add_argument("--integrated",action="store_true")
 args=p.parse_args()
