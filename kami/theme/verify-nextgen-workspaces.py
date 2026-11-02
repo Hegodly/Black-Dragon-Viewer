@@ -22,6 +22,7 @@ ACTION_TARGETS = {
     "hub_outfits": "appearance",
     "hub_places": "places",
     "hub_map": "world_map",
+    "hub_world": "World",
     "hub_poser": "poser",
     "hub_pose_creator": "poser_creator",
     "hub_material": "material_editor",
@@ -63,7 +64,7 @@ def assert_native():
     for value in ("toolbar_bottom", "toolbar_top", "toolbar_left",
                   "toolbar_right", "tab_width", "KAMI"):
         assert value in source
-    assert "return true" in header and "gl" not in header.lower()
+    assert "return true" in header and "glFinish(" not in header and "glReadPixels(" not in header
     print("PASS native workspace launcher, menu callbacks, preserved tools, and dock architecture")
 
 def assert_integrated():

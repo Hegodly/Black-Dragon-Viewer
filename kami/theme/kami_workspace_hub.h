@@ -6,6 +6,8 @@
 #include "llfloater.h"
 #include "llfloaterreg.h"
 #include "llbutton.h"
+#include "llviewermenu.h"
+#include "llmenugl.h"
 
 class KAMIWorkspaceHub final : public LLFloater
 {
@@ -20,6 +22,15 @@ public:
         bind("hub_outfits", "appearance");
         bind("hub_places", "places");
         bind("hub_map", "world_map");
+        getChild<LLButton>("hub_world")->setClickedCallback(
+            [this](LLUICtrl*, const LLSD&) {
+                if (!gMenuHolder) return;
+                if (LLMenuGL* world = gMenuHolder->findChild<LLMenuGL>("World", true))
+                {
+                    gMenuHolder->hideMenus();
+                    LLMenuGL::showPopup(this, world, 24, getRect().getHeight() - 150);
+                }
+            });
         bind("hub_poser", "poser");
         bind("hub_pose_creator", "poser_creator");
         bind("hub_material", "material_editor");
