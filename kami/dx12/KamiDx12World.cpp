@@ -198,7 +198,8 @@ bool Renderer::recordWorldDraws(
                 return fail("World mesh has out-of-range index", E_INVALIDARG);
     }
 
-    auto upload = [this, &liveUploads](const void* data, std::size_t bytes,
+    std::size_t uploadSlot = 0;
+    auto upload = [this, &liveUploads, &uploadSlot](const void* data, std::size_t bytes,
                                        ComPtr<ID3D12Resource>& result) -> bool {
         D3D12_HEAP_PROPERTIES props{};
         props.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -210,10 +211,19 @@ bool Renderer::recordWorldDraws(
         buffer.MipLevels = 1;
         buffer.SampleDesc.Count = 1;
         buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        HRESULT hr = device_->CreateCommittedResource(
-            &props, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr, IID_PPV_ARGS(&result));
-        if (FAILED(hr)) return fail("Create indexed-world GPU upload buffer", hr);
+        if (uploadSlot == liveUploads.size()) liveUploads.emplace_back();
+        auto& cached = liveUploads[uploadSlot++];
+        HRESULT hr = S_OK;
+        if (!cached || cached->GetDesc().Width != bytes)
+        {
+            // Caller has retired this frame's fence before reusing its pool.
+            cached.Reset();
+            hr = device_->CreateCommittedResource(
+                &props, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr, IID_PPV_ARGS(&cached));
+            if (FAILED(hr)) return fail("Create indexed-world GPU upload buffer", hr);
+        }
+        result = cached;
         void* mapped = nullptr;
         D3D12_RANGE readRange{0, 0};
         hr = result->Map(0, &readRange, &mapped);
@@ -222,7 +232,7 @@ bool Renderer::recordWorldDraws(
         const D3D12_RANGE writtenRange{0, static_cast<SIZE_T>(bytes)};
         result->Unmap(0, &writtenRange);
         // The referenced buffers must stay alive until command-list GPU fence.
-        liveUploads.push_back(result);
+        // Pool retains ownership until this frame's fence completes.
         return true;
     };
 
@@ -267,6 +277,7 @@ bool Renderer::recordWorldDraws(
         commandList_->DrawIndexedInstanced(static_cast<UINT>(mesh.indices.size()),
                                             1, 0, 0, 0);
     }
+    liveUploads.resize(uploadSlot); // Discard unused completed slots; pool stays within 32 MiB.
     if (to != D3D12_RESOURCE_STATE_RENDER_TARGET)
     {
         const auto barrier = worldTransition(target, D3D12_RESOURCE_STATE_RENDER_TARGET, to);
@@ -275,12 +286,19 @@ bool Renderer::recordWorldDraws(
     return true;
 }
 
+bool Renderer::worldFrameAvailable() const noexcept
+{
+    if (!ready() || !fence_) return false;
+    const UINT index = swapChain_->GetCurrentBackBufferIndex();
+    return fence_->GetCompletedValue() >= frameFenceValues_[index];
+}
+
 bool Renderer::renderWorldFrame(const WorldFrame& scene, bool vsync)
 {
     if (!ready() || !rtvHeap_) return fail("No native D3D12 presentation surface", E_FAIL);
     const UINT index = swapChain_->GetCurrentBackBufferIndex();
-    if (!waitForFrame(index)) return false;
-    frameUploads_[index].clear(); // This backbuffer's previous draw has finished.
+    if (!worldFrameAvailable()) return true; // Busy: drop preview update, never wait.
+    // Retain completed frame buffers for reuse; the availability poll retired their fence.
     if (!prepareWorldPipeline() || !ensureWorldDepth(width_, height_)) return false;
 
     HRESULT hr = allocators_[index]->Reset();
@@ -297,12 +315,16 @@ bool Renderer::renderWorldFrame(const WorldFrame& scene, bool vsync)
     if (FAILED(hr)) return fail("Close indexed-world command list", hr);
     ID3D12CommandList* lists[] = {commandList_.Get()};
     queue_->ExecuteCommandLists(1, lists);
-    const UINT flags = (!vsync && allowTearing_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+    const UINT flags = ((!vsync && allowTearing_) ? DXGI_PRESENT_ALLOW_TEARING : 0)
+                       | (!vsync ? DXGI_PRESENT_DO_NOT_WAIT : 0);
     hr = swapChain_->Present(vsync ? 1 : 0, flags);
-    if (FAILED(hr)) return fail("Present native indexed-world frame", hr);
+    // Even an unpresented submission owns its buffers until the GPU fence.
+    const HRESULT presentResult = hr;
     const UINT64 fence = signal();
     if (!fence) return false;
     frameFenceValues_[index] = fence;
+    if (FAILED(presentResult) && presentResult != DXGI_ERROR_WAS_STILL_DRAWING)
+        return fail("Present native indexed-world frame", presentResult);
     return true;
 }
 

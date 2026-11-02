@@ -60,7 +60,8 @@ expect("indexed world scene GPU pipeline exists",
            "DXGI_FORMAT_D32_FLOAT", "IASetVertexBuffers", "IASetIndexBuffer",
            "DrawIndexedInstanced", "SetGraphicsRoot32BitConstants", "CreateCommittedResource")))
 expect("per-backbuffer GPU resource lifetime preserved",
-       "frameUploads_[index].clear()" in world and
+       "if (!worldFrameAvailable()) return true;" in world and
+       "liveUploads.resize(uploadSlot)" in world and
        "frameFenceValues_[index] = fence;" in world)
 expect("world pass runs in native Windows CTest",
        "KamiDx12World.cpp" in cmake and
