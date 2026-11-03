@@ -66,6 +66,8 @@ void physics_patch(std::vector<Vertex>& out,P center,P radius,C color,
     const std::uint8_t parent=joint==rig::Joint::LeftPec||
         joint==rig::Joint::RightPec?
         static_cast<std::uint8_t>(rig::Joint::Chest):
+        joint==rig::Joint::LeftButt||joint==rig::Joint::RightButt?
+        static_cast<std::uint8_t>(rig::Joint::Butt):
         static_cast<std::uint8_t>(rig::Joint::Pelvis);
     const rig::Influences influences{{
         static_cast<std::uint8_t>(joint),parent,0,0
@@ -144,9 +146,9 @@ SceneMesh build_test_scene(unsigned divisions) {
     physics_patch(scene.vertices,{0.f,1.49f,.263f},{.27f,.29f,.15f},
                   {.57f,.89f,.73f},2.f,rig::Joint::Belly);
     physics_patch(scene.vertices,{-.22f,1.30f,-.265f},{.19f,.21f,.16f},
-                  {.66f,.57f,.92f},3.f,rig::Joint::Butt);
+                  {.66f,.57f,.92f},3.f,rig::Joint::LeftButt);
     physics_patch(scene.vertices,{ .22f,1.30f,-.265f},{.19f,.21f,.16f},
-                  {.66f,.57f,.92f},3.f,rig::Joint::Butt);
+                  {.66f,.57f,.92f},3.f,rig::Joint::RightButt);
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
