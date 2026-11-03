@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cstdint>
+#include <string_view>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
