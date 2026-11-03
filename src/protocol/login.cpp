@@ -251,6 +251,26 @@ std::wstring_view classify_login_http_body(std::string_view body) noexcept{
         return L"plain-text error response";
     return L"unrecognized error response";
 }
+std::wstring_view classify_login_http_content_type(
+    std::wstring_view media_type) noexcept {
+    const auto prefix=[&](std::wstring_view expected) {
+        if(media_type.size()<expected.size())return false;
+        for(std::size_t i=0;i<expected.size();++i){
+            const wchar_t x=media_type[i],y=expected[i];
+            const wchar_t folded=(x>=L'A'&&x<=L'Z')?x+32:x;
+            if(folded!=y)return false;
+        }
+        const auto len=expected.size();
+        return media_type.size()==len||media_type[len]==L';'||media_type[len]==L' ';
+    };
+    if(prefix(L"text/html"))return L"HTML error page (Content-Type)";
+    if(prefix(L"text/xml")||prefix(L"application/xml"))
+        return L"XML response (Content-Type)";
+    if(prefix(L"application/json")||prefix(L"application/problem+json"))
+        return L"JSON response (Content-Type)";
+    if(prefix(L"text/plain"))return L"plain-text response (Content-Type)";
+    return L"";
+}
 std::wstring describe_login_http_response(bool read_ok,
                                           std::string_view sample,
                                           unsigned read_error) {
@@ -524,6 +544,25 @@ LoginResult login_to_simulator(const LoginRequest& request,
         const DWORD read_error=read_ok?0:GetLastError();
         failure.http_response_kind=describe_login_http_response(read_ok!=FALSE,
             std::string_view(sample,static_cast<std::size_t>(count)),read_error);
+        // If the body is empty or unreadable, safely classify a standard
+        // Content-Type response header without displaying its raw value.
+        if(!read_ok||count==0){
+            wchar_t content_type[128]{};
+            DWORD bytes=sizeof(content_type);
+            if(WinHttpQueryHeaders(web.handle,WINHTTP_QUERY_CONTENT_TYPE,
+                                   WINHTTP_HEADER_NAME_BY_INDEX,
+                                   content_type,&bytes,WINHTTP_NO_HEADER_INDEX)){
+                const auto category=classify_login_http_content_type(
+                    std::wstring_view(content_type));
+                if(!category.empty()){
+                    failure.http_response_kind=std::wstring(category);
+                    if(!read_ok){
+                        failure.http_response_kind+=L" (body read WinHTTP "+
+                            std::to_wstring(read_error)+L")";
+                    }
+                }
+            }
+        }
         SecureZeroMemory(sample,sizeof(sample));
         failure.message+=L" [";
         failure.message+=failure.http_response_kind;
