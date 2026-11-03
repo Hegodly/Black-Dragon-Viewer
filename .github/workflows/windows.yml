@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - feature/kami-native-camera-system
   workflow_dispatch:
 
 jobs:
