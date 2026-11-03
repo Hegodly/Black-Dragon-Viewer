@@ -7,6 +7,7 @@
 #include "kami/features/body_physics.hpp"
 #include "kami/features/rig.hpp"
 #include "kami/features/rig_physics.hpp"
+#include "kami/features/rig_diagnostics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include <optional>
@@ -63,6 +64,9 @@ public:
         if(!rigphysics::decode_named_parameters(values,wearable))return false;
         rig_physics_.set_wearable(wearable);
         return true;
+    }
+    [[nodiscard]] const rig::Audit& skin_compatibility() const noexcept {
+        return skin_audit_;
     }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
@@ -123,6 +127,7 @@ private:
     avatar::Controller avatar_{};
     rigphysics::Solver rig_physics_{};
     rig::Palette skin_matrices_{};
+    rig::Audit skin_audit_{};
     std::optional<SceneMesh> preview_mesh_;
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;
