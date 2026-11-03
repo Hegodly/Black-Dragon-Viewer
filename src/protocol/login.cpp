@@ -71,6 +71,23 @@ std::string utf8(std::wstring_view s){
         return {};
     return bytes;
 }
+// The official viewer supplies the truthful Windows platform/version fields.
+// Query Windows itself: never impersonate the official viewer channel.
+std::string windows_nt_version(){
+    HMODULE ntdll=GetModuleHandleW(L"ntdll.dll");
+    if(!ntdll)return {};
+    using VersionFn=LONG (WINAPI*)(OSVERSIONINFOW*);
+    const auto version=reinterpret_cast<VersionFn>(
+        GetProcAddress(ntdll,"RtlGetVersion"));
+    if(!version)return {};
+    OSVERSIONINFOW os{};
+    os.dwOSVersionInfoSize=sizeof(os);
+    if(version(&os)<0||os.dwMajorVersion==0||os.dwMajorVersion>30)
+        return {};
+    return std::to_string(os.dwMajorVersion)+"."+
+           std::to_string(os.dwMinorVersion)+"."+
+           std::to_string(os.dwBuildNumber);
+}
 bool xml_safe_ascii(std::string_view v) noexcept {
     return !v.empty()&&v.size()<=128 &&
        std::all_of(v.begin(),v.end(),[](unsigned char c) {
@@ -340,6 +357,12 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     put_string(doc,"channel","KAMI Beyond Reality Dev");
     put_string(doc,"version","0.1.0.53");
     put_string(doc,"platform","Win");
+    const auto nt_version=windows_nt_version();
+    // Empty on unsupported/unknown platforms rather than fabricate values.
+    put_string(doc,"platform_version",nt_version);
+    put_string(doc,"platform_string",nt_version.empty()?
+               "Windows":"Microsoft Windows NT "+nt_version);
+    put_string(doc,"host_id","");
     put_string(doc,"mac",mac);
     // Official SL Windows viewer login sends MD5(volume-serial DWORD).
     // KAMI obtains it from the separately LGPL-licensed Windows bridge.
@@ -361,8 +384,15 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     doc+="<member><name>extended_errors</name>"
          "<value><boolean>1</boolean></value></member>";
     doc+="<member><name>options</name><value><array><data>";
-    for(const char* option:{"login-flags","inventory-root","inventory-skeleton",
-                            "buddy-list","gestures","global-textures"}){
+    for(const char* option:{"inventory-root","inventory-skeleton",
+                            "inventory-lib-root","inventory-lib-owner",
+                            "inventory-skel-lib","initial-outfit","gestures",
+                            "display_names","event_categories",
+                            "event_notifications","classified_categories",
+                            "adult_compliant","buddy-list","newuser-config",
+                            "ui-config","advanced-mode","max-agent-groups",
+                            "map-server-url","voice-config","tutorial_setting",
+                            "login-flags","global-textures"}){
         doc+="<value><string>";doc+=option;doc+="</string></value>";
     }
     doc+="</data></array></value></member>";
@@ -495,7 +525,9 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(payload.data.empty())return failure;
     // No credentials may ever leave this official Linden Lab host.
     const auto host=login_host(request.grid);
-    HttpHandle session(WinHttpOpen(L"KAMI-Beyond-Reality-Dev/0.1.0.53",
+    // Honest channel/version format analogous to the official LLCore
+    // user-agent string; this is KAMI, not a spoofed Linden Lab viewer.
+    HttpHandle session(WinHttpOpen(L"KAMI Beyond Reality Dev 0.1.0 (53)",
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     if(!session.handle){failure.status=LoginStatus::NetworkError;return failure;}
