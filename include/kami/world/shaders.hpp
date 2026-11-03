@@ -18,6 +18,7 @@ cbuffer Frame : register(b0) {
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
 Texture2D<float4> materialTexture : register(t1);
+StructuredBuffer<row_major float4x4> skinPalette : register(t2);
 SamplerState materialSampler : register(s1);
 struct VertexIn {
     float3 position : POSITION;
@@ -26,6 +27,8 @@ struct VertexIn {
     float2 material : MATERIAL;
     float2 uv : TEXCOORD0;
     float region : TEXCOORD1; // zero unless a local body physics marker
+    uint bones : BLENDINDICES;
+    uint weights : BLENDWEIGHT;
 };
 struct Interpolant {
     float4 clip : SV_POSITION;
@@ -37,6 +40,33 @@ struct Interpolant {
 };
 // The same local avatar transformation is used in the depth/shadow and
 // main passes; this keeps locomotion and shadows synchronized on the GPU.
+// Four-weight linear blend skinning, including shadow pass, so fitted-mesh
+// preview geometry visibly reacts to KAMI's independently simulated joints.
+void skin_vertex(VertexIn input,out float3 position,out float3 normal) {
+    position=input.position;
+    normal=input.normal;
+    if(input.weights==0U)return; // terrain / unrigged mesh
+    const uint4 joint=uint4(input.bones&255U,
+                            (input.bones>>8)&255U,
+                            (input.bones>>16)&255U,
+                            (input.bones>>24)&255U);
+    const uint4 encoded=uint4(input.weights&255U,
+                              (input.weights>>8)&255U,
+                              (input.weights>>16)&255U,
+                              (input.weights>>24)&255U);
+    const float4 w=float4(encoded)/255.0;
+    float3 p=float3(0.0,0.0,0.0);
+    float3 n=float3(0.0,0.0,0.0);
+    [unroll] for(uint i=0U;i<4U;++i) {
+        if(w[i]>0.0) {
+            const row_major float4x4 bone=skinPalette[min(joint[i],7U)];
+            p+=mul(float4(input.position,1.0),bone).xyz*w[i];
+            n+=mul(float4(input.normal,0.0),bone).xyz*w[i];
+        }
+    }
+    position=p;
+    normal=normalize(n);
+}
 float3 avatar_position(float3 local,float region) {
     // Deformation applies only to explicitly-tagged fitted-physics markers.
     // Neutral world/OBJ geometry has region=0 and remains unchanged.
@@ -68,17 +98,21 @@ float3 avatar_normal(float3 n) {
 }
 Interpolant vertex_main(VertexIn input) {
     Interpolant output;
-    const float3 world=avatar_position(input.position,input.region);
+    float3 skinned,skinnedNormal;
+    skin_vertex(input,skinned,skinnedNormal);
+    const float3 world=avatar_position(skinned,input.region);
     output.clip = mul(float4(world, 1.0), viewProjection);
     output.position = world;
-    output.normal = avatar_normal(input.normal);
+    output.normal = avatar_normal(skinnedNormal);
     output.albedo = input.color;
     output.material = input.material;
     output.uv = input.uv;
     return output;
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
-    return mul(float4(avatar_position(input.position,input.region),1.0),lightViewProjection);
+    float3 skinned,skinnedNormal;
+    skin_vertex(input,skinned,skinnedNormal);
+    return mul(float4(avatar_position(skinned,input.region),1.0),lightViewProjection);
 }
 float shadow_factor(float3 position,float3 normal) {
     if(frame.w<0.5) return 1.0;
