@@ -29,7 +29,7 @@ int main(){
     if(hash_mac_bytes(mac_bytes)!="d15ae53931880fd7b724dd7888b4b4ed")return 16;
     if(classify_login_http_body("<html><body>unknown</body></html>")!=
        L"HTML error page"||
-       classify_login_http_body("<?xml version=\\"1.0\\"?>")!=
+       classify_login_http_body("<?xml")!=
        L"XML-RPC response"||
        classify_login_http_body("")!=L"empty response")return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
