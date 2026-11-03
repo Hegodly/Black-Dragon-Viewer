@@ -195,7 +195,8 @@ bool Renderer::recordWorldDraws(
     const WorldFrame& scene, ID3D12Resource* target,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv, UINT width, UINT height,
     D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to,
-    std::vector<ComPtr<ID3D12Resource>>& liveUploads)
+    std::vector<ComPtr<ID3D12Resource>>& liveUploads,
+    ComPtr<ID3D12DescriptorHeap>& liveDescriptors)
 {
     if (!target || !worldPipeline_ || !worldDepth_ || !width || !height)
         return fail("World scene requires pipeline, target and depth", E_INVALIDARG);
@@ -213,8 +214,21 @@ bool Renderer::recordWorldDraws(
             mesh.vertices.size() > (1u << 20) ||
             mesh.indices.size() > (1u << 21))
             return fail("World scene has invalid vertex/index counts", E_INVALIDARG);
+        const bool textured = !mesh.albedoRGBA8.empty();
+        if (mesh.alphaCutoff < 0.f || mesh.alphaCutoff > 1.f ||
+            (mesh.textureWidth > 0) != (mesh.textureHeight > 0) ||
+            textured != (mesh.textureWidth > 0 && mesh.textureHeight > 0))
+            return fail("World mesh material dimensions or alpha cutoff invalid", E_INVALIDARG);
+        if (textured && (mesh.textureWidth > 1024 || mesh.textureHeight > 1024 ||
+                         mesh.albedoRGBA8.size() !=
+                         std::size_t(mesh.textureWidth) * mesh.textureHeight * 4u))
+            return fail("World RGBA8 texture exceeds prototype cap", E_INVALIDARG);
+        const std::size_t stagingBytes = textured
+            ? (std::size_t(mesh.textureWidth) * 4u + 255u) / 256u *
+              256u * mesh.textureHeight : 0u;
         const std::size_t bytes = mesh.vertices.size() * sizeof(WorldVertex) +
-                                  mesh.indices.size() * sizeof(std::uint32_t);
+                                  mesh.indices.size() * sizeof(std::uint32_t) +
+                                  stagingBytes;
         if (bytes > kMaxUploadBytes - totalBytes)
             return fail("World scene exceeds 32 MiB upload budget", E_OUTOFMEMORY);
         totalBytes += bytes;
@@ -239,7 +253,8 @@ bool Renderer::recordWorldDraws(
         if (uploadSlot == liveUploads.size()) liveUploads.emplace_back();
         auto& cached = liveUploads[uploadSlot++];
         HRESULT hr = S_OK;
-        if (!cached || cached->GetDesc().Width != bytes)
+        if (!cached || cached->GetDesc().Dimension != D3D12_RESOURCE_DIMENSION_BUFFER ||
+            cached->GetDesc().Width != bytes)
         {
             // Caller has retired this frame's fence before reusing its pool.
             cached.Reset();
@@ -261,6 +276,19 @@ bool Renderer::recordWorldDraws(
         return true;
     };
 
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{};
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.NumDescriptors = static_cast<UINT>(
+        std::max<std::size_t>(1, scene.meshes.size()));
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    const HRESULT descriptorResult = device_->CreateDescriptorHeap(
+        &srvHeapDesc, IID_PPV_ARGS(&liveDescriptors));
+    if (FAILED(descriptorResult))
+        return fail("Create per-frame world SRV descriptors", descriptorResult);
+    ID3D12DescriptorHeap* descriptorHeaps[] = {liveDescriptors.Get()};
+    commandList_->SetDescriptorHeaps(1, descriptorHeaps);
+    const UINT srvStride = device_->GetDescriptorHandleIncrementSize(srvHeapDesc.Type);
+
     if (from != D3D12_RESOURCE_STATE_RENDER_TARGET)
     {
         const auto barrier = worldTransition(target, from, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -279,6 +307,7 @@ bool Renderer::recordWorldDraws(
     commandList_->SetPipelineState(worldPipeline_.Get());
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    UINT meshIndex = 0;
     for (const WorldMesh& mesh : scene.meshes)
     {
         ComPtr<ID3D12Resource> vertices, indices;
@@ -297,10 +326,87 @@ bool Renderer::recordWorldDraws(
         indexView.Format = DXGI_FORMAT_R32_UINT;
         commandList_->IASetVertexBuffers(0, 1, &vertexView);
         commandList_->IASetIndexBuffer(&indexView);
+        // Native D3D12 upload path for CPU-decoded RGBA8 material textures.
+        // The local memory is row-pitch aligned; GPU resources and SRVs survive
+        // until the backbuffer fence retires. This is not an SL texture cache.
+        const bool textured = !mesh.albedoRGBA8.empty();
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+        srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv.Texture2D.MipLevels = 1;
+        auto cpuHandle = liveDescriptors->GetCPUDescriptorHandleForHeapStart();
+        cpuHandle.ptr += static_cast<SIZE_T>(meshIndex) * srvStride;
+        if (textured)
+        {
+            D3D12_RESOURCE_DESC tex{};
+            tex.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            tex.Width = mesh.textureWidth;
+            tex.Height = mesh.textureHeight;
+            tex.DepthOrArraySize = 1;
+            tex.MipLevels = 1;
+            tex.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            tex.SampleDesc.Count = 1;
+            tex.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+            UINT rows = 0;
+            UINT64 rowBytes = 0, total = 0;
+            device_->GetCopyableFootprints(&tex, 0, 1, 0, &footprint,
+                                           &rows, &rowBytes, &total);
+            if (!total || total > kMaxUploadBytes)
+                return fail("World texture GPU upload footprint invalid", E_OUTOFMEMORY);
+            std::vector<std::uint8_t> aligned(static_cast<std::size_t>(total), 0);
+            const std::size_t line = std::size_t(mesh.textureWidth) * 4u;
+            for (UINT y = 0; y < mesh.textureHeight; ++y)
+                std::memcpy(aligned.data() + std::size_t(y) * footprint.Footprint.RowPitch,
+                            mesh.albedoRGBA8.data() + std::size_t(y) * line, line);
+            ComPtr<ID3D12Resource> texUpload;
+            if (!upload(aligned.data(), aligned.size(), texUpload)) return false;
+            // A newly allocated texture begins in COPY_DEST. Never mistake
+            // an old frame's PIXEL_SHADER_RESOURCE for a copy destination.
+            if (uploadSlot == liveUploads.size()) liveUploads.emplace_back();
+            auto& texture = liveUploads[uploadSlot++];
+            texture.Reset(); // Corresponding frame fence completed already.
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+            const HRESULT createResult = device_->CreateCommittedResource(
+                &heap, D3D12_HEAP_FLAG_NONE, &tex,
+                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&texture));
+            if (FAILED(createResult))
+                return fail("Create GPU resident RGBA8 texture", createResult);
+            D3D12_TEXTURE_COPY_LOCATION src{};
+            src.pResource = texUpload.Get();
+            src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            src.PlacedFootprint = footprint;
+            D3D12_TEXTURE_COPY_LOCATION dst{};
+            dst.pResource = texture.Get();
+            dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            dst.SubresourceIndex = 0;
+            commandList_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+            const auto barrier = worldTransition(texture.Get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            commandList_->ResourceBarrier(1, &barrier);
+            device_->CreateShaderResourceView(texture.Get(), &srv, cpuHandle);
+        }
+        else
+        {
+            // Null texture SRV is legal: untextured HLSL path never samples.
+            device_->CreateShaderResourceView(nullptr, &srv, cpuHandle);
+        }
+
+        const float material[4] = {
+            textured ? 1.f : 0.f, mesh.alphaCutoff, 0.f, 0.f
+        };
         commandList_->SetGraphicsRoot32BitConstants(
             0, 16, mesh.worldViewProjection.data(), 0);
+        commandList_->SetGraphicsRoot32BitConstants(0, 4, material, 16);
+        auto gpuHandle = liveDescriptors->GetGPUDescriptorHandleForHeapStart();
+        gpuHandle.ptr += static_cast<UINT64>(meshIndex) * srvStride;
+        commandList_->SetGraphicsRootDescriptorTable(1, gpuHandle);
         commandList_->DrawIndexedInstanced(static_cast<UINT>(mesh.indices.size()),
-                                            1, 0, 0, 0);
+                                           1, 0, 0, 0);
+        ++meshIndex;
     }
     liveUploads.resize(uploadSlot); // Discard unused completed slots; pool stays within 32 MiB.
     if (to != D3D12_RESOURCE_STATE_RENDER_TARGET)
@@ -334,7 +440,7 @@ bool Renderer::renderWorldFrame(const WorldFrame& scene, bool vsync)
     rtv.ptr += static_cast<SIZE_T>(index) * rtvStride_;
     if (!recordWorldDraws(scene, targets_[index].Get(), rtv, width_, height_,
                           D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT,
-                          frameUploads_[index]))
+                          frameUploads_[index], frameWorldDescriptors_[index]))
         return false;
     hr = commandList_->Close();
     if (FAILED(hr)) return fail("Close indexed-world command list", hr);
@@ -441,9 +547,10 @@ bool Renderer::renderWorldOffscreenTest(UINT width, UINT height)
     hr = commandList_->Reset(allocators_[0].Get(), worldPipeline_.Get());
     if (FAILED(hr)) return fail("Reset indexed-world test command list", hr);
     std::vector<ComPtr<ID3D12Resource>> liveUploads;
+    ComPtr<ID3D12DescriptorHeap> liveDescriptors;
     if (!recordWorldDraws(scene, target.Get(), rtv, width, height,
                           D3D12_RESOURCE_STATE_RENDER_TARGET,
-                          D3D12_RESOURCE_STATE_COPY_SOURCE, liveUploads))
+                          D3D12_RESOURCE_STATE_COPY_SOURCE, liveUploads, liveDescriptors))
         return false;
 
     D3D12_TEXTURE_COPY_LOCATION from{};
