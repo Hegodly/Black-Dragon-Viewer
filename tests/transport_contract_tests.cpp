@@ -22,6 +22,10 @@ int main(){
     })if(valid_capability_url(value))return 3;
     const std::wstring too_long=std::wstring(L"https://example.org/")+std::wstring(2500,L'a');
     if(valid_capability_url(too_long))return 4;
+    std::wstring with_nul=L"https://example.org/cap/uuid";
+    with_nul.push_back(wchar_t{0});
+    with_nul+=L"suffix";
+    if(valid_capability_url(with_nul))return 5;
     // This test never performs a live network request.
     return 0;
 }
