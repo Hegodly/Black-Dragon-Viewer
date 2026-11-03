@@ -92,7 +92,7 @@ groups = [
     ]),
     ("AVATAR", 408, 182, [
         ("hub_outfits", "OUTFITS", "Appearance and clothing"),
-        ("hub_poser", "POSER", "Native Black Dragon pose tool"),
+        ("hub_poser", "POSER", "Native KAMI pose tool"),
         ("hub_pose_creator", "POSE CREATOR", "Native animation creator"),
     ]),
     ("CREATE", 24, 358, [
@@ -142,7 +142,7 @@ ET.SubElement(floater, "slider", {
     "initial_value": "0.96",
 })
 text("kami_workspaces_footer",
-     "BEYOND REALITY  |  Built on Black Dragon by NiranV Dean",
+     "BEYOND REALITY  |  KAMI WINDOWS EXPERIENCE",
      26, 558, 700, 23, font="SansSerifSmall",
      color="LabelTextColor")
 workspace_file = XUI / "floater_kami_workspaces.xml"
