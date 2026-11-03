@@ -66,6 +66,8 @@ login=(root/"src/protocol/login.cpp").read_text(encoding="utf-8")
 assert "login_to_simulator" in login
 assert "WINHTTP_FLAG_SECURE" in login
 assert "ProhibitDTD" in login
+assert "login_http_diagnostic(code)" in login
+assert "failure.message=login_http_diagnostic(code)" in login
 assert "KAMI Beyond Reality Dev" in login
 assert "src/protocol/load_scheduler.cpp" in cmake
 assert "src/protocol/lludp.cpp" in cmake

@@ -67,6 +67,18 @@ int main(){
     if(parse_login_xmlrpc("").status!=LoginStatus::MalformedReply||
        parse_login_xmlrpc("<methodResponse>").status!=LoginStatus::MalformedReply)
        return 9;
+    // No secrets/redirect URLs or untrusted response text in diagnostics.
+    for(unsigned code:{301U,302U,303U,307U,308U,400U,401U,403U,
+                       404U,405U,408U,429U,500U,502U,503U,504U,418U}){
+        const auto message=login_http_diagnostic(code);
+        if(message.find(L"HTTP "+std::to_wstring(code))==std::wstring::npos||
+           message.find(L"passwd")!=std::wstring::npos||message.size()>120U)
+            return 10;
+    }
+    if(login_http_diagnostic(403).find(L"refused")==std::wstring::npos||
+       login_http_diagnostic(429).find(L"retry later")==std::wstring::npos||
+       login_http_diagnostic(302).find(L"redirect blocked")==std::wstring::npos)
+        return 11;
     CoUninitialize();
     return 0;
 }

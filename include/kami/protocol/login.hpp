@@ -42,5 +42,8 @@ struct LoginResult {
 // included in output; callers must clear their own password buffer.
 [[nodiscard]] LoginResult login_to_simulator(const LoginRequest& request,
                                              std::wstring_view password);
+// Return safe diagnostics based ONLY on HTTP status codes. Never display
+// server response bodies, redirect Location headers, passwords, or tokens.
+[[nodiscard]] std::wstring login_http_diagnostic(unsigned status);
 [[nodiscard]] const wchar_t* login_status_label(LoginStatus status) noexcept;
 } // namespace kami::protocol

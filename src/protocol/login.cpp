@@ -308,6 +308,24 @@ LoginResult parse_login_xmlrpc(std::string_view xml){
     result.message=L"Second Life login accepted; simulator connection pending";
     return result;
 }
+std::wstring login_http_diagnostic(unsigned code) {
+    const std::wstring prefix=L"SL LOGIN HTTP "+std::to_wstring(code)+L" / ";
+    switch(code){
+    case 301:case 302:case 303:case 307:case 308:
+        return prefix+L"redirect blocked to protect credentials";
+    case 400:return prefix+L"server rejected login request format";
+    case 401:return prefix+L"HTTP authentication required";
+    case 403:return prefix+L"request refused by login server";
+    case 404:return prefix+L"login endpoint not found";
+    case 405:return prefix+L"request method not permitted";
+    case 408:return prefix+L"login request timed out";
+    case 429:return prefix+L"rate limited; retry later";
+    case 500:case 502:case 503:case 504:
+        return prefix+L"login service temporarily unavailable";
+    default:
+        return prefix+L"unexpected response; check official status";
+    }
+}
 LoginResult login_to_simulator(const LoginRequest& request,
                               std::wstring_view password){
     LoginResult failure{};
@@ -359,10 +377,16 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(!WinHttpQueryHeaders(web.handle,
        WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,
        WINHTTP_HEADER_NAME_BY_INDEX,&code,&length,WINHTTP_NO_HEADER_INDEX)){
-        failure.status=LoginStatus::HttpError;return failure;
+        failure.status=LoginStatus::HttpError;
+        failure.message=L"SL login HTTP response did not include a status code";
+        return failure;
     }
     failure.http_status=code;
-    if(code!=200){failure.status=LoginStatus::HttpError;return failure;}
+    if(code!=200){
+        failure.status=LoginStatus::HttpError;
+        failure.message=login_http_diagnostic(code);
+        return failure;
+    }
     std::string body;
     while(body.size()<=8U*1024U*1024U){
         char chunk[8192]{};
@@ -378,6 +402,8 @@ LoginResult login_to_simulator(const LoginRequest& request,
     }
     auto reply=parse_login_xmlrpc(body);
     reply.http_status=code;
+    if(reply.status==LoginStatus::MalformedReply)
+        reply.message=L"SL LOGIN HTTP 200 / unsupported XML-RPC login response";
     return reply;
 }
 const wchar_t* login_status_label(LoginStatus state) noexcept {
