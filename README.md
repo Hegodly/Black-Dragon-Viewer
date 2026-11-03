@@ -5,6 +5,11 @@ KAMI is a new, independently authored Windows application. This project does not
 ## Current status
 Original native Windows shell, Direct2D/DirectWrite interface, user-selectable light/dark appearances, keyboard navigation, and separate protocol boundary. This is NOT YET a working Second Life viewer: authentication, world rendering, inventory, avatar and messaging are not implemented.
 
+## World rendering policy
+KAMI's 3D rendering backend is **DirectX 12 exclusively**. The new original `src/world/device.cpp` uses DXGI to select a hardware D3D12 device and creates a direct command queue. An optional DX12 WARP path is provided for diagnostics where hardware DX12 is unavailable. This is only a foundation: it does not yet create a swap chain, draw geometry, or render a Second Life scene. No OpenGL or D3D11 world renderer is included.
+
+The existing **Direct2D/DirectWrite** rendering is strictly for the two-dimensional Windows app interface and does not replace the required DirectX 12 world renderer.
+
 ## Build
 Requires Windows, Visual Studio 2022 Desktop development with C++, Windows SDK, and CMake.
 Run these commands in the project root:
