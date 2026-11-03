@@ -421,7 +421,7 @@ std::wstring login_http_diagnostic(unsigned code) {
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"Bad Request (cause unconfirmed; check protocol)";
+    case 400:return prefix+L"Request declined (KAMI DIAG R2)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
@@ -473,6 +473,7 @@ LoginResult login_to_simulator(const LoginRequest& request,
         failure.status=LoginStatus::NetworkError;return failure;
     }
     constexpr wchar_t headers[]=L"Content-Type: text/xml; charset=UTF-8\r\n"
+                                 L"Accept: text/xml\r\n"
                                  L"Cache-Control: no-store\r\n";
     if(!WinHttpSendRequest(web.handle,headers,static_cast<DWORD>(-1),
            payload.data.data(),static_cast<DWORD>(payload.data.size()),
