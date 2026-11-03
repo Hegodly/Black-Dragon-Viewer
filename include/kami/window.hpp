@@ -7,6 +7,8 @@
 #include <wrl/client.h>
 #include <string_view>
 #include <chrono>
+#include <future>
+#include <string>
 #include "kami/graphics/settings.hpp"
 #include "kami/graphics/adaptive.hpp"
 #include "kami/features/telemetry.hpp"
@@ -17,6 +19,8 @@
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
 #include "kami/protocol/transport.hpp"
+#include "kami/protocol/login.hpp"
+#include "kami/protocol/simulator_transport.hpp"
 #include "kami/world/renderer.hpp"
 #include "kami/world/warmup.hpp"
 
@@ -51,6 +55,8 @@ private:
     void messenger_demo_reply();
     void messenger_select(messenger::Channel channel);
     void check_sl_tls_connection();
+    void begin_sl_login();
+    void update_sl_connection();
 
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
@@ -92,6 +98,11 @@ private:
     unsigned page_ = 0;
     protocol::Session session_;
     protocol::ProbeResult sl_tls_probe_{};
+    protocol::LoginStatus sl_login_status_=protocol::LoginStatus::NotAttempted;
+    std::wstring sl_login_message_=L"SL login not attempted";
+    bool sl_login_pending_=false;
+    std::future<protocol::LoginResult> sl_login_future_;
+    protocol::sim::Circuit sl_circuit_;
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
     Microsoft::WRL::ComPtr<IDWriteFactory> text_factory_;
