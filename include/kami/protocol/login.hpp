@@ -38,6 +38,8 @@ struct LoginResult {
     bool read_ok,std::string_view sample,unsigned read_error);
 [[nodiscard]] std::wstring_view classify_login_http_content_type(
     std::wstring_view media_type) noexcept;
+[[nodiscard]] std::wstring login_transport_diagnostic(
+    std::wstring_view stage,unsigned winhttp_error);
 // No password, seed capability, or account identifier is written to logs.
 [[nodiscard]] bool parse_account_name(std::wstring_view input,
                                       std::string& first,
