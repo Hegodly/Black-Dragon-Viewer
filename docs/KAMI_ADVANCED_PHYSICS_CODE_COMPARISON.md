@@ -14,14 +14,14 @@ LGPL copyright notices and **must not** be pasted into proprietary KAMI.
 
 | Capability | Official Second Life / Firestorm | Original KAMI branch |
 |---|---|---|
-| Physics channels | Breast cleavage/in-out, up/down, left/right; butt up/down and left/right; belly up/down | **Six** original spring channels with independent state and bounded offsets |
+| Physics channels | Breast cleavage/in-out, up/down, left/right; butt up/down and left/right; belly up/down | **Eight** original spring channels: six comparable directions plus KAMI chest twist and independent butt opening/closing |
 | Motion driver | Derives motion from joint world position, projects along body-relative directions, evaluates velocity and smoothed acceleration | Local locomotion phase, speed changes, heading changes, jump velocity, and landing events; world-joint motion adaptation still needed |
 | Wearable input | Resolves named in-world avatar visual parameters through established viewer avatar/wearable stack | Validates named parameters passed by a hypothetical decoder; **no real SL wearable asset decoding or normalization yet** |
 | Output | Drives temporary avatar visual parameters and updates avatar visuals | Builds independent per-bone translations for test LEFT_PEC, RIGHT_PEC, BELLY and BUTT joints |
 | Actual rigging | Real avatar appearance, joints, meshes, and fitted mesh workflows | Eight-joint **procedural test rig only**; four influence GPU linear blend skinning, neutral bind pose and per-joint hierarchy |
 | Rendering | Current viewer rendering stack | DX12-only dynamic structured GPU palette, shadow and lit pass shared skin deformation |
 | Safety | Has global physics enabled setting, delta guards and iteration limiting | Input finite checks, bounded influence indices and physics effects, fixed 8 ms simulation steps, malformed mesh rejection |
-| Performance | Updates motion state each active frame and updates visuals when changed; Firestorm includes a small optimized iteration change | Local-avatar frame updates, CPU-to-GPU transfer of 8 bone matrices; **distance-based remote-avatar LOD budget policy only, not live remote scheduling** |
+| Performance | Updates motion state each active frame and updates visuals when changed; Firestorm includes a small optimized iteration change | Local-avatar frame updates, CPU-to-GPU transfer of 10 bone matrices; **distance-based remote-avatar LOD budget policy only, not live remote scheduling** |
 | Compatibility reporting | Render result depends on avatar and mesh physics weights | Explicit Unrigged / Partial / PhysicsReady / Invalid weight audit for visible test geometry |
 | Server integration | Authenticated SL grid, inventory, avatar and animation pipeline | **Not yet integrated** |
 
@@ -61,3 +61,30 @@ LGPL copyright notices and **must not** be pasted into proprietary KAMI.
 
 **Do not claim this branch surpasses other viewers** without cross-viewer
 benchmarking, avatar body tests, and a reliable online session.
+
+## KAMI-exclusive two-side open/close and chest rotation
+
+Two additional client-only axes have been added for the **offline** test rig:
+
+- **ChestTwist**: spring-controlled opposing roll at LEFT_PEC / RIGHT_PEC.
+  The simulation stores radians, while the UI reports approximate degrees.
+- **ButtOpenClose**: an independent oscillating spring, driven by locomotion,
+  which moves KAMI_LEFT_BUTT and KAMI_RIGHT_BUTT in opposite directions.
+  Positive opens the two surfaces; negative closes them. The local preview
+  has a -0.029-meter-per-side closing stop with light rebound to prevent
+  its .19-meter half-width procedural lobes intersecting.
+- Added additional named **KAMI_** parameters for customization. These are
+  *not* standard SL physics wearable asset fields.
+- Weight coverage is reported separately from standard BUTT support:
+  missing KAMI-specific cheek bones must not be treated as broken SL meshes.
+
+This is a test of original client-side rendering **on the procedural KAMI mesh**.
+Real Second Life fitted mesh usually exposes a shared BUTT physics joint,
+not separate KAMI_LEFT_BUTT and KAMI_RIGHT_BUTT joints. Therefore the extra
+open/close effect **will not automatically deform ordinary SL mesh bodies**.
+It requires a future optional retargeting/deformation method, consent-aware
+avatar settings, compatible geometry and rigorous tests to prevent clipping.
+The preview currently responds to locomotion; dance animation inputs will
+require actual SL animation decoding after login and asset systems exist.
+
+No performance or quality superiority over other viewers is claimed.
