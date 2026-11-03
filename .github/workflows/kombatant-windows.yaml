@@ -413,6 +413,8 @@ jobs:
         run: python kami/theme/finalize-native-identity.py
       - name: Verify KAMI rebrand retains credits and action callbacks
         run: python kami/theme/test-native-identity.py
+      - name: Audit all KAMI windows for real UI rebuild sign-off
+        run: python kami/theme/audit-full-ui.py
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
@@ -489,6 +491,14 @@ jobs:
           name: KAMI-Windows-Hotfix
           path: kami-hotfix/KAMI-Windows-Hotfix.zip
           if-no-files-found: error
+          retention-days: 7
+      - name: Preserve KAMI UI completion coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAMI-UI-Completion-Audit
+          path: kami-ui-qa/
+          if-no-files-found: warn
           retention-days: 7
       - name: Preserve compiled build output
         if: success()
