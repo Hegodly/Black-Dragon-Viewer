@@ -606,6 +606,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       box(panel+19,470,290,25),small_font_.Get(),p.text);
                 label(L"Source polygons: "+std::to_wstring(creator_preview_.source_polygons),
                       box(panel+19,498,290,25),small_font_.Get(),p.text);
+                if(creator_preview_.skipped_degenerate_triangles>0) {
+                    label(L"Skipped zero-area triangles: "+
+                          std::to_wstring(creator_preview_.skipped_degenerate_triangles),
+                          box(panel+19,521,290,21),small_font_.Get(),p.muted);
+                }
                 if(height>=720.f) {
                     // Clearly labelled offline estimate, not an SL fee quote.
                     const auto estimate=viewer::estimate_scene_cost(
@@ -1305,13 +1310,19 @@ void Window::open_creator_obj() {
         return;
     }
     if(!world_renderer_.set_creator_preview(imported.scene)) {
-        creator_message_=L"DX12 could not allocate preview geometry.";
+        creator_message_=world_renderer_.error().empty()?
+            L"KAMI OBJ preview rejected this geometry":
+            world_renderer_.error();
         InvalidateRect(hwnd_,nullptr,FALSE);
         return;
     }
     creator_preview_=std::move(imported);
     creator_file_=path;
-    creator_message_=L"OBJ loaded into KAMI DX12 preview.";
+    creator_message_=imported.skipped_degenerate_triangles==0?
+        L"OBJ loaded into KAMI DX12 preview.":
+        L"OBJ preview loaded; skipped "+
+            std::to_wstring(imported.skipped_degenerate_triangles)+
+            L" zero-area triangles.";
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 void Window::save_photo_png() {
