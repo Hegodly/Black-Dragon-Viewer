@@ -83,8 +83,8 @@ assert "src/world/region_geometry.cpp" in cmake
 assert "region_mesh_?*region_mesh_:generated" in renderer
 assert "device_.initialize(allow_software_dx12)" in renderer
 assert "bool allow_software_dx12=false" in (root/"include/kami/world/renderer.hpp").read_text(encoding="utf-8")
-assert "d3d11" not in re.sub(r'(?m)^\s*#.*
-assert "opengl" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
+assert "d3d11" not in re.sub(r'(?m)^\s*#.*$', "", cmake.lower())
+assert "opengl" not in re.sub(r'(?m)^\s*#.*$', "", cmake.lower())
 
 transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
 assert "WINHTTP_FLAG_SECURE" in transport
