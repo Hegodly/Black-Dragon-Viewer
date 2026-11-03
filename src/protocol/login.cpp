@@ -143,6 +143,35 @@ std::string actual_mac(){
     }
     return {};
 }
+// Newer official SL clients send a 32-character hashed unique identifier
+// as the XML-RPC "mac" value. Never transmit the physical MAC itself.
+std::string hashed_mac() {
+    SecureBytes raw;
+    raw.data=actual_mac();
+    if(raw.data.empty())return {};
+    BCRYPT_ALG_HANDLE algorithm=nullptr;
+    if(!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
+           &algorithm,BCRYPT_MD5_ALGORITHM,nullptr,0)))return {};
+    std::array<unsigned char,16> digest{};
+    const NTSTATUS result=BCryptHash(algorithm,nullptr,0,
+        reinterpret_cast<PUCHAR>(raw.data.data()),
+        static_cast<ULONG>(raw.data.size()),digest.data(),
+        static_cast<ULONG>(digest.size()));
+    BCryptCloseAlgorithmProvider(algorithm,0);
+    if(!BCRYPT_SUCCESS(result)) {
+        SecureZeroMemory(digest.data(),digest.size());
+        return {};
+    }
+    constexpr char digits[]="0123456789abcdef";
+    std::string fingerprint;
+    fingerprint.reserve(32);
+    for(const unsigned char b:digest){
+        fingerprint.push_back(digits[b>>4]);
+        fingerprint.push_back(digits[b&15U]);
+    }
+    SecureZeroMemory(digest.data(),digest.size());
+    return fingerprint;
+}
 std::wstring safe_message(std::wstring s) {
     if(s.size()>200)s.resize(200);
     for(wchar_t& c:s)if(c<32||c==127)c=L' ';
@@ -213,7 +242,10 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     if(!xml_safe_ascii(first)||!xml_safe_ascii(last)||
        hashed.size()!=35||!hashed.starts_with("$1$")||
        !xml_safe_ascii(hashed.substr(3))||
-       mac.size()!=17||!accepted)return {};
+       mac.size()!=32||
+       !std::all_of(mac.begin(),mac.end(),[](unsigned char c){
+           return std::isxdigit(c)!=0;
+       })||!accepted)return {};
     std::string doc="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<methodCall><methodName>login_to_simulator</methodName>"
         "<params><param><value><struct>";
@@ -357,8 +389,8 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(!digest_password(password,hash)){
         failure.status=LoginStatus::CryptoUnavailable;return failure;
     }
-    const auto mac=actual_mac();
-    if(mac.empty()){failure.status=LoginStatus::NetworkError;return failure;}
+    const auto mac=hashed_mac();
+    if(mac.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
     SecureBytes payload;
     payload.data=build_login_xmlrpc(first,last,hash.data,mac,request.terms_accepted);
     if(payload.data.empty())return failure;
