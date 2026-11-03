@@ -442,6 +442,7 @@ void Renderer::draw() {
         0.f : std::chrono::duration<float>(now-last_camera_frame_).count();
     last_camera_frame_=now;
     const float seconds=std::chrono::duration<float>(now-start_time_).count();
+    avatar_spring_.step(std::sin(seconds*2.f),dt);
     camera_.update(dt,seconds,sample_test_terrain_height,graphics_.animate_avatar);
     const auto camera=camera_.pose();
     const XMVECTOR eye=XMVectorSet(camera.eye.x,camera.eye.y,camera.eye.z,0.f);
@@ -511,7 +512,7 @@ void Renderer::draw() {
         commands_->SetPipelineState(shadow_pipeline_.Get());
         commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
-        constants[25]=graphics_.animate_avatar?1.f:0.f;
+        constants[25]=graphics_.animate_avatar?.055f*avatar_spring_.position():0.f;
         commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                                 static_cast<UINT>(terrain_count_),0);
@@ -547,7 +548,7 @@ void Renderer::draw() {
         1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
     commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
-    constants[25]=graphics_.animate_avatar?1.f:0.f;
+    constants[25]=graphics_.animate_avatar?.055f*avatar_spring_.position():0.f;
     commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
