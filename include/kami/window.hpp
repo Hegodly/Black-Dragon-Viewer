@@ -21,6 +21,7 @@
 #include "kami/protocol/transport.hpp"
 #include "kami/protocol/login.hpp"
 #include "kami/protocol/simulator_transport.hpp"
+#include "kami/protocol/caps.hpp"
 #include "kami/world/renderer.hpp"
 #include "kami/world/warmup.hpp"
 
@@ -105,6 +106,14 @@ private:
     bool sl_login_pending_=false;
     std::future<protocol::LoginResult> sl_login_future_;
     protocol::sim::Circuit sl_circuit_;
+    // Bearer CAPS URLs are retained only for the authenticated region
+    // connection. Never display signed URLs or event payloads.
+    std::wstring caps_seed_url_;
+    std::wstring caps_status_;
+    bool caps_seed_started_=false;
+    bool caps_poll_started_=false;
+    std::future<protocol::caps::SeedResponse> caps_seed_future_;
+    std::future<protocol::caps::PollResponse> caps_poll_future_;
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
     Microsoft::WRL::ComPtr<IDWriteFactory> text_factory_;

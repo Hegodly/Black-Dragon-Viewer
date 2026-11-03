@@ -302,3 +302,36 @@ proof of a malformed outgoing XML-RPC document. R5 does not claim a
 live login fix, force different TLS protocols, spoof the SL viewer
 identity, bypass authentication, or retry real credentials.
 All tests are local/CI using synthetic values.
+
+## R6 seed CAPS and initial EventQueueGet transport
+
+After a verified Second Life login and a simulator UDP movement confirmation,
+KAMI now initiates a **real HTTPS POST to the seed capability URL from
+the authenticated login reply**. It requests `EventQueueGet` with an
+LLSD XML array and validates the returned `EventQueueGet` bearer URL.
+It then performs **one initial EventQueueGet long-poll request** with
+`ack=<undef />` and `done=false`. An HTTP 200 response is accepted
+only if its LLSD envelope includes `id` and `events` of the expected
+types. Standard long-poll timeout/502/503/504 responses after at least
+10 seconds are treated as *idle*, not as a verified event reply.
+
+This is an important transport milestone, **not complete event handling**:
+R6 deliberately does not ACK or dispatch event payloads, poll endlessly,
+decode region object updates, render actual SL world meshes, or use the
+simulator capabilities for inventory/assets. The one-shot poll may consume
+an event batch that cannot yet be processed; subsequent R7 development
+must implement a bounded event dispatcher and acknowledgement loop
+before this can be considered a usable in-world session.
+
+Security boundaries: URLs come only from the authenticated handoff and
+the verified seed response; hosts must be in Linden Lab's trusted domains,
+HTTPS certificate checks stay on, HTTP redirects are disabled, responses
+are size limited and parsed using MSXML with external XML entities and
+DTDs prohibited. Never print capability URLs, raw event data, account
+details, passwords or session identifiers.
+
+The HOME panel will now show `CAPS: requesting region seed` followed
+by a seed or EventQueueGet diagnostic instead of a permanent hard-coded
+`CAPS/EVENT QUEUE PENDING` string. Offline tests exercise URL validation,
+LLSD seed structure and event envelope structure; live server success is
+**not** guaranteed.

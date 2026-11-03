@@ -196,3 +196,14 @@ It folds the WMI serial to six bytes as `LLMachineID` does and hashes
 that result before sending the pseudonymous identifier to Second Life.
 See the bundled LGPL license and `third_party/secondlife-lgpl/NOTICE.md`.
 This is not a claim of complete live viewer networking or login.
+
+## R6 region capability handshake (experimental)
+
+After successful authentication and simulator movement confirmation, KAMI
+requests `EventQueueGet` from the live region's signed seed capability,
+then probes the returned event queue exactly once. It validates LLSD XML
+and reports whether the capability was granted, idle, or returned a
+structural/HTTP error. This test does **not** implement sustained
+event polling, dispatch simulator events, enable inventory or load
+actual region assets. UI status names distinguish that limitation.
+The DX12 renderer remains independently implemented.
