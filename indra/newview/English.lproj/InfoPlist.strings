@@ -1,7 +1,0 @@
-/* Localized versions of Info.plist keys */
-
-CFBundleName = "Black Dragon";
-
-CFBundleShortVersionString = "Black Dragon %%VERSION%%";
-CFBundleGetInfoString = "Black Dragon %%VERSION%%, Copyright 2004 Linden Research, Inc.";
-

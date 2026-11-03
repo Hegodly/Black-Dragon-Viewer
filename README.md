@@ -1,17 +1,18 @@
-# KAMI Viewer — Beyond Reality
+# KAMI Beyond Reality — Original Core
 
-KAMI Viewer is an experimental Second Life viewer based on the open-source [Black Dragon Viewer](https://github.com/NiranV/Black-Dragon-Viewer). The project aims to balance cinematic visuals, controllable post-processing, native rendering performance, and optional GPU upscaling.
+KAMI is a new, independently authored Windows application. This project does not import Black Dragon, Firestorm or official Second Life viewer source, assets, skins, shaders, or build scripts.
 
-**Brand:** KAMI Viewer (神) · **Tagline:** Beyond Reality.
+## Current status
+Original native Windows shell, Direct2D/DirectWrite interface, user-selectable light/dark appearances, keyboard navigation, and separate protocol boundary. This is NOT YET a working Second Life viewer: authentication, world rendering, inventory, avatar and messaging are not implemented.
 
-The Windows build uses KAMI Viewer branding for the application, logo, login, startup screen, About dialog, installer icon, and portable executable name (`KAMIViewer.exe`). Existing internal code and file identifiers may retain their historical names for compatibility.
+## Build
+Requires Windows, Visual Studio 2022 Desktop development with C++, Windows SDK, and CMake.
+Run these commands in the project root:
+    cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+    cmake --build build --config Release
+    ctest --test-dir build -C Release --output-on-failure
+Then start build/Release/KAMIViewer.exe.
 
-## Project status
+F1-F6 changes screens; T toggles light/dark and saves the preference in the Windows user registry.
 
-This is a **development build**, not a tested public release. The Windows viewer must compile and pass in-world tests for texture loading, startup, frame pacing, optional upscalers, and GPU compatibility before distribution.
-
-## Original source and notices
-
-Based on the [Black Dragon Viewer](https://github.com/NiranV/Black-Dragon-Viewer) and the [Second Life Viewer open-source codebase](https://wiki.secondlife.com/wiki/Open_Source_Portal). Preserve all existing source licenses, copyright notices, and third-party credits. KAMI Viewer is not affiliated with or endorsed by Linden Lab.
-
-For source licensing, see [LICENSE](LICENSE), [doc/LGPL-license.txt](doc/LGPL-license.txt), and the other original files in [doc](doc).
+This clean source tree lives on a separate branch in the owner's existing GitHub repository. The old repository name and earlier branches remain until a new repository is created or the existing one renamed. No inherited viewer files are included in this branch's source tree. The user has not yet selected a license for their newly authored code.
