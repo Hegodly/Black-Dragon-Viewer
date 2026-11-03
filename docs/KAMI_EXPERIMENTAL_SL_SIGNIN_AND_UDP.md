@@ -98,6 +98,16 @@ experimental Login Test. This status confirms an HTTP error response, not
 successful account authentication; its exact cause cannot be proven from
 the HTTP status alone.
 
+The original build also sent a raw colon-delimited physical MAC string.
+The modern official login request uses a hashed unique machine string in
+the `mac` field; KAMI now hashes the adapter identifier into a 32-character
+hex value before sending it and does not transmit the physical MAC. A stable
+hash remains a pseudonymous identifier and is disclosed as such.
+
+Legacy accounts may log in with `first.last` or `First Last`, while newer
+single-word accounts use the `Resident` surname. KAMI now normalizes the
+legacy dotted form correctly, rather than incorrectly adding `Resident`.
+
 The original request lacked the `id0` field listed among required
 parameters in the documented Second Life XML-RPC login contract. The
 experimental request now sends the documented all-zero *anonymous*
