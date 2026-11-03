@@ -1,5 +1,6 @@
 #include "kami/world/renderer.hpp"
 #include "kami/world/scene.hpp"
+#include "kami/world/shaders.hpp"
 #include <DirectXMath.h>
 #include <d3dcompiler.h>
 #include <algorithm>
@@ -14,36 +15,7 @@ namespace {
 constexpr DXGI_FORMAT kColorFormat=DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kDepthFormat=DXGI_FORMAT_D32_FLOAT;
 
-constexpr char kShader[] = R"(
-cbuffer Frame : register(b0) {
-    row_major float4x4 viewProjection;
-    float4 sunDirection;
-};
-struct VertexIn {
-    float3 position : POSITION;
-    float3 normal : NORMAL;
-    float3 color : COLOR;
-};
-struct Interpolant {
-    float4 clip : SV_POSITION;
-    float3 normal : NORMAL;
-    float3 albedo : COLOR;
-};
-Interpolant vertex_main(VertexIn input) {
-    Interpolant output;
-    output.clip = mul(float4(input.position, 1.0), viewProjection);
-    output.normal = input.normal;
-    output.albedo = input.color;
-    return output;
-}
-float4 pixel_main(Interpolant input) : SV_TARGET {
-    float3 n = normalize(input.normal);
-    float diffuse = saturate(dot(n, normalize(-sunDirection.xyz)));
-    float3 lit = input.albedo * (0.24 + diffuse * 0.85);
-    float3 ambient = float3(0.025, 0.035, 0.06);
-    return float4(saturate(lit + ambient), 1.0);
-}
-)";
+
 
 D3D12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE type) {
     D3D12_HEAP_PROPERTIES h{};
@@ -152,10 +124,10 @@ bool Renderer::make_pipeline() {
 
     Microsoft::WRL::ComPtr<ID3DBlob> vs,ps;
     constexpr UINT flags=D3DCOMPILE_ENABLE_STRICTNESS;
-    if(FAILED(D3DCompile(kShader,sizeof(kShader)-1,nullptr,nullptr,nullptr,
+    if(FAILED(D3DCompile(kSceneShader,sizeof(kSceneShader)-1,nullptr,nullptr,nullptr,
             "vertex_main","vs_5_0",flags,0,
             vs.GetAddressOf(),errors.ReleaseAndGetAddressOf()))) return false;
-    if(FAILED(D3DCompile(kShader,sizeof(kShader)-1,nullptr,nullptr,nullptr,
+    if(FAILED(D3DCompile(kSceneShader,sizeof(kSceneShader)-1,nullptr,nullptr,nullptr,
             "pixel_main","ps_5_0",flags,0,
             ps.GetAddressOf(),errors.ReleaseAndGetAddressOf()))) return false;
 

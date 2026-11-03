@@ -28,3 +28,7 @@ add_test(NAME KamiOriginalDX12DeviceContract COMMAND kami_dx12_tests)
 add_executable(kami_scene_tests tests/scene_tests.cpp)
 target_link_libraries(kami_scene_tests PRIVATE kami_core)
 add_test(NAME KamiProceduralSceneGeometry COMMAND kami_scene_tests)
+
+add_executable(kami_shader_tests tests/shader_tests.cpp)
+target_link_libraries(kami_shader_tests PRIVATE kami_core)
+add_test(NAME KamiOriginalHLSLShaderCompilation COMMAND kami_shader_tests)
