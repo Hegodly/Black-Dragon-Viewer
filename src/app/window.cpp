@@ -246,6 +246,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
                 const int copied=GetWindowTextW(messenger_edit_,value.data(),count+1);
                 value.resize(static_cast<std::size_t>(std::max(0,copied)));
                 (void)messenger_.set_draft(std::move(value));
+                InvalidateRect(hwnd_,nullptr,FALSE);
             }
             return 0;
         }
@@ -690,13 +691,14 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   messenger_centered_small_.Get(),selected?p.accent:p.muted);
         }
         if(messenger_.can_send()) {
-            round_rect(box(railX+14,474,192,38),13.f,p.accent_soft);
-            label(L"ADD DEMO REPLY",box(railX+23,478,174,29),
+            const float replyTop=std::min(474.f,height-196.f);
+            round_rect(box(railX+14,replyTop,192,38),13.f,p.accent_soft);
+            label(L"ADD DEMO REPLY",box(railX+23,replyTop+4,174,29),
                   messenger_centered_small_.Get(),p.accent);
         }
-        label(L"CONNECTION: OFFLINE",box(railX+20,height-139,181,25),
+        label(L"CONNECTION: OFFLINE",box(railX+20,height-153,181,25),
               messenger_centered_small_.Get(),p.muted);
-        label(L"No resident data",box(railX+20,height-116,181,21),
+        label(L"No resident data",box(railX+20,height-131,181,21),
               messenger_centered_small_.Get(),p.muted);
 
         label(messenger::channel_title(messenger_.active()),
@@ -744,10 +746,12 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             }
             round_rect(box(panelX+11,height-164.f,panelW-23.f,58.f),
                        19.f,p.surface);
+            const bool hasText=messenger_.draft().find_first_not_of(L" \t")!=
+                               std::wstring::npos;
             round_rect(box(panelX+panelW-115.f,height-158.f,103.f,46.f),
-                       15.f,p.accent_soft);
+                       15.f,hasText?p.accent_soft:p.elevated);
             label(L"PREVIEW",box(panelX+panelW-109.f,height-152.f,91.f,34.f),
-                  messenger_centered_small_.Get(),p.accent);
+                  messenger_centered_small_.Get(),hasText?p.accent:p.muted);
             label(L"Text stays local  /  No deliveries or read receipts",
                   box(panelX+16,height-96.f,panelW-31.f,25.f),
                   messenger_centered_small_.Get(),p.muted);
@@ -1243,7 +1247,9 @@ void Window::click(float x, float y) {
                     return;
                 }
             }
-            if(messenger_.can_send()&&y>=474.f&&y<512.f){
+            const float replyTop=std::min(474.f,
+                static_cast<float>(client.bottom)-196.f);
+            if(messenger_.can_send()&&y>=replyTop&&y<replyTop+38.f){
                 messenger_demo_reply();return;
             }
         }
