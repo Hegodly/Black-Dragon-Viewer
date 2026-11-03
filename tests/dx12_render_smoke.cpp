@@ -49,7 +49,7 @@ int main() {
     int result=0;
     {
         kami::world::Renderer renderer;
-        if(!renderer.initialize(window,640,480)) {
+        if(!renderer.initialize(window,640,480,true)) {
             print_failure(L"initialize",renderer);
             // No hardware/display in an automated server VM can prevent
             // an HWND swap chain. Report SKIPPED, not a false GPU pass.
