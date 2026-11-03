@@ -41,6 +41,7 @@ public:
     void shutdown() noexcept;
 
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    [[nodiscard]] ID3D12Device* native_device() const noexcept {return device_.native_device();}
     [[nodiscard]] const std::wstring& adapter_name() const noexcept {
         return device_.adapter_name();
     }
