@@ -186,7 +186,7 @@ std::wstring Circuit::diagnostic() const {
     case CircuitState::RegionHandshakeReceived:
         return L"REGION HANDSHAKE RECEIVED; AGENT MOVEMENT PENDING";
     case CircuitState::MovementConfirmed:
-        return L"SIMULATOR MOVEMENT CONFIRMED; CAPS/EVENT QUEUE PENDING";
+        return L"SIMULATOR MOVEMENT CONFIRMED; CAPS NEGOTIATION STARTING";
     case CircuitState::Failed:return L"SIMULATOR UDP ERROR";
     }
     return L"UNKNOWN SIMULATOR STATE";
