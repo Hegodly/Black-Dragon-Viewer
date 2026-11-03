@@ -6,9 +6,13 @@
 int main() {
     const auto mesh=kami::world::build_test_scene();
     if(mesh.terrain_count!=32U*32U*6U) return 1;
-    if(mesh.avatar_count!=6U*36U) return 2;
+    if(mesh.avatar_count!=6U*36U+5U*6U*10U*6U) return 2;
     if(mesh.vertices.size()!=mesh.terrain_count+mesh.avatar_count) return 3;
+    unsigned regions[4]{};
     for(const auto& v:mesh.vertices) {
+        if(v.body_region<0.f||v.body_region>3.f||!std::isfinite(v.body_region))
+            return 13;
+        ++regions[static_cast<unsigned>(v.body_region)];
         if(!std::isfinite(v.px)||!std::isfinite(v.py)||!std::isfinite(v.pz)) return 4;
         if(!std::isfinite(v.nx)||!std::isfinite(v.ny)||!std::isfinite(v.nz)) return 5;
         if(!std::isfinite(v.r)||!std::isfinite(v.g)||!std::isfinite(v.b)) return 6;
@@ -19,6 +23,8 @@ int main() {
         if(v.metallic<0.f||v.metallic>1.f||v.roughness<.06f||v.roughness>1.f) return 11;
         if(!std::isfinite(v.u)||!std::isfinite(v.v)) return 12;
     }
+    if(regions[0]==0||regions[1]==0||regions[2]==0||regions[3]==0)
+        return 14;
     const auto first=mesh.vertices.front();
     if(first.px<-15.f||first.px>15.f||first.pz<-15.f||first.pz>15.f) return 9;
     return 0;
