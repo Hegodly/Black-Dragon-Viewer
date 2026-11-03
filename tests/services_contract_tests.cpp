@@ -45,7 +45,15 @@ int main() {
        data.inventory().size()!=1)return 10;
     if(data.apply_inventory({{object,"",mesh,L"",1U}},true)||
        data.inventory().size()!=1)return 11;
+    if(data.apply_avatar({agent,mesh,object,{mesh},{{object,mesh,true}}},false))
+        return 14;
+    if(!data.apply_avatar({agent,mesh,object,{mesh},{{object,mesh,true}}},true)||
+       !data.avatar()||data.avatar()->attachments.size()!=1)return 15;
+    if(data.apply_avatar({agent,mesh,object,{mesh,mesh},{}},true) ||
+       data.avatar()->texture_asset_ids.size()!=1)return 16;
     link.reset();
+    if(data.avatar()||!data.objects().empty()||!data.inventory().empty())
+        return 17;
     if(services.mark_sent(teleport)||services.pending_count()!=0||
        services.accept_server_result(teleport,true,true)||
        services.prepare(Service::Building,object,L"edit")!=0)return 12;
