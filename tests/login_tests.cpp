@@ -34,16 +34,19 @@ int main(){
        classify_login_http_body("")!=L"empty response")return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
-                                              "abcdef0123456789abcdef0123456789",true);
+                                              "abcdef0123456789abcdef0123456789",
+                                              "f6532621685700b88aecbf202dc8f9d2",true);
     if(valid.empty()||valid.find("<methodName>login_to_simulator</methodName>")==
        std::string::npos||
        valid.find("<name>passwd</name>")==std::string::npos||
        valid.find("KAMI Beyond Reality Dev")==std::string::npos||
-       !build_login_xmlrpc("First","Last",hashed,"abcdef0123456789abcdef0123456789",false).empty())
+       !build_login_xmlrpc("First","Last",hashed,"abcdef0123456789abcdef0123456789",
+                          "f6532621685700b88aecbf202dc8f9d2",false).empty())
        return 3;
     // Confirm required field, valid XML-RPC boolean and no impersonation of
     // an official viewer. Legacy KAMI missed id0 on every login request.
-    if(valid.find("<name>id0</name>") == std::string::npos||
+    if(valid.find("<name>id0</name><value><string>f6532621685700b88aecbf202dc8f9d2</string>")==
+           std::string::npos||
        valid.find("00000000-0000-0000-0000-000000000000")==std::string::npos||
        valid.find("<name>extended_errors</name><value><boolean>1</boolean>")==
            std::string::npos||
@@ -61,9 +64,13 @@ int main(){
     // a raw physical MAC address, and rejects old/invalid MAC inputs.
     if(valid.find("AB:CD:EF:12:34:56")!=std::string::npos||
        !build_login_xmlrpc("First","Last",hashed,
-          "AB:CD:EF:12:34:56",true).empty()||
+          "AB:CD:EF:12:34:56","f6532621685700b88aecbf202dc8f9d2",true).empty()||
        !build_login_xmlrpc("First","Last",hashed,
-          "not-a-hashed-identifier-12345678",true).empty())
+          "not-a-hashed-identifier-12345678",
+          "f6532621685700b88aecbf202dc8f9d2",true).empty()||
+       !build_login_xmlrpc("First","Last",hashed,
+          "abcdef0123456789abcdef0123456789",
+          "00000000-0000-0000-0000-000000000000",true).empty())
        return 14;
     const auto accepted=wrap(
         m("login","true")+m("agent_id","12345678-90ab-4cde-8fab-000000000001")+

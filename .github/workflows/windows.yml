@@ -5,6 +5,7 @@ on:
       - feature/kami-original-core
       - fix/kami-sl-login-http400-protocol-fields
       - fix/kami-login-xmlrpc-types-timeouts-response-20261103
+      - fix/kami-official-login-identifier-bridge-20261103
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -44,6 +45,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
           Copy-Item build/Release/KAMIViewer.exe dist/KAMI
+          Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
+          Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
+          Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
           Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Original-Core-Test.zip

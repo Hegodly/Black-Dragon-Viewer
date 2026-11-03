@@ -66,6 +66,10 @@ login=(root/"src/protocol/login.cpp").read_text(encoding="utf-8")
 assert "login_to_simulator" in login
 assert "WINHTTP_FLAG_SECURE" in login
 assert "ProhibitDTD" in login
+assert "kami_sl_host_volume_id(" in login
+assert "src/sl_reference/official_login_identity.cpp" in cmake
+assert "kami_sl_login_identity" in cmake
+assert (root/"third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt").is_file()
 assert "login_http_diagnostic(code)" in login
 assert "failure.message=login_http_diagnostic(code)" in login
 assert "KAMI Beyond Reality Dev" in login
@@ -110,4 +114,4 @@ assert "WinHttpSendRequest" in transport
 assert "winhttp" in cmake
 assert "probe_login_tls" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
 assert "ggx_distribution" in shader
-print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")
+print("PASS: KAMI DX12 core remains separate; official SL login identity adaptation isolated in LGPL DLL")
