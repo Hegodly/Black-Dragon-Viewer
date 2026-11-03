@@ -28,6 +28,7 @@ public:
 private:
     static LRESULT CALLBACK dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     static LRESULT CALLBACK viewport_dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+    static LRESULT CALLBACK messenger_edit_dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     LRESULT handle(UINT message, WPARAM wp, LPARAM lp);
     LRESULT viewport_handle(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     [[nodiscard]] bool create_resources();
@@ -55,6 +56,7 @@ private:
     HWND hwnd_ = nullptr;
     HWND viewport_ = nullptr;
     HWND messenger_edit_ = nullptr;
+    WNDPROC messenger_edit_original_ = nullptr;
     HBRUSH messenger_edit_brush_ = nullptr;
     bool messenger_edit_sync_ = false;
     bool world_initialized_ = false;
