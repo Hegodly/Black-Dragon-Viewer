@@ -2,6 +2,9 @@
 #include "kami/protocol/simulator_wire.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
+#include <climits>
+#include <utility>
+#include <windows.h>
 #include <array>
 #include <string>
 #include <vector>
