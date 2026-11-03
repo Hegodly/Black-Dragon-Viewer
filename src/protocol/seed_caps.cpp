@@ -7,6 +7,7 @@
 #include <string>
 #include <array>
 #include <algorithm>
+#include <set>
 
 namespace kami::protocol::caps {
 namespace {
@@ -112,11 +113,13 @@ SeedResult parse_seed_reply(std::string_view xml){
     if(FAILED(map->selectNodes(keypath.b,&items))||!items)return result;
     long count=0;
     if(FAILED(items->get_length(&count))||count<1||count>256)return result;
+    std::set<std::wstring> seen_names;
     for(long i=0;i<count;++i){
         ComPtr<IXMLDOMNode> key;
         if(FAILED(items->get_item(i,&key))||!key)return result;
         auto name=content(key.Get());
-        if(name.empty()||name.size()>90)return result;
+        if(name.empty()||name.size()>90||!seen_names.insert(name).second)
+            return result;
         auto value=select(key.Get(),L"following-sibling::*[1]");
         if(!value)return result;
         BSTR type=nullptr;
@@ -126,7 +129,10 @@ SeedResult parse_seed_reply(std::string_view xml){
         if(!is_string)continue;
         const auto url=content(value.Get());
         if(url.size()>2048)return result;
-        if(name==L"EventQueueGet"&&valid_capability_url(url))
+        std::wstring parsed_host,parsed_path;
+        INTERNET_PORT parsed_port=0;
+        if(name==L"EventQueueGet"&&
+           crack(url,parsed_host,parsed_port,parsed_path))
             result.event_queue_url=url;
         if(valid_capability_url(url))
             ++result.granted_names;
