@@ -14,6 +14,9 @@ struct Audit {
     std::size_t weighted_vertices=0;
     std::size_t corrupt_vertices=0;
     bool left_pec=false,right_pec=false,belly=false,butt=false;
+    // KAMI's *local* two-cheek mesh helper coverage. Not an SL standard joint
+    // requirement; missing helpers must not invalidate standard SL fitted rig.
+    bool left_butt=false,right_butt=false,butt_open_close_ready=false;
 };
 [[nodiscard]] Audit inspect(std::span<const world::Vertex> vertices) noexcept;
 [[nodiscard]] const wchar_t* compatibility_label(Compatibility status) noexcept;
