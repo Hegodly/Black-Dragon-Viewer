@@ -210,7 +210,7 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     put_string(doc,"passwd",hashed);
     put_string(doc,"start","last");
     // This viewer ID is unique to this original KAMI build, never the
-    // Linden Lab or Firestorm channel.
+    // the official channel or any other viewer's channel.
     put_string(doc,"channel","KAMI Beyond Reality Dev");
     put_string(doc,"version","0.1.0.53");
     put_string(doc,"platform","Win");
