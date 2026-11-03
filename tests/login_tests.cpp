@@ -41,7 +41,10 @@ int main(){
        valid.find("<name>extended_errors</name><value><boolean>1</boolean>")==
            std::string::npos||
        valid.find("<name>options</name><value><array>")==std::string::npos||
-       valid.find("<name>viewer_digest</name>")!=std::string::npos)
+       valid.find("<name>viewer_digest</name>")!=std::string::npos||
+       valid.find("<name>agree_to_tos</name><value><boolean>0</boolean>")==std::string::npos||
+       valid.find("<name>read_critical</name><value><boolean>0</boolean>")==std::string::npos||
+       valid.find("<name>agree_to_tos</name><value><string>")!=std::string::npos)
        return 12;
     // Current protocol submits a 32-hex pseudonymous machine marker, not
     // a raw physical MAC address, and rejects old/invalid MAC inputs.
@@ -65,6 +68,16 @@ int main(){
     if(!ok.accepted()||ok.circuit_code!=190345234U||
        ok.handoff.simulator_port!=13000||
        ok.handoff.agent_id!="12345678-90ab-4cde-8fab-000000000001")return 4;
+    // HTTP accepts up to 8 MiB, including large optional inventory data.
+    const auto large_inventory=wrap(
+        m("login","true")+m("agent_id","12345678-90ab-4cde-8fab-000000000001")+
+        m("session_id","12345678-90ab-4cde-8fab-000000000002")+
+        m("sim_ip","sim1234.agni.lindenlab.com")+m("sim_port","13000","int")+
+        m("circuit_code","190345234","int")+
+        m("seed_capability","https://sim1234.agni.lindenlab.com:12345/cap/abc")+
+        "<member><name>inventory-skeleton</name><value><array><data><value><string>"+
+        std::string(1100000,'A')+"</string></value></data></array></value></member>");
+    if(!parse_login_xmlrpc(large_inventory).accepted())return 15;
     const auto mfa=parse_login_xmlrpc(wrap(
         m("login","false")+m("reason","mfa_challenge")+
         m("message","Enter a second factor")));
