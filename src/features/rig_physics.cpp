@@ -45,7 +45,16 @@ constexpr auto kNames=std::to_array<Binding>({
     {"Belly_Physics_UpDown_Damping",5,3,false},
     {"Belly_Physics_Mass",5,4,false},
     {"Belly_Physics_Gravity",5,5,false},
-    {"Belly_Physics_Drag",5,6,false}
+    {"Belly_Physics_Drag",5,6,false},
+    // KAMI-exclusive preview controls. Not standard Second Life wearables.
+    {"KAMI_Chest_Twist_Max_Effect",6,0,false},
+    {"KAMI_Chest_Twist_Spring",6,1,false},
+    {"KAMI_Chest_Twist_Gain",6,2,false},
+    {"KAMI_Chest_Twist_Damping",6,3,false},
+    {"KAMI_Butt_OpenClose_Max_Effect",7,0,false},
+    {"KAMI_Butt_OpenClose_Spring",7,1,false},
+    {"KAMI_Butt_OpenClose_Gain",7,2,false},
+    {"KAMI_Butt_OpenClose_Damping",7,3,false}
 });
 float finite_clamp(float value,float low,float high,float fallback) noexcept {
     return std::isfinite(value)?std::clamp(value,low,high):fallback;
@@ -77,6 +86,14 @@ Wearable sanitize(Wearable result) noexcept {
         a.gravity=finite_clamp(a.gravity,-1.f,1.f,0.f);
         a.drag=finite_clamp(a.drag,0.f,1.f,0.f);
     }
+    // Angles are radians. Cheek separation is meters per-side. Limits
+    // avoid implausible twisting or skin intersections in the local test.
+    result.settings[static_cast<std::size_t>(Axis::ChestTwist)].max_effect_m=
+        std::min(result.settings[static_cast<std::size_t>(Axis::ChestTwist)].max_effect_m,
+                 .20f);
+    result.settings[static_cast<std::size_t>(Axis::ButtOpenClose)].max_effect_m=
+        std::min(result.settings[static_cast<std::size_t>(Axis::ButtOpenClose)].max_effect_m,
+                 .09f);
     return result;
 }
 Wearable from_profile(avatar::BodyProfile profile) noexcept {
@@ -204,8 +221,9 @@ void Solver::step(avatar::State motion,float delta) noexcept {
         std::sin(phase*1.65f)*walk*.4f+jump*.25f+landed*.75f,
         // Rotational chest sway reacts to direction changes and gait.
         std::cos(phase*1.53f)*walk*.55f+turning*.70f+accel*.14f,
-        // Opposing butt cheek opening / closing, driven by motion and landings.
-        std::sin(phase*1.88f+.40f)*walk*.65f+accel*.36f+landed*.26f
+        // In-out cheek motion: negative drives closure/contact, positive
+        // opens and separates. The spring carries momentum through reversal.
+        std::sin(phase*1.88f+.40f)*walk*.85f+accel*.30f+landed*.28f
     }};
     float remaining=dt;
     while(remaining>0.000001f) {
@@ -226,6 +244,17 @@ void Solver::step(avatar::State motion,float delta) noexcept {
             }
             if(value< -a.max_effect_m) {
                 value=-a.max_effect_m;speed_y=std::max(0.f,speed_y);
+            }
+            if(i==static_cast<std::size_t>(Axis::ButtOpenClose)) {
+                // Procedural cheek centerlines start 0.44m apart with .19m
+                // half-widths. No interpenetration: closure <= .03m / side.
+                // Add light rebound on contact, rather than two rigid
+                // surfaces tunnelling through each other during a fast clap.
+                constexpr float kContactLimit=-.029f;
+                if(value<kContactLimit) {
+                    value=kContactLimit;
+                    if(speed_y<0.f)speed_y=-speed_y*.20f;
+                }
             }
         }
     }
