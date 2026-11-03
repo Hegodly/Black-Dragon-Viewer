@@ -795,7 +795,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(L"KAMI AVATAR  /  MOTION + BODY PHYSICS",
               box(contentX+28,106,contentWidth-55,42),
               title_font_.Get(),p.text);
-        label(L"Original DX12 mannequin + terrain physics. Live SL avatar not loaded.",
+        label(L"DX12 weighted fitted-mesh preview. Live SL wearables are not connected.",
               box(contentX+28,152,contentWidth-55,28),
               small_font_.Get(),p.accent);
         const float panelX=width-352.f;
@@ -827,18 +827,26 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(values[i],box(panelX+24,y+27,271.f,27.f),
                   messenger_centered_font_.Get(),p.text);
         }
-        const auto offsets=world_renderer_.body_physics_offsets();
+        const auto offsets=world_renderer_.detailed_body_physics_offsets();
         const auto millimeters=[](float value) {
             return std::to_wstring(static_cast<int>(std::lround(value*1000.f)));
         };
-        round_rect(box(panelX+16,height-238.f,291.f,45.f),12.f,p.elevated);
-        label(L"VISIBLE TEST DEFORMATION (MM)",
-              box(panelX+21,height-233.f,280.f,18.f),
+        round_rect(box(panelX+16,height-269.f,291.f,76.f),12.f,p.elevated);
+        label(L"SIX-AXIS RIG PHYSICS (MM)",
+              box(panelX+21,height-263.f,280.f,19.f),
               messenger_centered_small_.Get(),p.muted);
-        label(L"CHEST "+millimeters(offsets.breast_y)+
-              L"  BELLY "+millimeters(offsets.belly_y)+
-              L"  BUTT "+millimeters(offsets.butt_y),
-              box(panelX+21,height-214.f,280.f,22.f),
+        label(L"CHEST  UP "+millimeters(offsets.at(rigphysics::Axis::ChestVertical))+
+              L"   SIDE "+millimeters(offsets.at(rigphysics::Axis::ChestLateral)),
+              box(panelX+21,height-242.f,280.f,21.f),
+              messenger_centered_small_.Get(),p.accent);
+        label(L"DEPTH "+millimeters(offsets.at(rigphysics::Axis::ChestDepth))+
+              L"  BUTT "+millimeters(offsets.at(rigphysics::Axis::ButtVertical))+
+              L"  SIDE "+millimeters(offsets.at(rigphysics::Axis::ButtLateral)),
+              box(panelX+21,height-224.f,280.f,21.f),
+              messenger_centered_small_.Get(),p.accent);
+        label(L"BELLY "+millimeters(offsets.at(rigphysics::Axis::BellyVertical))+
+              L"   /   WEIGHTED DX12 BONES",
+              box(panelX+21,height-205.f,280.f,18.f),
               messenger_centered_small_.Get(),p.accent);
         round_rect(box(panelX+16,height-186.f,291.f,34.f),12.f,p.accent_soft);
         label(L"BODY PHYSICS [B]: "+
