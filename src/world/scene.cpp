@@ -74,3 +74,4 @@ SceneMesh build_test_scene() {
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
+} // namespace kami::world
