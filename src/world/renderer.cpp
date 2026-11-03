@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <limits>
 #include <utility>
+#include <vector>
 
 namespace kami::world {
 namespace {
@@ -496,7 +497,7 @@ void Renderer::draw() {
     XMFLOAT4X4 viewproj{},lightproj{};
     XMStoreFloat4x4(&viewproj,view*projection);
     XMStoreFloat4x4(&lightproj,lightView*lightProjection);
-    std::array<float,48> constants{};
+    std::array<float,56> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
     constants[17]=-.86f;
@@ -516,6 +517,14 @@ void Renderer::draw() {
     constants[45]=graphics_.contact_ambient?1.f:0.f;
     constants[46]=graphics_.diamond_glints?1.f:0.f;
     constants[47]=0.f;
+    constants[48]=static_cast<float>(photo_.exposure_tenths)/10.f;
+    constants[49]=static_cast<float>(photo_.contrast_percent)/100.f;
+    constants[50]=static_cast<float>(photo_.saturation_percent)/100.f;
+    constants[51]=static_cast<float>(photo_.vignette_percent)/100.f;
+    constants[52]=static_cast<float>(width_);
+    constants[53]=static_cast<float>(height_);
+    constants[54]=photo_.enabled?1.f:0.f;
+    constants[55]=0.f;
 
     commands_->SetGraphicsRootSignature(signature_.Get());
     commands_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -544,10 +553,10 @@ void Renderer::draw() {
         commands_->RSSetViewports(1,&shadowView);
         commands_->RSSetScissorRects(1,&shadowRect);
         commands_->SetPipelineState(shadow_pipeline_.Get());
-        commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
+        commands_->SetGraphicsRoot32BitConstants(0,56,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         constants[25]=graphics_.animate_avatar?.055f*avatar_spring_.position():0.f;
-        commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
+        commands_->SetGraphicsRoot32BitConstants(0,56,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                                 static_cast<UINT>(terrain_count_),0);
         constants[25]=0.f;
@@ -580,16 +589,60 @@ void Renderer::draw() {
     commands_->SetDescriptorHeaps(1,heaps);
     commands_->SetGraphicsRootDescriptorTable(
         1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
-    commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
+    commands_->SetGraphicsRoot32BitConstants(0,56,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
     constants[25]=graphics_.animate_avatar?.055f*avatar_spring_.position():0.f;
-    commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
+    commands_->SetGraphicsRoot32BitConstants(0,56,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
-    auto end=barrier(buffers_[index].Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_PRESENT);
-    commands_->ResourceBarrier(1,&end);
-    if(FAILED(commands_->Close())) return;
+    Microsoft::WRL::ComPtr<ID3D12Resource> photo_readback;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT photo_layout{};
+    UINT64 photo_bytes=0;
+    bool copying_photo=false;
+    if(capture_status_==CaptureStatus::Pending) {
+        if(width_>8192||height_>8192) {
+            capture_status_=CaptureStatus::Failed;
+        } else {
+            const auto desc=buffers_[index]->GetDesc();
+            UINT rows=0;
+            UINT64 row_bytes=0;
+            device_.native_device()->GetCopyableFootprints(
+                &desc,0,1,0,&photo_layout,&rows,&row_bytes,&photo_bytes);
+            const auto properties=heap(D3D12_HEAP_TYPE_READBACK);
+            const auto allocation=buffer_desc(photo_bytes);
+            if(photo_bytes!=0 && photo_bytes<=256ULL*1024ULL*1024ULL &&
+               SUCCEEDED(device_.native_device()->CreateCommittedResource(
+                   &properties,D3D12_HEAP_FLAG_NONE,&allocation,
+                   D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
+                   IID_PPV_ARGS(photo_readback.GetAddressOf())))) {
+                const auto to_copy=barrier(buffers_[index].Get(),
+                    D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);
+                commands_->ResourceBarrier(1,&to_copy);
+                D3D12_TEXTURE_COPY_LOCATION source{};
+                source.pResource=buffers_[index].Get();
+                source.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                source.SubresourceIndex=0;
+                D3D12_TEXTURE_COPY_LOCATION destination{};
+                destination.pResource=photo_readback.Get();
+                destination.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                destination.PlacedFootprint=photo_layout;
+                commands_->CopyTextureRegion(&destination,0,0,0,&source,nullptr);
+                const auto present=barrier(buffers_[index].Get(),
+                    D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_PRESENT);
+                commands_->ResourceBarrier(1,&present);
+                copying_photo=true;
+            } else capture_status_=CaptureStatus::Failed;
+        }
+    }
+    if(!copying_photo) {
+        const auto end=barrier(buffers_[index].Get(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_PRESENT);
+        commands_->ResourceBarrier(1,&end);
+    }
+    if(FAILED(commands_->Close())) {
+        if(copying_photo)capture_status_=CaptureStatus::Failed;
+        return;
+    }
     ID3D12CommandList* list[]={commands_.Get()};
     device_.graphics_queue()->ExecuteCommandLists(1,list);
     const UINT sync=graphics_.vsync?1U:0U;
@@ -598,11 +651,37 @@ void Renderer::draw() {
     if(FAILED(swapchain_->Present(sync,flags))) {
         error_=L"DX12 presentation failed";
         ready_=false;
+        if(copying_photo)capture_status_=CaptureStatus::Failed;
         return;
     }
     // Safe single-frame synchronization; multiframe scheduling is still
     // pending performance measurements on a real GPU.
     wait_for_gpu();
+    if(copying_photo) {
+        bool saved=false;
+        BYTE* mapped=nullptr;
+        const D3D12_RANGE to_read{0,static_cast<SIZE_T>(photo_bytes)};
+        if(SUCCEEDED(photo_readback->Map(
+                0,&to_read,reinterpret_cast<void**>(&mapped))) && mapped) {
+            const std::size_t stride=static_cast<std::size_t>(width_)*4;
+            std::vector<std::uint8_t> bgra(
+                stride*static_cast<std::size_t>(height_));
+            for(UINT y=0;y<height_;++y) {
+                const BYTE* row=mapped+
+                    static_cast<std::size_t>(y)*photo_layout.Footprint.RowPitch;
+                std::uint8_t* dst=bgra.data()+static_cast<std::size_t>(y)*stride;
+                for(UINT x=0;x<width_;++x) {
+                    dst[x*4+0]=row[x*4+2];
+                    dst[x*4+1]=row[x*4+1];
+                    dst[x*4+2]=row[x*4+0];
+                    dst[x*4+3]=row[x*4+3];
+                }
+            }
+            photo_readback->Unmap(0,nullptr);
+            saved=photo::write_bgra_png(capture_path_,bgra,width_,height_);
+        }
+        capture_status_=saved?CaptureStatus::Saved:CaptureStatus::Failed;
+    }
 }
 void Renderer::shutdown() noexcept {
     if(device_.graphics_queue()) wait_for_gpu();
