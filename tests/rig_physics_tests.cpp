@@ -67,5 +67,39 @@ int main() {
     state.grounded=true;state.vertical_velocity=0.f;
     solver.step(state,1.f/60.f);
     if(!std::isfinite(solver.output().at(Axis::ButtVertical)))return 12;
+    if(kAxes!=8)return 13;
+    // New channels must oscillate under gait, and OFF must disable both.
+    solver.set_profile(kami::avatar::BodyProfile::Natural);
+    float twist_peak=0.f,closure_peak=0.f;
+    state.grounded=true;
+    for(int i=0;i<240;++i) {
+        state.horizontal_speed=4.2f;
+        state.animation_phase=i*.17f;
+        state.heading=std::sin(i*.02f)*.15f;
+        solver.step(state,1.f/60.f);
+        twist_peak=std::max(twist_peak,std::abs(solver.output().at(Axis::ChestTwist)));
+        closure_peak=std::max(closure_peak,std::abs(solver.output().at(Axis::ButtOpenClose)));
+    }
+    if(twist_peak<.001f||closure_peak<.001f)return 14;
+    Output specified{};
+    specified.offsets[static_cast<int>(Axis::ButtOpenClose)]=.04f;
+    specified.offsets[static_cast<int>(Axis::ChestTwist)]=.06f;
+    const auto open=build_pose(specified);
+    using J=kami::rig::Joint;
+    if(std::abs(open[static_cast<int>(J::LeftButt)].translation.x+.04f)>1e-6f ||
+       std::abs(open[static_cast<int>(J::RightButt)].translation.x-.04f)>1e-6f)
+        return 15;
+    if(std::abs(open[static_cast<int>(J::LeftPec)].roll-.06f)>1e-6f ||
+       std::abs(open[static_cast<int>(J::RightPec)].roll+.06f)>1e-6f)
+        return 16;
+    specified.offsets[static_cast<int>(Axis::ButtOpenClose)]=-.025f;
+    const auto closed=build_pose(specified);
+    if(!(closed[static_cast<int>(J::LeftButt)].translation.x>0.f &&
+         closed[static_cast<int>(J::RightButt)].translation.x<0.f))
+        return 17;
+    solver.set_profile(kami::avatar::BodyProfile::Off);
+    solver.step(state,1.f/60.f);
+    if(solver.output().at(Axis::ButtOpenClose)!=0.f||
+       solver.output().at(Axis::ChestTwist)!=0.f)return 18;
     return 0;
 }
