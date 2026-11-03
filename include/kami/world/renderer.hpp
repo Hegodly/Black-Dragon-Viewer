@@ -2,6 +2,7 @@
 #include "kami/world/device.hpp"
 #include "kami/graphics/settings.hpp"
 #include "kami/camera/system.hpp"
+#include "kami/features/physics.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -69,6 +70,7 @@ private:
     graphics::Settings graphics_{};
     bool ready_ = false;
     camera::System camera_{};
+    physics::Spring avatar_spring_{};
     std::chrono::steady_clock::time_point last_camera_frame_{};
     std::chrono::steady_clock::time_point start_time_ = std::chrono::steady_clock::now();
     std::wstring error_;
