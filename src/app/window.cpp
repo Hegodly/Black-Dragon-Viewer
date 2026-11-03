@@ -540,7 +540,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   body_font_.Get(),p.accent);
             const wchar_t* names[]={
                 L"1  STYLE",L"2  EXPOSURE",L"3  CONTRAST",
-                L"4  SATURATION",L"5  VIGNETTE",L"6  LIVE GRADING"
+                L"4  SATURATION",L"5  VIGNETTE",L"6  LIVE GRADING",L"7  CAMERA SHOT"
             };
             const std::wstring values[]={
                 photo::preset_name(photo_settings_.preset),
@@ -548,9 +548,12 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(photo_settings_.contrast_percent)+L"%",
                 std::to_wstring(photo_settings_.saturation_percent)+L"%",
                 std::to_wstring(photo_settings_.vignette_percent)+L"%",
-                photo_settings_.enabled?L"ON":L"OFF"
+                photo_settings_.enabled?L"ON":L"OFF",
+                photo_shot_==0?L"FULL BODY":
+                photo_shot_==1?L"PORTRAIT":
+                photo_shot_==2?L"DETAIL":L"WIDE"
             };
-            for(unsigned i=0;i<6;++i) {
+            for(unsigned i=0;i<7;++i) {
                 const float y=300.f+41.f*static_cast<float>(i);
                 round_rect(box(panel+16,y,294,38),10.f,p.elevated);
                 label(names[i],box(panel+27,y+4,150,26),
@@ -940,6 +943,11 @@ void Window::advance_photo(unsigned row) {
             photo_settings_.vignette_percent+10;
         break;
     case 5: photo_settings_.enabled=!photo_settings_.enabled;break;
+    case 6:
+        photo_shot_=(photo_shot_+1U)%4U;
+        world_renderer_.apply_studio_shot(
+            static_cast<camera::StudioShot>(photo_shot_));
+        break;
     default: return;
     }
     photo_settings_=photo::normalize(photo_settings_);
@@ -1015,7 +1023,7 @@ void Window::click(float x, float y) {
     }
     if(page_==7 && x>=width-341.f && x<=width-51.f) {
         if(y>=245.f && y<288.f) { save_photo_png(); return; }
-        for(unsigned i=0;i<6;++i) {
+        for(unsigned i=0;i<7;++i) {
             const float top=300.f+41.f*static_cast<float>(i);
             if(y>=top && y<top+38.f) { advance_photo(i); return; }
         }
