@@ -19,6 +19,33 @@ avatar appearance manifests are original validated integration contracts
 that need actual verified LLUDP/capability transport and data decoders.
 See [live integration status](docs/KAMI_LIVE_SECOND_LIFE_CORE_STATUS.md).
 
+## Second Life login HTTP error diagnosis
+
+**HOME → L → login** displays the actual numeric status returned by the
+official Agni HTTPS login endpoint. Earlier builds collapsed all
+non-200 responses into `SL LOGIN HTTP ERROR`. Examples:
+
+- **HTTP 301/302/307/308**: the login endpoint requested a redirect.
+  KAMI deliberately refuses automatic credential-bearing redirects.
+- **HTTP 400**: the login server rejected the request format.
+- **HTTP 403**: the server refused the login request. This is not proof
+  the account password is wrong, and can involve edge/WAF policy.
+- **HTTP 404/405**: endpoint missing or POST method disallowed.
+- **HTTP 429**: rate limited; do not retry repeatedly.
+- **HTTP 500/502/503/504**: service may be temporarily unavailable.
+- **HTTP 200 / unsupported XML-RPC**: HTTPS succeeded but KAMI's XML-RPC
+  response parser still needs compatibility changes.
+
+Only status codes are displayed. KAMI does **not** show or log server
+response bodies, redirect URLs, passwords, session keys, or signed
+capability URLs. Do not paste credentials into bug reports or chat.
+
+The endpoint remains `https://login.agni.lindenlab.com/cgi-bin/login.cgi`,
+a documented third-party login target. If login fails, check
+[Second Life grid status](https://status.secondlifegrid.net/) and
+compare against a supported viewer. Use a dedicated test account for
+KAMI until its login and MFA/security implementation is reviewed.
+
 ## Experimental Second Life login + simulator UDP milestone
 
 In **HOME (F1)**, **N** still runs the password-free official HTTPS
