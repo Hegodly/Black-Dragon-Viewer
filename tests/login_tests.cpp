@@ -54,7 +54,7 @@ int main(){
     const int characters=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
         valid.data(),static_cast<int>(valid.size()),nullptr,0);
     if(characters<=0)return 20;
-    std::wstring wide_xml(static_cast<std::size_t>(characters),L'\\0');
+    std::wstring wide_xml(static_cast<std::size_t>(characters),L'\0');
     if(MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
         valid.data(),static_cast<int>(valid.size()),
         wide_xml.data(),characters)!=characters)return 21;
