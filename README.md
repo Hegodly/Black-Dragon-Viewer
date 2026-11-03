@@ -3,7 +3,21 @@
 KAMI is a new, independently authored Windows application. This project does not import Black Dragon, Firestorm or official Second Life viewer source, assets, skins, shaders, or build scripts.
 
 ## Current status
-Original native Windows shell, Direct2D/DirectWrite interface, user-selectable light/dark appearances, keyboard navigation, and separate protocol boundary. This is NOT YET a working Second Life viewer: authentication, world rendering, inventory, avatar and messaging are not implemented.
+KAMI is a Windows-only independent prototype with a working **offline DX12
+world preview**, avatar locomotion, eight-axis procedural avatar physics,
+local inventory/outfit planners, native messaging layout, graphics controls
+and creator/photo tools. **It is not a working Second Life viewer yet.**
+Actual login, simulator networking, remote inventory, avatar assets, messaging
+and teleport execution are not implemented.
+
+The HOME screen includes a user-triggered **Test Secure SL Route [N]**
+diagnostic that performs a real credential-free HTTPS HEAD to the official
+SL login service. The result only verifies TLS/HTTP reachability; it never
+claims the user is authenticated or connected. The new simulator handshake,
+capability references, service requests, inventory/world snapshots, and
+avatar appearance manifests are original validated integration contracts
+that need actual verified LLUDP/capability transport and data decoders.
+See [live integration status](docs/KAMI_LIVE_SECOND_LIFE_CORE_STATUS.md).
 
 ## World rendering policy
 KAMI's 3D rendering backend is **DirectX 12 exclusively**. The new original `src/world/device.cpp` uses DXGI to select a hardware D3D12 device and creates a direct command queue. An optional DX12 WARP path is provided for diagnostics where hardware DX12 is unavailable. This is only a foundation: it does not yet create a swap chain, draw geometry, or render a Second Life scene. No OpenGL or D3D11 world renderer is included.
