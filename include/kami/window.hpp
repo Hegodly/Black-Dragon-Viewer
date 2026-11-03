@@ -21,6 +21,7 @@
 #include "kami/protocol/transport.hpp"
 #include "kami/protocol/login.hpp"
 #include "kami/protocol/simulator_transport.hpp"
+#include "kami/protocol/seed_caps.hpp"
 #include "kami/world/renderer.hpp"
 #include "kami/world/warmup.hpp"
 
@@ -105,6 +106,11 @@ private:
     bool sl_login_pending_=false;
     std::future<protocol::LoginResult> sl_login_future_;
     protocol::sim::Circuit sl_circuit_;
+    std::wstring sl_seed_url_; // Authenticated signed token, never display
+    bool sl_seed_started_=false;
+    bool sl_seed_pending_=false;
+    std::wstring sl_seed_message_;
+    std::future<protocol::caps::SeedResult> sl_seed_future_;
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
     Microsoft::WRL::ComPtr<IDWriteFactory> text_factory_;
