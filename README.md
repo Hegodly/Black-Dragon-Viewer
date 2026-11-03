@@ -64,3 +64,40 @@ A KAMI-authored camera controller is now wired to the original DX12 offline scen
 In **Settings (F6)**, choose **Camera [C]** and click one of the seven settings rows or press keys 1–7. Switch back to Graphics with C. In **World (F2)**, left-drag to orbit; use the mouse wheel for dolly zoom, **Q** or right click for center/right/left shoulder compositions, **O** for cinematic idle orbit, **P** for precision pointer movement, **F** to lock/unlock the tracked target, and **R** to reset the view. Arrow keys/A/D orbit and W/S zoom the offline preview, preserving the existing demo keys.
 
 The custom camera has frame-rate-independent smoothing, proximity sampling against KAMI's procedural terrain, an automatic return toward the subject's facing direction after inactivity, a head-target anchor that follows the procedural mannequin's existing idle motion, and an opt-in shake toggle that is off by default. Its math is portable and unit-tested separately from Win32/DirectX. It deliberately does not pretend to implement collision against streamed Second Life objects, camera avatar bone tracking, avatar movement, or remote region camera control. Those require the future independently implemented SL world and animation pipelines.
+
+
+## Native KAMI Creator Studio + Photo Studio
+**Access:** F7 opens Creator Studio. F8 opens Photo Studio. Both share the real
+KAMI original DirectX 12 viewport and independent camera controls.
+
+**Creator Studio (F7):** Select **IMPORT OBJ** or press **I**; Windows opens a
+native file picker. KAMI parses an OBJ triangle/quad/polygon mesh from local
+disk, checks indices, finite vertex coordinates, degenerate triangles and
+resource limits, normalizes it for the local DX12 preview, then uploads actual
+preview triangles to the GPU. The studio displays the audited triangle,
+source-position and polygon counts alongside a clearly labelled example
+uncompressed mesh/texture memory estimate. Choose **RESTORE SCENE** or press
+**R** to return to original terrain/avatar preview. OBJ materials, rigs, texture
+maps, LODs and live mesh uploading are not implemented. KAMI does not bypass
+the Second Life simulator's upload charges, constraints or permission rules.
+
+**Photo Studio (F8):** KAMI-authored DX12 HLSL grades the actual preview with
+four styles (Cinematic, Natural, Monochrome and Night Studio), independent
+controls for exposure, contrast, saturation and vignette, and an option to
+disable the live grade. Click rows or press keys **1-6**. Photo settings persist
+per Windows user. **CAPTURE PNG** opens Windows Save As, reads back the
+current DX12 scene through a correctly aligned GPU readback resource, and
+encodes its pixels via the Windows Imaging Component. It captures the current
+DX12 render resolution; it does not secretly render additional 4K/8K pixels
+or include the Direct2D application chrome. No external injectors, MXAO or
+GShade are bundled.
+
+**Original viewer feature audit:** See
+`docs/SECOND_LIFE_FEATURE_AUDIT.md`. The code includes independent modules
+for locally staged outfit references, landmark drafts, the geometry/texture
+budget advisor and feature readiness reporting. Connected login, inventory,
+world, avatar, messaging and simulator mutations remain unavailable until
+the independently built SL protocol and asset streaming layers exist.
+
+These studios are real native code paths for an **offline DX12 development
+prototype**, not evidence that the viewer is ready for Second Life.

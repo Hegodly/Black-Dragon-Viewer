@@ -10,6 +10,8 @@ cbuffer Frame : register(b0) {
     float4 frame; // x=time seconds, y=avatar enabled, z=PBR enabled, w=shadows
     row_major float4x4 lightViewProjection;
     float4 kamiEffects; // x=haze, y=contact shading, z=metallic microglints
+    float4 photoGrade; // x=exposure EV, y=contrast, z=saturation, w=vignette
+    float4 photoViewport; // x=width, y=height, z=grading enabled
 };
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
@@ -134,6 +136,17 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
         float distanceToCamera=length(cameraWorldPosition.xyz-input.position);
         float haze=1.0-exp(-distanceToCamera*0.016);
         color=lerp(color,float3(0.34,0.44,0.51),saturate(haze)*0.36);
+    }
+    // Entirely native DX12 KAMI Photo Studio color pipeline, scene linear.
+    if(photoViewport.z>0.5) {
+        color *= exp2(photoGrade.x);
+        color=(color-0.18)*photoGrade.y+0.18;
+        const float neutral=dot(color,float3(0.2126,0.7152,0.0722));
+        color=lerp(float3(neutral,neutral,neutral),color,photoGrade.z);
+        const float2 normalized=input.clip.xy/max(photoViewport.xy,float2(1.0,1.0));
+        const float2 centered=(normalized-0.5)*2.0;
+        const float radius=dot(centered,centered)*0.5;
+        color*=1.0-saturate(radius)*photoGrade.w;
     }
     // Basic filmic output mapping while maintaining SDR UNORM compatibility.
     color=color/(color+float3(1.0,1.0,1.0));

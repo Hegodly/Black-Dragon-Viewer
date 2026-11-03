@@ -3,6 +3,9 @@
 #include "kami/graphics/settings.hpp"
 #include "kami/camera/system.hpp"
 #include "kami/features/physics.hpp"
+#include "kami/features/photo_studio.hpp"
+#include "kami/world/scene.hpp"
+#include <optional>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -16,6 +19,7 @@ namespace kami::world {
 
 // Independent DX12 viewport renderer. It draws an original offline scene.
 // It is NOT an SL simulator or asset renderer.
+enum class CaptureStatus { Idle, Pending, Saved, Failed };
 class Renderer final {
 public:
     Renderer() = default;
@@ -27,6 +31,14 @@ public:
     void resize(UINT width, UINT height);
     void set_graphics(graphics::Settings settings);
     void draw();
+    [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
+    void clear_creator_preview();
+    [[nodiscard]] bool creator_preview_active() const noexcept {return preview_mesh_.has_value();}
+    void set_photo_settings(photo::Settings value) noexcept { photo_=photo::normalize(value); }
+    [[nodiscard]] bool capture_png(std::wstring destination);
+    [[nodiscard]] CaptureStatus capture_status() const noexcept {return capture_status_;}
+    [[nodiscard]] const std::wstring& capture_path() const noexcept {return capture_path_;}
+
     void orbit(float yaw_delta, float elevation_delta);
     void zoom(float distance_delta);
     void set_camera_settings(camera::Settings settings) noexcept { camera_.set_settings(settings); }
@@ -37,6 +49,7 @@ public:
     void toggle_camera_focus() noexcept { camera_.toggle_focus_lock(); }
     void toggle_cinematic_orbit() noexcept { camera_.toggle_cinematic_orbit(); }
     void reset_camera() noexcept { camera_.reset(); }
+    void apply_studio_shot(camera::StudioShot shot) noexcept {camera_.apply_studio_shot(shot);}
     [[nodiscard]] const camera::System& camera_system() const noexcept { return camera_; }
     void shutdown() noexcept;
 
@@ -72,6 +85,11 @@ private:
     bool ready_ = false;
     camera::System camera_{};
     physics::Spring avatar_spring_{};
+    std::optional<SceneMesh> preview_mesh_;
+    photo::Settings photo_{};
+    CaptureStatus capture_status_=CaptureStatus::Idle;
+    std::wstring capture_path_;
+
     std::chrono::steady_clock::time_point last_camera_frame_{};
     std::chrono::steady_clock::time_point start_time_ = std::chrono::steady_clock::now();
     std::wstring error_;

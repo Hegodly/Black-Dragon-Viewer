@@ -1,5 +1,6 @@
 #include "kami/window.hpp"
 #include "kami/appearance.hpp"
+#include "kami/features/viewer_foundation.hpp"
 
 #include <windowsx.h>
 #include <dwmapi.h>
@@ -9,29 +10,37 @@
 #include <chrono>
 #include <mmsystem.h>
 #include <string>
+#include <commdlg.h>
+#include <filesystem>
+#include <utility>
 
 namespace kami::app {
 namespace {
 constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_Original_Window";
 constexpr wchar_t kViewportClassName[] = L"KAMI_Native_Camera_Viewport";
-constexpr std::array<std::wstring_view, 6> kPages = {
-    L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS"
+constexpr std::array<std::wstring_view, 8> kPages = {
+    L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS",
+    L"CREATOR STUDIO", L"PHOTO STUDIO"
 };
-constexpr std::array<std::wstring_view, 6> kDescriptions = {
+constexpr std::array<std::wstring_view, 8> kDescriptions = {
     L"Original Windows foundation. No imported viewer code.",
     L"Region login and world rendering are not implemented yet.",
     L"Avatar syncing, attachments and animation are not yet available.",
     L"Inventory is not connected. No inventory items can be changed.",
     L"Messages and delivery receipts are not implemented yet.",
-    L"Change appearance with the button above or press T."
+    L"Change appearance with the button above or press T.",
+    L"Local OBJ mesh preview and geometry validation.",
+    L"Native DX12 live grading and PNG exports."
 };
-constexpr std::array<std::wstring_view, 6> kExplanations = {
+constexpr std::array<std::wstring_view, 8> kExplanations = {
     L"Written for KAMI  /  Native Direct2D + DirectWrite",
     L"World access requires independent authentication and transport.",
     L"Avatar identity will be shown only after real server login.",
     L"Future inventory operations will honor server permissions.",
     L"Nothing on this screen sends a message to another resident.",
-    L"Choose Home, World, Avatar, Inventory, Messages or Settings."
+    L"Choose Home, World, Avatar, Inventory, Messages or Settings.",
+    L"Local mesh import only. Second Life upload service is not connected.",
+    L"Photo export captures actual DX12 viewport pixels with a PNG encoder."
 };
 D2D1_RECT_F box(float x, float y, float width, float height) {
     return D2D1::RectF(x, y, x+width, y+height);
@@ -42,6 +51,7 @@ bool Window::create(HINSTANCE instance, int show) {
     light_ = settings::light_appearance();
     graphics_ = graphics::load();
     camera_settings_ = camera::load();
+    photo_settings_ = photo::load();
     world_renderer_.set_graphics(graphics_);
     world_renderer_.set_camera_settings(camera_settings_);
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
@@ -194,12 +204,24 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         return 0;
     case WM_MOUSEWHEEL:
-        if (page_ == 1 && world_ready_) {
+        if ((page_ == 1 || page_ == 6 || page_ == 7) && world_ready_) {
             world_renderer_.zoom(GET_WHEEL_DELTA_WPARAM(wp) > 0 ? -0.7f : 0.7f);
             return 0;
         }
         break;
     case WM_KEYDOWN:
+        if(page_ == 7 && wp >= '1' && wp <= '7') {
+            advance_photo(static_cast<unsigned>(wp-'1'));
+            return 0;
+        }
+        if(page_ == 6 && wp == 'I') {open_creator_obj();return 0;}
+        if(page_ == 6 && wp == 'R') {
+            world_renderer_.clear_creator_preview();
+            creator_preview_={};creator_file_.clear();
+            creator_message_=L"Original scene restored. Import an OBJ to preview.";
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return 0;
+        }
         if(page_ == 5 && wp == 'C') {
             camera_settings_page_ = !camera_settings_page_;
             graphics_effects_page_ = false;
@@ -218,7 +240,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             else advance_graphics(static_cast<unsigned>(wp-'1'));
             return 0;
         }
-        if (page_ == 1 && world_ready_) {
+        if ((page_ == 1 || page_ == 6 || page_ == 7) && world_ready_) {
             switch (wp) {
             case VK_LEFT: case 'A': world_renderer_.orbit(-.11f, 0.f); return 0;
             case VK_RIGHT: case 'D': world_renderer_.orbit(.11f, 0.f); return 0;
@@ -233,7 +255,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             case 'R': world_renderer_.reset_camera(); return 0;
             }
         }
-        if (wp >= VK_F1 && wp <= VK_F6) {
+        if (wp >= VK_F1 && wp <= VK_F8) {
             select_page(static_cast<unsigned>(wp - VK_F1));
             return 0;
         }
@@ -285,14 +307,15 @@ void Window::resize(UINT width, UINT height) {
 }
 
 void Window::update_viewport() {
-    if (!hwnd_ || page_ != 1) {
+    if (!hwnd_ || (page_ != 1 && page_ != 6 && page_ != 7)) {
         if (viewport_) ShowWindow(viewport_, SW_HIDE);
         return;
     }
     RECT client{};
     GetClientRect(hwnd_, &client);
     const int x=302, y=188;
-    const int width=std::max<int>(128, client.right-350);
+    const int width=std::max<int>(128, client.right-
+        ((page_==6||page_==7)?690:350));
     const int height=std::max<int>(128, client.bottom-306);
     if (!viewport_) {
         viewport_=CreateWindowExW(0,kViewportClassName,L"",
@@ -339,7 +362,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     label(L"B E Y O N D  R E A L I T Y",box(41,103,200,25),small_font_.Get(),p.accent);
 
     for (unsigned index = 0; index < kPages.size(); ++index) {
-        const float y = 151.f + 56.f * static_cast<float>(index);
+        const float y = 151.f + 50.f * static_cast<float>(index);
         if (page_ == index) round_rect(box(30,y,212,44),15.f,p.accent_soft);
         label(kPages[index],box(49,y+10,175,28),body_font_.Get(),
               page_==index?p.accent:p.muted);
@@ -464,6 +487,94 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         return;
     }
 
+    if(page_==6 || page_==7) {
+        const bool creator=page_==6;
+        round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
+        label(creator?L"KAMI CREATOR STUDIO":L"KAMI PHOTO STUDIO",
+              box(contentX+28,105,contentWidth-56,44),title_font_.Get(),p.text);
+        label(creator?L"Local mesh inspection / DX12 preview":
+                      L"Live DX12 color grading / PNG export",
+              box(contentX+28,151,contentWidth-55,27),small_font_.Get(),p.accent);
+        const float panel=width-359.f;
+        round_rect(box(panel,188,326.f,height-306),20.f,p.surface);
+        if(creator) {
+            label(L"MESH PREVIEW",box(panel+18,204,290,30),body_font_.Get(),p.text);
+            round_rect(box(panel+18,249,290,43),13.f,p.accent_soft);
+            label(L"IMPORT OBJ   [I]",box(panel+33,260,260,26),
+                  body_font_.Get(),p.accent);
+            round_rect(box(panel+18,301,290,42),13.f,p.accent_soft);
+            label(L"RESTORE SCENE   [R]",box(panel+33,311,260,26),
+                  body_font_.Get(),p.accent);
+            label(L"Audit result",box(panel+19,365,285,24),small_font_.Get(),p.muted);
+            if(world_renderer_.creator_preview_active()) {
+                label(creator_preview_.audit.valid?L"VALID TRIANGLE GEOMETRY":
+                       L"INVALID MESH",
+                      box(panel+19,398,288,31),body_font_.Get(),p.accent);
+                label(L"Triangles: "+std::to_wstring(creator_preview_.audit.triangles),
+                      box(panel+19,442,290,25),small_font_.Get(),p.text);
+                label(L"Positions: "+std::to_wstring(creator_preview_.source_positions),
+                      box(panel+19,470,290,25),small_font_.Get(),p.text);
+                label(L"Source polygons: "+std::to_wstring(creator_preview_.source_polygons),
+                      box(panel+19,498,290,25),small_font_.Get(),p.text);
+                if(height>=720.f) {
+                    // Clearly labelled offline estimate, not an SL fee quote.
+                    const auto estimate=viewer::estimate_scene_cost(
+                        2048,2048,2,creator_preview_.audit.triangles,512);
+                    label(L"2 x 2K textures + mesh estimate:",
+                          box(panel+19,532,290,23),small_font_.Get(),p.muted);
+                    label(std::to_wstring(estimate.total_mb)+L" MiB uncompressed",
+                          box(panel+19,559,290,24),small_font_.Get(),p.accent);
+                }
+            } else {
+                label(L"NO MODEL SELECTED",box(panel+19,398,290,31),
+                      body_font_.Get(),p.muted);
+            }
+            label(creator_message_,box(contentX+30,height-109,contentWidth-60,32),
+                  small_font_.Get(),p.accent);
+            label(L"Local preview only; simulator upload not connected.",
+                  box(contentX+30,height-76,contentWidth-60,28),
+                  small_font_.Get(),p.muted);
+        } else {
+            label(L"PHOTO CONTROLS",box(panel+18,204,290,30),
+                  body_font_.Get(),p.text);
+            round_rect(box(panel+18,245,290,43),13.f,p.accent_soft);
+            label(L"CAPTURE PNG",box(panel+34,254,260,29),
+                  body_font_.Get(),p.accent);
+            const wchar_t* names[]={
+                L"1  STYLE",L"2  EXPOSURE",L"3  CONTRAST",
+                L"4  SATURATION",L"5  VIGNETTE",L"6  LIVE GRADING",L"7  CAMERA SHOT"
+            };
+            const std::wstring values[]={
+                photo::preset_name(photo_settings_.preset),
+                std::to_wstring(photo_settings_.exposure_tenths)+L" / 10 EV",
+                std::to_wstring(photo_settings_.contrast_percent)+L"%",
+                std::to_wstring(photo_settings_.saturation_percent)+L"%",
+                std::to_wstring(photo_settings_.vignette_percent)+L"%",
+                photo_settings_.enabled?L"ON":L"OFF",
+                photo_shot_==0?L"FULL BODY":
+                photo_shot_==1?L"PORTRAIT":
+                photo_shot_==2?L"DETAIL":L"WIDE"
+            };
+            for(unsigned i=0;i<7;++i) {
+                const float y=300.f+32.f*static_cast<float>(i);
+                round_rect(box(panel+16,y,294,30),9.f,p.elevated);
+                label(names[i],box(panel+27,y+4,150,26),
+                      small_font_.Get(),p.muted);
+                label(values[i],box(panel+174,y+5,130,26),
+                      small_font_.Get(),p.accent);
+            }
+            label(photo_message_,box(contentX+29,height-109,contentWidth-58,30),
+                  small_font_.Get(),p.accent);
+            label(L"Exports the actual DX12 scene. No external filters.",
+                  box(contentX+29,height-76,contentWidth-55,29),
+                  small_font_.Get(),p.muted);
+        }
+        if(!world_ready_)label(world_initialized_?world_renderer_.error():
+             L"Starting DX12 viewport...",box(contentX+30,190,400,45),
+             small_font_.Get(),p.muted);
+        return;
+    }
+
     if (page_ == 1) {
         round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
         label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
@@ -487,6 +598,50 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(perf,box(contentX+28,height-136,contentWidth-48,24),small_font_.Get(),p.accent);
         label(L"Procedural test scene only. SL region and avatar transport: not connected.",
               box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
+        return;
+    }
+
+    if(page_==2 || page_==3 || page_==4) {
+        round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
+        label(kPages[page_],box(contentX+28,111,contentWidth-55,42),
+              title_font_.Get(),p.text);
+        label(L"ORIGINAL KAMI MODULE READINESS / HONEST OFFLINE STATUS",
+              box(contentX+28,151,contentWidth-50,28),small_font_.Get(),p.accent);
+        constexpr viewer::Feature avatar[]={
+            viewer::Feature::AvatarAppearance,viewer::Feature::Gestures,
+            viewer::Feature::OutfitDrafts,viewer::Feature::Camera
+        };
+        constexpr viewer::Feature inventory[]={
+            viewer::Feature::Inventory,viewer::Feature::SmartSort,
+            viewer::Feature::LandmarkDrafts,viewer::Feature::Assets
+        };
+        constexpr viewer::Feature messages[]={
+            viewer::Feature::NearbyChat,viewer::Feature::DirectMessages,
+            viewer::Feature::Friends,viewer::Feature::Groups
+        };
+        const viewer::Feature* selected=page_==2?avatar:page_==3?inventory:messages;
+        const auto& catalog=viewer::feature_catalog();
+        for(unsigned i=0;i<4;++i) {
+            const float y=206.f+73.f*static_cast<float>(i);
+            round_rect(box(contentX+24,y,contentWidth-48,65),14.f,p.surface);
+            const auto f=selected[i];
+            for(const auto& entry:catalog) {
+                if(entry.feature!=f)continue;
+                label(entry.label,box(contentX+42,y+8,contentWidth-85,28),
+                      body_font_.Get(),p.text);
+                const bool local=entry.availability==viewer::Availability::OriginalLocalReady;
+                label(local?L"Local code available / no SL server changes":
+                      entry.availability==viewer::Availability::AssetPipelineRequired?
+                      L"Requires live assets + avatar decoder":
+                      L"Requires authenticated Second Life network adapter",
+                      box(contentX+42,y+36,contentWidth-86,24),
+                      small_font_.Get(),local?p.accent:p.muted);
+                break;
+            }
+        }
+        label(L"Account login, remote chat, editing and inventory actions are not connected.",
+              box(contentX+28,height-105,contentWidth-48,31),
+              small_font_.Get(),p.muted);
         return;
     }
 
@@ -589,12 +744,22 @@ void Window::toggle_appearance() {
 
 void Window::select_page(unsigned index) {
     if (index >= kPages.size()) return;
-    if(page_ == 1 && index != 1 && high_resolution_timer_) {
+    const bool was_world=(page_==1 || page_==6 || page_==7);
+    const bool next_world=(index==1 || index==6 || index==7);
+    if(was_world && !next_world && high_resolution_timer_) {
         (void)timeEndPeriod(1);
         high_resolution_timer_=false;
     }
     page_ = index;
-    if(index == 1 && !high_resolution_timer_)
+    if(index==1 && world_renderer_.creator_preview_active()) {
+        world_renderer_.clear_creator_preview();
+        creator_preview_={};creator_file_.clear();
+        creator_message_=L"Choose a local OBJ file to preview.";
+    }
+    auto look=photo_settings_;
+    if(index!=7)look.enabled=false;
+    world_renderer_.set_photo_settings(look);
+    if(next_world && !high_resolution_timer_)
         high_resolution_timer_=timeBeginPeriod(1)==0;
     fps_frames_=0;
     fps_display_=0;
@@ -605,7 +770,7 @@ void Window::select_page(unsigned index) {
 }
 
 bool Window::wants_realtime_render() const noexcept {
-    return page_ == 1 && world_ready_ && hwnd_ &&
+    return (page_ == 1 || page_ == 6 || page_ == 7) && world_ready_ && hwnd_ &&
            IsWindowVisible(hwnd_) && !IsIconic(hwnd_);
 }
 
@@ -615,6 +780,14 @@ void Window::tick() {
     const auto now=Clock::now();
     if(graphics_.fps_limit!=0 && now<next_frame_) return;
     world_renderer_.draw();
+    if(page_==7 && world_renderer_.capture_status()!=prior_capture_) {
+        prior_capture_=world_renderer_.capture_status();
+        if(prior_capture_==world::CaptureStatus::Saved)
+            photo_message_=L"PNG saved to selected location.";
+        else if(prior_capture_==world::CaptureStatus::Failed)
+            photo_message_=L"Capture failed. Check storage and DX12 availability.";
+        InvalidateRect(hwnd_,nullptr,FALSE);
+    }
     ++fps_frames_;
     if(fps_epoch_==Clock::time_point{}) fps_epoch_=now;
     const auto elapsed=std::chrono::duration<double>(now-fps_epoch_).count();
@@ -745,6 +918,93 @@ void Window::advance_camera(unsigned row) {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+void Window::advance_photo(unsigned row) {
+    switch(row) {
+    case 0:
+        photo_settings_=photo::for_preset(static_cast<photo::Preset>(
+            (static_cast<unsigned>(photo_settings_.preset)+1U)%4U));
+        break;
+    case 1:
+        photo_settings_.exposure_tenths=
+            photo_settings_.exposure_tenths>=10?-10:
+            photo_settings_.exposure_tenths+2;
+        break;
+    case 2:
+        photo_settings_.contrast_percent=
+            photo_settings_.contrast_percent>=160?60:
+            photo_settings_.contrast_percent+10;
+        break;
+    case 3:
+        photo_settings_.saturation_percent=
+            photo_settings_.saturation_percent>=140?0:
+            photo_settings_.saturation_percent+20;
+        break;
+    case 4:
+        photo_settings_.vignette_percent=
+            photo_settings_.vignette_percent>=80?0:
+            photo_settings_.vignette_percent+10;
+        break;
+    case 5: photo_settings_.enabled=!photo_settings_.enabled;break;
+    case 6:
+        photo_shot_=(photo_shot_+1U)%4U;
+        world_renderer_.apply_studio_shot(
+            static_cast<camera::StudioShot>(photo_shot_));
+        break;
+    default: return;
+    }
+    photo_settings_=photo::normalize(photo_settings_);
+    photo::save(photo_settings_);
+    world_renderer_.set_photo_settings(photo_settings_);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::open_creator_obj() {
+    wchar_t path[32768]{};
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize=sizeof(dialog);
+    dialog.hwndOwner=hwnd_;
+    dialog.lpstrFile=path;
+    dialog.nMaxFile=static_cast<DWORD>(std::size(path));
+    dialog.lpstrFilter=L"Wavefront OBJ (*.obj)\0*.obj\0All files (*.*)\0*.*\0\0";
+    dialog.nFilterIndex=1;
+    dialog.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_EXPLORER;
+    if(!GetOpenFileNameW(&dialog))return;
+    creator::Preview imported;
+    std::string problem;
+    if(!creator::import_obj_file(path,imported,problem)) {
+        creator_message_=L"Import failed: "+
+            std::wstring(problem.begin(),problem.end());
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    if(!world_renderer_.set_creator_preview(imported.scene)) {
+        creator_message_=L"DX12 could not allocate preview geometry.";
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    creator_preview_=std::move(imported);
+    creator_file_=path;
+    creator_message_=L"OBJ loaded into KAMI DX12 preview.";
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::save_photo_png() {
+    wchar_t path[32768]=L"KAMI-Photo.png";
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize=sizeof(dialog);
+    dialog.hwndOwner=hwnd_;
+    dialog.lpstrFile=path;
+    dialog.nMaxFile=static_cast<DWORD>(std::size(path));
+    dialog.lpstrFilter=L"PNG Image (*.png)\0*.png\0\0";
+    dialog.lpstrDefExt=L"png";
+    dialog.nFilterIndex=1;
+    dialog.Flags=OFN_OVERWRITEPROMPT|OFN_PATHMUSTEXIST|OFN_EXPLORER;
+    if(!GetSaveFileNameW(&dialog))return;
+    if(world_renderer_.capture_png(path)) {
+        photo_message_=L"DX12 capture queued; PNG output will be written.";
+        prior_capture_=world::CaptureStatus::Pending;
+    } else photo_message_=L"DX12 renderer not ready for capture.";
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
 void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
@@ -752,6 +1012,23 @@ void Window::click(float x, float y) {
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
         return;
+    }
+    if(page_==6 && x>=width-341.f && x<=width-51.f) {
+        if(y>=249.f && y<292.f) { open_creator_obj(); return; }
+        if(y>=301.f && y<343.f) {
+            world_renderer_.clear_creator_preview();
+            creator_preview_={};creator_file_.clear();
+            creator_message_=L"Original scene restored.";
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return;
+        }
+    }
+    if(page_==7 && x>=width-341.f && x<=width-51.f) {
+        if(y>=245.f && y<288.f) { save_photo_png(); return; }
+        for(unsigned i=0;i<7;++i) {
+            const float top=300.f+32.f*static_cast<float>(i);
+            if(y>=top && y<top+30.f) { advance_photo(i); return; }
+        }
     }
     if(page_==5 && x>=width-405.f && x<width-239.f && y>=106.f && y<154.f) {
         graphics_effects_page_=!graphics_effects_page_;
@@ -778,7 +1055,7 @@ void Window::click(float x, float y) {
     }
     if (x >= 30.f && x <= 242.f) {
         for (unsigned index = 0; index < kPages.size(); ++index) {
-            const float top = 151.f + 56.f*static_cast<float>(index);
+            const float top = 151.f + 50.f*static_cast<float>(index);
             if (y >= top && y < top+44.f) {
                 select_page(index);
                 return;

@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <iostream>
 #include <string>
+#include <filesystem>
+#include <objbase.h>
 
 namespace {
 LRESULT CALLBACK smoke_window(HWND window,UINT message,WPARAM wp,LPARAM lp) {
@@ -32,6 +34,14 @@ int main() {
         return 77;
     }
     ShowWindow(window,SW_SHOWNOACTIVATE);
+    // WIC screenshot encoding relies on a COM apartment, just like the GUI app.
+    const HRESULT co_ready=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    if(FAILED(co_ready)) {
+        DestroyWindow(window);
+        UnregisterClassW(desc.lpszClassName,instance);
+        std::wcerr<<L"Could not initialize COM for DX12 photo smoke test\n";
+        return 1;
+    }
     int result=0;
     {
         kami::world::Renderer renderer;
@@ -82,6 +92,35 @@ int main() {
                     print_failure(L"resize and camera",renderer);
                     result=6;
                 }
+                if(!result) {
+                    auto preview=kami::world::build_test_scene(8);
+                    if(!renderer.set_creator_preview(preview)) {
+                        print_failure(L"OBJ preview geometry",renderer);result=7;
+                    } else {
+                        renderer.draw();
+                        if(!renderer.ready()){print_failure(L"preview draw",renderer);result=8;}
+                        renderer.clear_creator_preview();
+                        if(renderer.ready()) renderer.draw();
+                        if(!renderer.ready()){print_failure(L"preview restore",renderer);result=9;}
+                    }
+                }
+                if(!result) {
+                    wchar_t folder[MAX_PATH]{};
+                    if(!GetTempPathW(MAX_PATH,folder))result=10;
+                    else {
+                        const std::wstring target=std::wstring(folder)+L"KAMI-DX12-Capture-Test.png";
+                        if(!renderer.capture_png(target))result=11;
+                        else {
+                            renderer.draw();
+                            if(renderer.capture_status()!=kami::world::CaptureStatus::Saved)
+                                result=12;
+                            else if(!std::filesystem::exists(target))
+                                result=13;
+                        }
+                        std::error_code ignored;
+                        std::filesystem::remove(target,ignored);
+                    }
+                }
                 if(!result) std::wcout
                     <<L"KAMI DX12 SMOKE PASS - adapter: "<<renderer.adapter_name()
                     <<L"; drawn="<<renderer.vertex_count()
@@ -92,5 +131,8 @@ int main() {
     }
     DestroyWindow(window);
     UnregisterClassW(desc.lpszClassName,instance);
+    CoUninitialize();
+    if(result!=0 && result!=77)
+        std::wcerr<<L"KAMI DX12 smoke failure stage "<<result<<L"\n";
     return result;
 }

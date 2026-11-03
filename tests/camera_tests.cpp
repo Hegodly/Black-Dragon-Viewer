@@ -55,6 +55,11 @@ int main() {
     c.orbit(.6f, 0.f);
     c.update(.1f, 2.1f, flat, false);
     if (near(c.pose().eye.x, baseline)) return 12;
+    c.apply_studio_shot(StudioShot::Portrait);
+    c.update(.1f,2.1f,flat,false);
+    if(c.shoulder()!=Shoulder::Right)return 14;
+    c.apply_studio_shot(StudioShot::Wide);
+    if(c.shoulder()!=Shoulder::Center)return 15;
     c.set_settings({50, 0, 400, true, true, false, false});
     c.reset();
     c.update(.1f, 2.2f, flat, false);

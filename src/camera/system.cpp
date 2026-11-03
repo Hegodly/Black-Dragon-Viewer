@@ -62,6 +62,22 @@ void System::cycle_shoulder() noexcept {
     case Shoulder::Left: shoulder_ = Shoulder::Center; break;
     }
 }
+void System::apply_studio_shot(StudioShot shot) noexcept {
+    // KAMI-original framing choices; no scripted avatar pose change.
+    switch(shot) {
+    case StudioShot::FullBody:
+        distance_m_=4.f;desired_pitch_=.16f;shoulder_=Shoulder::Center;break;
+    case StudioShot::Portrait:
+        distance_m_=2.6f;desired_pitch_=.04f;shoulder_=Shoulder::Right;break;
+    case StudioShot::Detail:
+        distance_m_=1.5f;desired_pitch_=-.09f;shoulder_=Shoulder::Center;break;
+    case StudioShot::Wide:
+        distance_m_=8.f;desired_pitch_=.30f;shoulder_=Shoulder::Center;break;
+    }
+    desired_yaw_=subject_heading_+.65f;
+    focus_lock_=true;
+    idle_seconds_=0.f;
+}
 void System::reset() noexcept {
     desired_yaw_ = subject_heading_ + .65f;
     desired_pitch_ = .16f;
