@@ -34,7 +34,8 @@ std::wstring_view login_host(Grid grid) noexcept {
 }
 bool valid_capability_url(std::wstring_view url) noexcept {
     if(url.size()<16||url.size()>2048||!url.starts_with(L"https://")||
-       url.find_first_of(L"\r\n\t\0")!=std::wstring_view::npos||
+       url.find_first_of(L"\r\n\t")!=std::wstring_view::npos||
+       url.find(wchar_t{0})!=std::wstring_view::npos||
        url.find(L'#')!=std::wstring_view::npos||
        url.find(L'@')!=std::wstring_view::npos) return false;
     // URLs are learned from authenticated simulator responses, never from
