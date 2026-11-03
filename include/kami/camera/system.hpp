@@ -23,6 +23,7 @@ struct Settings {
 void save(Settings value) noexcept;
 
 enum class Shoulder : std::uint8_t { Center, Right, Left };
+enum class StudioShot : std::uint8_t { FullBody, Portrait, Detail, Wide };
 struct Pose {
     Vec3 eye{};
     Vec3 focus{};
@@ -43,6 +44,7 @@ public:
     void toggle_focus_lock() noexcept { focus_lock_ = !focus_lock_; }
     void toggle_cinematic_orbit() noexcept { cinematic_orbit_ = !cinematic_orbit_; idle_seconds_ = 0.f; }
     void cycle_shoulder() noexcept;
+    void apply_studio_shot(StudioShot shot) noexcept;
     void reset() noexcept;
     void update(float delta_seconds, float elapsed_seconds, HeightSampler terrain_height,
                 bool animate_subject) noexcept;
