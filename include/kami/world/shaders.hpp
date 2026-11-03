@@ -18,7 +18,9 @@ cbuffer Frame : register(b0) {
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
 Texture2D<float4> materialTexture : register(t1);
-StructuredBuffer<row_major float4x4> skinPalette : register(t2);
+// Four float4 rows per original KAMI joint. Explicit vector arithmetic
+// avoids row/column-major ambiguities and works with DX11-era HLSL profiles.
+StructuredBuffer<float4> skinRows : register(t2);
 SamplerState materialSampler : register(s1);
 struct VertexIn {
     float3 position : POSITION;
@@ -59,9 +61,21 @@ void skin_vertex(VertexIn input,out float3 position,out float3 normal) {
     float3 n=float3(0.0,0.0,0.0);
     [unroll] for(uint i=0U;i<4U;++i) {
         if(w[i]>0.0) {
-            const row_major float4x4 bone=skinPalette[min(joint[i],7U)];
-            p+=mul(float4(input.position,1.0),bone).xyz*w[i];
-            n+=mul(float4(input.normal,0.0),bone).xyz*w[i];
+            const uint offset=min(joint[i],7U)*4U;
+            const float4 xrow=skinRows[offset];
+            const float4 yrow=skinRows[offset+1U];
+            const float4 zrow=skinRows[offset+2U];
+            const float4 trow=skinRows[offset+3U];
+            const float3 transformed=
+                input.position.x*xrow.xyz+
+                input.position.y*yrow.xyz+
+                input.position.z*zrow.xyz+trow.xyz;
+            const float3 rotated=
+                input.normal.x*xrow.xyz+
+                input.normal.y*yrow.xyz+
+                input.normal.z*zrow.xyz;
+            p+=transformed*w[i];
+            n+=rotated*w[i];
         }
     }
     position=p;
