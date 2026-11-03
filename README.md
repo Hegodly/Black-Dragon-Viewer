@@ -19,6 +19,30 @@ avatar appearance manifests are original validated integration contracts
 that need actual verified LLUDP/capability transport and data decoders.
 See [live integration status](docs/KAMI_LIVE_SECOND_LIFE_CORE_STATUS.md).
 
+## Experimental Second Life login + simulator UDP milestone
+
+In **HOME (F1)**, **N** still runs the password-free official HTTPS
+reachability diagnostic. **L** (or **SL LOGIN TEST**) now opens an explicit
+Terms acceptance warning followed by the **native Windows credential prompt**
+for the official main-grid login host. Password input is transient and is
+not saved. A real official HTTPS login request runs asynchronously.
+KAMI reports **LOGIN ACCEPTED** only after a validated login reply.
+
+After acceptance, an original WinSock UDP circuit sends UseCircuitCode,
+CompleteAgentMovement, and responds to simulator ping, acknowledgments
+and region handshakes. **Simulator responses, login acceptance and a
+fully usable in-world session are separate states.** This does not yet
+establish a full live SL session: capability/event queue, MFA handling,
+live terrain/mesh/texture assets, avatar skeletons, inventory, chat,
+teleporting and the remote DX12 world renderer remain to be built.
+The DX12 WORLD tab currently remains an offline test scene.
+
+See [experimental sign-in and UDP transport notes]
+(docs/KAMI_EXPERIMENTAL_SL_SIGNIN_AND_UDP.md). Use a test account when
+reviewing this experimental build; avoid submitting real passwords in
+issues or bug reports. Compliance and privacy reviews remain necessary
+before distributing a completed viewer.
+
 ## World rendering policy
 KAMI's 3D rendering backend is **DirectX 12 exclusively**. The new original `src/world/device.cpp` uses DXGI to select a hardware D3D12 device and creates a direct command queue. An optional DX12 WARP path is provided for diagnostics where hardware DX12 is unavailable. This is only a foundation: it does not yet create a swap chain, draw geometry, or render a Second Life scene. No OpenGL or D3D11 world renderer is included.
 
