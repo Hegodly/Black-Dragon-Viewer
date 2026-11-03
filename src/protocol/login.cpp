@@ -377,7 +377,9 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(!WinHttpQueryHeaders(web.handle,
        WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,
        WINHTTP_HEADER_NAME_BY_INDEX,&code,&length,WINHTTP_NO_HEADER_INDEX)){
-        failure.status=LoginStatus::HttpError;return failure;
+        failure.status=LoginStatus::HttpError;
+        failure.message=L"SL login HTTP response did not include a status code";
+        return failure;
     }
     failure.http_status=code;
     if(code!=200){
@@ -400,6 +402,8 @@ LoginResult login_to_simulator(const LoginRequest& request,
     }
     auto reply=parse_login_xmlrpc(body);
     reply.http_status=code;
+    if(reply.status==LoginStatus::MalformedReply)
+        reply.message=L"SL LOGIN HTTP 200 / unsupported XML-RPC login response";
     return reply;
 }
 const wchar_t* login_status_label(LoginStatus state) noexcept {
