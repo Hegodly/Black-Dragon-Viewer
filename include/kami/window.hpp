@@ -70,6 +70,7 @@ private:
     std::wstring creator_file_;
     std::wstring creator_message_ = L"Choose a local OBJ file to preview.";
     photo::Settings photo_settings_{};
+    unsigned photo_shot_ = 0;
     std::wstring photo_message_ = L"DX12 live preview - capture PNG to save.";
     world::CaptureStatus prior_capture_=world::CaptureStatus::Idle;
     bool light_ = false;
