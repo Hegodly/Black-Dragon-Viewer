@@ -202,11 +202,19 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_KEYDOWN:
         if(page_ == 5 && wp == 'C') {
             camera_settings_page_ = !camera_settings_page_;
+            graphics_effects_page_ = false;
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return 0;
+        }
+        if(page_ == 5 && wp == 'G') {
+            graphics_effects_page_ = !graphics_effects_page_;
+            camera_settings_page_ = false;
             InvalidateRect(hwnd_,nullptr,FALSE);
             return 0;
         }
         if(page_ == 5 && wp >= '1' && wp <= '7') {
             if(camera_settings_page_) advance_camera(static_cast<unsigned>(wp-'1'));
+            else if(graphics_effects_page_) advance_graphics_effects(static_cast<unsigned>(wp-'1'));
             else advance_graphics(static_cast<unsigned>(wp-'1'));
             return 0;
         }
@@ -351,6 +359,38 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX+contentWidth-194.f,108,164,42),14.f,p.surface);
         label(camera_settings_page_?L"GRAPHICS  [C]":L"CAMERA  [C]",
               box(contentX+contentWidth-179.f,120,147,24),small_font_.Get(),p.accent);
+        round_rect(box(contentX+contentWidth-370.f,108,164,42),14.f,p.surface);
+        label(graphics_effects_page_?L"BASIC  [G]":L"DX12 FX  [G]",
+              box(contentX+contentWidth-354.f,120,147,24),small_font_.Get(),p.accent);
+        if(graphics_effects_page_) {
+            label(L"KAMI NATIVE FX + ADAPTIVE FPS",
+                  box(contentX+28,113,contentWidth-415,38),title_font_.Get(),p.text);
+            label(L"DirectX 12 GPU shader options - click a row or press 1-5",
+                  box(contentX+28,153,contentWidth-55,28),small_font_.Get(),p.muted);
+            const wchar_t* names[]={
+                L"1  AUTO RENDER RESOLUTION",L"2  TARGET FRAME RATE",
+                L"3  ATMOSPHERE HAZE",L"4  MATERIAL CONTACT SHADING",
+                L"5  METALLIC MICROGLINTS"
+            };
+            const std::wstring values[]={
+                graphics_.auto_quality?L"ON (hysteresis + cooldown)":L"OFF",
+                std::to_wstring(graphics_.target_fps)+L" FPS",
+                graphics_.atmosphere_haze?L"DX12 SHADER ON":L"OFF",
+                graphics_.contact_ambient?L"DX12 SHADER ON":L"OFF",
+                graphics_.diamond_glints?L"DX12 SHADER ON":L"OFF"
+            };
+            for(unsigned i=0;i<5;++i) {
+                const float y=186.f+55.f*static_cast<float>(i);
+                round_rect(box(contentX+24,y,contentWidth-48,51),14.f,p.surface);
+                label(names[i],box(contentX+45,y+4,contentWidth-85,20),small_font_.Get(),p.muted);
+                label(values[i],box(contentX+45,y+26,contentWidth-85,26),body_font_.Get(),p.accent);
+            }
+            label(L"Native shading, not SSR, volumetric raymarch or screen-space AO.",
+                  box(contentX+26,height-114,contentWidth-52,28),small_font_.Get(),p.muted);
+            label(L"DLSS / XeSS / FSR / frame generation require separate SDK integration.",
+                  box(contentX+26,height-83,contentWidth-52,28),small_font_.Get(),p.muted);
+            return;
+        }
         if(camera_settings_page_) {
             label(L"KAMI CAMERA  /  ORIGINAL ENGINE",
                   box(contentX+28,113,contentWidth-225,38),title_font_.Get(),p.text);
@@ -439,6 +479,12 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         }
         label(L"Drag: orbit  |  Wheel: zoom  |  Q: shoulder  |  R: recenter  |  O: cinematic",
               box(contentX+29,height-103,contentWidth-50,30),small_font_.Get(),p.muted);
+        std::wstring perf=L"CPU "+std::to_wstring(static_cast<unsigned>(last_performance_.process_cpu_percent))+
+            L"%  |  RAM "+std::to_wstring(last_performance_.process_ram_mb)+L"MB";
+        if(last_performance_.gpu_readable)
+            perf+=L"  |  DX12 VRAM "+std::to_wstring(last_performance_.gpu_vram_used_mb)+
+                  L"/"+std::to_wstring(last_performance_.gpu_vram_budget_mb)+L"MB";
+        label(perf,box(contentX+28,height-136,contentWidth-48,24),small_font_.Get(),p.accent);
         label(L"Procedural test scene only. SL region and avatar transport: not connected.",
               box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
         return;
@@ -576,6 +622,13 @@ void Window::tick() {
         fps_display_=static_cast<unsigned>(static_cast<double>(fps_frames_)/elapsed+0.5);
         fps_frames_=0;
         fps_epoch_=now;
+        last_performance_=performance_monitor_.sample(world_renderer_.native_device());
+        if(adaptive_.sample(graphics_,static_cast<float>(fps_display_),
+                            static_cast<float>(elapsed))) {
+            world_renderer_.set_graphics(graphics_);
+            world_ready_=world_renderer_.ready();
+            next_frame_={};
+        }
         InvalidateRect(hwnd_,nullptr,FALSE);
     }
     if(graphics_.fps_limit!=0) {
@@ -589,7 +642,25 @@ void Window::advance_graphics(unsigned row) {
     switch(row) {
     case 0:
         graphics_.preset=static_cast<graphics::Preset>(
-            (static_cast<unsigned>(graphics_.preset)+1U)%3U);
+            (static_cast<unsigned>(graphics_.preset)+1U)%4U);
+        if(graphics_.preset==graphics::Preset::Potato) {
+            graphics_.render_scale_percent=50;
+            graphics_.pbr=false;graphics_.shadows=false;
+            graphics_.contact_ambient=false;
+            graphics_.atmosphere_haze=false;
+            graphics_.diamond_glints=false;
+        } else if(graphics_.preset==graphics::Preset::Quality) {
+            graphics_.render_scale_percent=100;
+            graphics_.pbr=true;graphics_.shadows=true;
+            graphics_.contact_ambient=true;
+            graphics_.diamond_glints=true;
+        } else if(graphics_.preset==graphics::Preset::Performance) {
+            graphics_.render_scale_percent=75;
+            graphics_.shadows=false;graphics_.atmosphere_haze=false;
+        } else {
+            graphics_.render_scale_percent=100;
+        }
+        adaptive_.reset();
         break;
     case 1:
         graphics_.render_scale_percent=
@@ -616,6 +687,28 @@ void Window::advance_graphics(unsigned row) {
     world_renderer_.set_graphics(graphics_);
     world_ready_=!world_initialized_ || world_renderer_.ready();
     next_frame_={};
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
+void Window::advance_graphics_effects(unsigned row) {
+    switch(row) {
+    case 0: graphics_.auto_quality=!graphics_.auto_quality; adaptive_.reset(); break;
+    case 1:
+        graphics_.target_fps=graphics_.target_fps==30?60:
+            graphics_.target_fps==60?90:
+            graphics_.target_fps==90?120:
+            graphics_.target_fps==120?144:30;
+        adaptive_.reset();
+        break;
+    case 2: graphics_.atmosphere_haze=!graphics_.atmosphere_haze; break;
+    case 3: graphics_.contact_ambient=!graphics_.contact_ambient; break;
+    case 4: graphics_.diamond_glints=!graphics_.diamond_glints; break;
+    default: return;
+    }
+    graphics_=graphics::normalize(graphics_);
+    graphics::save(graphics_);
+    world_renderer_.set_graphics(graphics_);
+    world_ready_=!world_initialized_ || world_renderer_.ready();
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
@@ -660,8 +753,15 @@ void Window::click(float x, float y) {
         toggle_appearance();
         return;
     }
+    if(page_==5 && x>=width-405.f && x<width-239.f && y>=106.f && y<154.f) {
+        graphics_effects_page_=!graphics_effects_page_;
+        camera_settings_page_=false;
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
     if(page_==5 && x>=width-220.f && x<width-44.f && y>=106.f && y<154.f) {
         camera_settings_page_=!camera_settings_page_;
+        graphics_effects_page_=false;
         InvalidateRect(hwnd_,nullptr,FALSE);
         return;
     }
@@ -670,6 +770,7 @@ void Window::click(float x, float y) {
             const float top=186.f+55.f*static_cast<float>(i);
             if(y>=top && y<top+51.f) {
                 if(camera_settings_page_) advance_camera(i);
+                else if(graphics_effects_page_) advance_graphics_effects(i);
                 else advance_graphics(i);
                 return;
             }

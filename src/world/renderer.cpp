@@ -442,6 +442,7 @@ void Renderer::draw() {
         0.f : std::chrono::duration<float>(now-last_camera_frame_).count();
     last_camera_frame_=now;
     const float seconds=std::chrono::duration<float>(now-start_time_).count();
+    avatar_spring_.step(std::sin(seconds*2.f),dt);
     camera_.update(dt,seconds,sample_test_terrain_height,graphics_.animate_avatar);
     const auto camera=camera_.pose();
     const XMVECTOR eye=XMVectorSet(camera.eye.x,camera.eye.y,camera.eye.z,0.f);
@@ -461,7 +462,7 @@ void Renderer::draw() {
     XMFLOAT4X4 viewproj{},lightproj{};
     XMStoreFloat4x4(&viewproj,view*projection);
     XMStoreFloat4x4(&lightproj,lightView*lightProjection);
-    std::array<float,44> constants{};
+    std::array<float,48> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
     constants[17]=-.86f;
@@ -477,6 +478,10 @@ void Renderer::draw() {
     constants[26]=graphics_.pbr?1.f:0.f;
     constants[27]=graphics_.shadows?1.f:0.f;
     std::memcpy(constants.data()+28,&lightproj,sizeof(lightproj));
+    constants[44]=graphics_.atmosphere_haze?1.f:0.f;
+    constants[45]=graphics_.contact_ambient?1.f:0.f;
+    constants[46]=graphics_.diamond_glints?1.f:0.f;
+    constants[47]=0.f;
 
     commands_->SetGraphicsRootSignature(signature_.Get());
     commands_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -505,10 +510,10 @@ void Renderer::draw() {
         commands_->RSSetViewports(1,&shadowView);
         commands_->RSSetScissorRects(1,&shadowRect);
         commands_->SetPipelineState(shadow_pipeline_.Get());
-        commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
+        commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
-        constants[25]=graphics_.animate_avatar?1.f:0.f;
-        commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
+        constants[25]=graphics_.animate_avatar?.055f*avatar_spring_.position():0.f;
+        commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                                 static_cast<UINT>(terrain_count_),0);
         constants[25]=0.f;
@@ -541,10 +546,10 @@ void Renderer::draw() {
     commands_->SetDescriptorHeaps(1,heaps);
     commands_->SetGraphicsRootDescriptorTable(
         1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
-    commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
+    commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
-    constants[25]=graphics_.animate_avatar?1.f:0.f;
-    commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
+    constants[25]=graphics_.animate_avatar?.055f*avatar_spring_.position():0.f;
+    commands_->SetGraphicsRoot32BitConstants(0,48,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
     auto end=barrier(buffers_[index].Get(),

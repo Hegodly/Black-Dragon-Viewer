@@ -5,10 +5,10 @@ if(NOT WIN32)
 endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/protocol/session.cpp src/world/device.cpp src/world/scene.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
+add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/social.cpp src/features/navigation.cpp src/features/physics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/world/device.cpp src/world/scene.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
 target_include_directories(kami_core PUBLIC include)
 target_compile_definitions(kami_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(kami_core PUBLIC d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm)
+target_link_libraries(kami_core PUBLIC d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm bcrypt psapi)
 add_executable(KAMIViewer WIN32 src/app/main.cpp src/app/window.cpp)
 target_include_directories(KAMIViewer PRIVATE include)
 target_link_libraries(KAMIViewer PRIVATE kami_core ole32)
@@ -54,3 +54,35 @@ set_tests_properties(KamiDX12RealRendererSmoke PROPERTIES SKIP_RETURN_CODE 77 TI
 add_executable(kami_camera_tests tests/camera_tests.cpp)
 target_link_libraries(kami_camera_tests PRIVATE kami_core)
 add_test(NAME KamiOriginalCameraSystem COMMAND kami_camera_tests)
+
+add_executable(kami_adaptive_quality_tests tests/adaptive_quality_tests.cpp)
+target_link_libraries(kami_adaptive_quality_tests PRIVATE kami_core)
+add_test(NAME KamiAdaptiveDX12RenderScale COMMAND kami_adaptive_quality_tests)
+
+add_executable(kami_inventory_tests tests/inventory_tests.cpp)
+target_link_libraries(kami_inventory_tests PRIVATE kami_core)
+add_test(NAME KamiNativeInventorySafeSort COMMAND kami_inventory_tests)
+
+add_executable(kami_creator_tests tests/creator_tests.cpp)
+target_link_libraries(kami_creator_tests PRIVATE kami_core)
+add_test(NAME KamiCreatorMeshPreflight COMMAND kami_creator_tests)
+
+add_executable(kami_social_tests tests/social_tests.cpp)
+target_link_libraries(kami_social_tests PRIVATE kami_core)
+add_test(NAME KamiMessageReceiptTrust COMMAND kami_social_tests)
+
+add_executable(kami_navigation_tests tests/navigation_tests.cpp)
+target_link_libraries(kami_navigation_tests PRIVATE kami_core)
+add_test(NAME KamiNavigationPermissionContract COMMAND kami_navigation_tests)
+
+add_executable(kami_physics_tests tests/physics_tests.cpp)
+target_link_libraries(kami_physics_tests PRIVATE kami_core)
+add_test(NAME KamiProceduralAvatarSpring COMMAND kami_physics_tests)
+
+add_executable(kami_hotfix_tests tests/hotfix_tests.cpp)
+target_link_libraries(kami_hotfix_tests PRIVATE kami_core)
+add_test(NAME KamiHotfixIntegrityAndTrust COMMAND kami_hotfix_tests)
+
+add_executable(kami_telemetry_tests tests/telemetry_tests.cpp)
+target_link_libraries(kami_telemetry_tests PRIVATE kami_core)
+add_test(NAME KamiSystemTelemetryContract COMMAND kami_telemetry_tests)

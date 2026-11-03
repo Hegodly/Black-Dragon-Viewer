@@ -2,6 +2,7 @@
 #include "kami/world/device.hpp"
 #include "kami/graphics/settings.hpp"
 #include "kami/camera/system.hpp"
+#include "kami/features/physics.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -40,6 +41,7 @@ public:
     void shutdown() noexcept;
 
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    [[nodiscard]] ID3D12Device* native_device() const noexcept {return device_.native_device();}
     [[nodiscard]] const std::wstring& adapter_name() const noexcept {
         return device_.adapter_name();
     }
@@ -69,6 +71,7 @@ private:
     graphics::Settings graphics_{};
     bool ready_ = false;
     camera::System camera_{};
+    physics::Spring avatar_spring_{};
     std::chrono::steady_clock::time_point last_camera_frame_{};
     std::chrono::steady_clock::time_point start_time_ = std::chrono::steady_clock::now();
     std::wstring error_;
