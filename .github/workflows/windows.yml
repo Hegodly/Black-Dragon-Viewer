@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - fix/kami-sl-login-http400-protocol-fields
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge

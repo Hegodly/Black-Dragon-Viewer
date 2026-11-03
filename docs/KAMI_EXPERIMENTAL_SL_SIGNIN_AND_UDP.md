@@ -90,3 +90,38 @@ Official documentation:
 - https://wiki.secondlife.com/wiki/CompleteAgentMovement
 - https://wiki.secondlife.com/wiki/RegionHandshake
 - https://secondlife.com/corporate/third-party-viewers
+
+## Login HTTP 400 — third-party XML-RPC request validation
+
+A user screenshot from November 3, 2026 showed **HTTP 400** on the
+experimental Login Test. This status confirms an HTTP error response, not
+successful account authentication; its exact cause cannot be proven from
+the HTTP status alone.
+
+The original build also sent a raw colon-delimited physical MAC string.
+The modern official login request uses a hashed unique machine string in
+the `mac` field; KAMI now hashes the adapter identifier into a 32-character
+hex value before sending it and does not transmit the physical MAC. A stable
+hash remains a pseudonymous identifier and is disclosed as such.
+
+Legacy accounts may log in with `first.last` or `First Last`, while newer
+single-word accounts use the `Resident` surname. KAMI now normalizes the
+legacy dotted form correctly, rather than incorrectly adding `Resident`.
+
+The original request lacked the `id0` field listed among required
+parameters in the documented Second Life XML-RPC login contract. The
+experimental request now sends the documented all-zero *anonymous*
+placeholder rather than a raw disk serial number, and opts in to
+`extended_errors` structured error information. This is a candidate
+protocol compatibility fix **not verified against the live server**.
+The message for 400 no longer claims that the server conclusively rejected
+the request *format*. The service might also reject unrecognized viewer
+versions, account restrictions, or intermediary HTTP requests.
+
+Do not print XML-RPC password hashes, account identifiers, capability URLs,
+HTTP response bodies or MFA tokens in diagnostic UI or logs. No automatic
+login retries should be added; users must initiate each attempt. The
+prototype does not support MFA continuation, a full ToS challenge flow,
+caps/event queue, live world assets or actual region rendering.
+
+Protocol reference: https://wiki.secondlife.com/wiki/Current_login_protocols

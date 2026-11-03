@@ -143,6 +143,35 @@ std::string actual_mac(){
     }
     return {};
 }
+// Newer official SL clients send a 32-character hashed unique identifier
+// as the XML-RPC "mac" value. Never transmit the physical MAC itself.
+std::string hashed_mac() {
+    SecureBytes raw;
+    raw.data=actual_mac();
+    if(raw.data.empty())return {};
+    BCRYPT_ALG_HANDLE algorithm=nullptr;
+    if(!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
+           &algorithm,BCRYPT_MD5_ALGORITHM,nullptr,0)))return {};
+    std::array<unsigned char,16> digest{};
+    const NTSTATUS result=BCryptHash(algorithm,nullptr,0,
+        reinterpret_cast<PUCHAR>(raw.data.data()),
+        static_cast<ULONG>(raw.data.size()),digest.data(),
+        static_cast<ULONG>(digest.size()));
+    BCryptCloseAlgorithmProvider(algorithm,0);
+    if(!BCRYPT_SUCCESS(result)) {
+        SecureZeroMemory(digest.data(),digest.size());
+        return {};
+    }
+    constexpr char digits[]="0123456789abcdef";
+    std::string fingerprint;
+    fingerprint.reserve(32);
+    for(const unsigned char b:digest){
+        fingerprint.push_back(digits[b>>4]);
+        fingerprint.push_back(digits[b&15U]);
+    }
+    SecureZeroMemory(digest.data(),digest.size());
+    return fingerprint;
+}
 std::wstring safe_message(std::wstring s) {
     if(s.size()>200)s.resize(200);
     for(wchar_t& c:s)if(c<32||c==127)c=L' ';
@@ -190,8 +219,18 @@ bool parse_account_name(std::wstring_view account,std::string& first,
         }
         return true;
     };
-    if(delimiter==std::wstring_view::npos)return convert(account,first)&&
-        (last="Resident",true);
+    if(delimiter==std::wstring_view::npos) {
+        // SL's one-field login accepts modern usernames and the legacy
+        // "first.last" spelling. Old KAMI treated "first.last" as a modern
+        // first name and silently submitted the wrong last name.
+        const auto dot=account.find(L'.');
+        if(dot==std::wstring_view::npos)
+            return convert(account,first)&&(last="Resident",true);
+        if(dot==0||dot+1==account.size()||
+           account.find(L'.',dot+1)!=std::wstring_view::npos)return false;
+        return convert(account.substr(0,dot),first)&&
+               convert(account.substr(dot+1),last);
+    }
     auto first_part=account.substr(0,delimiter);
     auto last_part=account.substr(delimiter+1);
     if(last_part.find(L' ')!=std::wstring_view::npos)return false;
@@ -203,7 +242,10 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     if(!xml_safe_ascii(first)||!xml_safe_ascii(last)||
        hashed.size()!=35||!hashed.starts_with("$1$")||
        !xml_safe_ascii(hashed.substr(3))||
-       mac.size()!=17||!accepted)return {};
+       mac.size()!=32||
+       !std::all_of(mac.begin(),mac.end(),[](unsigned char c){
+           return std::isxdigit(c)!=0;
+       })||!accepted)return {};
     std::string doc="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<methodCall><methodName>login_to_simulator</methodName>"
         "<params><param><value><struct>";
@@ -217,8 +259,16 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     put_string(doc,"version","0.1.0.53");
     put_string(doc,"platform","Win");
     put_string(doc,"mac",mac);
+    // Required by the documented SL XML-RPC login contract. KAMI avoids
+    // exposing a disk serial number by sending the documented anonymous
+    // placeholder until a user-consented machine-ID design is reviewed.
+    put_string(doc,"id0","00000000-0000-0000-0000-000000000000");
     put_string(doc,"agree_to_tos","true");
     put_string(doc,"read_critical","false");
+    // Ask for structured (non-secret) error reasons from the login service.
+    // Unlike authentication success, these are optional hints.
+    doc+="<member><name>extended_errors</name>"
+         "<value><boolean>1</boolean></value></member>";
     doc+="<member><name>options</name><value><array><data>";
     for(const char* option:{"login-flags","inventory-root","inventory-skeleton",
                             "buddy-list","gestures","global-textures"}){
@@ -313,7 +363,7 @@ std::wstring login_http_diagnostic(unsigned code) {
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"server rejected login request format";
+    case 400:return prefix+L"Bad Request (cause unconfirmed; check protocol)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
@@ -339,8 +389,8 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(!digest_password(password,hash)){
         failure.status=LoginStatus::CryptoUnavailable;return failure;
     }
-    const auto mac=actual_mac();
-    if(mac.empty()){failure.status=LoginStatus::NetworkError;return failure;}
+    const auto mac=hashed_mac();
+    if(mac.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
     SecureBytes payload;
     payload.data=build_login_xmlrpc(first,last,hash.data,mac,request.terms_accepted);
     if(payload.data.empty())return failure;
