@@ -20,6 +20,9 @@ assert not header.exists() and not installer_header.exists() and not installer_s
 shutil.copyfile(ROOT / "kami/release/kami_update_checker.h", header)
 shutil.copyfile(ROOT / "kami/release/kami_update_install.h", installer_header)
 shutil.copyfile(ROOT / "kami/release/KAMIUpdater.ps1", installer_script)
+test_script = VIEW / "app_settings/kami-test-updater.ps1"
+assert not test_script.exists(), "Test updater already integrated"
+shutil.copyfile(ROOT / "kami/release/KAMI-Test-Update.ps1", test_script)
 
 login = VIEW / "llpanellogin.cpp"
 data = login.read_text(encoding="utf-8-sig")
@@ -52,6 +55,19 @@ bool callback_install_kami_update(const LLSD& notification, const LLSD& response
     LLAppViewer::instance()->requestQuit();
     return false;
 }
+
+bool callback_test_kami_update(const LLSD& notification, const LLSD& response)
+{
+    if (LLNotificationsUtil::getSelectedOption(notification, response) != 0)
+        return false;
+    if (!kami::updates::launchTestInstall())
+    {
+        LLNotificationsUtil::add("KAMIUpdateLauncherError");
+        return false;
+    }
+    LLAppViewer::instance()->requestQuit();
+    return false;
+}
 #endif
 
 LLPointer<LLCredential> load_user_credentials''')
@@ -72,7 +88,15 @@ data = data[:begin] + '''    // KAMI release metadata is checked off the UI thre
 
 ''' + data[end:]
 
-once('void LLPanelLogin::draw()\n{\n#if LL_WINDOWS\n',
+once('#if LL_WINDOWS\\n    LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");', '''#if LL_WINDOWS
+    getChild<LLButton>("kami_test_update")->setClickedCallback(
+        [](LLUICtrl*, const LLSD&) {
+            LLNotificationsUtil::add("KAMITestUpdateConfirm", LLSD(), LLSD(),
+                callback_test_kami_update);
+        });
+    LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");''')
+
+once('void LLPanelLogin::draw()\\n{\\n#if LL_WINDOWS\\n',
 '''void LLPanelLogin::draw()
 {
 #if LL_WINDOWS
@@ -124,6 +148,15 @@ actions = [x for x in button if x.tag == "button.commit_callback"]
 assert len(actions) == 1 and actions[0].get("function") == "PromptShowURL"
 actions[0].set("parameter",
     "WebLaunchExternalTarget,https://github.com/Hegodly/Black-Dragon-Viewer/releases")
+assert not any(n.get("name") == "kami_test_update" for n in root.iter())
+ET.SubElement(root, "button", {
+    "name": "kami_test_update",
+    "label": "TEST UPDATE (LOCAL)",
+    "tool_tip": "Verify the updater and restart KAMI without changing executable code",
+    "layout": "topleft", "follows": "right|top",
+    "left": "808", "top": "30", "width": "170", "height": "26",
+    "font": "SansSerifSmall",
+})
 ET.indent(tree, space=" ")
 tree.write(login_ui, encoding="utf-8", xml_declaration=True)
 
@@ -149,6 +182,16 @@ manual.text = "A newer KAMI release is available, but it has no verified automat
 ET.SubElement(manual, "tag").text = "confirm"
 ET.SubElement(manual, "usetemplate", {
     "name": "okcancelbuttons", "yestext": "VIEW RELEASE", "notext": "LATER"
+})
+testConfirm = ET.SubElement(tree.getroot(), "notification", {
+    "name": "KAMITestUpdateConfirm", "icon": "notify.tga", "type": "alertmodal"
+})
+testConfirm.text = ("Run the local KAMI test update? It will verify a bundled test ZIP, "
+    "close the viewer, install a harmless marker file, and restart KAMI. "
+    "It needs free disk space for a backup. No new program code is downloaded.\\n")
+ET.SubElement(testConfirm, "tag").text = "confirm"
+ET.SubElement(testConfirm, "usetemplate", {
+    "name": "okcancelbuttons", "yestext": "TEST & RESTART", "notext": "CANCEL"
 })
 fail = ET.SubElement(tree.getroot(), "notification", {
     "name": "KAMIUpdateLauncherError", "icon": "alertmodal.tga", "type": "alertmodal"
