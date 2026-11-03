@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <filesystem>
+#include <objbase.h>
 
 namespace {
 LRESULT CALLBACK smoke_window(HWND window,UINT message,WPARAM wp,LPARAM lp) {
@@ -33,6 +34,14 @@ int main() {
         return 77;
     }
     ShowWindow(window,SW_SHOWNOACTIVATE);
+    // WIC screenshot encoding relies on a COM apartment, just like the GUI app.
+    const HRESULT co_ready=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    if(FAILED(co_ready)) {
+        DestroyWindow(window);
+        UnregisterClassW(desc.lpszClassName,instance);
+        std::wcerr<<L"Could not initialize COM for DX12 photo smoke test\n";
+        return 1;
+    }
     int result=0;
     {
         kami::world::Renderer renderer;
@@ -122,7 +131,8 @@ int main() {
     }
     DestroyWindow(window);
     UnregisterClassW(desc.lpszClassName,instance);
+    CoUninitialize();
     if(result!=0 && result!=77)
-        std::wcerr<<L"KAMI DX12 smoke failure stage "<<result<<L"\\n";
+        std::wcerr<<L"KAMI DX12 smoke failure stage "<<result<<L"\n";
     return result;
 }
