@@ -21,7 +21,7 @@ constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
 constexpr UINT kCompilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 constexpr std::size_t kMaxShaderBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxPipelineBytes = 32U * 1024U * 1024U;
-constexpr std::string_view kBuildVersion = "kami-dx12-pso-v4-shadowmap-pbr-sm5";
+constexpr std::string_view kBuildVersion = "kami-dx12-pso-v5-textured-shadow-pbr-sm5";
 namespace fs = std::filesystem;
 
 std::uint64_t fnv(std::string_view data, std::uint64_t h = 14695981039346656037ULL) noexcept {
@@ -129,7 +129,7 @@ bool root_signature(ID3D12Device* device,
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_DESCRIPTOR_RANGE shadow_range{};
     shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    shadow_range.NumDescriptors=1;
+    shadow_range.NumDescriptors=2;
     shadow_range.BaseShaderRegister=0;
     shadow_range.OffsetInDescriptorsFromTableStart=D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     D3D12_ROOT_PARAMETER parameters[2]{};
@@ -151,11 +151,22 @@ bool root_signature(ID3D12Device* device,
     comparison.MaxLOD=D3D12_FLOAT32_MAX;
     comparison.ShaderRegister=0;
     comparison.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC material_sampler{};
+    material_sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    material_sampler.AddressU=D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    material_sampler.AddressV=D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    material_sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    material_sampler.MaxAnisotropy=1;
+    material_sampler.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;
+    material_sampler.MaxLOD=D3D12_FLOAT32_MAX;
+    material_sampler.ShaderRegister=1;
+    material_sampler.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC samplers[]={comparison,material_sampler};
     D3D12_ROOT_SIGNATURE_DESC root{};
     root.NumParameters=2;
     root.pParameters=parameters;
-    root.NumStaticSamplers=1;
-    root.pStaticSamplers=&comparison;
+    root.NumStaticSamplers=2;
+    root.pStaticSamplers=samplers;
     root.Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     Microsoft::WRL::ComPtr<ID3DBlob> blob;
     if(FAILED(D3D12SerializeRootSignature(&root,D3D_ROOT_SIGNATURE_VERSION_1,
@@ -172,7 +183,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc(
     desc.pRootSignature=root;
     desc.VS={vs.data(),vs.size()};
     desc.PS={ps.data(),ps.size()};
-    desc.InputLayout={input,4};
+    desc.InputLayout={input,5};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.FrontCounterClockwise=FALSE;
@@ -235,6 +246,8 @@ bool ShaderCache::prepare(
         {"COLOR",0,DXGI_FORMAT_R32G32B32_FLOAT,0,24,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,44,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     auto desc=pipeline_desc(signature.Get(),vs,ps,input);
@@ -316,12 +329,14 @@ bool ShaderCache::prepare_shadow(
         {"COLOR",0,DXGI_FORMAT_R32G32B32_FLOAT,0,24,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,44,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature=signature;
     desc.VS={vs.data(),vs.size()};
-    desc.InputLayout={input,4};
+    desc.InputLayout={input,5};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.DepthClipEnable=TRUE;

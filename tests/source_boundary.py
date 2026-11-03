@@ -40,5 +40,11 @@ assert "shadow_srv_heap_" in renderer
 shader=(root/"include/kami/world/shaders.hpp").read_text(encoding="utf-8")
 assert "shadow_vertex_main" in shader
 assert "shadow_factor" in shader
+assert "materialTexture.Sample" in shader
+assert "make_material_texture()" in renderer
+assert "CopyTextureRegion" in renderer
+assert "GetCopyableFootprints" in renderer
+assert "material_texture_" in renderer
+assert "NumDescriptors=2" in (root/"src/world/shader_cache.cpp").read_text(encoding="utf-8")
 assert "ggx_distribution" in shader
 print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")

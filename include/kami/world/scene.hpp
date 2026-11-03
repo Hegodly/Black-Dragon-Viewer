@@ -8,6 +8,7 @@ struct Vertex {
     float nx, ny, nz;
     float r, g, b;
     float metallic, roughness;
+    float u, v;
 };
 struct SceneMesh {
     std::vector<Vertex> vertices;

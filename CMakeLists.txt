@@ -40,3 +40,7 @@ add_test(NAME KamiStartupShaderWarmupContract COMMAND kami_shader_warmup_tests)
 add_executable(kami_graphics_tests tests/graphics_settings_tests.cpp)
 target_link_libraries(kami_graphics_tests PRIVATE kami_core)
 add_test(NAME KamiNativeGraphicsSettingsAndPresets COMMAND kami_graphics_tests)
+
+add_executable(kami_texture_tests tests/texture_upload_tests.cpp)
+target_link_libraries(kami_texture_tests PRIVATE kami_core)
+add_test(NAME KamiDX12TextureFootprintContract COMMAND kami_texture_tests)

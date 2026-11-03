@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cmath>
 #include <cstring>
+#include <cstdint>
 #include <limits>
 #include <utility>
 
@@ -104,6 +105,91 @@ bool Renderer::make_shadow() {
     device_.native_device()->CreateShaderResourceView(
         shadow_map_.Get(),&srv,
         shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart());
+    return true;
+}
+
+
+bool Renderer::make_material_texture() {
+    // First GPU image is a KAMI-authored procedural 64x64 albedo texture.
+    // This creates the real DX12 upload + shader-resource path required
+    // later for independently decoded external assets.
+    constexpr UINT tw=64,th=64;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width=tw;
+    desc.Height=th;
+    desc.DepthOrArraySize=1;
+    desc.MipLevels=1;
+    desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count=1;
+    desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    const auto heap_default=heap(D3D12_HEAP_TYPE_DEFAULT);
+    if(FAILED(device_.native_device()->CreateCommittedResource(
+            &heap_default,D3D12_HEAP_FLAG_NONE,&desc,
+            D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
+            IID_PPV_ARGS(material_texture_.ReleaseAndGetAddressOf()))))
+        return false;
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    UINT rows=0;
+    UINT64 rowBytes=0,uploadSize=0;
+    device_.native_device()->GetCopyableFootprints(
+        &desc,0,1,0,&footprint,&rows,&rowBytes,&uploadSize);
+    if(rows!=th || rowBytes!=tw*4U || uploadSize==0) return false;
+    const auto upload_desc=buffer_desc(uploadSize);
+    const auto heap_upload=heap(D3D12_HEAP_TYPE_UPLOAD);
+    if(FAILED(device_.native_device()->CreateCommittedResource(
+            &heap_upload,D3D12_HEAP_FLAG_NONE,&upload_desc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+            IID_PPV_ARGS(material_upload_.ReleaseAndGetAddressOf()))))
+        return false;
+
+    void* mapped=nullptr;
+    if(FAILED(material_upload_->Map(0,nullptr,&mapped))) return false;
+    std::memset(mapped,0,static_cast<std::size_t>(uploadSize));
+    auto* pixels=static_cast<std::uint8_t*>(mapped);
+    for(UINT y=0;y<th;++y) for(UINT x=0;x<tw;++x) {
+        auto* pixel=pixels+static_cast<std::size_t>(y)*footprint.Footprint.RowPitch+
+                     static_cast<std::size_t>(x)*4;
+        const bool tile=((x/8U+y/8U)%2U)==0U;
+        pixel[0]=tile?220:128;
+        pixel[1]=tile?205:160;
+        pixel[2]=tile?180:215;
+        pixel[3]=255;
+    }
+    material_upload_->Unmap(0,nullptr);
+
+    D3D12_TEXTURE_COPY_LOCATION dest{};
+    dest.pResource=material_texture_.Get();
+    dest.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dest.SubresourceIndex=0;
+    D3D12_TEXTURE_COPY_LOCATION source{};
+    source.pResource=material_upload_.Get();
+    source.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    source.PlacedFootprint=footprint;
+    if(FAILED(allocator_->Reset()) ||
+       FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get())))
+        return false;
+    commands_->CopyTextureRegion(&dest,0,0,0,&source,nullptr);
+    const auto ready=barrier(material_texture_.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    commands_->ResourceBarrier(1,&ready);
+    if(FAILED(commands_->Close())) return false;
+    ID3D12CommandList* list[]={commands_.Get()};
+    device_.graphics_queue()->ExecuteCommandLists(1,list);
+    wait_for_gpu();
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Texture2D.MipLevels=1;
+    auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr+=device_.native_device()->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    device_.native_device()->CreateShaderResourceView(
+        material_texture_.Get(),&srv,handle);
     return true;
 }
 
@@ -241,7 +327,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     dsv.NumDescriptors=2;
     D3D12_DESCRIPTOR_HEAP_DESC srv{};
     srv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srv.NumDescriptors=1;
+    srv.NumDescriptors=2;
     srv.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if(FAILED(device_.native_device()->CreateDescriptorHeap(
             &dsv,IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf()))) ||
@@ -278,6 +364,10 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     fence_event_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
     if(!fence_event_) {
         error_=L"Could not create GPU event";
+        return false;
+    }
+    if(!make_material_texture()) {
+        error_=L"Could not upload DX12 material texture";
         return false;
     }
     ready_=true;
@@ -476,6 +566,8 @@ void Renderer::shutdown() noexcept {
     if(fence_event_) { CloseHandle(fence_event_); fence_event_=nullptr; }
     depth_.Reset();
     shadow_map_.Reset();
+    material_texture_.Reset();
+    material_upload_.Reset();
     for(auto& buffer:buffers_) buffer.Reset();
     swapchain_.Reset();
     geometry_.Reset();

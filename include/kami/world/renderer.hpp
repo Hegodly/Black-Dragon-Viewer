@@ -46,6 +46,7 @@ private:
     [[nodiscard]] bool make_targets();
     [[nodiscard]] bool make_depth();
     [[nodiscard]] bool make_shadow();
+    [[nodiscard]] bool make_material_texture();
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
     void wait_for_gpu() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle(UINT index) const noexcept;
@@ -70,6 +71,8 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kBuffers> buffers_;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_;
     Microsoft::WRL::ComPtr<ID3D12Resource> shadow_map_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> material_texture_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> material_upload_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> shadow_pipeline_;

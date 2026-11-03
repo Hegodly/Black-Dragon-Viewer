@@ -12,11 +12,14 @@ cbuffer Frame : register(b0) {
 };
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
+Texture2D<float4> materialTexture : register(t1);
+SamplerState materialSampler : register(s1);
 struct VertexIn {
     float3 position : POSITION;
     float3 normal : NORMAL;
     float3 color : COLOR;
     float2 material : MATERIAL;
+    float2 uv : TEXCOORD0;
 };
 struct Interpolant {
     float4 clip : SV_POSITION;
@@ -24,6 +27,7 @@ struct Interpolant {
     float3 normal : TEXCOORD1;
     float3 albedo : TEXCOORD2;
     float2 material : TEXCOORD3;
+    float2 uv : TEXCOORD4;
 };
 Interpolant vertex_main(VertexIn input) {
     Interpolant output;
@@ -35,6 +39,7 @@ Interpolant vertex_main(VertexIn input) {
     output.normal = input.normal;
     output.albedo = input.color;
     output.material = input.material;
+    output.uv = input.uv;
     return output;
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
@@ -83,7 +88,10 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     float NdotV=max(saturate(dot(N,V)),0.001);
     float NdotH=saturate(dot(N,H));
     float VdotH=saturate(dot(V,H));
-    float3 base=saturate(input.albedo);
+    // This is a real sampled GPU texture, procedurally uploaded by KAMI.
+    // Later SL texture assets will enter through the same resource interface.
+    float3 texel=materialTexture.Sample(materialSampler,input.uv).rgb;
+    float3 base=saturate(input.albedo*lerp(0.72,1.12,texel));
     float visibility=shadow_factor(input.position,N);
     float3 radiance=float3(1.25,1.18,1.08)*sunDirectionIntensity.w;
     float3 color;

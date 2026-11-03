@@ -19,7 +19,7 @@ void triangle(std::vector<Vertex>& out,P a,P b,P c,C color,
     const P n=normal(a,b,c);
     for(const P p: {a,b,c})
         out.push_back({p.x,p.y,p.z,n.x,n.y,n.z,color.r,color.g,color.b,
-                       metallic,roughness});
+                       metallic,roughness,p.x*.18f,p.z*.18f});
 }
 void quad(std::vector<Vertex>& out,P a,P b,P c,P d,C color,
           float metallic,float roughness) {

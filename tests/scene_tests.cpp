@@ -17,6 +17,7 @@ int main() {
         if(v.r<0.f||v.r>1.f||v.g<0.f||v.g>1.f||v.b<0.f||v.b>1.f) return 8;
         if(!std::isfinite(v.metallic)||!std::isfinite(v.roughness)) return 10;
         if(v.metallic<0.f||v.metallic>1.f||v.roughness<.06f||v.roughness>1.f) return 11;
+        if(!std::isfinite(v.u)||!std::isfinite(v.v)) return 12;
     }
     const auto first=mesh.vertices.front();
     if(first.px<-15.f||first.px>15.f||first.pz<-15.f||first.pz>15.f) return 9;
