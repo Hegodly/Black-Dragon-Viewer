@@ -3,6 +3,10 @@
 #include "kami/features/viewer_foundation.hpp"
 
 #include <windowsx.h>
+#include <credui.h>
+#include <shellapi.h>
+#include <future>
+#include <thread>
 #include <dwmapi.h>
 #include <algorithm>
 #include <array>
@@ -258,6 +262,10 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
               static_cast<float>(GET_Y_LPARAM(lp)));
         return 0;
     case WM_TIMER:
+        if(wp==203) {
+            update_sl_connection();
+            return 0;
+        }
         if (wp == 202) {
             const auto state=shader_warmup_.snapshot();
             if (page_ == 0) InvalidateRect(hwnd_, nullptr, FALSE);
@@ -273,6 +281,10 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
+        if(page_==0 && wp=='L') {
+            begin_sl_login();
+            return 0;
+        }
         if(page_==0 && wp=='N') {
             check_sl_tls_connection();
             return 0;
@@ -360,6 +372,8 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND:
         return 1;
     case WM_DESTROY:
+        (void)KillTimer(hwnd_,203);
+        sl_circuit_.stop();
         if(messenger_edit_brush_){DeleteObject(messenger_edit_brush_);messenger_edit_brush_=nullptr;}
         messenger_edit_=nullptr;
         if(high_resolution_timer_) (void)timeEndPeriod(1);
@@ -949,8 +963,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
 
     label(L"SECOND LIFE CONNECTION",box(contentX+25,377,cardWidth-50,27),
           small_font_.Get(),p.muted);
-    label(session_.can_enter_world()?L"CONNECTED":L"OFFLINE",
-          box(contentX+25,412,cardWidth-50,44),title_font_.Get(),p.text);
+    const wchar_t* connection_state=
+        sl_login_pending_?L"AUTHENTICATING":
+        sl_circuit_.movement_seen()?L"SIMULATOR HANDSHAKE":
+        sl_login_status_==protocol::LoginStatus::Accepted?
+            L"LOGIN ACCEPTED":L"OFFLINE";
+    label(connection_state,box(contentX+25,412,cardWidth-50,44),
+          title_font_.Get(),p.text);
     std::wstring check;
     switch(sl_tls_probe_.status) {
     case protocol::ProbeStatus::NotChecked:
@@ -1027,8 +1046,21 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               box(contentX+cardWidth+40,475,cardWidth-52,34),
               small_font_.Get(),p.muted);
     }
-    label(L"ALPHA 0.1  /  This application is not yet a Second Life viewer.",
-          box(contentX,height-66,contentWidth,32),
+    if(page_==0) {
+        const float y=std::min(558.f,height-150.f);
+        round_rect(box(contentX,y,contentWidth,87.f),20.f,p.surface);
+        round_rect(box(contentX+18,y+19,216.f,42.f),13.f,p.accent_soft);
+        label(sl_login_pending_?L"AUTHENTICATING...":
+              L"SL LOGIN TEST [L]",
+              box(contentX+27,y+29,202.f,24.f),
+              small_font_.Get(),p.accent);
+        const auto status=sl_login_status_==protocol::LoginStatus::Accepted?
+            sl_circuit_.diagnostic():sl_login_message_;
+        label(status,box(contentX+252,y+14,contentWidth-269,59),
+              small_font_.Get(),p.muted);
+    }
+    label(L"ALPHA 0.1  /  Login and UDP experimental; NOT in-world without caps + assets.",
+          box(contentX,height-55,contentWidth,28),
           small_font_.Get(),p.muted);
 }
 
@@ -1404,6 +1436,110 @@ void Window::check_sl_tls_connection() {
     sl_tls_probe_=protocol::probe_login_tls(protocol::Grid::Agni);
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
+void Window::begin_sl_login() {
+    if(sl_login_pending_)return;
+    // No hidden account collection, saved secrets, or identity spoofing.
+    // Explicit acceptance and Windows native credential input only.
+    const int choice=MessageBoxW(hwnd_,
+        L"KAMI experimental Second Life login (not yet a complete viewer).\n\n"
+        L"Please review the official Second Life Terms of Service:\n"
+        L"https://secondlife.com/corporate/tos\n\n"
+        L"YES: I have read and accept the current Terms, and want KAMI\n"
+        L"to send credentials to the official SL login server over HTTPS.\n"
+        L"NO: Open the official Terms in my browser.\n"
+        L"CANCEL: Do not sign in.\n\n"
+        L"KAMI does not save credentials. MFA challenges are not yet supported.",
+        L"KAMI Beyond Reality / Experimental Login",
+        MB_YESNOCANCEL|MB_ICONINFORMATION|MB_DEFBUTTON3);
+    if(choice==IDNO){
+        (void)ShellExecuteW(hwnd_,L"open",
+            L"https://secondlife.com/corporate/tos",
+            nullptr,nullptr,SW_SHOWNORMAL);
+        return;
+    }
+    if(choice!=IDYES)return;
+
+    CREDUI_INFOW prompt{};
+    prompt.cbSize=sizeof(prompt);
+    prompt.hwndParent=hwnd_;
+    prompt.pszCaptionText=L"KAMI Beyond Reality / Second Life";
+    prompt.pszMessageText=
+        L"Experimental login for login.agni.lindenlab.com only. "
+        L"Credentials are used once and never saved.";
+    std::array<wchar_t,CREDUI_MAX_USERNAME_LENGTH+1> account{};
+    std::array<wchar_t,CREDUI_MAX_PASSWORD_LENGTH+1> secret{};
+    BOOL save=FALSE;
+    const DWORD status=CredUIPromptForCredentialsW(
+        &prompt,L"login.agni.lindenlab.com",nullptr,0,
+        account.data(),static_cast<ULONG>(account.size()),
+        secret.data(),static_cast<ULONG>(secret.size()),&save,
+        CREDUI_FLAGS_GENERIC_CREDENTIALS|
+        CREDUI_FLAGS_ALWAYS_SHOW_UI|CREDUI_FLAGS_DO_NOT_PERSIST);
+    if(status!=NO_ERROR){
+        SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
+        return;
+    }
+    protocol::LoginRequest request{};
+    request.grid=protocol::Grid::Agni;
+    request.account=account.data();
+    request.terms_accepted=true;
+    std::wstring password=secret.data();
+    SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
+    SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
+    sl_circuit_.stop();
+    sl_login_status_=protocol::LoginStatus::NotAttempted;
+    sl_login_message_=L"Authenticating with Second Life over HTTPS...";
+    sl_login_pending_=true;
+    sl_login_future_=std::async(std::launch::async,
+        [req=std::move(request),password=std::move(password)]() mutable {
+            const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+            protocol::LoginResult answer{};
+            if(SUCCEEDED(init)){
+                answer=protocol::login_to_simulator(req,password);
+                CoUninitialize();
+            }else{
+                answer.status=protocol::LoginStatus::MalformedReply;
+            }
+            if(!password.empty())
+                SecureZeroMemory(password.data(),
+                                 password.size()*sizeof(wchar_t));
+            return answer;
+        });
+    (void)SetTimer(hwnd_,203,100,nullptr);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::update_sl_connection() {
+    if(sl_login_pending_&&sl_login_future_.valid()&&
+       sl_login_future_.wait_for(std::chrono::seconds(0))==
+           std::future_status::ready) {
+        protocol::LoginResult result{};
+        try{
+            result=sl_login_future_.get();
+        } catch(...) {
+            result.status=protocol::LoginStatus::NetworkError;
+        }
+        sl_login_pending_=false;
+        sl_login_status_=result.status;
+        sl_login_message_=result.message.empty()?
+            protocol::login_status_label(result.status):result.message;
+        if(result.accepted()) {
+            if(sl_circuit_.start(result))
+                sl_login_message_=L"Login accepted; contacting simulator...";
+            else
+                sl_login_message_=L"SL accepted login, but simulator UDP failed";
+        }
+        if(!result.handoff.seed_capability.empty())
+            SecureZeroMemory(result.handoff.seed_capability.data(),
+                result.handoff.seed_capability.size()*sizeof(wchar_t));
+        result.handoff={};
+    }
+    if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed)
+        sl_circuit_.poll();
+    if(!sl_login_pending_&&
+       sl_circuit_.state()==protocol::sim::CircuitState::Closed)
+        (void)KillTimer(hwnd_,203);
+    if(page_==0)InvalidateRect(hwnd_,nullptr,FALSE);
+}
 void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
@@ -1416,6 +1552,12 @@ void Window::click(float x, float y) {
        x<301.f+(width-305.f-18.f)/2.f-44.f &&
        y>=493.f && y<526.f) {
         check_sl_tls_connection();
+        return;
+    }
+    if(page_==0 && x>=297.f && x<=530.f &&
+       y>=std::min(558.f,static_cast<float>(client.bottom)-150.f)+17.f &&
+       y<std::min(558.f,static_cast<float>(client.bottom)-150.f)+64.f) {
+        begin_sl_login();
         return;
     }
     if(page_==2 && y>=static_cast<float>(client.bottom)-186.f &&
