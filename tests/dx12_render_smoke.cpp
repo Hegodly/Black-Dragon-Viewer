@@ -1,7 +1,9 @@
 #include "kami/world/renderer.hpp"
+#include "kami/features/creator_studio.hpp"
 #include "kami/graphics/settings.hpp"
 #include <windows.h>
 #include <iostream>
+#include <sstream>
 #include <cmath>
 #include <algorithm>
 #include <string>
@@ -196,6 +198,34 @@ int main() {
                         if(renderer.ready()) renderer.draw();
                         if(!renderer.ready()){print_failure(L"preview restore",renderer);result=9;}
                     }
+                }
+                if(!result) {
+                    // Actual Creator Studio OBJ -> DX12 upload and render
+                    // (not just the procedural preview mesh smoke).
+                    std::istringstream obj_source(
+                        "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n"
+                        "f 1 2 3 4\n");
+                    kami::creator::Preview imported_preview{};
+                    std::string import_error;
+                    if(!kami::creator::import_obj(
+                        obj_source,imported_preview,import_error)) {
+                        std::wcerr<<L"OBJ smoke parser failed\n";result=23;
+                    } else if(!renderer.set_creator_preview(
+                                   std::move(imported_preview.scene))||
+                              renderer.vertex_count()!=6U||
+                              renderer.skin_compatibility().status!=
+                                  kami::rig::Compatibility::Unrigged) {
+                        print_failure(L"OBJ GPU preview upload",renderer);
+                        result=24;
+                    } else {
+                        renderer.draw();
+                        if(!renderer.ready()) {
+                            print_failure(L"OBJ GPU preview draw",renderer);
+                            result=25;
+                        }
+                    }
+                    renderer.clear_creator_preview();
+                    if(renderer.ready())renderer.draw();
                 }
                 if(!result) {
                     wchar_t folder[MAX_PATH]{};

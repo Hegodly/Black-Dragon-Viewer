@@ -10,6 +10,7 @@ struct Preview {
     Audit audit;
     std::size_t source_positions = 0;
     std::size_t source_polygons = 0;
+    std::size_t skipped_degenerate_triangles = 0;
     float source_height = 0.f;
 };
 
