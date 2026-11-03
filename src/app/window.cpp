@@ -795,7 +795,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               box(contentX+28,152,contentWidth-55,28),
               small_font_.Get(),p.accent);
         const float panelX=width-352.f;
-        round_rect(box(panelX,190,324.f,height-311.f),22.f,p.surface);
+        round_rect(box(panelX,190,324.f,height-280.f),22.f,p.surface);
         label(L"LOCAL AVATAR TELEMETRY",
               box(panelX+15,206,292,26),
               messenger_centered_small_.Get(),p.accent);
@@ -815,7 +815,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             L"GROUND PHYSICS",L"HEADING"
         };
         for(unsigned i=0;i<5;++i) {
-            const float y=241.f+63.f*static_cast<float>(i);
+            const float y=241.f+std::min(63.f,(height-400.f)/6.f)*static_cast<float>(i);
             round_rect(box(panelX+16,y,291.f,58.f),12.f,p.elevated);
             label(titles[i],box(panelX+24,y+6,271.f,22.f),
                   messenger_centered_small_.Get(),p.muted);
