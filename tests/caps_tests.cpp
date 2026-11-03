@@ -49,6 +49,32 @@ int exercise(){
         "<llsd><map><key>id</key><integer>1</integer>"
         "<key>events</key><string>bad</string></map></llsd>",count))
         return 10;
+    EventQueueFrame frame{};
+    if(!parse_event_queue_frame(empty,frame)||
+       frame.id.token!="12345"||!frame.id.integer||
+       frame.event_count!=0)return 11;
+    if(build_event_queue_post(frame.id).find(
+         "<key>ack</key><integer>12345</integer>")==std::string::npos)
+        return 12;
+    if(build_event_queue_post({}).find(
+         "<key>ack</key><undef />")==std::string::npos)
+        return 13;
+    if(!parse_event_queue_frame(events,frame)||
+       frame.event_count!=1)return 14;
+    const std::string typed=
+        "<llsd><map><key>id</key><string>abc-1</string>"
+        "<key>events</key><array/></map></llsd>";
+    if(!parse_event_queue_frame(typed,frame)||
+       frame.id.token!="abc-1"||frame.id.integer||
+       build_event_queue_post(frame.id).find(
+         "<key>ack</key><string>abc-1</string>")==std::string::npos)
+        return 15;
+    if(!build_event_queue_post({"x<evil",false}).empty()||
+       !build_event_queue_post({"oops",true}).empty())return 16;
+    if(parse_event_queue_frame(
+        "<llsd><map><key>id</key><integer>4</integer>"
+        "<key>events</key><array><string>untrusted</string></array>"
+        "</map></llsd>",frame))return 17;
     return 0;
 }
 }
