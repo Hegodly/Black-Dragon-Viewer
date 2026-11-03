@@ -273,6 +273,10 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
+        if(page_==0 && wp=='N') {
+            check_sl_tls_connection();
+            return 0;
+        }
         if(page_ == 7 && wp >= '1' && wp <= '7') {
             advance_photo(static_cast<unsigned>(wp-'1'));
             return 0;
@@ -938,8 +942,27 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
           small_font_.Get(),p.muted);
     label(session_.can_enter_world()?L"CONNECTED":L"OFFLINE",
           box(contentX+25,412,cardWidth-50,44),title_font_.Get(),p.text);
-    label(L"No simulated login",box(contentX+25,475,cardWidth-50,34),
+    std::wstring check;
+    switch(sl_tls_probe_.status) {
+    case protocol::ProbeStatus::NotChecked:
+        check=L"TLS NOT TESTED";break;
+    case protocol::ProbeStatus::TlsEndpointReached:
+        check=L"TLS REACHED  /  HTTP "+std::to_wstring(sl_tls_probe_.http_status);break;
+    case protocol::ProbeStatus::NetworkUnavailable:
+        check=L"SL NETWORK UNREACHABLE";break;
+    case protocol::ProbeStatus::TlsError:
+        check=L"TLS VALIDATION FAILED";break;
+    case protocol::ProbeStatus::BadResponse:
+        check=L"SL LOGIN HTTP ERROR";break;
+    }
+    label(check,box(contentX+25,468,cardWidth-50,24),
           small_font_.Get(),p.muted);
+    if(page_==0) {
+        round_rect(box(contentX+22,493,cardWidth-44,33),11.f,p.accent_soft);
+        label(L"TEST SECURE SL ROUTE [N]",
+              box(contentX+31,500,cardWidth-62,22),
+              small_font_.Get(),p.accent);
+    }
 
     if (page_ == 0) {
         // Startup preparation is genuine D3D12 bytecode and GPU-specific PSO
@@ -1359,12 +1382,23 @@ void Window::messenger_demo_reply() {
         InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+void Window::check_sl_tls_connection() {
+    // User initiated: HEAD HTTPS only; never collects or submits credentials.
+    sl_tls_probe_=protocol::probe_login_tls(protocol::Grid::Agni);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
 void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
     const float width = static_cast<float>(client.right);
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
+        return;
+    }
+    if(page_==0 && x>=301.f &&
+       x<301.f+(width-305.f-18.f)/2.f-44.f &&
+       y>=493.f && y<526.f) {
+        check_sl_tls_connection();
         return;
     }
     if(page_==2 && y>=static_cast<float>(client.bottom)-186.f &&
