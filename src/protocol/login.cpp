@@ -48,7 +48,9 @@ public:
     Bstr& operator=(const Bstr&)=delete;
 };
 std::wstring wide(std::string_view s) {
-    if(s.empty()||s.size()>1048576)return {};
+    // Match the bounded HTTP/XML-RPC reply size. A successful login may
+    // contain more than 1 MiB of optional inventory data.
+    if(s.empty()||s.size()>8U*1024U*1024U)return {};
     const int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
         s.data(),static_cast<int>(s.size()),nullptr,0);
     if(n<=0)return {};
@@ -95,6 +97,13 @@ void put_string(std::string& doc,std::string_view name,std::string_view value) {
     doc+="</name><value><string>";
     doc+=xml_quote(value);
     doc+="</string></value></member>";
+}
+void put_bool(std::string& doc,std::string_view name,bool value) {
+    doc+="<member><name>";
+    doc+=name;
+    doc+="</name><value><boolean>";
+    doc+=value?'1':'0';
+    doc+="</boolean></value></member>";
 }
 bool digest_password(std::wstring_view password,SecureBytes& hash) {
     if(password.empty()||password.size()>128)return false;
@@ -263,8 +272,10 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     // exposing a disk serial number by sending the documented anonymous
     // placeholder until a user-consented machine-ID design is reviewed.
     put_string(doc,"id0","00000000-0000-0000-0000-000000000000");
-    put_string(doc,"agree_to_tos","true");
-    put_string(doc,"read_critical","false");
+    // Local test consent is not the Second Life Terms or a critical notice.
+    // Do not claim account actions are complete before a server challenge.
+    put_bool(doc,"agree_to_tos",false);
+    put_bool(doc,"read_critical",false);
     // Ask for structured (non-secret) error reasons from the login service.
     // Unlike authentication success, these are optional hints.
     doc+="<member><name>extended_errors</name>"
@@ -400,7 +411,8 @@ LoginResult login_to_simulator(const LoginRequest& request,
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     if(!session.handle){failure.status=LoginStatus::NetworkError;return failure;}
-    WinHttpSetTimeouts(session.handle,3500,3500,4500,4500);
+    // Allow a slow authenticated login; the credential-free probe remains short.
+    WinHttpSetTimeouts(session.handle,15000,15000,30000,30000);
     HttpHandle connection(WinHttpConnect(session.handle,
         std::wstring(host).c_str(),INTERNET_DEFAULT_HTTPS_PORT,0));
     if(!connection.handle){failure.status=LoginStatus::NetworkError;return failure;}
