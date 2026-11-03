@@ -59,7 +59,7 @@ floater = ET.Element("floater", {
     "bg_alpha_color": "FloaterDefaultBackgroundColor",
 })
 
-def text(name, value, x, y, w, h, *, font="SansSerif", color="0.93 0.95 0.97 1"):
+def text(name, value, x, y, w, h, *, font="SansSerif", color="LabelTextColor"):
     e = ET.SubElement(floater, "text", {
         "name": name, "layout": "topleft", "left": str(x), "top": str(y),
         "width": str(w), "height": str(h), "font": font,
@@ -76,10 +76,10 @@ ET.SubElement(floater, "icon", {
 text("kami_workspaces_name", "K A M I", 112, 42, 490, 34,
      font="SansSerifBoldLarge")
 text("kami_workspaces_tagline", "BEYOND REALITY  /  WORKSPACE NAVIGATOR", 114, 78, 580, 24,
-     color="0.65 0.78 0.85 1")
+     color="LabelTextColor")
 text("kami_workspaces_intro",
      "Native tools. Original Second Life actions. A new way to work.",
-     26, 130, 730, 27, color="0.78 0.83 0.88 1")
+     26, 130, 730, 27, color="LabelTextColor")
 
 # Four workspaces and a 3x4 grid. Sections are arranged as two columns
 # of 2-button rows for discoverability and predictable keyboard navigation.
@@ -88,10 +88,11 @@ groups = [
         ("hub_inventory", "INVENTORY", "Inventory window"),
         ("hub_places", "PLACES", "Saved and recent locations"),
         ("hub_map", "WORLD MAP", "World map"),
+        ("hub_world", "WORLD MENU", "World actions and Area Search"),
     ]),
     ("AVATAR", 408, 182, [
         ("hub_outfits", "OUTFITS", "Appearance and clothing"),
-        ("hub_poser", "POSER", "Native Black Dragon pose tool"),
+        ("hub_poser", "POSER", "Native KAMI pose tool"),
         ("hub_pose_creator", "POSE CREATOR", "Native animation creator"),
     ]),
     ("CREATE", 24, 358, [
@@ -108,7 +109,7 @@ groups = [
 
 for title, left, top, buttons in groups:
     text(f"kami_group_{title.lower()}", title, left, top, 350, 26,
-         font="SansSerifBold", color="0.84 0.88 0.92 1")
+         font="SansSerifBold", color="LabelTextColor")
     border = ET.SubElement(floater, "view_border", {
         "name": f"kami_group_{title.lower()}_rule",
         "layout": "topleft", "left": str(left), "top": str(top+29),
@@ -128,10 +129,22 @@ for title, left, top, buttons in groups:
             "image_hover_unselected": "Toolbar_Middle_Over",
         })
 
+ET.SubElement(floater, "slider", {
+    "name": "kami_glass_opacity",
+    "label": "PANEL OPACITY",
+    "control_name": "KamiGlassOpacity",
+    "tool_tip": "Controls KAMI window translucency; does not add GPU blur",
+    "layout": "topleft",
+    "follows": "top|left",
+    "left": "408", "top": "515", "width": "333", "height": "19",
+    "label_width": "128", "min_val": "0.80", "max_val": "1.0",
+    "increment": "0.05", "decimal_digits": "2",
+    "initial_value": "0.96",
+})
 text("kami_workspaces_footer",
-     "BEYOND REALITY  |  Built on Black Dragon by NiranV Dean",
+     "BEYOND REALITY  |  KAMI WINDOWS EXPERIENCE",
      26, 558, 700, 23, font="SansSerifSmall",
-     color="0.59 0.67 0.72 1")
+     color="LabelTextColor")
 workspace_file = XUI / "floater_kami_workspaces.xml"
 ET.indent(floater, space=" ")
 ET.ElementTree(floater).write(workspace_file, encoding="utf-8", xml_declaration=True)
@@ -174,36 +187,14 @@ for label,key,parameter in [
     ET.SubElement(item, "menu_item_call.on_click", {
         "function": "Floater.Show", "parameter": parameter,
     })
-# Reuse the exact existing legacy XML controls instead of cloning them.
-# Reparenting retains callbacks, toggle-state bindings, names and shortcuts,
-# and avoids duplicate registrations/accelerators in the new menu.
-legacy_menus = [item for item in list(me[0]) if item.tag == "menu"]
-world_menus = [item for item in legacy_menus if item.get("name") == "World"]
-assert len(world_menus) == 1, "Expected one original World menu"
-world = world_menus[0]
-assert any(
-    item.get("name") == "Kami DX12 Live Preview"
-    for item in world.iter("menu_item_check")
-), "Original experimental DX12 preview control is missing"
-
-# Put World directly in Workspaces so the DX12 test is two menu levels away.
-ET.SubElement(new, "menu_item_separator")
-me[0].remove(world)
-new.append(world)
-
-# Other original categories are grouped compactly under one cascading menu.
-# Their real controls move; none is duplicated or reimplemented.
-legacy = ET.SubElement(new, "menu", {
-    "label": "LEGACY OPTIONS", "name": "KAMI_LegacyOptions",
-    "create_jump_keys": "true", "tear_off": "false",
-})
-for item in legacy_menus:
-    if item is world:
-        continue
-    me[0].remove(item)
-    legacy.append(item)
-assert len(legacy) == len(legacy_menus) - 1
-assert not any(child.tag == "menu" for child in me[0])
+# Startup resolves MarketplaceListings relative to the original Me menu.
+# Keep every original submenu under its original parent; moving controls
+# preserves XML attributes but breaks native parent-relative lookups.
+marketplace = list(me[0].iter())
+assert any(e.get("name") == "MarketplaceListings" for e in marketplace), \
+    "MarketplaceListings must remain reachable from the Me menu"
+assert any(e.get("name") == "World" for e in marketplace), \
+    "The original World menu must remain under Me"
 
 root.insert(0, new)
 root.set("bg_visible", "true")

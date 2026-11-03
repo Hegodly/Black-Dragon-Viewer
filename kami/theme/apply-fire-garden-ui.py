@@ -20,13 +20,13 @@ WIN.mkdir(parents=True,exist_ok=True)
 
 # Exact design direction from the APPROVED Fire Garden mockup:
 # black/charcoal smoked glass, silver/chrome edges and typography, fire-red
-# garden visible behind windows, amber highlights, icy cyan ONLY for selection.
+# garden visible behind windows, amber highlights, iOS-style system blue for selection.
 # These are SKIN colors/textures, never scene-lighting or GPU settings.
-obsidian=(8,10,12)
-smoke=(24,24,27)
-blue=(77,187,224)
+obsidian=(14,17,25)
+smoke=(29,32,42)
+blue=(10,132,255)
 ember=(215,65,33)
-silver=(167,176,183)
+silver=(189,198,214)
 gold=(209,113,54)
 text=(235,238,239)
 
@@ -46,7 +46,7 @@ def outline(canvas, glow=False, selected=False):
     w,h=canvas.size
     border=blue if selected or glow else silver
     alpha=208 if selected else 115 if glow else 115
-    d.rounded_rectangle((1,1,w-2,h-2),radius=min(5,h//3),
+    d.rounded_rectangle((1,1,w-2,h-2),radius=min(12,h//2),
                         outline=(*border,alpha),width=2 if selected else 1)
     if selected:
         d.line((8,h-3,w-8,h-3),fill=(*blue,210),width=2)
@@ -111,17 +111,17 @@ assets={
   "Checkbox_On": "kami_fg_checkbox_on.png",
   "Checkbox_On_Press": "kami_fg_checkbox_on.png",
 }
-widget("kami_fg_window.png",(8,10,12),(22,21,23))
-widget("kami_fg_panel.png",(12,12,14),(25,23,23))
+widget("kami_fg_window.png",(16,19,26),(33,37,48))
+widget("kami_fg_panel.png",(19,23,31),(37,42,53))
 widget("kami_fg_button.png",(29,29,31),(15,15,17))
-widget("kami_fg_button_on.png",(23,40,48),(15,20,24),selected=True)
-widget("kami_fg_button_press.png",(25,51,63),(13,22,29),selected=True)
-widget("kami_fg_button_selected.png",(19,40,51),(13,23,29),selected=True)
+widget("kami_fg_button_on.png",(10,68,151),(9,35,79),selected=True)
+widget("kami_fg_button_press.png",(9,72,161),(6,44,104),selected=True)
+widget("kami_fg_button_selected.png",(8,68,154),(12,48,106),selected=True)
 widget("kami_fg_toolbar.png",(13,14,16),(20,21,23))
 widget("kami_fg_toolbar_hover.png",(23,35,40),(14,19,23),glow=True)
-widget("kami_fg_toolbar_selected.png",(17,38,48),(12,20,25),selected=True)
+widget("kami_fg_toolbar_selected.png",(9,66,149),(10,37,85),selected=True)
 widget("kami_fg_tab.png",(22,22,24),(13,14,17))
-widget("kami_fg_tab_selected.png",(17,39,50),(12,22,28),selected=True)
+widget("kami_fg_tab_selected.png",(10,67,155),(11,42,95),selected=True)
 widget("kami_fg_text_field.png",(14,15,17),(27,27,29))
 widget("kami_fg_text_field_active.png",(16,30,36),(21,23,28),selected=True)
 
@@ -142,16 +142,36 @@ d.rounded_rectangle((9,6,23,25),radius=5,fill=(169,177,187,249),outline=(233,239
 thumb.save(WIN/"kami_fg_slider_thumb.png",optimize=True)
 
 def checkbox(name,checked):
-    img=Image.new("RGBA",(24,24),(0,0,0,0))
+    img=Image.new("RGBA",(18,18),(0,0,0,0))
     draw=ImageDraw.Draw(img)
-    draw.rounded_rectangle((2,2,21,21),radius=4,
+    draw.rounded_rectangle((1,1,16,16),radius=3,
         fill=(24,44,54,251) if checked else (16,17,20,245),
         outline=(*blue,255) if checked else (*silver,212),width=2)
     if checked:
-        draw.line(((6,12),(10,16),(18,7)),fill=(241,244,246,255),width=3,joint="curve")
+        draw.line(((4,9),(7,12),(13,5)),fill=(241,244,246,255),width=3,joint="curve")
     img.save(WIN/name,optimize=True)
 checkbox("kami_fg_checkbox_off.png",False)
 checkbox("kami_fg_checkbox_on.png",True)
+
+def fix_checkbox_scaling(xui):
+    # LLCheckBoxCtrl intentionally extends its button over the label for clicks.
+    # Draw the glyph at native size; never scale it to that expanded hit area.
+    paths = [xui / "widgets/check_box.xml"]
+    paths.extend(p for p in xui.rglob("*.xml") if p not in paths)
+    changed = 0
+    for path in paths:
+        tree = ET.parse(path)
+        nodes = list(tree.getroot().iter("check_box.check_button"))
+        if not nodes:
+            continue
+        for node in nodes:
+            node.set("scale_image", "false")
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+        changed += len(nodes)
+    assert changed, "Native checkbox widget defaults not found"
+    return changed
+
+fix_checkbox_scaling(SKIN / "xui/en")
 
 # Per-floater preferences artwork. Actual approved Fire Garden, obscured by
 # smoked glass; lower left has the brighter fire highlights, right stays
@@ -200,24 +220,24 @@ colors={
  "MenuDefaultBgColor": "0.041 0.042 0.047 0.97",
  "MenuPopupBgColor": "0.049 0.050 0.057 0.97",
  # Cyan is a small interaction highlight, not the entire background.
- "MenuItemHighlightBgColor": "0.11 0.30 0.38 0.70",
+ "MenuItemHighlightBgColor": "0.04 0.51 1.0 0.78",
  "MenuItemHighlightFgColor": "0.96 0.97 0.98 1",
- "EmphasisColor": "0.30 0.73 0.88 0.54",
- "EmphasisColor_13": "0.30 0.73 0.88 0.13",
- "EmphasisColor_35": "0.30 0.73 0.88 0.35",
- "BeaconColor": "0.30 0.73 0.88 0.95",
+ "EmphasisColor": "0.04 0.51 1.0 0.54",
+ "EmphasisColor_13": "0.04 0.51 1.0 0.13",
+ "EmphasisColor_35": "0.04 0.51 1.0 0.35",
+ "BeaconColor": "0.04 0.51 1.0 0.95",
  "ComboListBgColor": "0.07 0.07 0.08 0.98",
  "ButtonLabelColor": "0.91 0.92 0.94 1",
  "ButtonLabelSelectedColor": "1 1 1 1",
  "LabelTextColor": "0.92 0.92 0.94 1",
- "ScrollSelectedBGColor": "0.11 0.30 0.39 0.74",
+ "ScrollSelectedBGColor": "0.04 0.51 1.0 0.78",
  "ScrollSelectedFGColor": "0.97 0.98 1 1",
  "ScrollHoveredColor": "0.21 0.25 0.28 0.34",
  "ScrollUnselectedColor": "0.78 0.80 0.84 1",
  "InventoryBackgroundColor": "0.046 0.045 0.049 0.92",
  "InventoryMouseOverColor": "0.15 0.24 0.29 0.36",
  "SliderThumbCenterColor": "0.79 0.82 0.85 1",
- "SliderThumbOutlineColor": "0.30 0.73 0.88 1",
+ "SliderThumbOutlineColor": "0.04 0.51 1.0 1",
  "MultiSliderThumbCenterColor": "0.79 0.82 0.85 1",
  "ScrollbarTrackColor": "0.08 0.08 0.10 0.84",
  "ScrollbarThumbColor": "0.46 0.49 0.52 0.90",

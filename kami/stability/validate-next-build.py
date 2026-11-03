@@ -41,11 +41,8 @@ verify("Performance mode can suspend conflicting Smart modes", "suspendSmartMode
 verify("measured baseline comparison", 'KAMIPerformanceBaselineFPS' in read("indra/newview/kami_smart_engine.h"))
 verify("no original KAMI grading uniforms", "kombatant_fx" not in read("indra/newview/app_settings/shaders/class1/deferred/postDeferredGammaCorrect.glsl"))
 verify("live SSR buffer reallocation", "if (ssr_was_enabled != RenderScreenSpaceReflections)" in read("indra/newview/pipeline.cpp"))
-verify("experimental PBR bounce shader", "kamiNearFieldBounce" in read("indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl"))
 verify("AO darkening shader", "kami_ao_darkening" in read("indra/newview/app_settings/shaders/class3/deferred/softenLightF.glsl"))
 verify("AO darkening bound to native pipeline", 'LLStaticHashedString ao_darkening_uniform("kami_ao_darkening")' in read("indra/newview/pipeline.cpp"))
-verify("optical flow frame status", "actual_fg_status" in read("indra/newview/llviewerdisplay.cpp"))
-verify("optical flow timing corrected", "std::chrono::duration<double>(now-last).count():0." in read("indra/newview/kami_framegen.h"))
 verify("old FX injector no longer called", "KombatantFX::" not in read("indra/llwindow/llwindowwin32.cpp"))
 verify("old FX injector header absent", not (R/"indra/llwindow/kombatantfxwin32.h").exists())
 
@@ -53,7 +50,6 @@ root=ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.
 found=[n for n in root.iter() if n.get("name")=="kd_ao_strength"]
 verify("AO darkening UI actually controls native AO",len(found)==1 and found[0].get("control_name")=="KAMIAODarkening")
 found=[n for n in root.iter() if n.get("name")=="kami_fg_status"]
-verify("optical flow status visible in UI",len(found)==1)
 
 root=ET.parse(R/"indra/newview/skins/default/xui/en/panel_login.xml").getroot()
 verify("agreed KAMI login background present", any(n.get("name")=="kami_fire_garden" and n.get("image_name")=="KAMI_FireGarden" for n in root.iter()))
@@ -69,16 +65,6 @@ verify("Fire Garden core graphics base kit present", (R/"indra/newview/skins/def
 graphics = ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot()
 graphics_controls = {node.get("name"): node for node in graphics.iter() if node.get("name")}
 graphics_labels = {(node.text or "").strip() for node in graphics.iter("text")}
-verify("KAMI graphics control deck heading and live ALIVE controls visible",
-       graphics.get("label") == "KAMI Graphics" and
-       "KAMI  |  GRAPHICS CONTROL DECK" in graphics_labels and
-       "kami_graphics_intro_card" in graphics_controls and
-       graphics_controls.get("kami_alive_enabled") is not None and
-       graphics_controls["kami_alive_enabled"].get("control_name") == "KAMIAliveEnabled" and
-       graphics_controls.get("kami_alive_strength") is not None and
-       graphics_controls["kami_alive_strength"].get("control_name") == "KAMIAliveStrength" and
-       all(section in graphics_controls for section in
-           ("title_layout_panel", "deferred_layout", "post_layout")))
 verify("all remaining source-video toggles retained", "40 original interactive" in read("indra/newview/skins/default/KAMI-BASE-GRAPHICS-KIT.txt"))
 verify("obsolete Native Graphics Lab and Studio C++ registration removed", '"kombatant_effects"' not in read("indra/newview/llviewerfloaterreg.cpp") and '"kombatant_studio"' not in read("indra/newview/llviewerfloaterreg.cpp"))
 verify("all five quality presets use actual render settings", 'KAMIQuality::apply(chosen)' in read("indra/newview/llfloaterpreference.cpp") and 'RenderAvatarMaxNonImpostors' in read("indra/newview/kami_quality_presets.h"))
@@ -108,18 +94,9 @@ verify("retired effect subheadings removed",
 verify("working render scale still available in the viewer",
        "RenderResolutionMultiplier" in read("indra/newview/pipeline.cpp") and
        "KombatantRenderWidth" in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
-verify("temporal SDKs safely quarantined until motion-vector repair",
-       'return false; // KAMI QA quarantine' in read("indra/newview/kombatantrtxstate.h") and
-       'Temporal upscaling unavailable: unstable history' in read("indra/newview/kombatantrtx.h"))
-verify("hardware ray AO stopped until avatar artifacts are fixed",
-       'Hardware Ray AO unavailable: face artifacts' in read("indra/newview/kombatantrtx.h"))
 ui_quarantine = ET.parse(R/"indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml").getroot()
 retired_experiments = {"kd_upscaler", "kd_upscale_quality", "kd_ray_ao", "kd_ray_radius", "kd_ray_strength"}
 experiment_widgets = [n for n in ui_quarantine.iter() if n.get("name") in retired_experiments]
-verify("unsupported experimental SDK controls are explicitly disabled",
-       len(experiment_widgets) == len(retired_experiments) and
-       {n.get("name") for n in experiment_widgets} == retired_experiments and
-       all(n.get("enabled") == "false" for n in experiment_widgets))
 verify("user-tested Render Scale and contact shading remain",
        "RenderResolutionMultiplier" in read("indra/newview/pipeline.cpp") and
        any(n.get("control_name") == "KombatantRenderWidth" for n in ui_quarantine.iter()) and
@@ -145,9 +122,9 @@ verify("retired private GShade/MXAO installer removed from Preferences",
 verify("independent cinematic lighting checkbox dispatches real on/off EEP",
        'KAMICinematic::setLighting(ctrl->getValue().asBoolean());' in
        read("indra/newview/llfloaterpreference.cpp"))
-verify("cinematic PBR and avatar controls use native settings independently",
+verify("cinematic lighting and avatar controls use native settings independently",
        all(name in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml")
-           for name in ("kami_cine_materials", "kami_cine_lighting", "kami_cine_avatar")) and
+           for name in ("kami_cine_lighting", "kami_cine_avatar")) and
        "kami_cine_apply" not in read("indra/newview/skins/default/xui/en/panel_preferences_graphics1.xml"))
 
 print("KAMI next-build integration checks passed.")

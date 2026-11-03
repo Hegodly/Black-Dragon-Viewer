@@ -132,3 +132,4 @@ DX12-06: reproducible Windows packaging, stability and GPU FPS regression
 
 A successful foundation test proves a genuine DX12 draw, not a completed viewer,
 not an FPS gain, and not successful in-world behavior.
+\n## DX12-04 native frosted-glass GPU compositor proof\n\nAn independent D3D12 compute shader now processes a real texture with a\n5x5 Gaussian kernel, applies a silver tint only within a rectangular UI\npanel, leaves the surrounding scene unblurred, and reads back actual pixels\nto verify the blur ran on WARP. It runs inside the separate native DX12 smoke\ntest. It does **not** yet apply to the live Second Life viewer or replace its\nOpenGL UI compositor; production integration requires a full DX12 framebuffer\nand widget composition path. This prototype intentionally adds no GPU work\nto the current working viewer.\n

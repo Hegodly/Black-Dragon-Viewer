@@ -61,7 +61,7 @@ public:
         // texture streaming and CPU/FPS budgets usable during experiments.
         const auto now = std::chrono::steady_clock::now();
         if (now - mLastFrame < std::chrono::milliseconds(100)) return;
-        mLastFrame = now;
+        if (!mRenderer.worldFrameAvailable()) return;
 
         if ((UINT)width != mWidth || (UINT)height != mHeight)
         {
@@ -83,6 +83,8 @@ public:
             failAndDisable("renderWorldFrame");
             return;
         }
+        // Cool down after work completes, even when an update was slow.
+        mLastFrame = std::chrono::steady_clock::now();
     }
 
 private:

@@ -12,6 +12,7 @@ header = (HERE / "KamiDx12Renderer.h").read_text(encoding="utf-8")
 world = (HERE / "KamiDx12World.cpp").read_text(encoding="utf-8")
 core = (HERE / "KamiDx12Renderer.cpp").read_text(encoding="utf-8")
 smoke = (HERE / "KamiDx12Smoke.cpp").read_text(encoding="utf-8")
+glass = (HERE / "KamiDx12Glass.cpp").read_text(encoding="utf-8")
 cmake = (HERE / "CMakeLists.txt").read_text(encoding="utf-8")
 
 
@@ -26,7 +27,7 @@ expect("Windows-only native DX12 includes", all(
 ))
 expect("no OpenGL API or translation calls", not re.search(
     r"(?:#\s*include\s*[<\"]GL[/\\]|\b(?:gl[A-Z]\w+|wgl[A-Z]\w+)\s*\()",
-    header + core + world + smoke + cmake
+    header + core + world + glass + smoke + cmake
 ))
 expect("no test adapter automatically replaces hardware",
        "if (warpForTesting)" in core
@@ -60,11 +61,19 @@ expect("indexed world scene GPU pipeline exists",
            "DXGI_FORMAT_D32_FLOAT", "IASetVertexBuffers", "IASetIndexBuffer",
            "DrawIndexedInstanced", "SetGraphicsRoot32BitConstants", "CreateCommittedResource")))
 expect("per-backbuffer GPU resource lifetime preserved",
-       "frameUploads_[index].clear()" in world and
+       "if (!worldFrameAvailable()) return true;" in world and
+       "liveUploads.resize(uploadSlot)" in world and
        "frameFenceValues_[index] = fence;" in world)
 expect("world pass runs in native Windows CTest",
        "KamiDx12World.cpp" in cmake and
        "renderer.renderWorldOffscreenTest" in smoke)
 expect("world GPU readback detects depth and indexed mesh",
        "redOccludesBlue" in world and "blackClear" in world)
-print("Kami DX12-01+02 native indexed world pass source contracts PASS")
+expect("native blur is a real DirectX 12 compute pass, not alpha-only",
+       all(word in glass for word in (
+           "CSGlass", "D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS",
+           "CreateComputePipelineState", "SetComputeRootDescriptorTable",
+           "Dispatch(", "CopyTextureRegion", "blendedInside")))
+expect("WARP smoke tests GPU Gaussian glass",
+       "KamiDx12Glass.cpp" in cmake and "renderGlassOffscreenTest" in smoke)
+print("Kami DX12 native indexed world + GPU glass compositor source contracts PASS")

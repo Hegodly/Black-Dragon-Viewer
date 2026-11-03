@@ -222,12 +222,12 @@ replace_once(C,"selected_mode > static_cast<S32>(KamiSortMode::BRAND_FOLDERS)) r
 replace_once(C,
 """    if (mode == KamiSortMode::BRAND_FOLDERS)
     {
-        kami_preview_brand_folders();
+        kami_preview_brand_folders(gInventory.getRootFolderID());
         return;
     }""",
 """    if (mode == KamiSortMode::BRAND_FOLDERS)
     {
-        kami_preview_brand_folders();
+        kami_preview_brand_folders(gInventory.getRootFolderID());
         return;
     }
     if (mode == KamiSortMode::DEMO_CLEANUP)

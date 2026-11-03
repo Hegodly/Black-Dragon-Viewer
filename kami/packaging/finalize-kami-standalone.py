@@ -13,6 +13,12 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 KAMI_EXE = "KAMIViewer.exe"
+WORKSPACE_ACTIONS = {
+    "hub_inventory", "hub_places", "hub_map", "hub_world",
+    "hub_outfits", "hub_poser", "hub_pose_creator",
+    "hub_material", "hub_snapshot", "hub_camera",
+    "hub_preferences", "hub_hardware", "hub_toolbar",
+}
 LEGACY_ROOT = {
     "blackdragon-bin.exe", "blackdragon-bin.pdb",
     "blackdragon-bin.exp", "blackdragon-bin.lib", "blackdragon-bin.map",
@@ -25,6 +31,10 @@ LEGACY_ROOT = {
 OBSOLETE_ROOT_SCRIPTS = {"start-without-rtx.cmd", "copy_touched.bat"}
 REQUIRED = [
     "app_settings/settings.xml",
+    "app_settings/kami-updater.ps1",
+    "app_settings/kami-test-updater.ps1",
+    "app_settings/KAMI-Test-Update.zip",
+    "app_settings/KAMI-Test-Update.json",
     "app_settings/settings_blackdragon.xml",
     "app_settings/contributors-source.txt",
     "skins/default/xui/en/panel_login.xml",
@@ -97,7 +107,9 @@ def verify_ui(out: Path) -> None:
 
     hub = xml("skins/default/xui/en/floater_kami_workspaces.xml")
     assert hub.get("name") == "kami_workspaces"
-    assert len([n for n in hub.iter("button")]) == 12, "KAMI native Workspaces actions missing"
+    buttons = [n.get("name") for n in hub.iter("button")]
+    assert set(buttons) == WORKSPACE_ACTIONS and len(buttons) == len(set(buttons)), \
+        "KAMI native Workspaces actions missing, unexpected or duplicated"
     prefs = xml("skins/default/xui/en/floater_preferences.xml")
     assert prefs.get("title", "").startswith("KAMI"), "Preferences not branded"
     ET.parse(out / "app_settings/settings_blackdragon.xml")
@@ -106,6 +118,12 @@ def verify_ui(out: Path) -> None:
 
 def finalize(out: Path) -> list[str]:
     out = out.resolve()
+    retired_runtimes = {'kombatantrtx64.dll', 'nvngx_dlss.dll', 'libxess.dll',
+                        'kamimxao64.dll', 'amd_fidelityfx_dx12.dll'}
+    unexpected = [p.name for p in out.rglob('*')
+                  if p.is_file() and p.name.casefold() in retired_runtimes]
+    if unexpected:
+        raise RuntimeError('Experimental runtime in release: ' + ', '.join(sorted(unexpected)))
     if not (out / KAMI_EXE).is_file() or (out / KAMI_EXE).stat().st_size < 4:
         raise RuntimeError("KAMIViewer.exe missing or empty; refuse to publish release")
     for relative in REQUIRED:

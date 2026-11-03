@@ -54,4 +54,22 @@ check("World menu allows manual preview ON/OFF",
 check("compiled into actual Windows viewer not a batch installer",
       "kami_dx12_live_preview.cpp" in cmake
       and "kami_dx12_live_preview.h" in cmake)
+renderer = (root / "kami/dx12/KamiDx12World.cpp").read_text("utf-8")
+bridge = (root / "indra/newview/kami_dx12_scene_bridge.cpp").read_text("utf-8")
+check("busy GPU skips capture before rebuilding scene",
+      source.index("worldFrameAvailable()") < source.index("captureLiveVolumeWorld(camera, &stats)")
+      and "if (!worldFrameAvailable()) return true;" in renderer)
+check("nonblocking presentation still fences submitted buffer lifetime",
+      "DXGI_PRESENT_DO_NOT_WAIT" in renderer
+      and "DXGI_ERROR_WAS_STILL_DRAWING" in renderer
+      and renderer.index("frameFenceValues_[index] = fence;") < renderer.index("if (FAILED(presentResult)"))
+check("reuse completed upload buffers instead of per-mesh allocation churn",
+      "cached->GetDesc().Width != bytes" in renderer
+      and "result = cached;" in renderer
+      and "frameUploads_[index].clear()" not in renderer)
+check("capture time checked during object vertex and index traversal",
+      "std::chrono::milliseconds(2)" in bridge
+      and "(vertex & 255)" in bridge and "(index & 255)" in bridge)
+check("slow update cools down from completion",
+      "mLastFrame = std::chrono::steady_clock::now();" in source)
 print("KAMI native DX12 real-scene preview source validation PASS")

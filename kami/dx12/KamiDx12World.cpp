@@ -1,6 +1,7 @@
 #include "KamiDx12Renderer.h"
 
 #include <d3dcompiler.h>
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -13,27 +14,36 @@ constexpr const char* kWorldShader = R"(
 cbuffer PerMesh : register(b0)
 {
     row_major float4x4 worldViewProjection;
+    float4 material; // enabled texture, alpha cutoff, reserved, reserved
 }
+Texture2D<float4> albedo : register(t0);
+SamplerState samplerNearest : register(s0);
 struct VSIn
 {
     float3 position : POSITION;
     float4 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 struct PSIn
 {
     float4 position : SV_Position;
     float4 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 PSIn VSWorld(VSIn input)
 {
     PSIn output;
     output.position = mul(float4(input.position, 1.0), worldViewProjection);
     output.color = input.color;
+    output.uv = input.uv;
     return output;
 }
 float4 PSWorld(PSIn input) : SV_Target0
 {
-    return input.color;
+    float4 color = input.color;
+    if (material.x > 0.5) color *= albedo.Sample(samplerNearest, input.uv);
+    if (material.y > 0.0) clip(color.a - material.y);
+    return color;
 }
 )";
 
@@ -56,16 +66,30 @@ bool Renderer::prepareWorldPipeline()
     if (worldPipeline_ && worldRootSignature_) return true;
     if (!device_) return fail("World pass requires D3D12 device", E_FAIL);
 
-    D3D12_ROOT_PARAMETER constants{};
-    constants.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    constants.Constants.ShaderRegister = 0;
-    constants.Constants.RegisterSpace = 0;
-    constants.Constants.Num32BitValues = 16;
-    constants.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
+    D3D12_ROOT_PARAMETER params[2]{};
+    params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[0].Constants.ShaderRegister = 0;
+    params[0].Constants.Num32BitValues = 20;
+    params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_DESCRIPTOR_RANGE range{};
+    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    range.NumDescriptors = 1;
+    params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[1].DescriptorTable.NumDescriptorRanges = 1;
+    params[1].DescriptorTable.pDescriptorRanges = &range;
+    params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
     D3D12_ROOT_SIGNATURE_DESC root{};
-    root.NumParameters = 1;
-    root.pParameters = &constants;
+    root.NumParameters = 2;
+    root.pParameters = params;
+    root.NumStaticSamplers = 1;
+    root.pStaticSamplers = &sampler;
     root.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     ComPtr<ID3DBlob> signature, errors;
     HRESULT hr = D3D12SerializeRootSignature(&root, D3D_ROOT_SIGNATURE_VERSION_1,
@@ -87,16 +111,18 @@ bool Renderer::prepareWorldPipeline()
                     D3DCOMPILE_ENABLE_STRICTNESS, 0, &ps, &errors);
     if (FAILED(hr)) return fail("Compile D3D12 world pixel shader", hr);
 
-    D3D12_INPUT_ELEMENT_DESC inputs[2]{};
+    D3D12_INPUT_ELEMENT_DESC inputs[3]{};
     inputs[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
                  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
     inputs[1] = {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12,
+                 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+    inputs[2] = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 28,
                  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
     pso.pRootSignature = worldRootSignature_.Get();
     pso.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
     pso.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-    pso.InputLayout = {inputs, 2};
+    pso.InputLayout = {inputs, 3};
     pso.SampleMask = UINT_MAX;
     pso.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pso.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -170,7 +196,8 @@ bool Renderer::recordWorldDraws(
     const WorldFrame& scene, ID3D12Resource* target,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv, UINT width, UINT height,
     D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to,
-    std::vector<ComPtr<ID3D12Resource>>& liveUploads)
+    std::vector<ComPtr<ID3D12Resource>>& liveUploads,
+    ComPtr<ID3D12DescriptorHeap>& liveDescriptors)
 {
     if (!target || !worldPipeline_ || !worldDepth_ || !width || !height)
         return fail("World scene requires pipeline, target and depth", E_INVALIDARG);
@@ -188,8 +215,21 @@ bool Renderer::recordWorldDraws(
             mesh.vertices.size() > (1u << 20) ||
             mesh.indices.size() > (1u << 21))
             return fail("World scene has invalid vertex/index counts", E_INVALIDARG);
+        const bool textured = !mesh.albedoRGBA8.empty();
+        if (mesh.alphaCutoff < 0.f || mesh.alphaCutoff > 1.f ||
+            (mesh.textureWidth > 0) != (mesh.textureHeight > 0) ||
+            textured != (mesh.textureWidth > 0 && mesh.textureHeight > 0))
+            return fail("World mesh material dimensions or alpha cutoff invalid", E_INVALIDARG);
+        if (textured && (mesh.textureWidth > 1024 || mesh.textureHeight > 1024 ||
+                         mesh.albedoRGBA8.size() !=
+                         std::size_t(mesh.textureWidth) * mesh.textureHeight * 4u))
+            return fail("World RGBA8 texture exceeds prototype cap", E_INVALIDARG);
+        const std::size_t stagingBytes = textured
+            ? (std::size_t(mesh.textureWidth) * 4u + 255u) / 256u *
+              256u * mesh.textureHeight : 0u;
         const std::size_t bytes = mesh.vertices.size() * sizeof(WorldVertex) +
-                                  mesh.indices.size() * sizeof(std::uint32_t);
+                                  mesh.indices.size() * sizeof(std::uint32_t) +
+                                  stagingBytes;
         if (bytes > kMaxUploadBytes - totalBytes)
             return fail("World scene exceeds 32 MiB upload budget", E_OUTOFMEMORY);
         totalBytes += bytes;
@@ -198,7 +238,8 @@ bool Renderer::recordWorldDraws(
                 return fail("World mesh has out-of-range index", E_INVALIDARG);
     }
 
-    auto upload = [this, &liveUploads](const void* data, std::size_t bytes,
+    std::size_t uploadSlot = 0;
+    auto upload = [this, &liveUploads, &uploadSlot](const void* data, std::size_t bytes,
                                        ComPtr<ID3D12Resource>& result) -> bool {
         D3D12_HEAP_PROPERTIES props{};
         props.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -210,10 +251,20 @@ bool Renderer::recordWorldDraws(
         buffer.MipLevels = 1;
         buffer.SampleDesc.Count = 1;
         buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        HRESULT hr = device_->CreateCommittedResource(
-            &props, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr, IID_PPV_ARGS(&result));
-        if (FAILED(hr)) return fail("Create indexed-world GPU upload buffer", hr);
+        if (uploadSlot == liveUploads.size()) liveUploads.emplace_back();
+        auto& cached = liveUploads[uploadSlot++];
+        HRESULT hr = S_OK;
+        if (!cached || cached->GetDesc().Dimension != D3D12_RESOURCE_DIMENSION_BUFFER ||
+            cached->GetDesc().Width != bytes)
+        {
+            // Caller has retired this frame's fence before reusing its pool.
+            cached.Reset();
+            hr = device_->CreateCommittedResource(
+                &props, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr, IID_PPV_ARGS(&cached));
+            if (FAILED(hr)) return fail("Create indexed-world GPU upload buffer", hr);
+        }
+        result = cached;
         void* mapped = nullptr;
         D3D12_RANGE readRange{0, 0};
         hr = result->Map(0, &readRange, &mapped);
@@ -222,9 +273,22 @@ bool Renderer::recordWorldDraws(
         const D3D12_RANGE writtenRange{0, static_cast<SIZE_T>(bytes)};
         result->Unmap(0, &writtenRange);
         // The referenced buffers must stay alive until command-list GPU fence.
-        liveUploads.push_back(result);
+        // Pool retains ownership until this frame's fence completes.
         return true;
     };
+
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{};
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.NumDescriptors = static_cast<UINT>(
+        std::max<std::size_t>(1, scene.meshes.size()));
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    const HRESULT descriptorResult = device_->CreateDescriptorHeap(
+        &srvHeapDesc, IID_PPV_ARGS(&liveDescriptors));
+    if (FAILED(descriptorResult))
+        return fail("Create per-frame world SRV descriptors", descriptorResult);
+    ID3D12DescriptorHeap* descriptorHeaps[] = {liveDescriptors.Get()};
+    commandList_->SetDescriptorHeaps(1, descriptorHeaps);
+    const UINT srvStride = device_->GetDescriptorHandleIncrementSize(srvHeapDesc.Type);
 
     if (from != D3D12_RESOURCE_STATE_RENDER_TARGET)
     {
@@ -244,6 +308,7 @@ bool Renderer::recordWorldDraws(
     commandList_->SetPipelineState(worldPipeline_.Get());
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    UINT meshIndex = 0;
     for (const WorldMesh& mesh : scene.meshes)
     {
         ComPtr<ID3D12Resource> vertices, indices;
@@ -262,11 +327,89 @@ bool Renderer::recordWorldDraws(
         indexView.Format = DXGI_FORMAT_R32_UINT;
         commandList_->IASetVertexBuffers(0, 1, &vertexView);
         commandList_->IASetIndexBuffer(&indexView);
+        // Native D3D12 upload path for CPU-decoded RGBA8 material textures.
+        // The local memory is row-pitch aligned; GPU resources and SRVs survive
+        // until the backbuffer fence retires. This is not an SL texture cache.
+        const bool textured = !mesh.albedoRGBA8.empty();
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+        srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv.Texture2D.MipLevels = 1;
+        auto cpuHandle = liveDescriptors->GetCPUDescriptorHandleForHeapStart();
+        cpuHandle.ptr += static_cast<SIZE_T>(meshIndex) * srvStride;
+        if (textured)
+        {
+            D3D12_RESOURCE_DESC tex{};
+            tex.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            tex.Width = mesh.textureWidth;
+            tex.Height = mesh.textureHeight;
+            tex.DepthOrArraySize = 1;
+            tex.MipLevels = 1;
+            tex.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            tex.SampleDesc.Count = 1;
+            tex.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+            UINT rows = 0;
+            UINT64 rowBytes = 0, total = 0;
+            device_->GetCopyableFootprints(&tex, 0, 1, 0, &footprint,
+                                           &rows, &rowBytes, &total);
+            if (!total || total > kMaxUploadBytes)
+                return fail("World texture GPU upload footprint invalid", E_OUTOFMEMORY);
+            std::vector<std::uint8_t> aligned(static_cast<std::size_t>(total), 0);
+            const std::size_t line = std::size_t(mesh.textureWidth) * 4u;
+            for (UINT y = 0; y < mesh.textureHeight; ++y)
+                std::memcpy(aligned.data() + std::size_t(y) * footprint.Footprint.RowPitch,
+                            mesh.albedoRGBA8.data() + std::size_t(y) * line, line);
+            ComPtr<ID3D12Resource> texUpload;
+            if (!upload(aligned.data(), aligned.size(), texUpload)) return false;
+            // A newly allocated texture begins in COPY_DEST. Never mistake
+            // an old frame's PIXEL_SHADER_RESOURCE for a copy destination.
+            if (uploadSlot == liveUploads.size()) liveUploads.emplace_back();
+            auto& texture = liveUploads[uploadSlot++];
+            texture.Reset(); // Corresponding frame fence completed already.
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+            const HRESULT createResult = device_->CreateCommittedResource(
+                &heap, D3D12_HEAP_FLAG_NONE, &tex,
+                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&texture));
+            if (FAILED(createResult))
+                return fail("Create GPU resident RGBA8 texture", createResult);
+            D3D12_TEXTURE_COPY_LOCATION src{};
+            src.pResource = texUpload.Get();
+            src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            src.PlacedFootprint = footprint;
+            D3D12_TEXTURE_COPY_LOCATION dst{};
+            dst.pResource = texture.Get();
+            dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            dst.SubresourceIndex = 0;
+            commandList_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+            const auto barrier = worldTransition(texture.Get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            commandList_->ResourceBarrier(1, &barrier);
+            device_->CreateShaderResourceView(texture.Get(), &srv, cpuHandle);
+        }
+        else
+        {
+            // Null texture SRV is legal: untextured HLSL path never samples.
+            device_->CreateShaderResourceView(nullptr, &srv, cpuHandle);
+        }
+
+        const float material[4] = {
+            textured ? 1.f : 0.f, mesh.alphaCutoff, 0.f, 0.f
+        };
         commandList_->SetGraphicsRoot32BitConstants(
             0, 16, mesh.worldViewProjection.data(), 0);
+        commandList_->SetGraphicsRoot32BitConstants(0, 4, material, 16);
+        auto gpuHandle = liveDescriptors->GetGPUDescriptorHandleForHeapStart();
+        gpuHandle.ptr += static_cast<UINT64>(meshIndex) * srvStride;
+        commandList_->SetGraphicsRootDescriptorTable(1, gpuHandle);
         commandList_->DrawIndexedInstanced(static_cast<UINT>(mesh.indices.size()),
-                                            1, 0, 0, 0);
+                                           1, 0, 0, 0);
+        ++meshIndex;
     }
+    liveUploads.resize(uploadSlot); // Discard unused completed slots; pool stays within 32 MiB.
     if (to != D3D12_RESOURCE_STATE_RENDER_TARGET)
     {
         const auto barrier = worldTransition(target, D3D12_RESOURCE_STATE_RENDER_TARGET, to);
@@ -275,12 +418,19 @@ bool Renderer::recordWorldDraws(
     return true;
 }
 
+bool Renderer::worldFrameAvailable() const noexcept
+{
+    if (!ready() || !fence_) return false;
+    const UINT index = swapChain_->GetCurrentBackBufferIndex();
+    return fence_->GetCompletedValue() >= frameFenceValues_[index];
+}
+
 bool Renderer::renderWorldFrame(const WorldFrame& scene, bool vsync)
 {
     if (!ready() || !rtvHeap_) return fail("No native D3D12 presentation surface", E_FAIL);
     const UINT index = swapChain_->GetCurrentBackBufferIndex();
-    if (!waitForFrame(index)) return false;
-    frameUploads_[index].clear(); // This backbuffer's previous draw has finished.
+    if (!worldFrameAvailable()) return true; // Busy: drop preview update, never wait.
+    // Retain completed frame buffers for reuse; the availability poll retired their fence.
     if (!prepareWorldPipeline() || !ensureWorldDepth(width_, height_)) return false;
 
     HRESULT hr = allocators_[index]->Reset();
@@ -291,18 +441,22 @@ bool Renderer::renderWorldFrame(const WorldFrame& scene, bool vsync)
     rtv.ptr += static_cast<SIZE_T>(index) * rtvStride_;
     if (!recordWorldDraws(scene, targets_[index].Get(), rtv, width_, height_,
                           D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_PRESENT,
-                          frameUploads_[index]))
+                          frameUploads_[index], frameWorldDescriptors_[index]))
         return false;
     hr = commandList_->Close();
     if (FAILED(hr)) return fail("Close indexed-world command list", hr);
     ID3D12CommandList* lists[] = {commandList_.Get()};
     queue_->ExecuteCommandLists(1, lists);
-    const UINT flags = (!vsync && allowTearing_) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+    const UINT flags = ((!vsync && allowTearing_) ? DXGI_PRESENT_ALLOW_TEARING : 0)
+                       | (!vsync ? DXGI_PRESENT_DO_NOT_WAIT : 0);
     hr = swapChain_->Present(vsync ? 1 : 0, flags);
-    if (FAILED(hr)) return fail("Present native indexed-world frame", hr);
+    // Even an unpresented submission owns its buffers until the GPU fence.
+    const HRESULT presentResult = hr;
     const UINT64 fence = signal();
     if (!fence) return false;
     frameFenceValues_[index] = fence;
+    if (FAILED(presentResult) && presentResult != DXGI_ERROR_WAS_STILL_DRAWING)
+        return fail("Present native indexed-world frame", presentResult);
     return true;
 }
 
@@ -333,6 +487,33 @@ bool Renderer::renderWorldOffscreenTest(UINT width, UINT height)
     background.indices = {0, 1, 2};
     scene.meshes.push_back(std::move(foreground));
     scene.meshes.push_back(std::move(background));
+
+    // Verify real GPU texel sampling: a magenta RGBA8 quad in the top-right.
+    WorldMesh textured;
+    textured.vertices = {
+        {{{ 0.40f, 0.40f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{0.f,0.f}}},
+        {{{ 0.96f, 0.40f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{1.f,0.f}}},
+        {{{ 0.96f, 0.96f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{1.f,1.f}}},
+        {{{ 0.40f, 0.96f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{0.f,1.f}}}
+    };
+    textured.indices = {0,1,2,0,2,3};
+    textured.textureWidth = textured.textureHeight = 2;
+    textured.albedoRGBA8 = {255, 0, 255, 255, 255, 0, 255, 255,
+                            255, 0, 255, 255, 255, 0, 255, 255};
+    scene.meshes.push_back(std::move(textured));
+
+    // Transparent yellow mesh in bottom-left must be clipped by alpha mask.
+    WorldMesh transparent;
+    transparent.vertices = {
+        {{{-0.98f,-0.98f,0.08f}},{{1.f,1.f,0.f,1.f}},{{0.f,0.f}}},
+        {{{-0.70f,-0.98f,0.08f}},{{1.f,1.f,0.f,1.f}},{{1.f,0.f}}},
+        {{{-0.98f,-0.70f,0.08f}},{{1.f,1.f,0.f,1.f}},{{0.f,1.f}}}
+    };
+    transparent.indices = {0,1,2};
+    transparent.textureWidth = transparent.textureHeight = 1;
+    transparent.albedoRGBA8 = {255,255,0,0};
+    transparent.alphaCutoff = 0.5f;
+    scene.meshes.push_back(std::move(transparent));
 
     D3D12_RESOURCE_DESC targetDesc{};
     targetDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -394,9 +575,10 @@ bool Renderer::renderWorldOffscreenTest(UINT width, UINT height)
     hr = commandList_->Reset(allocators_[0].Get(), worldPipeline_.Get());
     if (FAILED(hr)) return fail("Reset indexed-world test command list", hr);
     std::vector<ComPtr<ID3D12Resource>> liveUploads;
+    ComPtr<ID3D12DescriptorHeap> liveDescriptors;
     if (!recordWorldDraws(scene, target.Get(), rtv, width, height,
                           D3D12_RESOURCE_STATE_RENDER_TARGET,
-                          D3D12_RESOURCE_STATE_COPY_SOURCE, liveUploads))
+                          D3D12_RESOURCE_STATE_COPY_SOURCE, liveUploads, liveDescriptors))
         return false;
 
     D3D12_TEXTURE_COPY_LOCATION from{};
@@ -429,10 +611,25 @@ bool Renderer::renderWorldOffscreenTest(UINT width, UINT height)
         pixels[center + 2] > 180 && pixels[center + 3] > 245;
     const bool blackClear =
         pixels[0] < 5 && pixels[1] < 5 && pixels[2] < 5;
+    // BGRA output: textured magenta must have red and blue but no green.
+    const std::size_t pink = std::size_t(height / 8) *
+                             footprint.Footprint.RowPitch +
+                             std::size_t(width * 7 / 8) * 4u;
+    const bool uvTextureSampled =
+        pixels[pink] > 230 && pixels[pink + 1] < 30 &&
+        pixels[pink + 2] > 230;
+    const std::size_t masked = std::size_t(height * 97 / 100) *
+                               footprint.Footprint.RowPitch +
+                               std::size_t(width * 3 / 100) * 4u;
+    const bool transparentDiscarded =
+        pixels[masked] < 5 && pixels[masked + 1] < 5 &&
+        pixels[masked + 2] < 5;
     D3D12_RANGE writtenRange{0, 0};
     readback->Unmap(0, &writtenRange);
-    if (!redOccludesBlue || !blackClear)
-        return fail("Indexed-world mesh, MVP or depth readback mismatched", E_FAIL);
+    if (!redOccludesBlue || !blackClear || !uvTextureSampled ||
+        !transparentDiscarded)
+        return fail("DX12 indexed world depth/texture/alpha GPU readback mismatch",
+                    E_FAIL);
     return true;
 }
 
