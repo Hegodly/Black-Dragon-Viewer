@@ -162,3 +162,20 @@ nor a useful Second Life session is proven by compilation/tests. Re-test
 once with a dedicated test account and report only the HTTP code plus
 response **category**. Do not supply raw HTTP bodies, SL credentials,
 signed URLs or login payloads to issues or chats.
+
+## Diagnostic revision R2
+
+The hard-coded HTTP 400 instruction "check protocol" has been removed because
+it was not a real finding. The app now reports "Request declined (KAMI DIAG R2)"
+and retains a safe response **format** category, when readable. The new
+marker lets testers distinguish the updated executable from prior builds.
+
+The login POST declares acceptance of XML responses, and offline regression
+tests now parse the entire generated XML-RPC login document using MSXML with
+DTD/external entity handling disabled (in addition to existing serialization
+field checks). These tests verify XML syntax and local protocol structure,
+**not** live Second Life server acceptance.
+
+For privacy, avoid publishing any real authentication XML, raw HTTP response
+body or token. If HTTP 400 recurs, share only the displayed status and category.
+A browser-only GET/HEAD probe cannot validate credential-bearing POST replies.
