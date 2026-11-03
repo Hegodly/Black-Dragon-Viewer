@@ -3,7 +3,8 @@
 #include "kami/features/viewer_foundation.hpp"
 
 #include <windowsx.h>
-#include <credui.h>
+#include <wincred.h>
+#include <objbase.h>
 #include <shellapi.h>
 #include <future>
 #include <thread>
