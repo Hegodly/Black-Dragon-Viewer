@@ -646,7 +646,107 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         return;
     }
 
-    if(page_==2 || page_==3 || page_==4) {
+    if(page_==4) {
+        const float railX=contentX+18.f;
+        const float panelX=contentX+255.f;
+        const float panelW=std::max(280.f,contentWidth-277.f);
+        const float cardHeight=height-178.f;
+        round_rect(box(contentX,90,contentWidth,cardHeight),29.f,p.elevated);
+        // Separate conversation rail: readable but unmistakably offline.
+        round_rect(box(railX,109,220.f,cardHeight-38.f),22.f,p.surface);
+        label(L"KAMI",box(railX+16,126,188,30),
+              messenger_centered_font_.Get(),p.text);
+        label(L"M E S S E N G E R",box(railX+15,154,190,22),
+              messenger_centered_small_.Get(),p.accent);
+        const wchar_t* tabs[]={L"DESIGN PREVIEW",L"NEARBY CHAT",L"GROUPS"};
+        const wchar_t* subtitles[]={L"Local demo",L"Not connected",L"Not connected"};
+        for(unsigned i=0;i<3;++i) {
+            const float top=211.f+76.f*static_cast<float>(i);
+            const bool selected=static_cast<unsigned>(messenger_.active())==i;
+            round_rect(box(railX+13,top,194,67),16.f,
+                       selected?p.accent_soft:p.elevated);
+            label(tabs[i],box(railX+25,top+9,172,28),
+                  messenger_centered_font_.Get(),selected?p.text:p.muted);
+            label(subtitles[i],box(railX+25,top+39,172,20),
+                  messenger_centered_small_.Get(),selected?p.accent:p.muted);
+        }
+        if(messenger_.can_send()) {
+            round_rect(box(railX+14,474,192,38),13.f,p.accent_soft);
+            label(L"ADD DEMO REPLY",box(railX+23,478,174,29),
+                  messenger_centered_small_.Get(),p.accent);
+        }
+        label(L"CONNECTION: OFFLINE",box(railX+20,height-139,181,25),
+              messenger_centered_small_.Get(),p.muted);
+        label(L"No resident data",box(railX+20,height-116,181,21),
+              messenger_centered_small_.Get(),p.muted);
+
+        label(messenger::channel_title(messenger_.active()),
+              box(panelX+12,115,panelW-24,37),
+              messenger_centered_font_.Get(),p.text);
+        label(messenger::channel_subtitle(messenger_.active()),
+              box(panelX+15,150,panelW-30,22),
+              messenger_centered_small_.Get(),p.muted);
+        label(L"NOT CONNECTED TO SECOND LIFE",
+              box(panelX+15,176,panelW-30,24),
+              messenger_centered_small_.Get(),p.accent);
+
+        if(messenger_.can_send()) {
+            // Paint the latest entries backward so the newest are always visible.
+            // Center text *within* bubbles; keep incoming/outgoing sides distinct.
+            const auto& chat=messenger_.messages();
+            float cursor=height-197.f;
+            for(std::size_t offset=0;offset<chat.size();++offset) {
+                const auto& msg=chat[chat.size()-1-offset];
+                const bool system=msg.direction==messenger::Direction::System;
+                const float bubblesW=std::min(395.f,panelW-45.f);
+                const float bubbleH=system?33.f:
+                    (msg.text.size()>96?83.f:msg.text.size()>49?66.f:49.f);
+                const float needed=bubbleH+(system?13.f:25.f);
+                cursor-=needed;
+                if(cursor<207.f)break;
+                if(system) {
+                    label(msg.text,box(panelX+20,cursor,panelW-40,bubbleH),
+                          messenger_centered_small_.Get(),p.muted);
+                    continue;
+                }
+                const float px=msg.direction==messenger::Direction::Outgoing?
+                    panelX+panelW-bubblesW-22.f:panelX+22.f;
+                round_rect(box(px,cursor,bubblesW,bubbleH),18.f,
+                           msg.direction==messenger::Direction::Outgoing?
+                           p.accent_soft:p.surface);
+                label(msg.text,box(px+14,cursor+5,bubblesW-28,bubbleH-10),
+                      messenger_centered_font_.Get(),p.text);
+                const unsigned hh=(msg.clock_minutes/60U)%24U;
+                const unsigned mm=msg.clock_minutes%60U;
+                wchar_t timestamp[48]{};
+                (void)swprintf_s(timestamp,L"LOCAL DEMO  %02u:%02u",hh,mm);
+                label(timestamp,box(px+10,cursor+bubbleH+3,bubblesW-20,18),
+                      messenger_centered_small_.Get(),p.muted);
+            }
+            round_rect(box(panelX+11,height-164.f,panelW-23.f,58.f),
+                       19.f,p.surface);
+            round_rect(box(panelX+panelW-115.f,height-158.f,103.f,46.f),
+                       15.f,p.accent_soft);
+            label(L"PREVIEW",box(panelX+panelW-109.f,height-152.f,91.f,34.f),
+                  messenger_centered_small_.Get(),p.accent);
+            label(L"Text stays local  /  No deliveries or read receipts",
+                  box(panelX+16,height-96.f,panelW-31.f,25.f),
+                  messenger_centered_small_.Get(),p.muted);
+        } else {
+            label(L"NO LIVE MESSAGES AVAILABLE",
+                  box(panelX+28,285,panelW-56,36),
+                  messenger_centered_font_.Get(),p.text);
+            label(L"This channel requires KAMI's authenticated network layer.",
+                  box(panelX+30,323,panelW-60,70),
+                  messenger_centered_small_.Get(),p.muted);
+            label(L"No messages have been fetched or sent.",
+                  box(panelX+25,401,panelW-50,30),
+                  messenger_centered_small_.Get(),p.accent);
+        }
+        return;
+    }
+
+    if(page_==2 || page_==3) {
         round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
         label(kPages[page_],box(contentX+28,111,contentWidth-55,42),
               title_font_.Get(),p.text);
