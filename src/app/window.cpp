@@ -1073,6 +1073,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(L"Login not accepted; DX12 shaders remain ready",
                   box(contentX+252,y+51,contentWidth-269,22.f),
                   small_font_.Get(),p.muted);
+        }else if(sl_login_status_==protocol::LoginStatus::Accepted&&
+                 sl_circuit_.movement_seen()){
+            label(L"SIMULATOR MOVEMENT CONFIRMED",
+                  box(contentX+252,y+6,contentWidth-269,22.f),
+                  small_font_.Get(),p.text);
+            label(caps_status_.empty()?
+                  L"CAPS negotiation not started":caps_status_,
+                  box(contentX+252,y+35,contentWidth-269,30.f),
+                  small_font_.Get(),p.muted);
         }else{
             const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
                 sl_circuit_.state()!=protocol::sim::CircuitState::Closed?
@@ -1460,6 +1469,31 @@ void Window::check_sl_tls_connection() {
 }
 void Window::begin_sl_login() {
     if(sl_login_pending_)return;
+    // One active region CAPS request at a time. A new login must not
+    // overwrite an outstanding async request or reuse bearer URLs.
+    if((caps_seed_future_.valid()&&
+        caps_seed_future_.wait_for(std::chrono::seconds(0))!=
+            std::future_status::ready)||
+       (caps_poll_future_.valid()&&
+        caps_poll_future_.wait_for(std::chrono::seconds(0))!=
+            std::future_status::ready)){
+        caps_status_=L"CAPS request in progress; retry after it completes";
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    if(caps_seed_future_.valid()){
+        auto previous=caps_seed_future_.get();
+        if(!previous.event_queue_url.empty())
+            SecureZeroMemory(previous.event_queue_url.data(),
+                 previous.event_queue_url.size()*sizeof(wchar_t));
+    }
+    if(caps_poll_future_.valid())(void)caps_poll_future_.get();
+    if(!caps_seed_url_.empty())
+        SecureZeroMemory(caps_seed_url_.data(),
+                          caps_seed_url_.size()*sizeof(wchar_t));
+    caps_seed_url_.clear();
+    caps_status_.clear();
+    caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
     // Explicit acceptance and Windows native credential input only.
     const int choice=MessageBoxW(hwnd_,
@@ -1553,10 +1587,16 @@ void Window::update_sl_connection() {
         sl_login_message_=result.message.empty()?
             protocol::login_status_label(result.status):result.message;
         if(result.accepted()) {
-            if(sl_circuit_.start(result))
+            if(sl_circuit_.start(result)){
+                // Seed URL was authenticated as part of the login handoff.
+                // Do not request CAPS until the simulator movement message.
+                caps_seed_url_=result.handoff.seed_capability;
+                caps_status_=L"CAPS seed queued; waiting for simulator";
                 sl_login_message_=L"Login accepted; contacting simulator...";
-            else
+            }else{
+                caps_status_=L"Simulator UDP failed; CAPS not started";
                 sl_login_message_=L"SL accepted login, but simulator UDP failed";
+            }
         }
         if(!result.handoff.seed_capability.empty())
             SecureZeroMemory(result.handoff.seed_capability.data(),
@@ -1566,6 +1606,63 @@ void Window::update_sl_connection() {
     if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed &&
        sl_circuit_.state()!=protocol::sim::CircuitState::Failed)
         sl_circuit_.poll();
+    if(sl_login_status_==protocol::LoginStatus::Accepted&&
+       sl_circuit_.movement_seen()&&
+       !caps_seed_started_&&!caps_seed_url_.empty()){
+        caps_seed_started_=true;
+        caps_status_=L"CAPS: requesting region seed over HTTPS...";
+        auto url=std::move(caps_seed_url_);
+        caps_seed_url_.clear();
+        caps_seed_future_=std::async(std::launch::async,
+            [url=std::move(url)]()mutable {
+                const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+                protocol::caps::SeedResponse response{};
+                if(SUCCEEDED(init)){
+                    response=protocol::caps::request_seed(url);
+                    CoUninitialize();
+                }else response.diagnostic=L"CAPS COM initialization failed";
+                if(!url.empty())
+                    SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+                return response;
+            });
+    }
+    if(caps_seed_started_&&caps_seed_future_.valid()&&
+       caps_seed_future_.wait_for(std::chrono::seconds(0))==
+           std::future_status::ready){
+        protocol::caps::SeedResponse result{};
+        try{result=caps_seed_future_.get();}
+        catch(...){result.diagnostic=L"CAPS seed worker failed";}
+        caps_status_=result.diagnostic;
+        if(result.granted&&
+           sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
+            caps_poll_started_=true;
+            caps_status_=L"CAPS seed OK; first EventQueueGet poll...";
+            caps_poll_future_=std::async(std::launch::async,
+                [url=std::move(result.event_queue_url)]()mutable {
+                    const HRESULT init=CoInitializeEx(
+                        nullptr,COINIT_MULTITHREADED);
+                    protocol::caps::PollResponse response{};
+                    if(SUCCEEDED(init)){
+                        response=protocol::caps::probe_event_queue_once(url);
+                        CoUninitialize();
+                    }else response.diagnostic=L"EventQueue COM init failed";
+                    if(!url.empty())
+                        SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+                    return response;
+                });
+        }
+        if(!result.event_queue_url.empty())
+            SecureZeroMemory(result.event_queue_url.data(),
+                result.event_queue_url.size()*sizeof(wchar_t));
+    }
+    if(caps_poll_started_&&caps_poll_future_.valid()&&
+       caps_poll_future_.wait_for(std::chrono::seconds(0))==
+          std::future_status::ready){
+        try{
+            auto result=caps_poll_future_.get();
+            caps_status_=result.diagnostic;
+        }catch(...){caps_status_=L"EventQueue worker failed";}
+    }
     if(!sl_login_pending_&&
        (sl_circuit_.state()==protocol::sim::CircuitState::Closed||
         sl_circuit_.state()==protocol::sim::CircuitState::Failed))
