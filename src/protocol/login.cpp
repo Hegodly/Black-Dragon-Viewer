@@ -48,7 +48,9 @@ public:
     Bstr& operator=(const Bstr&)=delete;
 };
 std::wstring wide(std::string_view s) {
-    if(s.empty()||s.size()>1048576)return {};
+    // Match the bounded HTTP/XML-RPC reply size. A successful login may
+    // contain more than 1 MiB of optional inventory data.
+    if(s.empty()||s.size()>8U*1024U*1024U)return {};
     const int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
         s.data(),static_cast<int>(s.size()),nullptr,0);
     if(n<=0)return {};
@@ -96,6 +98,20 @@ void put_string(std::string& doc,std::string_view name,std::string_view value) {
     doc+=xml_quote(value);
     doc+="</string></value></member>";
 }
+void put_bool(std::string& doc,std::string_view name,bool value) {
+    doc+="<member><name>";
+    doc+=name;
+    doc+="</name><value><boolean>";
+    doc+=value?'1':'0';
+    doc+="</boolean></value></member>";
+}
+void put_int(std::string& doc,std::string_view name,int value) {
+    doc+="<member><name>";
+    doc+=name;
+    doc+="</name><value><int>";
+    doc+=std::to_string(value);
+    doc+="</int></value></member>";
+}
 bool digest_password(std::wstring_view password,SecureBytes& hash) {
     if(password.empty()||password.size()>128)return false;
     SecureBytes raw;
@@ -119,57 +135,36 @@ bool digest_password(std::wstring_view password,SecureBytes& hash) {
     SecureZeroMemory(digest.data(),digest.size());
     return true;
 }
-std::string actual_mac(){
+// Read only the six underlying adapter bytes. Never construct or transmit
+// a printable physical MAC address; the official SL hash is of raw bytes.
+bool physical_adapter_bytes(std::array<std::uint8_t,6>& output){
     ULONG size=0;
     if(GetAdaptersAddresses(AF_UNSPEC,
        GAA_FLAG_SKIP_ANYCAST|GAA_FLAG_SKIP_MULTICAST|GAA_FLAG_SKIP_DNS_SERVER,
-       nullptr,nullptr,&size)!=ERROR_BUFFER_OVERFLOW||size>1024*1024)return {};
+       nullptr,nullptr,&size)!=ERROR_BUFFER_OVERFLOW||size==0||
+       size>1024U*1024U)return false;
     std::vector<std::uint8_t> memory(size);
     auto* first=reinterpret_cast<PIP_ADAPTER_ADDRESSES>(memory.data());
     if(GetAdaptersAddresses(AF_UNSPEC,
        GAA_FLAG_SKIP_ANYCAST|GAA_FLAG_SKIP_MULTICAST|GAA_FLAG_SKIP_DNS_SERVER,
-       nullptr,first,&size)!=NO_ERROR)return {};
-    for(auto* a=first;a;a=a->Next){
-        if(a->OperStatus!=IfOperStatusUp||a->IfType==IF_TYPE_SOFTWARE_LOOPBACK||
-           a->PhysicalAddressLength!=6)continue;
-        constexpr char hex[]="0123456789ABCDEF";
-        std::string mac;
-        for(unsigned i=0;i<6;++i){
-            if(i)mac.push_back(':');
-            mac.push_back(hex[a->PhysicalAddress[i]>>4]);
-            mac.push_back(hex[a->PhysicalAddress[i]&15]);
-        }
-        return mac;
+       nullptr,first,&size)!=NO_ERROR)return false;
+    for(auto* adapter=first;adapter;adapter=adapter->Next){
+        if(adapter->OperStatus!=IfOperStatusUp||
+           adapter->IfType==IF_TYPE_SOFTWARE_LOOPBACK||
+           adapter->PhysicalAddressLength!=output.size())continue;
+        std::copy_n(adapter->PhysicalAddress,output.size(),output.begin());
+        return true;
     }
-    return {};
+    return false;
 }
-// Newer official SL clients send a 32-character hashed unique identifier
-// as the XML-RPC "mac" value. Never transmit the physical MAC itself.
-std::string hashed_mac() {
-    SecureBytes raw;
-    raw.data=actual_mac();
-    if(raw.data.empty())return {};
-    BCRYPT_ALG_HANDLE algorithm=nullptr;
-    if(!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
-           &algorithm,BCRYPT_MD5_ALGORITHM,nullptr,0)))return {};
-    std::array<unsigned char,16> digest{};
-    const NTSTATUS result=BCryptHash(algorithm,nullptr,0,
-        reinterpret_cast<PUCHAR>(raw.data.data()),
-        static_cast<ULONG>(raw.data.size()),digest.data(),
-        static_cast<ULONG>(digest.size()));
-    BCryptCloseAlgorithmProvider(algorithm,0);
-    if(!BCRYPT_SUCCESS(result)) {
-        SecureZeroMemory(digest.data(),digest.size());
-        return {};
+std::string hashed_mac(){
+    std::array<std::uint8_t,6> raw{};
+    if(!physical_adapter_bytes(raw)){
+        // Same anonymous fallback as the official client when no ID exists.
+        return std::string(32,'0');
     }
-    constexpr char digits[]="0123456789abcdef";
-    std::string fingerprint;
-    fingerprint.reserve(32);
-    for(const unsigned char b:digest){
-        fingerprint.push_back(digits[b>>4]);
-        fingerprint.push_back(digits[b&15U]);
-    }
-    SecureZeroMemory(digest.data(),digest.size());
+    auto fingerprint=hash_mac_bytes(raw);
+    SecureZeroMemory(raw.data(),raw.size());
     return fingerprint;
 }
 std::wstring safe_message(std::wstring s) {
@@ -201,6 +196,59 @@ bool parse_u32(std::wstring_view s,std::uint32_t& out) noexcept {
     out=static_cast<std::uint32_t>(n);return true;
 }
 } // namespace
+// Deterministic, offline-testable equivalent of the official raw-byte
+// machine identifier hash. The raw bytes never leave this process.
+std::string hash_mac_bytes(std::array<std::uint8_t,6> raw){
+    BCRYPT_ALG_HANDLE provider=nullptr;
+    if(!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
+        &provider,BCRYPT_MD5_ALGORITHM,nullptr,0))){
+        SecureZeroMemory(raw.data(),raw.size());
+        return {};
+    }
+    std::array<unsigned char,16> digest{};
+    const NTSTATUS status=BCryptHash(provider,nullptr,0,
+        raw.data(),static_cast<ULONG>(raw.size()),
+        digest.data(),static_cast<ULONG>(digest.size()));
+    BCryptCloseAlgorithmProvider(provider,0);
+    SecureZeroMemory(raw.data(),raw.size());
+    if(!BCRYPT_SUCCESS(status)){
+        SecureZeroMemory(digest.data(),digest.size());
+        return {};
+    }
+    constexpr char hex[]="0123456789abcdef";
+    std::string result;
+    result.reserve(digest.size()*2);
+    for(const unsigned char byte:digest){
+        result.push_back(hex[byte>>4]);
+        result.push_back(hex[byte&15U]);
+    }
+    SecureZeroMemory(digest.data(),digest.size());
+    return result;
+}
+
+// Return only the category of the server response. NEVER surface its text.
+std::wstring_view classify_login_http_body(std::string_view body) noexcept{
+    if(body.starts_with("\xEF\xBB\xBF"))body.remove_prefix(3);
+    while(!body.empty()&&(body.front()==' '||body.front()=='\n'||
+                          body.front()=='\r'||body.front()=='\t'))
+        body.remove_prefix(1);
+    if(body.empty())return L"empty response";
+    auto begins=[&](std::string_view pattern){
+        if(body.size()<pattern.size())return false;
+        for(std::size_t i=0;i<pattern.size();++i){
+            if(std::tolower(static_cast<unsigned char>(body[i]))!=
+               std::tolower(static_cast<unsigned char>(pattern[i])))return false;
+        }
+        return true;
+    };
+    if(begins("<?xml")||begins("<methodresponse"))
+        return L"XML-RPC response";
+    if(begins("<!doctype html")||begins("<html"))
+        return L"HTML error page";
+    if(begins("{")||begins("["))return L"JSON/error gateway response";
+    return L"unrecognized error response";
+}
+
 
 bool parse_account_name(std::wstring_view account,std::string& first,
                         std::string& last) noexcept {
@@ -263,8 +311,18 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     // exposing a disk serial number by sending the documented anonymous
     // placeholder until a user-consented machine-ID design is reviewed.
     put_string(doc,"id0","00000000-0000-0000-0000-000000000000");
-    put_string(doc,"agree_to_tos","true");
-    put_string(doc,"read_critical","false");
+    // Mirror the typed non-secret metadata sent by the official login
+    // transaction, using only truthful KAMI / Windows process information.
+    put_int(doc,"address_size",static_cast<int>(sizeof(void*)*8));
+    put_int(doc,"last_exec_event",0);
+    put_int(doc,"last_exec_duration",0);
+    put_string(doc,"last_exec_session_id","00000000-0000-0000-0000-000000000000");
+    put_string(doc,"token","");
+    put_string(doc,"mfa_hash","");
+    // Local test consent is not the Second Life Terms or a critical notice.
+    // Do not claim account actions are complete before a server challenge.
+    put_bool(doc,"agree_to_tos",false);
+    put_bool(doc,"read_critical",false);
     // Ask for structured (non-secret) error reasons from the login service.
     // Unlike authentication success, these are optional hints.
     doc+="<member><name>extended_errors</name>"
@@ -363,7 +421,7 @@ std::wstring login_http_diagnostic(unsigned code) {
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"Bad Request (cause unconfirmed; check protocol)";
+    case 400:return prefix+L"Request declined (KAMI DIAG R2)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
@@ -400,7 +458,8 @@ LoginResult login_to_simulator(const LoginRequest& request,
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     if(!session.handle){failure.status=LoginStatus::NetworkError;return failure;}
-    WinHttpSetTimeouts(session.handle,3500,3500,4500,4500);
+    // Allow a slow authenticated login; the credential-free probe remains short.
+    WinHttpSetTimeouts(session.handle,15000,15000,30000,30000);
     HttpHandle connection(WinHttpConnect(session.handle,
         std::wstring(host).c_str(),INTERNET_DEFAULT_HTTPS_PORT,0));
     if(!connection.handle){failure.status=LoginStatus::NetworkError;return failure;}
@@ -414,6 +473,7 @@ LoginResult login_to_simulator(const LoginRequest& request,
         failure.status=LoginStatus::NetworkError;return failure;
     }
     constexpr wchar_t headers[]=L"Content-Type: text/xml; charset=UTF-8\r\n"
+                                 L"Accept: text/xml\r\n"
                                  L"Cache-Control: no-store\r\n";
     if(!WinHttpSendRequest(web.handle,headers,static_cast<DWORD>(-1),
            payload.data.data(),static_cast<DWORD>(payload.data.size()),
@@ -435,6 +495,18 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(code!=200){
         failure.status=LoginStatus::HttpError;
         failure.message=login_http_diagnostic(code);
+        // Classify up to 512 response bytes in memory. Never display or log
+        // the body, which may contain credentials, tokens or signed URLs.
+        char sample[512]{};
+        DWORD count=0;
+        if(WinHttpReadData(web.handle,sample,sizeof(sample),&count)){
+            const auto kind=classify_login_http_body(
+                std::string_view(sample,static_cast<std::size_t>(count)));
+            failure.message+=L" [";
+            failure.message+=kind;
+            failure.message+=L"]";
+        }
+        SecureZeroMemory(sample,sizeof(sample));
         return failure;
     }
     std::string body;

@@ -25,6 +25,13 @@ int main(){
        parse_account_name(L"first..last",f,l)||
        parse_account_name(L".last",f,l)||
        parse_account_name(L"first.",f,l))return 13;
+    const std::array<std::uint8_t,6> mac_bytes{0,1,2,3,4,5};
+    if(hash_mac_bytes(mac_bytes)!="d15ae53931880fd7b724dd7888b4b4ed")return 16;
+    if(classify_login_http_body("<html><body>unknown</body></html>")!=
+       L"HTML error page"||
+       classify_login_http_body("<?xml")!=
+       L"XML-RPC response"||
+       classify_login_http_body("")!=L"empty response")return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",true);
@@ -41,7 +48,14 @@ int main(){
        valid.find("<name>extended_errors</name><value><boolean>1</boolean>")==
            std::string::npos||
        valid.find("<name>options</name><value><array>")==std::string::npos||
-       valid.find("<name>viewer_digest</name>")!=std::string::npos)
+       valid.find("<name>address_size</name><value><int>64</int>")==std::string::npos||
+       valid.find("<name>last_exec_event</name><value><int>0</int>")==std::string::npos||
+       valid.find("<name>mfa_hash</name>")==std::string::npos||
+       valid.find("<name>token</name>")==std::string::npos||
+       valid.find("<name>viewer_digest</name>")!=std::string::npos||
+       valid.find("<name>agree_to_tos</name><value><boolean>0</boolean>")==std::string::npos||
+       valid.find("<name>read_critical</name><value><boolean>0</boolean>")==std::string::npos||
+       valid.find("<name>agree_to_tos</name><value><string>")!=std::string::npos)
        return 12;
     // Current protocol submits a 32-hex pseudonymous machine marker, not
     // a raw physical MAC address, and rejects old/invalid MAC inputs.
@@ -65,6 +79,16 @@ int main(){
     if(!ok.accepted()||ok.circuit_code!=190345234U||
        ok.handoff.simulator_port!=13000||
        ok.handoff.agent_id!="12345678-90ab-4cde-8fab-000000000001")return 4;
+    // HTTP accepts up to 8 MiB, including large optional inventory data.
+    const auto large_inventory=wrap(
+        m("login","true")+m("agent_id","12345678-90ab-4cde-8fab-000000000001")+
+        m("session_id","12345678-90ab-4cde-8fab-000000000002")+
+        m("sim_ip","sim1234.agni.lindenlab.com")+m("sim_port","13000","int")+
+        m("circuit_code","190345234","int")+
+        m("seed_capability","https://sim1234.agni.lindenlab.com:12345/cap/abc")+
+        "<member><name>inventory-skeleton</name><value><array><data><value><string>"+
+        std::string(1100000,'A')+"</string></value></data></array></value></member>");
+    if(!parse_login_xmlrpc(large_inventory).accepted())return 15;
     const auto mfa=parse_login_xmlrpc(wrap(
         m("login","false")+m("reason","mfa_challenge")+
         m("message","Enter a second factor")));
@@ -97,6 +121,9 @@ int main(){
            message.find(L"passwd")!=std::wstring::npos||message.size()>120U)
             return 10;
     }
+    if(login_http_diagnostic(400).find(L"KAMI DIAG R2")==std::wstring::npos||
+       login_http_diagnostic(400).find(L"check protocol")!=std::wstring::npos)
+       return 24;
     if(login_http_diagnostic(403).find(L"refused")==std::wstring::npos||
        login_http_diagnostic(429).find(L"retry later")==std::wstring::npos||
        login_http_diagnostic(302).find(L"redirect blocked")==std::wstring::npos)

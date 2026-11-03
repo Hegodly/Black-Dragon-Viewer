@@ -125,3 +125,58 @@ prototype does not support MFA continuation, a full ToS challenge flow,
 caps/event queue, live world assets or actual region rendering.
 
 Protocol reference: https://wiki.secondlife.com/wiki/Current_login_protocols
+
+## Login request correctness follow-up (November 3, 2026)
+
+Experimental login now emits XML-RPC booleans for `agree_to_tos` and
+`read_critical`, initially both false. The local KAMI test warning is not
+the actual Second Life Terms/notice confirmation; KAMI must not silently
+acknowledge a server challenge. The authenticated login HTTP receive timeout
+is now 30 seconds; the password-free TLS probe remains short. The XML parser
+and HTTP reader now share a bounded 8 MiB reply limit so optional large
+inventory data need not invalidate authentication. Offline regression tests
+cover protocol types and a large XML response. This is an unverified client
+fix, **not proof of successful live SL authentication**. Passwords, session
+tokens and capability URLs are not written to diagnostics.
+
+## Further investigation after repeated HTTP 400
+
+A second user test still returned HTTP 400, disproving the hypothesis
+that the earlier booleans/timeouts alone would resolve the problem.
+
+This follow-up corrects the machine identifier to hash the **six raw
+adapter bytes** rather than the printable colon-separated address,
+matching the official viewer's hashing semantics; the physical address
+is never sent. It also adds non-secret typed request metadata used by
+the current official login implementation, without impersonating its
+channel/version or claiming the user acknowledged SL's Terms.
+
+For non-200 replies, KAMI now reads no more than 512 bytes *only to
+classify the response format*: empty, XML-RPC, HTML, JSON-like, or
+unrecognized. The response bytes are then cleared, never shown or
+logged; this helps distinguish login-service replies from intervening
+HTML error pages without exposing any account or capability data.
+
+These are **candidate compatibility changes**. Neither a real login
+nor a useful Second Life session is proven by compilation/tests. Re-test
+once with a dedicated test account and report only the HTTP code plus
+response **category**. Do not supply raw HTTP bodies, SL credentials,
+signed URLs or login payloads to issues or chats.
+
+## Diagnostic revision R2
+
+The hard-coded HTTP 400 instruction "check protocol" has been removed because
+it was not a real finding. The app now reports "Request declined (KAMI DIAG R2)"
+and retains a safe response **format** category, when readable. The new
+marker lets testers distinguish the updated executable from prior builds.
+
+The login POST now explicitly accepts XML responses. Offline regression
+tests check generated login fields, required XML-RPC types and error status
+messages. A proposed full-document MSXML test destabilized CI and was removed;
+the existing response parser security tests remain. These tests **do not**
+prove that the server will accept the request or that the serialized body
+is compatible with its current implementation.
+
+For privacy, avoid publishing any real authentication XML, raw HTTP response
+body or token. If HTTP 400 recurs, share only the displayed status and category.
+A browser-only GET/HEAD probe cannot validate credential-bearing POST replies.

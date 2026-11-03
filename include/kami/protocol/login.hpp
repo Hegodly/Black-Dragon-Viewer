@@ -1,5 +1,6 @@
 #pragma once
 #include "kami/protocol/bootstrap.hpp"
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -26,6 +27,12 @@ struct LoginResult {
         return status==LoginStatus::Accepted;
     }
 };
+// Hash raw adapter bytes (not a printable colon-delimited MAC).
+// This pure helper supports deterministic offline protocol tests.
+[[nodiscard]] std::string hash_mac_bytes(std::array<std::uint8_t,6> raw);
+// Only a category is returned: never expose untrusted HTTP error bodies.
+[[nodiscard]] std::wstring_view classify_login_http_body(
+    std::string_view body) noexcept;
 // No password, seed capability, or account identifier is written to logs.
 [[nodiscard]] bool parse_account_name(std::wstring_view input,
                                       std::string& first,
@@ -42,8 +49,9 @@ struct LoginResult {
 // included in output; callers must clear their own password buffer.
 [[nodiscard]] LoginResult login_to_simulator(const LoginRequest& request,
                                              std::wstring_view password);
-// Return safe diagnostics based ONLY on HTTP status codes. Never display
-// server response bodies, redirect Location headers, passwords, or tokens.
+// Return safe diagnostics based on HTTP status only; optional non-secret
+// response type classification is appended by login_to_simulator().
+ // Never display server response bodies or sensitive response headers.
 [[nodiscard]] std::wstring login_http_diagnostic(unsigned status);
 [[nodiscard]] const wchar_t* login_status_label(LoginStatus status) noexcept;
 } // namespace kami::protocol
