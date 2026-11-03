@@ -1,6 +1,7 @@
 #include "KamiDx12Renderer.h"
 
 #include <d3dcompiler.h>
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -487,6 +488,33 @@ bool Renderer::renderWorldOffscreenTest(UINT width, UINT height)
     scene.meshes.push_back(std::move(foreground));
     scene.meshes.push_back(std::move(background));
 
+    // Verify real GPU texel sampling: a magenta RGBA8 quad in the top-right.
+    WorldMesh textured;
+    textured.vertices = {
+        {{{ 0.40f, 0.40f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{0.f,0.f}}},
+        {{{ 0.96f, 0.40f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{1.f,0.f}}},
+        {{{ 0.96f, 0.96f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{1.f,1.f}}},
+        {{{ 0.40f, 0.96f, 0.10f}}, {{1.f,1.f,1.f,1.f}}, {{0.f,1.f}}}
+    };
+    textured.indices = {0,1,2,0,2,3};
+    textured.textureWidth = textured.textureHeight = 2;
+    textured.albedoRGBA8 = {255, 0, 255, 255, 255, 0, 255, 255,
+                            255, 0, 255, 255, 255, 0, 255, 255};
+    scene.meshes.push_back(std::move(textured));
+
+    // Transparent yellow mesh in bottom-left must be clipped by alpha mask.
+    WorldMesh transparent;
+    transparent.vertices = {
+        {{{-0.98f,-0.98f,0.08f}},{{1.f,1.f,0.f,1.f}},{{0.f,0.f}}},
+        {{{-0.70f,-0.98f,0.08f}},{{1.f,1.f,0.f,1.f}},{{1.f,0.f}}},
+        {{{-0.98f,-0.70f,0.08f}},{{1.f,1.f,0.f,1.f}},{{0.f,1.f}}}
+    };
+    transparent.indices = {0,1,2};
+    transparent.textureWidth = transparent.textureHeight = 1;
+    transparent.albedoRGBA8 = {255,255,0,0};
+    transparent.alphaCutoff = 0.5f;
+    scene.meshes.push_back(std::move(transparent));
+
     D3D12_RESOURCE_DESC targetDesc{};
     targetDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     targetDesc.Width = width;
@@ -583,10 +611,25 @@ bool Renderer::renderWorldOffscreenTest(UINT width, UINT height)
         pixels[center + 2] > 180 && pixels[center + 3] > 245;
     const bool blackClear =
         pixels[0] < 5 && pixels[1] < 5 && pixels[2] < 5;
+    // BGRA output: textured magenta must have red and blue but no green.
+    const std::size_t pink = std::size_t(height / 8) *
+                             footprint.Footprint.RowPitch +
+                             std::size_t(width * 7 / 8) * 4u;
+    const bool uvTextureSampled =
+        pixels[pink] > 230 && pixels[pink + 1] < 30 &&
+        pixels[pink + 2] > 230;
+    const std::size_t masked = std::size_t(height * 97 / 100) *
+                               footprint.Footprint.RowPitch +
+                               std::size_t(width * 3 / 100) * 4u;
+    const bool transparentDiscarded =
+        pixels[masked] < 5 && pixels[masked + 1] < 5 &&
+        pixels[masked + 2] < 5;
     D3D12_RANGE writtenRange{0, 0};
     readback->Unmap(0, &writtenRange);
-    if (!redOccludesBlue || !blackClear)
-        return fail("Indexed-world mesh, MVP or depth readback mismatched", E_FAIL);
+    if (!redOccludesBlue || !blackClear || !uvTextureSampled ||
+        !transparentDiscarded)
+        return fail("DX12 indexed world depth/texture/alpha GPU readback mismatch",
+                    E_FAIL);
     return true;
 }
 
