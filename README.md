@@ -186,3 +186,13 @@ modules are not included or claimed to be working.
 
 A successful compilation/test does not prove Second Life login succeeds.
 Use a test account and report the HTTP status/response category only.
+
+### Official Windows machine-ID login compatibility
+
+The LGPL Windows login bridge now also follows Linden Lab's current
+WMI machine fingerprint preference: motherboard product UUID,
+operating-system serial fallback, then (if unavailable) adapter bytes.
+It folds the WMI serial to six bytes as `LLMachineID` does and hashes
+that result before sending the pseudonymous identifier to Second Life.
+See the bundled LGPL license and `third_party/secondlife-lgpl/NOTICE.md`.
+This is not a claim of complete live viewer networking or login.
