@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <cmath>
 #include <cstring>
@@ -327,14 +328,23 @@ void Renderer::draw() {
         .08f,200.f);
     XMFLOAT4X4 viewproj{};
     XMStoreFloat4x4(&viewproj,view*projection);
-    std::array<float,20> constants{};
+    std::array<float,28> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
     constants[17]=-.86f;
     constants[18]=.38f;
     constants[19]=graphics_.sun_strength();
-    commands_->SetGraphicsRoot32BitConstants(0,20,constants.data(),0);
+    XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&constants[20]),eye);
+    constants[23]=1.f;
+    const auto elapsed=std::chrono::steady_clock::now()-start_time_;
+    constants[24]=std::chrono::duration<float>(elapsed).count();
+    constants[25]=0.f;
+    constants[26]=graphics_.pbr?1.f:0.f;
+    constants[27]=0.f;
+    commands_->SetGraphicsRoot32BitConstants(0,28,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
+    constants[25]=graphics_.animate_avatar?1.f:0.f;
+    commands_->SetGraphicsRoot32BitConstants(0,28,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
     auto end=barrier(buffers_[index].Get(),

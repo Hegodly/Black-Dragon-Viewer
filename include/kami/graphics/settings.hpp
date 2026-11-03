@@ -9,6 +9,8 @@ struct Settings {
     unsigned render_scale_percent=100;
     unsigned fps_limit=60;  // 0 = uncapped; VSync may still limit presentation.
     bool vsync=true;
+    bool pbr=true;
+    bool animate_avatar=true;
     [[nodiscard]] unsigned terrain_divisions() const noexcept {
         switch(preset) {
         case Preset::Performance: return 16;

@@ -5,6 +5,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <string>
 #include <windows.h>
@@ -56,6 +57,7 @@ private:
     float yaw_ = .65f;
     float elevation_ = 6.8f;
     float distance_ = 17.f;
+    std::chrono::steady_clock::time_point start_time_ = std::chrono::steady_clock::now();
     std::wstring error_;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain3> swapchain_;

@@ -21,7 +21,7 @@ constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
 constexpr UINT kCompilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 constexpr std::size_t kMaxShaderBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxPipelineBytes = 32U * 1024U * 1024U;
-constexpr std::string_view kBuildVersion = "kami-dx12-pso-v2-sm5-opt3";
+constexpr std::string_view kBuildVersion = "kami-dx12-pso-v3-pbr-anim-sm5";
 namespace fs = std::filesystem;
 
 std::uint64_t fnv(std::string_view data, std::uint64_t h = 14695981039346656037ULL) noexcept {
@@ -125,7 +125,7 @@ bool root_signature(ID3D12Device* device,
     D3D12_ROOT_PARAMETER constants{};
     constants.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     constants.Constants.ShaderRegister=0;
-    constants.Constants.Num32BitValues=20;
+    constants.Constants.Num32BitValues=28;
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_ROOT_SIGNATURE_DESC root{};
     root.NumParameters=1;
@@ -146,7 +146,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc(
     desc.pRootSignature=root;
     desc.VS={vs.data(),vs.size()};
     desc.PS={ps.data(),ps.size()};
-    desc.InputLayout={input,3};
+    desc.InputLayout={input,4};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.FrontCounterClockwise=FALSE;
@@ -207,6 +207,8 @@ bool ShaderCache::prepare(
         {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"COLOR",0,DXGI_FORMAT_R32G32B32_FLOAT,0,24,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     auto desc=pipeline_desc(signature.Get(),vs,ps,input);

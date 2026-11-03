@@ -4,6 +4,7 @@
 int main() {
     using namespace kami::graphics;
     Settings def;
+    if(!def.pbr || !def.animate_avatar) return 6;
     if(def.preset!=Preset::Balanced || def.render_scale_percent!=100 ||
        def.fps_limit!=60 || !def.vsync) return 1;
     Settings bad{};

@@ -133,7 +133,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
-        if(page_ == 5 && wp >= '1' && wp <= '4') {
+        if(page_ == 5 && wp >= '1' && wp <= '6') {
             advance_graphics(static_cast<unsigned>(wp - '1'));
             return 0;
         }
@@ -272,25 +272,28 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX,90,contentWidth,height-165),29.f,p.elevated);
         label(L"GRAPHICS + FPS  /  DIRECTX 12",
               box(contentX+28,113,contentWidth-55,38),title_font_.Get(),p.text);
-        label(L"Actual renderer controls - click a row or press 1, 2, 3 or 4",
+        label(L"Renderer controls - click a row or press 1 through 6",
               box(contentX+28,153,contentWidth-55,28),small_font_.Get(),p.muted);
         const wchar_t* names[]={
             L"1  QUALITY PRESET",L"2  WORLD RENDER SCALE",
-            L"3  FRAME RATE LIMIT",L"4  VERTICAL SYNC"
+            L"3  FRAME RATE LIMIT",L"4  VERTICAL SYNC",
+            L"5  PBR MATERIAL LIGHTING",L"6  AVATAR PREVIEW MOTION"
         };
         std::wstring preset=graphics::preset_label(graphics_.preset);
         std::wstring scale=std::to_wstring(graphics_.render_scale_percent)+L"%";
         std::wstring fps=graphics_.fps_limit==0?L"UNLIMITED":
                          std::to_wstring(graphics_.fps_limit)+L" FPS";
         const std::wstring values[]={
-            preset,scale,fps,graphics_.vsync?L"ON":L"OFF"
+            preset,scale,fps,graphics_.vsync?L"ON":L"OFF",
+            graphics_.pbr?L"GGX METALLIC / ROUGHNESS":L"OFF / BASIC LAMBERT",
+            graphics_.animate_avatar?L"ON":L"OFF"
         };
-        for(unsigned i=0;i<4;++i) {
-            const float y=193.f+82.f*static_cast<float>(i);
-            round_rect(box(contentX+24,y,contentWidth-48,69),17.f,p.surface);
-            label(names[i],box(contentX+45,y+11,contentWidth-85,26),
+        for(unsigned i=0;i<6;++i) {
+            const float y=186.f+55.f*static_cast<float>(i);
+            round_rect(box(contentX+24,y,contentWidth-48,51),14.f,p.surface);
+            label(names[i],box(contentX+45,y+4,contentWidth-85,20),
                   small_font_.Get(),p.muted);
-            label(values[i],box(contentX+45,y+35,contentWidth-85,30),
+            label(values[i],box(contentX+45,y+26,contentWidth-85,26),
                   body_font_.Get(),p.accent);
         }
         label(L"Presets alter actual geometry + lighting. Render scale changes DX12 pixels.",
@@ -484,6 +487,8 @@ void Window::advance_graphics(unsigned row) {
         }
         break;
     case 3: graphics_.vsync=!graphics_.vsync; break;
+    case 4: graphics_.pbr=!graphics_.pbr; break;
+    case 5: graphics_.animate_avatar=!graphics_.animate_avatar; break;
     default: return;
     }
     graphics_=graphics::normalize(graphics_);
@@ -503,9 +508,9 @@ void Window::click(float x, float y) {
         return;
     }
     if(page_==5 && x>=303.f && x<width-49.f) {
-        for(unsigned i=0;i<4;++i) {
-            const float top=193.f+82.f*static_cast<float>(i);
-            if(y>=top && y<top+69.f) {
+        for(unsigned i=0;i<6;++i) {
+            const float top=186.f+55.f*static_cast<float>(i);
+            if(y>=top && y<top+51.f) {
                 advance_graphics(i);
                 return;
             }

@@ -38,6 +38,8 @@ Settings load() {
     settings.render_scale_percent=read(key,L"RenderScalePercent",100);
     settings.fps_limit=read(key,L"FrameLimit",60);
     settings.vsync=read(key,L"VSync",1)!=0;
+    settings.pbr=read(key,L"PBR",1)!=0;
+    settings.animate_avatar=read(key,L"AvatarPreviewMotion",1)!=0;
     RegCloseKey(key);
     return normalize(settings);
 }
@@ -50,6 +52,8 @@ void save(Settings settings) noexcept {
     write(key,L"RenderScalePercent",settings.render_scale_percent);
     write(key,L"FrameLimit",settings.fps_limit);
     write(key,L"VSync",settings.vsync?1U:0U);
+    write(key,L"PBR",settings.pbr?1U:0U);
+    write(key,L"AvatarPreviewMotion",settings.animate_avatar?1U:0U);
     RegCloseKey(key);
 }
 const wchar_t* preset_label(Preset preset) noexcept {

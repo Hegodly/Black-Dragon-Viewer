@@ -14,28 +14,32 @@ P normal(P a,P b,P c) {
     const float mag=std::sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
     return mag>0.00001f ? P{n.x/mag,n.y/mag,n.z/mag} : P{0,1,0};
 }
-void triangle(std::vector<Vertex>& out,P a,P b,P c,C color) {
+void triangle(std::vector<Vertex>& out,P a,P b,P c,C color,
+              float metallic=0.f,float roughness=.85f) {
     const P n=normal(a,b,c);
     for(const P p: {a,b,c})
-        out.push_back({p.x,p.y,p.z,n.x,n.y,n.z,color.r,color.g,color.b});
+        out.push_back({p.x,p.y,p.z,n.x,n.y,n.z,color.r,color.g,color.b,
+                       metallic,roughness});
 }
-void quad(std::vector<Vertex>& out,P a,P b,P c,P d,C color) {
-    triangle(out,a,b,c,color);
-    triangle(out,a,c,d,color);
+void quad(std::vector<Vertex>& out,P a,P b,P c,P d,C color,
+          float metallic,float roughness) {
+    triangle(out,a,b,c,color,metallic,roughness);
+    triangle(out,a,c,d,color,metallic,roughness);
 }
-void box(std::vector<Vertex>& out,P center,P half,C color) {
+void box(std::vector<Vertex>& out,P center,P half,C color,
+         float metallic,float roughness) {
     const float x=center.x,y=center.y,z=center.z;
     const float a=half.x,b=half.y,c=half.z;
     const std::array<P,8> p={{
         {x-a,y-b,z-c},{x+a,y-b,z-c},{x+a,y+b,z-c},{x-a,y+b,z-c},
         {x-a,y-b,z+c},{x+a,y-b,z+c},{x+a,y+b,z+c},{x-a,y+b,z+c}
     }};
-    quad(out,p[4],p[5],p[6],p[7],color);
-    quad(out,p[1],p[0],p[3],p[2],color);
-    quad(out,p[0],p[4],p[7],p[3],color);
-    quad(out,p[5],p[1],p[2],p[6],color);
-    quad(out,p[3],p[7],p[6],p[2],color);
-    quad(out,p[0],p[1],p[5],p[4],color);
+    quad(out,p[4],p[5],p[6],p[7],color,metallic,roughness);
+    quad(out,p[1],p[0],p[3],p[2],color,metallic,roughness);
+    quad(out,p[0],p[4],p[7],p[3],color,metallic,roughness);
+    quad(out,p[5],p[1],p[2],p[6],color,metallic,roughness);
+    quad(out,p[3],p[7],p[6],p[2],color,metallic,roughness);
+    quad(out,p[0],p[1],p[5],p[4],color,metallic,roughness);
 }
 float height(float x,float z) {
     const float wave=0.36f*std::sin(x*.47f)*std::cos(z*.40f);
@@ -65,12 +69,12 @@ SceneMesh build_test_scene(unsigned divisions) {
 
     // A stylized, deliberately anonymous mannequin demonstrates avatar-like
     // geometry, materials and lighting. No SL appearance is represented.
-    box(scene.vertices,{0,1.75f,0},{.50f,.75f,.26f},{.12f,.38f,.86f});
-    box(scene.vertices,{0,2.77f,0},{.35f,.35f,.34f},{.78f,.57f,.41f});
-    box(scene.vertices,{-.74f,1.70f,0},{.19f,.67f,.20f},{.17f,.44f,.78f});
-    box(scene.vertices,{.74f,1.70f,0},{.19f,.67f,.20f},{.17f,.44f,.78f});
-    box(scene.vertices,{-.24f,.55f,0},{.19f,.56f,.23f},{.15f,.23f,.39f});
-    box(scene.vertices,{.24f,.55f,0},{.19f,.56f,.23f},{.15f,.23f,.39f});
+    box(scene.vertices,{0,1.75f,0},{.50f,.75f,.26f},{.12f,.38f,.86f},.32f,.28f);
+    box(scene.vertices,{0,2.77f,0},{.35f,.35f,.34f},{.78f,.57f,.41f},0.f,.65f);
+    box(scene.vertices,{-.74f,1.70f,0},{.19f,.67f,.20f},{.17f,.44f,.78f},.35f,.28f);
+    box(scene.vertices,{.74f,1.70f,0},{.19f,.67f,.20f},{.17f,.44f,.78f},.35f,.28f);
+    box(scene.vertices,{-.24f,.55f,0},{.19f,.56f,.23f},{.15f,.23f,.39f},.05f,.83f);
+    box(scene.vertices,{.24f,.55f,0},{.19f,.56f,.23f},{.15f,.23f,.39f},.05f,.83f);
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
