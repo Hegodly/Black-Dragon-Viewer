@@ -9,29 +9,36 @@
 #include <chrono>
 #include <mmsystem.h>
 #include <string>
+#include <commdlg.h>
+#include <filesystem>
 
 namespace kami::app {
 namespace {
 constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_Original_Window";
 constexpr wchar_t kViewportClassName[] = L"KAMI_Native_Camera_Viewport";
-constexpr std::array<std::wstring_view, 6> kPages = {
-    L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS"
+constexpr std::array<std::wstring_view, 8> kPages = {
+    L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS",
+    L"CREATOR STUDIO", L"PHOTO STUDIO"
 };
-constexpr std::array<std::wstring_view, 6> kDescriptions = {
+constexpr std::array<std::wstring_view, 8> kDescriptions = {
     L"Original Windows foundation. No imported viewer code.",
     L"Region login and world rendering are not implemented yet.",
     L"Avatar syncing, attachments and animation are not yet available.",
     L"Inventory is not connected. No inventory items can be changed.",
     L"Messages and delivery receipts are not implemented yet.",
-    L"Change appearance with the button above or press T."
+    L"Change appearance with the button above or press T.",
+    L"Local OBJ mesh preview and geometry validation.",
+    L"Native DX12 live grading and PNG exports."
 };
-constexpr std::array<std::wstring_view, 6> kExplanations = {
+constexpr std::array<std::wstring_view, 8> kExplanations = {
     L"Written for KAMI  /  Native Direct2D + DirectWrite",
     L"World access requires independent authentication and transport.",
     L"Avatar identity will be shown only after real server login.",
     L"Future inventory operations will honor server permissions.",
     L"Nothing on this screen sends a message to another resident.",
-    L"Choose Home, World, Avatar, Inventory, Messages or Settings."
+    L"Choose Home, World, Avatar, Inventory, Messages or Settings.",
+    L"Local mesh import only. Second Life upload service is not connected.",
+    L"Photo export captures actual DX12 viewport pixels with a PNG encoder."
 };
 D2D1_RECT_F box(float x, float y, float width, float height) {
     return D2D1::RectF(x, y, x+width, y+height);
@@ -42,6 +49,7 @@ bool Window::create(HINSTANCE instance, int show) {
     light_ = settings::light_appearance();
     graphics_ = graphics::load();
     camera_settings_ = camera::load();
+    photo_settings_ = photo::load();
     world_renderer_.set_graphics(graphics_);
     world_renderer_.set_camera_settings(camera_settings_);
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
@@ -194,12 +202,24 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         return 0;
     case WM_MOUSEWHEEL:
-        if (page_ == 1 && world_ready_) {
+        if ((page_ == 1 || page_ == 6 || page_ == 7) && world_ready_) {
             world_renderer_.zoom(GET_WHEEL_DELTA_WPARAM(wp) > 0 ? -0.7f : 0.7f);
             return 0;
         }
         break;
     case WM_KEYDOWN:
+        if(page_ == 7 && wp >= '1' && wp <= '7') {
+            advance_photo(static_cast<unsigned>(wp-'1'));
+            return 0;
+        }
+        if(page_ == 6 && wp == 'I') {open_creator_obj();return 0;}
+        if(page_ == 6 && wp == 'R') {
+            world_renderer_.clear_creator_preview();
+            creator_preview_={};creator_file_.clear();
+            creator_message_=L"Original scene restored. Import an OBJ to preview.";
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return 0;
+        }
         if(page_ == 5 && wp == 'C') {
             camera_settings_page_ = !camera_settings_page_;
             graphics_effects_page_ = false;
@@ -218,7 +238,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             else advance_graphics(static_cast<unsigned>(wp-'1'));
             return 0;
         }
-        if (page_ == 1 && world_ready_) {
+        if ((page_ == 1 || page_ == 6 || page_ == 7) && world_ready_) {
             switch (wp) {
             case VK_LEFT: case 'A': world_renderer_.orbit(-.11f, 0.f); return 0;
             case VK_RIGHT: case 'D': world_renderer_.orbit(.11f, 0.f); return 0;
@@ -233,7 +253,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             case 'R': world_renderer_.reset_camera(); return 0;
             }
         }
-        if (wp >= VK_F1 && wp <= VK_F6) {
+        if (wp >= VK_F1 && wp <= VK_F8) {
             select_page(static_cast<unsigned>(wp - VK_F1));
             return 0;
         }
@@ -285,7 +305,7 @@ void Window::resize(UINT width, UINT height) {
 }
 
 void Window::update_viewport() {
-    if (!hwnd_ || page_ != 1) {
+    if (!hwnd_ || (page_ != 1 && page_ != 6 && page_ != 7)) {
         if (viewport_) ShowWindow(viewport_, SW_HIDE);
         return;
     }
@@ -339,7 +359,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     label(L"B E Y O N D  R E A L I T Y",box(41,103,200,25),small_font_.Get(),p.accent);
 
     for (unsigned index = 0; index < kPages.size(); ++index) {
-        const float y = 151.f + 56.f * static_cast<float>(index);
+        const float y = 151.f + 50.f * static_cast<float>(index);
         if (page_ == index) round_rect(box(30,y,212,44),15.f,p.accent_soft);
         label(kPages[index],box(49,y+10,175,28),body_font_.Get(),
               page_==index?p.accent:p.muted);
@@ -589,12 +609,22 @@ void Window::toggle_appearance() {
 
 void Window::select_page(unsigned index) {
     if (index >= kPages.size()) return;
-    if(page_ == 1 && index != 1 && high_resolution_timer_) {
+    const bool was_world=(page_==1 || page_==6 || page_==7);
+    const bool next_world=(index==1 || index==6 || index==7);
+    if(was_world && !next_world && high_resolution_timer_) {
         (void)timeEndPeriod(1);
         high_resolution_timer_=false;
     }
     page_ = index;
-    if(index == 1 && !high_resolution_timer_)
+    if(index==1 && world_renderer_.creator_preview_active()) {
+        world_renderer_.clear_creator_preview();
+        creator_preview_={};creator_file_.clear();
+        creator_message_=L"Choose a local OBJ file to preview.";
+    }
+    auto look=photo_settings_;
+    if(index!=7)look.enabled=false;
+    world_renderer_.set_photo_settings(look);
+    if(next_world && !high_resolution_timer_)
         high_resolution_timer_=timeBeginPeriod(1)==0;
     fps_frames_=0;
     fps_display_=0;
@@ -605,7 +635,7 @@ void Window::select_page(unsigned index) {
 }
 
 bool Window::wants_realtime_render() const noexcept {
-    return page_ == 1 && world_ready_ && hwnd_ &&
+    return (page_ == 1 || page_ == 6 || page_ == 7) && world_ready_ && hwnd_ &&
            IsWindowVisible(hwnd_) && !IsIconic(hwnd_);
 }
 
@@ -615,6 +645,14 @@ void Window::tick() {
     const auto now=Clock::now();
     if(graphics_.fps_limit!=0 && now<next_frame_) return;
     world_renderer_.draw();
+    if(page_==7 && world_renderer_.capture_status()!=prior_capture_) {
+        prior_capture_=world_renderer_.capture_status();
+        if(prior_capture_==world::CaptureStatus::Saved)
+            photo_message_=L"PNG saved to selected location.";
+        else if(prior_capture_==world::CaptureStatus::Failed)
+            photo_message_=L"Capture failed. Check storage and DX12 availability.";
+        InvalidateRect(hwnd_,nullptr,FALSE);
+    }
     ++fps_frames_;
     if(fps_epoch_==Clock::time_point{}) fps_epoch_=now;
     const auto elapsed=std::chrono::duration<double>(now-fps_epoch_).count();
@@ -778,7 +816,7 @@ void Window::click(float x, float y) {
     }
     if (x >= 30.f && x <= 242.f) {
         for (unsigned index = 0; index < kPages.size(); ++index) {
-            const float top = 151.f + 56.f*static_cast<float>(index);
+            const float top = 151.f + 50.f*static_cast<float>(index);
             if (y >= top && y < top+44.f) {
                 select_page(index);
                 return;
