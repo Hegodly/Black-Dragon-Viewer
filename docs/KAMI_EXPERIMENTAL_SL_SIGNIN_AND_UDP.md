@@ -247,3 +247,23 @@ request to Second Life or include any real account credentials.
 
 Passing this test proves only that the constructed XML is structurally
 well formed. HTTP 400 server acceptance remains unverified.
+
+## Official Windows hashed machine ID algorithm
+
+Earlier builds calculated login `mac` from the first active physical
+network adapter. The modern official viewer normally **does not use
+that identifier first**. Its `LLMachineID::init()` selects the WMI
+`Win32_ComputerSystemProduct.UUID` if present and valid, otherwise
+`Win32_OperatingSystem.SerialNumber`. The serial string is folded by
+accumulating its UTF-16 character values modulo 256 across six bytes,
+and those six bytes are MD5-hashed into the `mac` login value.
+
+KAMI now calls the LGPL-separated device identity DLL for that WMI-first
+algorithm. The prior adapter-based MD5 is only a fallback when WMI
+fails, as in the official viewer's final `LLUUID::getNodeID()`
+fallback. CI tests use synthetic serial numbers and never query real
+hardware identifiers. All identifiers are kept in memory only,
+apart from the hashed identifiers sent over TLS to the SL login server.
+
+This is another concrete protocol implementation difference corrected,
+but no live login result is yet verified.
