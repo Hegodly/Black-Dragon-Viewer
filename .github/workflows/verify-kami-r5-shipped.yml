@@ -1,0 +1,90 @@
+name: KAMI R5 Original Artifact Runtime QA
+on:
+  push:
+    branches:
+      - test/kami-seed-caps-original-artifact-runtime-20261103
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  exact-package:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - name: Download exact previous KAMI R5 build artifact
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 41726031084
+          github-token: ${{ github.token }}
+          name: KAMI-Original-Core-TEST-not-yet-SL-viewer
+          path: original
+
+      - name: Expand exact artifact and verify file integrity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nested = Join-Path $PWD 'original/KAMI-Original-Core-Test.zip'
+          if (!(Test-Path $nested)) { throw "Original artifact ZIP missing" }
+          Expand-Archive -LiteralPath $nested -DestinationPath "$PWD\package"
+          $root = Join-Path $PWD 'package/KAMI'
+          $expected = @{
+            'KAMIViewer.exe' = '9B6976FD0F5D8D781646707997AA67C5C89AC9F5E4F438F1EA166E817852B49A'
+            'KAMI_SL_Login_Identity.dll' = '9E035409FAFF84973C1B6D850DFC4F7473DD2240E5C7889722C4B04240FCBA3E'
+            'KAMI-DX12-Smoke.exe' = '551774AB3600A3E7C366D7EE17748F6E40D1D7FD0A62FA1B67634DE2021A8DAE'
+          }
+          foreach ($key in $expected.Keys) {
+            $file = Join-Path $root $key
+            if (!(Test-Path $file)) { throw "Missing shipped binary: $key" }
+            $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+            if ($actual -ne $expected[$key]) { throw "Binary mismatch for $key" }
+            Write-Host "VERIFIED original shipped binary: $key"
+          }
+          foreach ($file in @('LICENSE.LGPL-2.1.txt', 'NOTICE.md','README.md')) {
+            if (!(Test-Path (Join-Path $root $file))) {
+              throw "Required notice or README absent: $file"
+            }
+          }
+
+      - name: Execute shipped DX12 renderer smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = Join-Path $PWD 'package/KAMI/KAMI-DX12-Smoke.exe'
+          Push-Location (Split-Path $bin)
+          try {
+            & $bin
+            $code = $LASTEXITCODE
+            Write-Host "Shipped DX12 smoke exit code: $code"
+            if ($code -eq 77) { throw "DX12 smoke SKIPPED on runner: not a pass" }
+            if ($code -ne 0) { throw "DX12 smoke failed: $code" }
+          } finally { Pop-Location }
+
+      - name: Launch shipped KAMIViewer.exe and verify GUI window
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $PWD 'package/KAMI'
+          $exe = Join-Path $root 'KAMIViewer.exe'
+          $proc = $null
+          try {
+            $proc = Start-Process -FilePath $exe -WorkingDirectory $root -PassThru
+            Start-Sleep -Seconds 5
+            $proc.Refresh()
+            if ($proc.HasExited) {
+              throw "Shipped GUI exited in 5 seconds: code $($proc.ExitCode)"
+            }
+            if ($proc.MainWindowHandle -eq 0) {
+              throw "GUI process alive but has no Win32 main window"
+            }
+            Write-Host "PASS: shipped KAMI process stayed alive with GUI handle"
+          } finally {
+            if ($null -ne $proc) {
+              $proc.Refresh()
+              if (-not $proc.HasExited) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              }
+            }
+          }
