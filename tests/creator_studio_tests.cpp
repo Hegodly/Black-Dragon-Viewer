@@ -40,7 +40,9 @@ int main() {
     if(kami::creator::kMaxPreviewVertices!=
        kami::creator::kMaxPreviewTriangles*3U||
        kami::creator::kMaxPreviewVertices>=1000000U)return 8;
-    if(import_obj(zero,scene,error)||
+    std::istringstream zero_again(
+        "v 0 0 0\nv 0 0 0\nv 0 0 0\nf 1 2 3\n");
+    if(import_obj(zero_again,scene,error)||
        error.find("degenerate")==std::string::npos)return 9;
     return 0;
 }
