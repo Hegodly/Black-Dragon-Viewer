@@ -18,7 +18,7 @@ int main() {
         const auto mesh=kami::world::build_test_scene(s.terrain_divisions());
         const auto div=s.terrain_divisions();
         if(mesh.terrain_count != static_cast<std::size_t>(div)*div*6U) return 3;
-        if(mesh.avatar_count!=216U) return 4;
+        if(mesh.avatar_count!=216U+1500U) return 4;
     }
     if(Settings{Preset::Performance}.sun_strength()>=Settings{Preset::Quality}.sun_strength())
         return 5;
