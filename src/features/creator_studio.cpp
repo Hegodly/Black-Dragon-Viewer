@@ -1,4 +1,5 @@
 #include "kami/features/creator_studio.hpp"
+#include "kami/features/creator_limits.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -51,9 +52,8 @@ bool import_obj(std::istream& input, Preview& output, std::string& error) {
     positions.reserve(1024);
     std::vector<world::Vertex> vertices;
     std::string line;
-    std::size_t line_number=0,polygon_count=0;
+    std::size_t line_number=0,polygon_count=0,skipped_degenerate=0;
     constexpr std::size_t kMaxPositions=400000;
-    constexpr std::size_t kMaxTriangles=500000;
     while(std::getline(input,line)) {
         ++line_number;
         if(line_number>1500000||line.size()>16384) {
@@ -82,23 +82,34 @@ bool import_obj(std::istream& input, Preview& output, std::string& error) {
                 }
                 face.push_back(index);
             }
-            if(face.size()<3||vertices.size()/3+face.size()-2>kMaxTriangles) {
-                error="Invalid polygon or OBJ preview triangle limit exceeded";
+            if(face.size()<3) {
+                error="OBJ face has fewer than three vertices";return false;
+            }
+            if(vertices.size()/3+face.size()-2>
+               kMaxPreviewTriangles) {
+                error="OBJ too dense for local preview; reduce polygon count in Blender";
                 return false;
             }
             ++polygon_count;
-            for(std::size_t j=1;j+1<face.size();++j)
+            // Duplicate or zero-area triangles occasionally appear in
+            // creator exports. Drop them without rejecting otherwise valid
+            // geometry, and report the exact number to the user.
+            for(std::size_t j=1;j+1<face.size();++j) {
                 if(!triangle(vertices,positions[face[0]],positions[face[j]],
                              positions[face[j+1]])) {
-                    error="Degenerate or non-finite polygon";return false;
+                    ++skipped_degenerate;
                 }
+            }
         }
     }
     if(!input.eof()&&input.fail()) {
         error="Could not read OBJ stream";return false;
     }
     if(vertices.empty()) {
-        error="OBJ has no renderable triangles";return false;
+        error=skipped_degenerate?
+            "OBJ contains only degenerate (zero-area) faces":
+            "OBJ has no renderable triangles";
+        return false;
     }
     Position mn{vertices[0].px,vertices[0].py,vertices[0].pz},mx=mn;
     for(const auto& v:vertices) {
@@ -122,6 +133,7 @@ bool import_obj(std::istream& input, Preview& output, std::string& error) {
     candidate.scene.vertices=std::move(vertices);
     candidate.source_positions=positions.size();
     candidate.source_polygons=polygon_count;
+    candidate.skipped_degenerate_triangles=skipped_degenerate;
     candidate.source_height=dy;
     candidate.audit=inspect(candidate.scene);
     if(!candidate.audit.valid) {
@@ -132,6 +144,13 @@ bool import_obj(std::istream& input, Preview& output, std::string& error) {
 }
 bool import_obj_file(const std::wstring& path,Preview& output,std::string& error) {
     if(path.empty()) {error="No OBJ path selected";return false;}
+    std::error_code file_error;
+    const auto size=std::filesystem::file_size(
+        std::filesystem::path(path),file_error);
+    if(!file_error && size>kMaxPreviewFileBytes) {
+        error="OBJ file exceeds 128 MiB local preview safety limit";
+        return false;
+    }
     std::ifstream file(std::filesystem::path(path),std::ios::binary);
     if(!file) {error="OBJ file could not be opened";return false;}
     return import_obj(file,output,error);
