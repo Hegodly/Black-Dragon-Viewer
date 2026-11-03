@@ -17,7 +17,9 @@ enum class DeviceStatus {
 
 class Device final {
 public:
-    [[nodiscard]] DeviceStatus initialize(bool allow_software_fallback = true) noexcept;
+    // Hardware DX12 is the shipped viewer default. WARP remains an explicit
+    // DX12-only option for diagnostics and CI, never an OpenGL fallback.
+    [[nodiscard]] DeviceStatus initialize(bool allow_software_fallback = false) noexcept;
     [[nodiscard]] DeviceStatus status() const noexcept { return status_; }
     [[nodiscard]] bool is_ready() const noexcept {
         return status_ == DeviceStatus::ReadyHardware ||
