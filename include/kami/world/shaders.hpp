@@ -26,7 +26,7 @@ Interpolant vertex_main(VertexIn input) {
 float4 pixel_main(Interpolant input) : SV_TARGET {
     float3 n = normalize(input.normal);
     float diffuse = saturate(dot(n, normalize(-sunDirection.xyz)));
-    float3 lit = input.albedo * (0.24 + diffuse * 0.85);
+    float3 lit = input.albedo * (0.18 + diffuse * sunDirection.w);
     float3 ambient = float3(0.025, 0.035, 0.06);
     return float4(saturate(lit + ambient), 1.0);
 }

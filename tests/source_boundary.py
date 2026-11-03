@@ -18,10 +18,20 @@ assert "D3D12CreateDevice" in renderer
 assert "D3D12_COMMAND_LIST_TYPE_DIRECT" in renderer
 assert "DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE" in renderer
 assert "src/world/device.cpp" in cmake
+assert "src/settings/graphics.cpp" in cmake
+assert "src/world/scene.cpp" in cmake
+assert "winmm" in cmake
 assert "d3d12 dxgi" in cmake
 assert (root/"src/world/shader_cache.cpp").is_file()
 assert (root/"src/world/warmup.cpp").is_file()
 assert "shader_warmup_.begin()" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
 assert not re.search(r"\b(?:OpenGL|glCreateShader|wglCreateContext|D3D11CreateDevice)\s*\(",renderer)
 
-print("PASS: independent KAMI source boundary; no imported viewer code")
+ui=(root/"src/app/window.cpp").read_text(encoding="utf-8")
+renderer=(root/"src/world/renderer.cpp").read_text(encoding="utf-8")
+assert "GRAPHICS + FPS" in ui and "advance_graphics(" in ui
+assert "DXGI_PRESENT_ALLOW_TEARING" in renderer
+assert "graphics_.render_scale_percent" in renderer
+assert "graphics_.terrain_divisions()" in renderer
+assert "graphics_.vsync" in renderer
+print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")

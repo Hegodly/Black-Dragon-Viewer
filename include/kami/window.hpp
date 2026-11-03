@@ -6,6 +6,8 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 #include <string_view>
+#include <chrono>
+#include "kami/graphics/settings.hpp"
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
@@ -16,6 +18,8 @@ namespace kami::app {
 class Window final {
 public:
     [[nodiscard]] bool create(HINSTANCE instance, int show);
+    [[nodiscard]] bool wants_realtime_render() const noexcept;
+    void tick();
 private:
     static LRESULT CALLBACK dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     LRESULT handle(UINT message, WPARAM wp, LPARAM lp);
@@ -26,6 +30,7 @@ private:
     void select_page(unsigned page);
     void toggle_appearance();
     void click(float x, float y);
+    void advance_graphics(unsigned row);
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
     void draw_interface(float width, float height, const ui::Palette& palette);
@@ -36,6 +41,12 @@ private:
     bool world_ready_ = false;
     world::Renderer world_renderer_;
     world::ShaderWarmup shader_warmup_;
+    graphics::Settings graphics_{};
+    bool high_resolution_timer_ = false;
+    std::chrono::steady_clock::time_point next_frame_{};
+    std::chrono::steady_clock::time_point fps_epoch_{};
+    unsigned fps_frames_ = 0;
+    unsigned fps_display_ = 0;
     bool light_ = false;
     unsigned page_ = 0;
     protocol::Session session_;

@@ -30,3 +30,15 @@ The World tab now hosts a **DirectX 12 rendering viewport**. It renders a locall
 KAMI now starts shader preparation automatically on the HOME/initial screen (no F2 required). It detects the DirectX 12 hardware adapter, compiles its currently implemented HLSL shaders once using optimization level 3, creates an actual D3D12 graphics pipeline state, and writes cached shader bytecode and GPU-specific pipeline state under **%LOCALAPPDATA%\\KAMI\\ShaderCache**. Future launches reuse cached blobs and validate the pipeline against the current driver; changing the GPU, driver, shader code or build-cache version causes a safe rebuild. A progress bar on HOME shows real compilation stages and cache status. This is NOT a login blocker and no fake percent animation runs. On unsupported hardware it reports unavailable.
 
 This mimics Call of Duty's high-level initial shader optimization *workflow*, not proprietary Call of Duty code or its full shader library. Only the independent KAMI scene's implemented shaders can currently be optimized. The cache can reduce shader compilation stutter and loading overhead but is not a guarantee of higher average FPS. The app still lacks real Second Life account login and world networking.
+
+## Graphics + FPS — first native control batch
+
+Open **SETTINGS (F6)**. The new Graphics + FPS pane is authored from KAMI C++ and includes four **functional** DX12 scene controls: Quality Preset (Performance / Balanced / Quality), Render Scale (50 / 75 / 100 percent of the World viewport pixels), Frame Rate Limit (30 / 60 / 120 / 144 / unlimited), and VSync (on/off). Click each row or press **1–4** to cycle. Values persist per Windows user under `HKCU\\Software\\KAMI\\OriginalCore\\Graphics` and are applied when the World tab is opened, or live while it is running.
+
+- **Performance:** 16x16 terrain triangles and lighter directional lighting.
+- **Balanced:** 32x32 terrain divisions and mid-strength lighting.
+- **Quality:** 64x64 terrain divisions and stronger directional lighting.
+- **Render Scale:** changes the actual DXGI swap-chain and depth-buffer pixel dimensions; DXGI stretches the finished scene to the viewport. It is not AI upscaling.
+- **FPS cap:** a frame pacing loop targets the selected maximum. VSync uses the DXGI presentation interval, with tearing only where hardware/Windows reports support. The real-time World FPS display updates once per second.
+
+These are **only** settings for KAMI's original *offline test scene*. DLSS, XeSS, FSR, real-time ray tracing, SSAO, full PBR asset ingestion, frame generation and a live Second Life world remain unimplemented and have no pretend toggles. This first batch is not yet benchmarked against any existing viewer; average FPS can be bounded by CPU/GPU and OS scheduling.

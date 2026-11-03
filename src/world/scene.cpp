@@ -44,10 +44,10 @@ float height(float x,float z) {
 }
 } // namespace
 
-SceneMesh build_test_scene() {
+SceneMesh build_test_scene(unsigned divisions) {
     SceneMesh scene;
-    constexpr int divisions=32;
-    constexpr float step=28.f/divisions;
+    divisions=std::clamp(divisions,8U,64U);
+    const float step=28.f/static_cast<float>(divisions);
     scene.vertices.reserve(divisions*divisions*6+6*36);
     for(int z=0;z<divisions;++z) {
         for(int x=0;x<divisions;++x) {

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -14,6 +15,9 @@ namespace kami::world {
 namespace {
 constexpr DXGI_FORMAT kColorFormat=DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kDepthFormat=DXGI_FORMAT_D32_FLOAT;
+UINT scaled(UINT source,unsigned scale) {
+    return std::max<UINT>(64U,static_cast<UINT>((static_cast<std::uint64_t>(source)*scale+50U)/100U));
+}
 
 
 
@@ -103,7 +107,7 @@ bool Renderer::make_pipeline() {
 }
 
 bool Renderer::make_geometry() {
-    const SceneMesh scene=build_test_scene();
+    const SceneMesh scene=build_test_scene(graphics_.terrain_divisions());
     if(scene.vertices.empty() ||
        scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
         return false;
@@ -131,8 +135,10 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     if(ready_) return true;
     if(!window || !width || !height) { error_=L"Invalid viewport dimensions"; return false; }
     window_=window;
-    width_=width;
-    height_=height;
+    client_width_=width;
+    client_height_=height;
+    width_=scaled(width,graphics_.render_scale_percent);
+    height_=scaled(height,graphics_.render_scale_percent);
     if(device_.initialize(true)==DeviceStatus::Unavailable) {
         error_=L"No DirectX 12 device available";
         return false;
@@ -142,6 +148,13 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     if(FAILED(CreateDXGIFactory2(0,IID_PPV_ARGS(factory.GetAddressOf())))) {
         error_=L"DXGI factory creation failed";
         return false;
+    }
+    Microsoft::WRL::ComPtr<IDXGIFactory5> factory5;
+    if(SUCCEEDED(factory.As(&factory5))) {
+        BOOL supported=FALSE;
+        if(SUCCEEDED(factory5->CheckFeatureSupport(
+                DXGI_FEATURE_PRESENT_ALLOW_TEARING,&supported,sizeof(supported))))
+            allow_tearing_=supported!=FALSE;
     }
     DXGI_SWAP_CHAIN_DESC1 swap{};
     swap.Width=width_;
@@ -154,6 +167,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     swap.Scaling=DXGI_SCALING_STRETCH;
     swap.SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swap.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
+    swap.Flags=allow_tearing_?DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING:0;
     Microsoft::WRL::ComPtr<IDXGISwapChain1> chain;
     if(FAILED(factory->CreateSwapChainForHwnd(
             device_.graphics_queue(),window_,&swap,nullptr,nullptr,
@@ -226,21 +240,44 @@ void Renderer::wait_for_gpu() noexcept {
 }
 
 void Renderer::resize(UINT width,UINT height) {
-    if(!ready_ || !width || !height || (width==width_ && height==height_)) return;
+    if(!width || !height) return;
+    client_width_=width;
+    client_height_=height;
+    const UINT target_width=scaled(width,graphics_.render_scale_percent);
+    const UINT target_height=scaled(height,graphics_.render_scale_percent);
+    if(!ready_ || (target_width==width_ && target_height==height_)) return;
     wait_for_gpu();
     for(auto& buffer:buffers_) buffer.Reset();
     depth_.Reset();
-    if(FAILED(swapchain_->ResizeBuffers(kBuffers,width,height,kColorFormat,0))) {
+    if(FAILED(swapchain_->ResizeBuffers(kBuffers,target_width,target_height,
+                kColorFormat,allow_tearing_?DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING:0))) {
         ready_=false;
-        error_=L"Failed to resize DirectX 12 swap chain";
+        error_=L"Failed to resize DirectX 12 render scale";
         return;
     }
-    width_=width;
-    height_=height;
+    width_=target_width;
+    height_=target_height;
     if(!make_targets() || !make_depth()) {
         ready_=false;
         error_=L"Failed to recreate DirectX 12 attachments";
     }
+}
+
+void Renderer::set_graphics(graphics::Settings settings) {
+    settings=graphics::normalize(settings);
+    const bool detail_changed=graphics_.preset!=settings.preset;
+    const bool scale_changed=graphics_.render_scale_percent!=settings.render_scale_percent;
+    graphics_=settings;
+    if(!ready_) return;
+    if(detail_changed) {
+        wait_for_gpu();
+        if(!make_geometry()) {
+            ready_=false;
+            error_=L"Cannot rebuild terrain for selected graphics preset";
+            return;
+        }
+    }
+    if(scale_changed) resize(client_width_,client_height_);
 }
 
 void Renderer::orbit(float yaw_delta,float elevation_delta) {
@@ -295,7 +332,7 @@ void Renderer::draw() {
     constants[16]=.35f;
     constants[17]=-.86f;
     constants[18]=.38f;
-    constants[19]=1.f;
+    constants[19]=graphics_.sun_strength();
     commands_->SetGraphicsRoot32BitConstants(0,20,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
@@ -306,7 +343,10 @@ void Renderer::draw() {
     if(FAILED(commands_->Close())) return;
     ID3D12CommandList* list[]={commands_.Get()};
     device_.graphics_queue()->ExecuteCommandLists(1,list);
-    const HRESULT result=swapchain_->Present(1,0);
+    const UINT sync=graphics_.vsync?1U:0U;
+    const UINT flags=(!graphics_.vsync && allow_tearing_)?
+        DXGI_PRESENT_ALLOW_TEARING:0U;
+    const HRESULT result=swapchain_->Present(sync,flags);
     if(FAILED(result)) {
         error_=L"DX12 presentation failed";
         ready_=false;

@@ -10,3 +10,6 @@
 8. Verify secure releases, signed updates, rollback and Windows accessibility/performance.
 
 No feature may be represented as working until its subsystem passes end-to-end testing. The original project is not a reskin or code fork of a viewer. The old experimental branch is unrelated and remains unchanged during this migration.
+
+## Native Graphics + FPS controls (initial batch)
+The offline DX12 World screen uses per-user persisted Quality Preset, 50/75/100% actual render scale, a 30/60/120/144/unlimited frame pacer, VSync/tearing flags where supported, an FPS counter and tier-specific terrain and directional lighting. Pending: visual and framerate verification on real user hardware, proper GPU multiframe scheduling, real SL assets, PBR, ambient occlusion, shader effects, upscalers, frame generation, RT and adaptive quality.

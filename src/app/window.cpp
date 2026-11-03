@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <array>
 #include <string_view>
+#include <chrono>
+#include <mmsystem.h>
+#include <string>
 
 namespace kami::app {
 namespace {
@@ -36,6 +39,8 @@ D2D1_RECT_F box(float x, float y, float width, float height) {
 
 bool Window::create(HINSTANCE instance, int show) {
     light_ = settings::light_appearance();
+    graphics_ = graphics::load();
+    world_renderer_.set_graphics(graphics_);
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
                                   factory_.ReleaseAndGetAddressOf()))) return false;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
@@ -76,7 +81,6 @@ bool Window::create(HINSTANCE instance, int show) {
     // COD-like first-run hardware pipeline preparation happens automatically
     // on the opening KAMI screen, before the World tab is entered.
     shader_warmup_.begin();
-    (void)SetTimer(hwnd_, 201, 33, nullptr);
     (void)SetTimer(hwnd_, 202, 125, nullptr);
     ShowWindow(hwnd_, show);
     UpdateWindow(hwnd_);
@@ -114,8 +118,6 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
               static_cast<float>(GET_Y_LPARAM(lp)));
         return 0;
     case WM_TIMER:
-        if (wp == 201 && page_ == 1 && world_ready_ && !IsIconic(hwnd_))
-            world_renderer_.draw();
         if (wp == 202) {
             const auto state=shader_warmup_.snapshot();
             if (page_ == 0) InvalidateRect(hwnd_, nullptr, FALSE);
@@ -131,6 +133,10 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
+        if(page_ == 5 && wp >= '1' && wp <= '4') {
+            advance_graphics(static_cast<unsigned>(wp - '1'));
+            return 0;
+        }
         if (page_ == 1 && world_ready_) {
             switch (wp) {
             case VK_LEFT: case 'A': world_renderer_.orbit(-.11f, 0.f); return 0;
@@ -159,7 +165,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND:
         return 1;
     case WM_DESTROY:
-        (void)KillTimer(hwnd_, 201);
+        if(high_resolution_timer_) (void)timeEndPeriod(1);
         (void)KillTimer(hwnd_, 202);
         world_renderer_.shutdown();
         target_.Reset();
@@ -262,12 +268,49 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     label(light_?L"LIGHT MODE   [T]":L"DARK MODE   [T]",
           box(width-176,36,145,24),small_font_.Get(),p.accent);
 
+    if(page_ == 5) {
+        round_rect(box(contentX,90,contentWidth,height-165),29.f,p.elevated);
+        label(L"GRAPHICS + FPS  /  DIRECTX 12",
+              box(contentX+28,113,contentWidth-55,38),title_font_.Get(),p.text);
+        label(L"Actual renderer controls - click a row or press 1, 2, 3 or 4",
+              box(contentX+28,153,contentWidth-55,28),small_font_.Get(),p.muted);
+        const wchar_t* names[]={
+            L"1  QUALITY PRESET",L"2  WORLD RENDER SCALE",
+            L"3  FRAME RATE LIMIT",L"4  VERTICAL SYNC"
+        };
+        std::wstring preset=graphics::preset_label(graphics_.preset);
+        std::wstring scale=std::to_wstring(graphics_.render_scale_percent)+L"%";
+        std::wstring fps=graphics_.fps_limit==0?L"UNLIMITED":
+                         std::to_wstring(graphics_.fps_limit)+L" FPS";
+        const std::wstring values[]={
+            preset,scale,fps,graphics_.vsync?L"ON":L"OFF"
+        };
+        for(unsigned i=0;i<4;++i) {
+            const float y=193.f+82.f*static_cast<float>(i);
+            round_rect(box(contentX+24,y,contentWidth-48,69),17.f,p.surface);
+            label(names[i],box(contentX+45,y+11,contentWidth-85,26),
+                  small_font_.Get(),p.muted);
+            label(values[i],box(contentX+45,y+35,contentWidth-85,30),
+                  body_font_.Get(),p.accent);
+        }
+        label(L"Presets alter actual geometry + lighting. Render scale changes DX12 pixels.",
+              box(contentX+26,height-114,contentWidth-52,28),
+              small_font_.Get(),p.muted);
+        label(L"No fake DLSS, frame generation, or ray tracing toggles.",
+              box(contentX+26,height-83,contentWidth-52,28),
+              small_font_.Get(),p.muted);
+        return;
+    }
+
     if (page_ == 1) {
         round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
         label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
               title_font_.Get(),p.text);
         label(L"Offline KAMI scene lab: GPU geometry, lighting, depth and materials",
               box(contentX+30,151,contentWidth-50,30),small_font_.Get(),p.accent);
+        const std::wstring fps_label=L"FPS: "+std::to_wstring(fps_display_);
+        label(fps_label,box(contentX+contentWidth-130,116,112,28),
+              small_font_.Get(),p.accent);
         if (!world_ready_) {
             label(world_initialized_?world_renderer_.error():L"Loading DX12 viewport...",
                   box(contentX+35,234,contentWidth-70,55),body_font_.Get(),p.muted);
@@ -378,9 +421,77 @@ void Window::toggle_appearance() {
 
 void Window::select_page(unsigned index) {
     if (index >= kPages.size()) return;
+    if(page_ == 1 && index != 1 && high_resolution_timer_) {
+        (void)timeEndPeriod(1);
+        high_resolution_timer_=false;
+    }
     page_ = index;
+    if(index == 1 && !high_resolution_timer_)
+        high_resolution_timer_=timeBeginPeriod(1)==0;
+    fps_frames_=0;
+    fps_display_=0;
+    fps_epoch_=std::chrono::steady_clock::now();
+    next_frame_={};
     update_viewport();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool Window::wants_realtime_render() const noexcept {
+    return page_ == 1 && world_ready_ && hwnd_ &&
+           IsWindowVisible(hwnd_) && !IsIconic(hwnd_);
+}
+
+void Window::tick() {
+    if(!wants_realtime_render()) return;
+    using Clock=std::chrono::steady_clock;
+    const auto now=Clock::now();
+    if(graphics_.fps_limit!=0 && now<next_frame_) return;
+    world_renderer_.draw();
+    ++fps_frames_;
+    if(fps_epoch_==Clock::time_point{}) fps_epoch_=now;
+    const auto elapsed=std::chrono::duration<double>(now-fps_epoch_).count();
+    if(elapsed>=1.0) {
+        fps_display_=static_cast<unsigned>(static_cast<double>(fps_frames_)/elapsed+0.5);
+        fps_frames_=0;
+        fps_epoch_=now;
+        InvalidateRect(hwnd_,nullptr,FALSE);
+    }
+    if(graphics_.fps_limit!=0) {
+        const auto duration=std::chrono::duration_cast<Clock::duration>(
+            std::chrono::duration<double>(1.0/static_cast<double>(graphics_.fps_limit)));
+        next_frame_=now+duration;
+    }
+}
+
+void Window::advance_graphics(unsigned row) {
+    switch(row) {
+    case 0:
+        graphics_.preset=static_cast<graphics::Preset>(
+            (static_cast<unsigned>(graphics_.preset)+1U)%3U);
+        break;
+    case 1:
+        graphics_.render_scale_percent=
+            graphics_.render_scale_percent==100?50:
+            graphics_.render_scale_percent==50?75:100;
+        break;
+    case 2:
+        switch(graphics_.fps_limit) {
+        case 30: graphics_.fps_limit=60; break;
+        case 60: graphics_.fps_limit=120; break;
+        case 120: graphics_.fps_limit=144; break;
+        case 144: graphics_.fps_limit=0; break;
+        default: graphics_.fps_limit=30; break;
+        }
+        break;
+    case 3: graphics_.vsync=!graphics_.vsync; break;
+    default: return;
+    }
+    graphics_=graphics::normalize(graphics_);
+    graphics::save(graphics_);
+    world_renderer_.set_graphics(graphics_);
+    world_ready_=!world_initialized_ || world_renderer_.ready();
+    next_frame_={};
+    InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
 void Window::click(float x, float y) {
@@ -390,6 +501,15 @@ void Window::click(float x, float y) {
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
         return;
+    }
+    if(page_==5 && x>=303.f && x<width-49.f) {
+        for(unsigned i=0;i<4;++i) {
+            const float top=193.f+82.f*static_cast<float>(i);
+            if(y>=top && y<top+69.f) {
+                advance_graphics(i);
+                return;
+            }
+        }
     }
     if (x >= 30.f && x <= 242.f) {
         for (unsigned index = 0; index < kPages.size(); ++index) {

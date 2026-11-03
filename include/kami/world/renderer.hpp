@@ -1,5 +1,6 @@
 #pragma once
 #include "kami/world/device.hpp"
+#include "kami/graphics/settings.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -21,6 +22,7 @@ public:
 
     [[nodiscard]] bool initialize(HWND window, UINT width, UINT height);
     void resize(UINT width, UINT height);
+    void set_graphics(graphics::Settings settings);
     void draw();
     void orbit(float yaw_delta, float elevation_delta);
     void zoom(float distance_delta);
@@ -47,6 +49,9 @@ private:
     Device device_;
     HWND window_ = nullptr;
     UINT width_ = 0, height_ = 0;
+    UINT client_width_ = 0, client_height_ = 0;
+    bool allow_tearing_ = false;
+    graphics::Settings graphics_{};
     bool ready_ = false;
     float yaw_ = .65f;
     float elevation_ = 6.8f;

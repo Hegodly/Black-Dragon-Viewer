@@ -15,5 +15,5 @@ struct SceneMesh {
 };
 
 // Original procedural test assets, not Second Life content.
-[[nodiscard]] SceneMesh build_test_scene();
+[[nodiscard]] SceneMesh build_test_scene(unsigned divisions = 32);
 } // namespace kami::world
