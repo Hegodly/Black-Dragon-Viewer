@@ -1,4 +1,5 @@
 #include "kami/protocol/login.hpp"
+#include "kami/official_login_identity.hpp"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -286,12 +287,16 @@ bool parse_account_name(std::wstring_view account,std::string& first,
 }
 std::string build_login_xmlrpc(std::string_view first,std::string_view last,
                               std::string_view hashed,
-                              std::string_view mac,bool accepted){
+                              std::string_view mac,
+                              std::string_view id0,bool accepted){
     if(!xml_safe_ascii(first)||!xml_safe_ascii(last)||
        hashed.size()!=35||!hashed.starts_with("$1$")||
        !xml_safe_ascii(hashed.substr(3))||
        mac.size()!=32||
        !std::all_of(mac.begin(),mac.end(),[](unsigned char c){
+           return std::isxdigit(c)!=0;
+       })||id0.size()!=32||
+       !std::all_of(id0.begin(),id0.end(),[](unsigned char c){
            return std::isxdigit(c)!=0;
        })||!accepted)return {};
     std::string doc="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -307,10 +312,9 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     put_string(doc,"version","0.1.0.53");
     put_string(doc,"platform","Win");
     put_string(doc,"mac",mac);
-    // Required by the documented SL XML-RPC login contract. KAMI avoids
-    // exposing a disk serial number by sending the documented anonymous
-    // placeholder until a user-consented machine-ID design is reviewed.
-    put_string(doc,"id0","00000000-0000-0000-0000-000000000000");
+    // Official SL Windows viewer login sends MD5(volume-serial DWORD).
+    // KAMI obtains it from the separately LGPL-licensed Windows bridge.
+    put_string(doc,"id0",id0);
     // Mirror the typed non-secret metadata sent by the official login
     // transaction, using only truthful KAMI / Windows process information.
     put_int(doc,"address_size",static_cast<int>(sizeof(void*)*8));
@@ -449,8 +453,16 @@ LoginResult login_to_simulator(const LoginRequest& request,
     }
     const auto mac=hashed_mac();
     if(mac.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
+    std::array<char,33> volume_id0{};
+    if(!kami_sl_host_volume_id(volume_id0.data(),volume_id0.size())){
+        failure.status=LoginStatus::CryptoUnavailable;
+        failure.message=L"Unable to determine Windows login device ID";
+        return failure;
+    }
     SecureBytes payload;
-    payload.data=build_login_xmlrpc(first,last,hash.data,mac,request.terms_accepted);
+    payload.data=build_login_xmlrpc(first,last,hash.data,mac,
+        std::string_view(volume_id0.data(),32),request.terms_accepted);
+    SecureZeroMemory(volume_id0.data(),volume_id0.size());
     if(payload.data.empty())return failure;
     // No credentials may ever leave this official Linden Lab host.
     const auto host=login_host(request.grid);
