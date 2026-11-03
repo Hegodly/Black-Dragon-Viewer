@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <iostream>
 #include <string>
+#include <filesystem>
 
 namespace {
 LRESULT CALLBACK smoke_window(HWND window,UINT message,WPARAM wp,LPARAM lp) {
@@ -81,6 +82,35 @@ int main() {
                 if(!renderer.ready()) {
                     print_failure(L"resize and camera",renderer);
                     result=6;
+                }
+                if(!result) {
+                    auto preview=kami::world::build_test_scene(8);
+                    if(!renderer.set_creator_preview(preview)) {
+                        print_failure(L"OBJ preview geometry",renderer);result=7;
+                    } else {
+                        renderer.draw();
+                        if(!renderer.ready()){print_failure(L"preview draw",renderer);result=8;}
+                        renderer.clear_creator_preview();
+                        if(renderer.ready()) renderer.draw();
+                        if(!renderer.ready()){print_failure(L"preview restore",renderer);result=9;}
+                    }
+                }
+                if(!result) {
+                    wchar_t folder[MAX_PATH]{};
+                    if(!GetTempPathW(MAX_PATH,folder))result=10;
+                    else {
+                        const std::wstring target=std::wstring(folder)+L"KAMI-DX12-Capture-Test.png";
+                        if(!renderer.capture_png(target))result=11;
+                        else {
+                            renderer.draw();
+                            if(renderer.capture_status()!=kami::world::CaptureStatus::Saved)
+                                result=12;
+                            else if(!std::filesystem::exists(target))
+                                result=13;
+                        }
+                        std::error_code ignored;
+                        std::filesystem::remove(target,ignored);
+                    }
                 }
                 if(!result) std::wcout
                     <<L"KAMI DX12 SMOKE PASS - adapter: "<<renderer.adapter_name()
