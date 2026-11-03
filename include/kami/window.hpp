@@ -16,6 +16,7 @@
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
+#include "kami/protocol/transport.hpp"
 #include "kami/world/renderer.hpp"
 #include "kami/world/warmup.hpp"
 
@@ -49,6 +50,7 @@ private:
     void messenger_send();
     void messenger_demo_reply();
     void messenger_select(messenger::Channel channel);
+    void check_sl_tls_connection();
 
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
@@ -89,6 +91,7 @@ private:
     bool light_ = false;
     unsigned page_ = 0;
     protocol::Session session_;
+    protocol::ProbeResult sl_tls_probe_{};
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
     Microsoft::WRL::ComPtr<IDWriteFactory> text_factory_;
