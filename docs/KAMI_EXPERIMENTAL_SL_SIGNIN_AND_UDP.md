@@ -335,3 +335,36 @@ by a seed or EventQueueGet diagnostic instead of a permanent hard-coded
 `CAPS/EVENT QUEUE PENDING` string. Offline tests exercise URL validation,
 LLSD seed structure and event envelope structure; live server success is
 **not** guaranteed.
+
+## R7 — Verified region metadata and safe EventQueue continuation
+
+R7 starts from the R6 build that received a real
+`AgentMovementComplete` and validated an `EventQueueGet` response.
+
+- The authenticated, connected simulator's RegionHandshake packet is
+  parsed for a bounded, printable region name and finite water height.
+  A verified region label is displayed on HOME. This is actual UDP
+  metadata, **not** terrain/objects/avatar geometry.
+- The EventQueueGet capability URL is kept only for the active
+  session rather than discarded after the first poll.
+- Empty LLSD event responses are parsed and the bounded, typed server
+  `id` is sent as `ack` on the next poll. Only one async request is
+  outstanding at a time, and the UI remains responsive.
+- A recognized idle long-poll is retried with a small delay. Real
+  nonempty event arrays are **not acknowledged or silently discarded**:
+  without complete event decoders/handlers they pause automatic polling
+  and the HOME screen explicitly states that dispatch is pending.
+- Invalid LLSD shapes, unsafe ids, or HTTP errors pause the poller
+  rather than sending malformed acknowledgements or retrying
+  indefinitely. Signed CAPS URLs, event bodies and credentials are
+  never printed.
+- Offline tests cover malformed names/water heights, simulator UDP
+  loopback, cursor serialization and event-envelope rejection.
+
+**Not yet implemented:** decompression of simulator LayerData terrain
+patches, ObjectUpdate/ImprovedTerseObjectUpdate decoding, mesh/texture
+asset pipelines, true region DX12 geometry, remote avatar inventory,
+simulator crossings and complete event dispatch. KAMI still renders
+its standalone offline scene until those paths exist and are verified.
+CI tests cannot confirm any live region data beyond the tester's
+actual Second Life connection.
