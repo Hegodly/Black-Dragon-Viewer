@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace kami::world {
@@ -9,7 +10,9 @@ struct Vertex {
     float r, g, b;
     float metallic, roughness;
     float u, v;
-    float body_region=0.f; // 0=none; local marker 1=breast, 2=belly, 3=butt
+    float body_region=0.f; // legacy local preview; rigged vertices use weights
+    std::uint32_t bone_indices=0;
+    std::uint32_t bone_weights=0; // packed normalized UNORM8 x4; zero=unrigged
 };
 struct SceneMesh {
     std::vector<Vertex> vertices;
