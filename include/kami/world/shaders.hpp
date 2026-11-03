@@ -78,7 +78,7 @@ Interpolant vertex_main(VertexIn input) {
     return output;
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
-    return mul(float4(avatar_position(input.position),1.0),lightViewProjection);
+    return mul(float4(avatar_position(input.position,input.region),1.0),lightViewProjection);
 }
 float shadow_factor(float3 position,float3 normal) {
     if(frame.w<0.5) return 1.0;
