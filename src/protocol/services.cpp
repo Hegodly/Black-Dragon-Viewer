@@ -80,6 +80,29 @@ std::size_t Services::pending_count() const noexcept {
             request.state==IntentState::Sent))++total;
     return total;
 }
+bool LiveData::apply_avatar(AvatarManifest value,bool verified) {
+    if(!verified||!session_.online()||!valid_uuid(value.avatar_id)||
+       !valid_uuid(value.body_mesh_asset_id)||
+       (!value.physics_wearable_asset_id.empty()&&
+        !valid_uuid(value.physics_wearable_asset_id))||
+       value.texture_asset_ids.size()>256U||
+       value.attachments.size()>128U)return false;
+    std::unordered_set<std::string> unique;
+    for(const auto& texture:value.texture_asset_ids) {
+        if(!valid_uuid(texture)||!unique.insert(texture).second)return false;
+    }
+    unique.clear();
+    for(const auto& attachment:value.attachments) {
+        if(!valid_uuid(attachment.object_id)||
+           (attachment.rigged&&!valid_uuid(attachment.mesh_asset_id))||
+           (!attachment.mesh_asset_id.empty()&&
+            !valid_uuid(attachment.mesh_asset_id))||
+           !unique.insert(attachment.object_id).second)return false;
+    }
+    avatar_=std::move(value);
+    avatar_generation_=session_.generation();
+    return true;
+}
 bool LiveData::apply_objects(std::vector<WorldObject> value,bool verified) {
     if(!verified||!session_.online()||value.size()>100000U)return false;
     std::unordered_set<std::string> ids;
@@ -110,7 +133,7 @@ bool LiveData::apply_inventory(std::vector<InventoryEntry> value,bool verified) 
     return true;
 }
 void LiveData::clear() noexcept {
-    objects_.clear();inventory_.clear();
-    objects_generation_=inventory_generation_=0;
+    objects_.clear();inventory_.clear();avatar_.reset();
+    objects_generation_=inventory_generation_=avatar_generation_=0;
 }
 } // namespace kami::protocol
