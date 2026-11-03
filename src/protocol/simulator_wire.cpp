@@ -106,8 +106,17 @@ Inbound classify(const lludp::Packet& packet) noexcept {
     if(!lludp::message_number(packet.body,id,bytes))return Inbound::Invalid;
     switch(id){
     case 0x01:return packet.body.size()>=6?Inbound::StartPing:Inbound::Invalid;
-    case 0xffff0094U:return packet.body.size()>=4+4+1+1?Inbound::RegionHandshake:
-                        Inbound::Invalid;
+    case 0xffff0094U: {
+        // Validate the complete fixed RegionInfo block, plus a length-
+        // prefixed SimName. A few bytes of spoofed data are not a handshake.
+        constexpr std::size_t minimum=4U+4U+1U+1U+16U+1U+4U+
+                                      4U+16U+8U*16U+8U*4U;
+        if(packet.body.size()<minimum)return Inbound::Invalid;
+        const auto sim_name_length=packet.body[9];
+        return sim_name_length>0U&&
+               packet.body.size()>=minimum+sim_name_length?
+               Inbound::RegionHandshake:Inbound::Invalid;
+    }
     case 0xffff00faU:return packet.body.size()>=4+16+16+12+12+8+4?
                         Inbound::AgentMovementComplete:Inbound::Invalid;
     case 0xfffffffbU:return packet.body.size()>=5&&
