@@ -21,3 +21,19 @@ The rest of the official viewer's login, LLCore HTTP, LLSD,
 session/capability and simulator networking implementations have
 **not yet** been imported; the KAMI prototype does not become a
 complete Second Life viewer merely by adding the identity bridge.
+
+## Windows machine fingerprint
+
+The same LGPL DLL now also adapts the current official viewer's
+`LLMachineID::init()`, `LLWMIMethods::getGenericSerialNumber()` and
+`llHashedUniqueID()` behavior from
+`indra/newview/llmachineid.cpp` and
+`indra/newview/llhasheduniqueid.cpp` (upstream `develop` commit
+`b645b767684ccabdfd285f0c2a55855697029909`).
+
+On Windows, KAMI queries WMI for the motherboard/system-product UUID,
+then falls back to the operating-system serial number. It folds the
+UTF-16 serial's successive characters into six bytes and hashes these
+bytes with MD5, matching the viewer's Windows `mac` parameter format.
+Only if WMI is unavailable does KAMI fall back to hashed adapter bytes.
+No physical serial or UUID is written to log files.

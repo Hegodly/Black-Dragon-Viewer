@@ -13,7 +13,18 @@ std::string wrap(std::string fields) {
            "<value><struct>"+fields+"</struct></value></param></params></methodResponse>";
 }
 } // namespace
-int main(){
+int main(int argc,char** argv){
+    if(argc==2&&std::string_view(argv[1])=="--emit-synthetic-login-xml"){
+        // This branch emits a fake, offline login fixture only.
+        // NEVER add CLI arguments that read/store real credentials.
+        const auto doc=build_login_xmlrpc(
+            "Synthetic","Resident","$1$00000000000000000000000000000000",
+            "00000000000000000000000000000000",
+            "00000000000000000000000000000000",true);
+        if(doc.empty())return 40;
+        std::cout<<doc<<"\n";
+        return 0;
+    }
     const HRESULT init=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     if(FAILED(init))return 1;
     std::string f,l;
@@ -31,7 +42,17 @@ int main(){
        L"HTML error page"||
        classify_login_http_body("<?xml")!=
        L"XML-RPC response"||
-       classify_login_http_body("")!=L"empty response")return 17;
+       classify_login_http_body("")!=L"empty response"||
+       classify_login_http_body("Bad Request")!=L"plain-text error response"||
+       describe_login_http_response(true,"",0)!=L"empty response"||
+       describe_login_http_response(false,"",12030)!=
+           L"unavailable (WinHTTP 12030)"||
+       classify_login_http_content_type(L"TEXT/HTML; charset=UTF-8")!=
+           L"HTML error page (Content-Type)"||
+       classify_login_http_content_type(L"application/json")!=
+           L"JSON response (Content-Type)"||
+       classify_login_http_content_type(L"application/octet-stream")!=L"")
+           return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",
@@ -54,6 +75,10 @@ int main(){
        valid.find("<name>address_size</name><value><int>64</int>")==std::string::npos||
        valid.find("<name>last_exec_event</name><value><int>0</int>")==std::string::npos||
        valid.find("<name>mfa_hash</name>")==std::string::npos||
+       valid.find("<name>host_id</name>")==std::string::npos||
+       valid.find("<name>platform_version</name>")==std::string::npos||
+       valid.find("<name>platform_string</name>")==std::string::npos||
+       valid.find("<value><string>adult_compliant</string></value>")==std::string::npos||
        valid.find("<name>token</name>")==std::string::npos||
        valid.find("<name>viewer_digest</name>")!=std::string::npos||
        valid.find("<name>agree_to_tos</name><value><boolean>0</boolean>")==std::string::npos||
@@ -128,7 +153,7 @@ int main(){
            message.find(L"passwd")!=std::wstring::npos||message.size()>120U)
             return 10;
     }
-    if(login_http_diagnostic(400).find(L"KAMI DIAG R2")==std::wstring::npos||
+    if(login_http_diagnostic(400).find(L"KAMI DIAG R3")==std::wstring::npos||
        login_http_diagnostic(400).find(L"check protocol")!=std::wstring::npos)
        return 24;
     if(login_http_diagnostic(403).find(L"refused")==std::wstring::npos||

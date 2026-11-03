@@ -71,6 +71,23 @@ std::string utf8(std::wstring_view s){
         return {};
     return bytes;
 }
+// The official viewer supplies the truthful Windows platform/version fields.
+// Query Windows itself: never impersonate the official viewer channel.
+std::string windows_nt_version(){
+    HMODULE ntdll=GetModuleHandleW(L"ntdll.dll");
+    if(!ntdll)return {};
+    using VersionFn=LONG (WINAPI*)(OSVERSIONINFOW*);
+    const auto version=reinterpret_cast<VersionFn>(
+        GetProcAddress(ntdll,"RtlGetVersion"));
+    if(!version)return {};
+    OSVERSIONINFOW os{};
+    os.dwOSVersionInfoSize=sizeof(os);
+    if(version(&os)<0||os.dwMajorVersion==0||os.dwMajorVersion>30)
+        return {};
+    return std::to_string(os.dwMajorVersion)+"."+
+           std::to_string(os.dwMinorVersion)+"."+
+           std::to_string(os.dwBuildNumber);
+}
 bool xml_safe_ascii(std::string_view v) noexcept {
     return !v.empty()&&v.size()<=128 &&
        std::all_of(v.begin(),v.end(),[](unsigned char c) {
@@ -247,7 +264,36 @@ std::wstring_view classify_login_http_body(std::string_view body) noexcept{
     if(begins("<!doctype html")||begins("<html"))
         return L"HTML error page";
     if(begins("{")||begins("["))return L"JSON/error gateway response";
+    if(begins("Bad Request")||begins("400 Bad Request")||begins("error"))
+        return L"plain-text error response";
     return L"unrecognized error response";
+}
+std::wstring_view classify_login_http_content_type(
+    std::wstring_view media_type) noexcept {
+    const auto prefix=[&](std::wstring_view expected) {
+        if(media_type.size()<expected.size())return false;
+        for(std::size_t i=0;i<expected.size();++i){
+            const wchar_t x=media_type[i],y=expected[i];
+            const wchar_t folded=(x>=L'A'&&x<=L'Z')?x+32:x;
+            if(folded!=y)return false;
+        }
+        const auto len=expected.size();
+        return media_type.size()==len||media_type[len]==L';'||media_type[len]==L' ';
+    };
+    if(prefix(L"text/html"))return L"HTML error page (Content-Type)";
+    if(prefix(L"text/xml")||prefix(L"application/xml"))
+        return L"XML response (Content-Type)";
+    if(prefix(L"application/json")||prefix(L"application/problem+json"))
+        return L"JSON response (Content-Type)";
+    if(prefix(L"text/plain"))return L"plain-text response (Content-Type)";
+    return L"";
+}
+std::wstring describe_login_http_response(bool read_ok,
+                                          std::string_view sample,
+                                          unsigned read_error) {
+    if(!read_ok)
+        return L"unavailable (WinHTTP "+std::to_wstring(read_error)+L")";
+    return std::wstring(classify_login_http_body(sample));
 }
 
 
@@ -311,6 +357,12 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     put_string(doc,"channel","KAMI Beyond Reality Dev");
     put_string(doc,"version","0.1.0.53");
     put_string(doc,"platform","Win");
+    const auto nt_version=windows_nt_version();
+    // Empty on unsupported/unknown platforms rather than fabricate values.
+    put_string(doc,"platform_version",nt_version);
+    put_string(doc,"platform_string",nt_version.empty()?
+               "Windows":"Microsoft Windows NT "+nt_version);
+    put_string(doc,"host_id","");
     put_string(doc,"mac",mac);
     // Official SL Windows viewer login sends MD5(volume-serial DWORD).
     // KAMI obtains it from the separately LGPL-licensed Windows bridge.
@@ -332,8 +384,15 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     doc+="<member><name>extended_errors</name>"
          "<value><boolean>1</boolean></value></member>";
     doc+="<member><name>options</name><value><array><data>";
-    for(const char* option:{"login-flags","inventory-root","inventory-skeleton",
-                            "buddy-list","gestures","global-textures"}){
+    for(const char* option:{"inventory-root","inventory-skeleton",
+                            "inventory-lib-root","inventory-lib-owner",
+                            "inventory-skel-lib","initial-outfit","gestures",
+                            "display_names","event_categories",
+                            "event_notifications","classified_categories",
+                            "adult_compliant","buddy-list","newuser-config",
+                            "ui-config","advanced-mode","max-agent-groups",
+                            "map-server-url","voice-config","tutorial_setting",
+                            "login-flags","global-textures"}){
         doc+="<value><string>";doc+=option;doc+="</string></value>";
     }
     doc+="</data></array></value></member>";
@@ -425,7 +484,7 @@ std::wstring login_http_diagnostic(unsigned code) {
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"Request declined (KAMI DIAG R2)";
+    case 400:return prefix+L"Request declined (KAMI DIAG R3)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
@@ -451,8 +510,17 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(!digest_password(password,hash)){
         failure.status=LoginStatus::CryptoUnavailable;return failure;
     }
-    const auto mac=hashed_mac();
-    if(mac.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
+    // Current official SL viewer uses LLMachineID::init's WMI machine
+    // fingerprint first. Only fall back to raw adapter bytes if unavailable.
+    SecureBytes mac;
+    std::array<char,33> wmi_hash{};
+    if(kami_sl_host_machine_hash(wmi_hash.data(),wmi_hash.size())){
+        mac.data.assign(wmi_hash.data(),32);
+    }else{
+        mac.data=hashed_mac();
+    }
+    SecureZeroMemory(wmi_hash.data(),wmi_hash.size());
+    if(mac.data.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
     std::array<char,33> volume_id0{};
     if(!kami_sl_host_volume_id(volume_id0.data(),volume_id0.size())){
         failure.status=LoginStatus::CryptoUnavailable;
@@ -460,13 +528,15 @@ LoginResult login_to_simulator(const LoginRequest& request,
         return failure;
     }
     SecureBytes payload;
-    payload.data=build_login_xmlrpc(first,last,hash.data,mac,
+    payload.data=build_login_xmlrpc(first,last,hash.data,mac.data,
         std::string_view(volume_id0.data(),32),request.terms_accepted);
     SecureZeroMemory(volume_id0.data(),volume_id0.size());
     if(payload.data.empty())return failure;
     // No credentials may ever leave this official Linden Lab host.
     const auto host=login_host(request.grid);
-    HttpHandle session(WinHttpOpen(L"KAMI-Beyond-Reality-Dev/0.1.0.53",
+    // Honest channel/version format analogous to the official LLCore
+    // user-agent string; this is KAMI, not a spoofed Linden Lab viewer.
+    HttpHandle session(WinHttpOpen(L"KAMI Beyond Reality Dev 0.1.0 (53)",
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     if(!session.handle){failure.status=LoginStatus::NetworkError;return failure;}
@@ -511,14 +581,33 @@ LoginResult login_to_simulator(const LoginRequest& request,
         // the body, which may contain credentials, tokens or signed URLs.
         char sample[512]{};
         DWORD count=0;
-        if(WinHttpReadData(web.handle,sample,sizeof(sample),&count)){
-            const auto kind=classify_login_http_body(
-                std::string_view(sample,static_cast<std::size_t>(count)));
-            failure.message+=L" [";
-            failure.message+=kind;
-            failure.message+=L"]";
+        const BOOL read_ok=WinHttpReadData(web.handle,sample,sizeof(sample),&count);
+        const DWORD read_error=read_ok?0:GetLastError();
+        failure.http_response_kind=describe_login_http_response(read_ok!=FALSE,
+            std::string_view(sample,static_cast<std::size_t>(count)),read_error);
+        // If the body is empty or unreadable, safely classify a standard
+        // Content-Type response header without displaying its raw value.
+        if(!read_ok||count==0){
+            wchar_t content_type[128]{};
+            DWORD bytes=sizeof(content_type);
+            if(WinHttpQueryHeaders(web.handle,WINHTTP_QUERY_CONTENT_TYPE,
+                                   WINHTTP_HEADER_NAME_BY_INDEX,
+                                   content_type,&bytes,WINHTTP_NO_HEADER_INDEX)){
+                const auto category=classify_login_http_content_type(
+                    std::wstring_view(content_type));
+                if(!category.empty()){
+                    failure.http_response_kind=std::wstring(category);
+                    if(!read_ok){
+                        failure.http_response_kind+=L" (body read WinHTTP "+
+                            std::to_wstring(read_error)+L")";
+                    }
+                }
+            }
         }
         SecureZeroMemory(sample,sizeof(sample));
+        failure.message+=L" [";
+        failure.message+=failure.http_response_kind;
+        failure.message+=L"]";
         return failure;
     }
     std::string body;

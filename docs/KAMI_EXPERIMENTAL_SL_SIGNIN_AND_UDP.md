@@ -203,3 +203,67 @@ grid configuration and event-driven login handling. Those modules
 would require a much larger dependency-aware port, license compliance
 and simulator validation. Full SL login and region loading remain
 experimental and must be confirmed on the live grid.
+
+## KAMI DIAG R3: visible, structured HTTP 400 information
+
+The R2 login diagnostic displayed the HTTP status, response classification
+and advice in one clipped line; when the WinHTTP response-body read failed,
+the classification was omitted entirely.
+
+R3 always stores the HTTP status and a *safe* response category in the login
+result. UI shows HTTP status + diagnostic revision, response classification,
+and pending simulator state on three distinct lines; it does not reveal the
+HTTP body, password/hash, account name, signed simulator capability URL,
+cookies, token or machine fingerprint.
+
+If WinHTTP cannot read the response body, the category displays a WinHTTP
+GetLastError numeric code. Empty, HTML, XML-RPC, JSON-like and plain-text
+error replies have distinct labels. A server HTTP 400 is still **not**
+proof of a malformed XML-RPC request; neither this diagnostic patch nor the
+official Windows machine-ID bridge proves the live login works.
+
+## Additional official-login compatibility fields
+
+KAMI now sends its **actual** Windows NT platform version and platform
+description from RtlGetVersion when available, an empty optional
+host_id, and the official viewer's commonly requested options
+(including adult_compliant, inventory library, notifications and maps).
+The user agent declares `KAMI Beyond Reality Dev 0.1.0 (53)` rather
+than claiming to be Linden Lab's viewer. The client still sends
+credentials only to the official Linden Lab TLS endpoint.
+
+These fields match the public structure of Linden Lab's viewer request
+but do not guarantee authorization. Response Content-Type is classified
+safely if the HTTP error body is unreadable. Login remains experimental.
+
+## Synthetic request structural regression
+
+The Windows workflow now generates a strictly synthetic login request
+with a known fake account/password digest and validates it independently
+with .NET System.Xml using DTD processing disabled. CI verifies
+XML well-formedness, required member keys, no duplicate keys, XML-RPC
+array options and typed boolean ToS controls. It does not send the
+request to Second Life or include any real account credentials.
+
+Passing this test proves only that the constructed XML is structurally
+well formed. HTTP 400 server acceptance remains unverified.
+
+## Official Windows hashed machine ID algorithm
+
+Earlier builds calculated login `mac` from the first active physical
+network adapter. The modern official viewer normally **does not use
+that identifier first**. Its `LLMachineID::init()` selects the WMI
+`Win32_ComputerSystemProduct.UUID` if present and valid, otherwise
+`Win32_OperatingSystem.SerialNumber`. The serial string is folded by
+accumulating its UTF-16 character values modulo 256 across six bytes,
+and those six bytes are MD5-hashed into the `mac` login value.
+
+KAMI now calls the LGPL-separated device identity DLL for that WMI-first
+algorithm. The prior adapter-based MD5 is only a fallback when WMI
+fails, as in the official viewer's final `LLUUID::getNodeID()`
+fallback. CI tests use synthetic serial numbers and never query real
+hardware identifiers. All identifiers are kept in memory only,
+apart from the hashed identifiers sent over TLS to the SL login server.
+
+This is another concrete protocol implementation difference corrected,
+but no live login result is yet verified.
