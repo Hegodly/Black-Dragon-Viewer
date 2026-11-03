@@ -100,6 +100,8 @@ private:
     protocol::ProbeResult sl_tls_probe_{};
     protocol::LoginStatus sl_login_status_=protocol::LoginStatus::NotAttempted;
     std::wstring sl_login_message_=L"SL login not attempted";
+    unsigned sl_login_http_status_=0;
+    std::wstring sl_login_response_kind_;
     bool sl_login_pending_=false;
     std::future<protocol::LoginResult> sl_login_future_;
     protocol::sim::Circuit sl_circuit_;
