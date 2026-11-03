@@ -7,8 +7,8 @@ interface generators and before final packaging. Users do not run a script.
 
 **Dark mode:** retains the existing original KAMI palette. **Light mode:**
 switches a defined subset of native color tokens to a cool silver/frost palette,
-with dark, high-contrast foregrounds. A saved checkbox is under the native
-KAMI WORKSPACES menu. Switching mode performs no new 3D render passes or
+with dark, high-contrast foregrounds. A saved checkbox and a panel-opacity slider are under the native
+KAMI WORKSPACES menu. The slider changes native color alpha, not backdrop blur. Switching mode performs no new 3D render passes or
 per-frame UI calculations.
 
 This is a **native appearance foundation**, not a completed iOS clone:
@@ -30,6 +30,6 @@ tokens; this intentionally avoids overwriting the user's custom colors.
 A manual Advanced → Reload Color Settings may require toggling the
 appearance setting off and on to reapply the selected palette.
 
-Full Liquid Glass-style panel redesign, adjustable backdrop blur/transparency
+Full Liquid Glass-style panel redesign and adjustable backdrop blur
 and the production DX12-only Second Life renderer are separate unfinished
 milestones.

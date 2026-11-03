@@ -82,7 +82,15 @@ void kami_apply_appearance()
 {
     auto& palette = LLUIColorTable::instance();
     palette.clearKAMIRuntimePalette();
-    if (!gSavedSettings.getBOOL("KamiLightMode")) return;
+    const F32 opacity = llclamp(gSavedSettings.getF32("KamiGlassOpacity"), .80f, 1.f);
+    if (!gSavedSettings.getBOOL("KamiLightMode"))
+    {
+        // Dark mode keeps its original tonal palette; only panel opacity is adjustable.
+        LLColor4 background = palette.getColor("FloaterDefaultBackgroundColor").get();
+        background.mV[3] = opacity;
+        palette.setKAMIRuntimeColor("FloaterDefaultBackgroundColor", background);
+        return;
+    }
 
     // Original KAMI palette: cool silver, soft frost, graphite typography.
     // Mutate existing named colors so controls holding LLUIColor references
@@ -128,6 +136,11 @@ void kami_apply_appearance()
     };
     for (const auto& swatch : light)
         palette.setKAMIRuntimeColor(swatch.name, swatch.value);
+    // Opacity changes are cheap color updates, not additional blur shaders.
+    palette.setKAMIRuntimeColor("FloaterDefaultBackgroundColor",
+        LLColor4(.94f,.96f,.985f,opacity));
+    palette.setKAMIRuntimeColor("PanelDefaultBackgroundColor",
+        LLColor4(.94f,.96f,.985f,opacity));
 }
 
 void settings_setup_listeners()
@@ -136,6 +149,8 @@ patch(viewer, "void settings_setup_listeners()\n{\n\t//BD - Special Debugs and h
 """void settings_setup_listeners()
 {
     setting_setup_signal_listener(gSavedSettings, "KamiLightMode",
+        [](const LLSD&) { kami_apply_appearance(); });
+    setting_setup_signal_listener(gSavedSettings, "KamiGlassOpacity",
         [](const LLSD&) { kami_apply_appearance(); });
 	//BD - Special Debugs and handles""")
 
@@ -158,6 +173,20 @@ patch(settings, "  <key>KamiDX12LivePreview</key>\n",
     <string>Boolean</string>
     <key>Value</key>
     <integer>0</integer>
+  </map>
+  <key>KamiDX12LivePreview</key>
+""")
+patch(settings, "  <key>KamiDX12LivePreview</key>\n",
+"""  <key>KamiGlassOpacity</key>
+  <map>
+    <key>Comment</key>
+    <string>Native KAMI floating panel opacity; a light UI color update, not GPU backdrop blur.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>0.96</real>
   </map>
   <key>KamiDX12LivePreview</key>
 """)

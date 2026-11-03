@@ -129,6 +129,18 @@ for title, left, top, buttons in groups:
             "image_hover_unselected": "Toolbar_Middle_Over",
         })
 
+ET.SubElement(floater, "slider", {
+    "name": "kami_glass_opacity",
+    "label": "PANEL OPACITY",
+    "control_name": "KamiGlassOpacity",
+    "tool_tip": "Controls KAMI window translucency; does not add GPU blur",
+    "layout": "topleft",
+    "follows": "top|left",
+    "left": "408", "top": "515", "width": "333", "height": "19",
+    "label_width": "128", "min_val": "0.80", "max_val": "1.0",
+    "increment": "0.05", "decimal_digits": "2",
+    "initial_value": "0.96",
+})
 text("kami_workspaces_footer",
      "BEYOND REALITY  |  Built on Black Dragon by NiranV Dean",
      26, 558, 700, 23, font="SansSerifSmall",
