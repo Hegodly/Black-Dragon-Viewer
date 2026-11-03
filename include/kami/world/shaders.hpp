@@ -9,6 +9,7 @@ cbuffer Frame : register(b0) {
     float4 cameraWorldPosition;
     float4 frame; // x=time seconds, y=avatar enabled, z=PBR enabled, w=shadows
     row_major float4x4 lightViewProjection;
+    float4 kamiEffects; // x=haze, y=contact shading, z=metallic microglints
 };
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
@@ -109,6 +110,29 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
         float3 specular=D*G*F/max(4.0*NdotV*NdotL,0.001);
         float3 diffuse=(1.0-F)*(1.0-metallic)*base/PI;
         color=base*0.075+(diffuse+specular)*radiance*NdotL*visibility;
+    }
+    // Original KAMI material-space contact shading. This uses existing per-pixel
+    // world position/normal, not an incorrectly labelled screen-space AO pass.
+    if(kamiEffects.y>0.5) {
+        float lower=saturate(input.position.y*0.65);
+        float contact=lerp(0.76,1.0,lower);
+        color*=lerp(contact,1.0,0.12*saturate(N.y));
+    }
+    // GPU-native procedural specular microglints: no external overlay or injector.
+    if(kamiEffects.z>0.5 && input.material.x>0.15) {
+        float3 R=reflect(-L,N);
+        float focused=pow(saturate(dot(R,V)),64.0);
+        float sparkle=pow(saturate(sin(input.position.x*94.7+
+                            input.position.y*117.3+input.position.z*51.8+
+                            frame.x*1.4)*0.5+0.5),24.0);
+        color+=float3(0.7,0.82,1.0)*focused*sparkle*
+                    saturate(input.material.x)*0.26;
+    }
+    // KAMI distance-based atmosphere. Not volumetric ray marching.
+    if(kamiEffects.x>0.5) {
+        float distanceToCamera=length(cameraWorldPosition.xyz-input.position);
+        float haze=1.0-exp(-distanceToCamera*0.016);
+        color=lerp(color,float3(0.34,0.44,0.51),saturate(haze)*0.36);
     }
     // Basic filmic output mapping while maintaining SDR UNORM compatibility.
     color=color/(color+float3(1.0,1.0,1.0));
