@@ -25,6 +25,13 @@ int main(){
        parse_account_name(L"first..last",f,l)||
        parse_account_name(L".last",f,l)||
        parse_account_name(L"first.",f,l))return 13;
+    const std::array<std::uint8_t,6> mac_bytes{0,1,2,3,4,5};
+    if(hash_mac_bytes(mac_bytes)!="d15ae53931880fd7b724dd7888b4b4ed")return 16;
+    if(classify_login_http_body("<html><body>unknown</body></html>")!=
+       L"HTML error page"||
+       classify_login_http_body("<?xml version=\\"1.0\\"?>")!=
+       L"XML-RPC response"||
+       classify_login_http_body("")!=L"empty response")return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",true);
@@ -41,6 +48,10 @@ int main(){
        valid.find("<name>extended_errors</name><value><boolean>1</boolean>")==
            std::string::npos||
        valid.find("<name>options</name><value><array>")==std::string::npos||
+       valid.find("<name>address_size</name><value><int>64</int>")==std::string::npos||
+       valid.find("<name>last_exec_event</name><value><int>0</int>")==std::string::npos||
+       valid.find("<name>mfa_hash</name>")==std::string::npos||
+       valid.find("<name>token</name>")==std::string::npos||
        valid.find("<name>viewer_digest</name>")!=std::string::npos||
        valid.find("<name>agree_to_tos</name><value><boolean>0</boolean>")==std::string::npos||
        valid.find("<name>read_critical</name><value><boolean>0</boolean>")==std::string::npos||
