@@ -241,7 +241,9 @@ bool Renderer::make_pipeline() {
 }
 
 bool Renderer::make_geometry() {
-    const SceneMesh scene=build_test_scene(graphics_.terrain_divisions());
+    SceneMesh generated;
+    if(!preview_mesh_) generated=build_test_scene(graphics_.terrain_divisions());
+    const SceneMesh& scene=preview_mesh_?*preview_mesh_:generated;
     if(scene.vertices.empty() ||
        scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
         return false;
@@ -431,6 +433,38 @@ void Renderer::zoom(float distance_delta) {
     camera_.zoom(distance_delta);
 }
 
+bool Renderer::set_creator_preview(SceneMesh mesh) {
+    if(mesh.vertices.empty() || mesh.vertices.size()>1000000 ||
+       mesh.terrain_count+mesh.avatar_count!=mesh.vertices.size()) return false;
+    if(ready_)wait_for_gpu();
+    auto previous=std::move(preview_mesh_);
+    preview_mesh_=std::move(mesh);
+    if(ready_ && !make_geometry()) {
+        preview_mesh_=std::move(previous);
+        if(!make_geometry()){ready_=false;error_=L"Could not restore original mesh";}
+        return false;
+    }
+    camera_.set_subject({0.f,-1.2f,0.f});
+    camera_.reset();
+    return true;
+}
+void Renderer::clear_creator_preview() {
+    if(!preview_mesh_)return;
+    if(ready_)wait_for_gpu();
+    preview_mesh_.reset();
+    if(ready_ && !make_geometry()) {
+        ready_=false;error_=L"Could not restore original procedural scene";
+    }
+    camera_.set_subject({});
+    camera_.reset();
+}
+bool Renderer::capture_png(std::wstring destination) {
+    if(!ready_||destination.empty()||capture_status_==CaptureStatus::Pending)
+        return false;
+    capture_path_=std::move(destination);
+    capture_status_=CaptureStatus::Pending;
+    return true;
+}
 void Renderer::draw() {
     if(!ready_ || !width_ || !height_) return;
     if(FAILED(allocator_->Reset()) ||
