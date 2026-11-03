@@ -48,7 +48,7 @@ if a.integrated:
     template=next(n for n in notice.iter("notification") if n.get("name")=="UpdateAvailable")
     assert "new KAMI Viewer release" in (template.text or "")
     assert template.find("usetemplate").get("yestext") == "INSTALL & RESTART"
-    assert (view/"app_settings/KAMI-Test-Update.zip").is_file()
+    assert "KAMI-Test-Update.zip" in (r/"kami/packaging/stage-portable-data.py").read_text()
     assert (view/"app_settings/kami-test-updater.ps1").is_file()
     assert (view/"app_settings/kami-updater.ps1").is_file()
     assert any(n.get("name") == "kami_test_update" for n in login.iter("button"))
