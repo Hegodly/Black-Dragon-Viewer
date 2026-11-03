@@ -109,7 +109,7 @@ once('void LLPanelLogin::draw()\n{\n#if LL_WINDOWS\n',
             switch (release.status)
             {
             case kami::updates::Status::Available:
-                status->setLabelArg("[UPDATE_STRING]", "NEW KAMI RELEASE AVAILABLE");
+                status->setLabelArg("[UPDATE_STRING]", std::string("NEW KAMI RELEASE AVAILABLE"));
                 kami::updates::selectedVersion() = release.version;
                 if (release.installable)
                 {
@@ -123,13 +123,13 @@ once('void LLPanelLogin::draw()\n{\n#if LL_WINDOWS\n',
                 }
                 break;
             case kami::updates::Status::Current:
-                status->setLabelArg("[UPDATE_STRING]", "UP TO DATE");
+                status->setLabelArg("[UPDATE_STRING]", std::string("UP TO DATE"));
                 break;
             case kami::updates::Status::NoPublishedRelease:
-                status->setLabelArg("[UPDATE_STRING]", "NO PUBLIC RELEASE YET");
+                status->setLabelArg("[UPDATE_STRING]", std::string("NO PUBLIC RELEASE YET"));
                 break;
             default:
-                status->setLabelArg("[UPDATE_STRING]", "CHECK UNAVAILABLE (OFFLINE?)");
+                status->setLabelArg("[UPDATE_STRING]", std::string("CHECK UNAVAILABLE (OFFLINE?)"));
                 break;
             }
         }
