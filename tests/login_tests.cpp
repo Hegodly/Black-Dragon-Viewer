@@ -1,5 +1,7 @@
 #include "kami/protocol/login.hpp"
 #include <objbase.h>
+#include <msxml6.h>
+#include <wrl/client.h>
 #include <string>
 #include <iostream>
 using namespace kami::protocol;
@@ -35,6 +37,40 @@ int main(){
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",true);
+    // Validate the complete serialized XML-RPC request with the same
+    // security-conscious MSXML DOM engine used for login responses.
+    Microsoft::WRL::ComPtr<IXMLDOMDocument2> request_doc;
+    if(FAILED(CoCreateInstance(__uuidof(DOMDocument60),nullptr,
+       CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&request_doc)))||!request_doc)
+       return 18;
+    (void)request_doc->put_async(VARIANT_FALSE);
+    (void)request_doc->put_resolveExternals(VARIANT_FALSE);
+    VARIANT prohibit; VariantInit(&prohibit);
+    prohibit.vt=VT_BOOL; prohibit.boolVal=VARIANT_TRUE;
+    const BSTR property=SysAllocString(L"ProhibitDTD");
+    const HRESULT property_status=request_doc->setProperty(property,prohibit);
+    SysFreeString(property);
+    if(FAILED(property_status))return 19;
+    const int characters=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
+        valid.data(),static_cast<int>(valid.size()),nullptr,0);
+    if(characters<=0)return 20;
+    std::wstring wide_xml(static_cast<std::size_t>(characters),L'\\0');
+    if(MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
+        valid.data(),static_cast<int>(valid.size()),
+        wide_xml.data(),characters)!=characters)return 21;
+    const BSTR xml_source=SysAllocStringLen(wide_xml.data(),
+                                             static_cast<UINT>(wide_xml.size()));
+    VARIANT_BOOL parsed=VARIANT_FALSE;
+    const HRESULT parsed_status=request_doc->loadXML(xml_source,&parsed);
+    SysFreeString(xml_source);
+    if(FAILED(parsed_status)||parsed!=VARIANT_TRUE)return 22;
+    // Expected single struct parameter with the correct root XML-RPC method.
+    const BSTR method_path=SysAllocString(
+        L"/methodCall/methodName[text()='login_to_simulator']");
+    Microsoft::WRL::ComPtr<IXMLDOMNode> method_node;
+    (void)request_doc->selectSingleNode(method_path,&method_node);
+    SysFreeString(method_path);
+    if(!method_node)return 23;
     if(valid.empty()||valid.find("<methodName>login_to_simulator</methodName>")==
        std::string::npos||
        valid.find("<name>passwd</name>")==std::string::npos||
@@ -121,6 +157,9 @@ int main(){
            message.find(L"passwd")!=std::wstring::npos||message.size()>120U)
             return 10;
     }
+    if(login_http_diagnostic(400).find(L"KAMI DIAG R2")==std::wstring::npos||
+       login_http_diagnostic(400).find(L"check protocol")!=std::wstring::npos)
+       return 24;
     if(login_http_diagnostic(403).find(L"refused")==std::wstring::npos||
        login_http_diagnostic(429).find(L"retry later")==std::wstring::npos||
        login_http_diagnostic(302).find(L"redirect blocked")==std::wstring::npos)
