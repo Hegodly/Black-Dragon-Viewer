@@ -60,6 +60,14 @@ assert (root/"src/protocol/transport.cpp").is_file()
 assert (root/"src/protocol/bootstrap.cpp").is_file()
 assert (root/"src/protocol/services.cpp").is_file()
 assert (root/"src/protocol/lludp.cpp").is_file()
+assert (root/"src/protocol/login.cpp").is_file()
+assert (root/"src/protocol/load_scheduler.cpp").is_file()
+login=(root/"src/protocol/login.cpp").read_text(encoding="utf-8")
+assert "login_to_simulator" in login
+assert "WINHTTP_FLAG_SECURE" in login
+assert "ProhibitDTD" in login
+assert "KAMI Beyond Reality Dev" in login
+assert "src/protocol/load_scheduler.cpp" in cmake
 assert "src/protocol/lludp.cpp" in cmake
 transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
 assert "WINHTTP_FLAG_SECURE" in transport

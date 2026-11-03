@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - feature/kami-sl-xmlrpc-login-and-sim-handshake
       - feature/kami-creator-obj-import-reliability
       - feature/kami-live-sl-connectivity-foundations
       - feature/kami-eight-axis-chest-twist-butt-depth
