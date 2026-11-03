@@ -18,6 +18,23 @@ and data contracts; it does NOT authenticate or log a Resident into SL.
 | Avatar appearance | `LiveData::apply_avatar` validates avatar, fitted mesh, textures, attachments and optional physics wearable references | No real SL inventory access or fetched asset decoding. KAMI's eight-axis rigging remains local |
 | Tests | CTest validates URL/transport policy without making network requests, state ordering, disconnection, fake reply rejection, service intent gating and received data limits | CI passing does not prove live Second Life connection |
 
+## Follow-up login and performance development
+
+KAMI now contains an **experimental independent XML-RPC login client** in
+`src/protocol/login.cpp` which targets official SL login hosts over verified
+HTTPS and parses scalar responses, including account-action prompts. It is
+compiled and covered by offline tests, but is **not wired to the viewer UI**
+and has not been field-tested with a live account. Do not enter passwords
+until the credential-entry UI, ToS/MFA support, privacy review, and
+authenticated simulator circuit are completed.
+
+A new `src/protocol/load_scheduler.cpp` implementation provides visible-first
+UUID-based asset queueing, duplicate suppression, concurrency ceilings,
+and a planned GPU upload budget. It is not yet connected to actual
+SL HTTP assets, a disk cache, decoders, or DX12 resource uploads.
+See [fast loading plan](KAMI_SL_FAST_LOAD_PIPELINE.md). No measured
+Second Life login or region-loading speedup can be claimed yet.
+
 ## What must still be implemented for a real login
 
 1. Official-compatible, consent-based SL authentication flow with a unique
