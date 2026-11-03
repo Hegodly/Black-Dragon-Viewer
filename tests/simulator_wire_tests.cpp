@@ -1,5 +1,7 @@
 #include "kami/protocol/simulator_wire.hpp"
 #include <array>
+#include <cstring>
+#include <limits>
 using namespace kami::protocol;
 namespace{
 LoginResult good(){
@@ -60,5 +62,28 @@ int main(){
     movement.body[5]^=1;
     if(sim::movement_complete_identifies(movement,login))return 10;
     if(sim::classify(movement)!=sim::Inbound::AgentMovementComplete)return 11;
+    lludp::Packet region{};
+    region.flags=lludp::kReliable;
+    region.body.assign(215U,0U);
+    region.body[0]=0xff;region.body[1]=0xff;
+    region.body[3]=0x94;region.body[9]=4;
+    region.body[10]='T';region.body[11]='e';
+    region.body[12]='s';region.body[13]='t';
+    // WaterHeight follows variable-length SimName, SimOwner and manager bit.
+    constexpr float water=31.25f;
+    std::memcpy(region.body.data()+31,&water,sizeof(float));
+    sim::RegionMetadata snapshot{};
+    if(!sim::decode_region_metadata(region,snapshot)||
+       !snapshot.verified||snapshot.name!="Test"||
+       snapshot.water_height!=water)return 12;
+    region.body[12]=0x0a;
+    if(sim::decode_region_metadata(region,snapshot)||snapshot.verified)
+        return 13;
+    region.body[12]='s';region.body[9]=255;
+    if(sim::decode_region_metadata(region,snapshot))return 14;
+    region.body[9]=4;
+    const float invalid=std::numeric_limits<float>::infinity();
+    std::memcpy(region.body.data()+31,&invalid,sizeof(float));
+    if(sim::decode_region_metadata(region,snapshot))return 15;
     return 0;
 }
