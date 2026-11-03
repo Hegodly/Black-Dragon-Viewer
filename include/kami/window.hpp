@@ -8,6 +8,7 @@
 #include <string_view>
 #include <chrono>
 #include "kami/graphics/settings.hpp"
+#include "kami/graphics/adaptive.hpp"
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
@@ -33,6 +34,7 @@ private:
     void toggle_appearance();
     void click(float x, float y);
     void advance_graphics(unsigned row);
+    void advance_graphics_effects(unsigned row);
     void advance_camera(unsigned row);
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
@@ -45,6 +47,8 @@ private:
     world::Renderer world_renderer_;
     world::ShaderWarmup shader_warmup_;
     graphics::Settings graphics_{};
+    graphics::AdaptiveQuality adaptive_{};
+    bool graphics_effects_page_ = false;
     camera::Settings camera_settings_{};
     bool camera_settings_page_ = false;
     bool camera_dragging_ = false;
