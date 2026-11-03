@@ -90,3 +90,28 @@ Official documentation:
 - https://wiki.secondlife.com/wiki/CompleteAgentMovement
 - https://wiki.secondlife.com/wiki/RegionHandshake
 - https://secondlife.com/corporate/third-party-viewers
+
+## Login HTTP 400 — third-party XML-RPC request validation
+
+A user screenshot from November 3, 2026 showed **HTTP 400** on the
+experimental Login Test. This status confirms an HTTP error response, not
+successful account authentication; its exact cause cannot be proven from
+the HTTP status alone.
+
+The original request lacked the `id0` field listed among required
+parameters in the documented Second Life XML-RPC login contract. The
+experimental request now sends the documented all-zero *anonymous*
+placeholder rather than a raw disk serial number, and opts in to
+`extended_errors` structured error information. This is a candidate
+protocol compatibility fix **not verified against the live server**.
+The message for 400 no longer claims that the server conclusively rejected
+the request *format*. The service might also reject unrecognized viewer
+versions, account restrictions, or intermediary HTTP requests.
+
+Do not print XML-RPC password hashes, account identifiers, capability URLs,
+HTTP response bodies or MFA tokens in diagnostic UI or logs. No automatic
+login retries should be added; users must initiate each attempt. The
+prototype does not support MFA continuation, a full ToS challenge flow,
+caps/event queue, live world assets or actual region rendering.
+
+Protocol reference: https://wiki.secondlife.com/wiki/Current_login_protocols
