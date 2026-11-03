@@ -180,3 +180,26 @@ is compatible with its current implementation.
 For privacy, avoid publishing any real authentication XML, raw HTTP response
 body or token. If HTTP 400 recurs, share only the displayed status and category.
 A browser-only GET/HEAD probe cannot validate credential-bearing POST replies.
+
+## Official Windows viewer identity compatibility bridge (Nov 3, 2026)
+
+This branch replaces the original KAMI `id0` placeholder
+(`00000000-0000-0000-0000-000000000000`) with the official Second
+Life Windows viewer behavior from
+`LLAppViewerWin32::generateSerialNumber()`: MD5 of the raw 32-bit C:
+volume serial number, output as 32 lowercase hexadecimal characters.
+The raw serial is never sent or logged.
+
+The adapted official algorithm lives in its own replaceable
+LGPL-2.1 DLL (`KAMI_SL_Login_Identity.dll`) and is packaged with
+the applicable source notices and license. The new deterministic
+regression test checks the official Windows input-byte ordering.
+An unavailable volume ID produces a local error, not a fabricated
+device identifier.
+
+This **does not** import the full official SL viewer login subsystem:
+the original viewer depends on LLSD, LLCore HTTP, credential storage,
+grid configuration and event-driven login handling. Those modules
+would require a much larger dependency-aware port, license compliance
+and simulator validation. Full SL login and region loading remain
+experimental and must be confirmed on the live grid.
