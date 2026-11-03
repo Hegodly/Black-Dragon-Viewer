@@ -235,3 +235,15 @@ credentials only to the official Linden Lab TLS endpoint.
 These fields match the public structure of Linden Lab's viewer request
 but do not guarantee authorization. Response Content-Type is classified
 safely if the HTTP error body is unreadable. Login remains experimental.
+
+## Synthetic request structural regression
+
+The Windows workflow now generates a strictly synthetic login request
+with a known fake account/password digest and validates it independently
+with .NET System.Xml using DTD processing disabled. CI verifies
+XML well-formedness, required member keys, no duplicate keys, XML-RPC
+array options and typed boolean ToS controls. It does not send the
+request to Second Life or include any real account credentials.
+
+Passing this test proves only that the constructed XML is structurally
+well formed. HTTP 400 server acceptance remains unverified.
