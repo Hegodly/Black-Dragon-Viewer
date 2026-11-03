@@ -145,14 +145,14 @@ void kami_apply_appearance()
 
 void settings_setup_listeners()
 {""")
-patch(viewer, "void settings_setup_listeners()\n{\n\t//BD - Special Debugs and handles",
+patch(viewer, "void settings_setup_listeners()\n{",
 """void settings_setup_listeners()
 {
     setting_setup_signal_listener(gSavedSettings, "KamiLightMode",
         [](const LLSD&) { kami_apply_appearance(); });
     setting_setup_signal_listener(gSavedSettings, "KamiGlassOpacity",
         [](const LLSD&) { kami_apply_appearance(); });
-	//BD - Special Debugs and handles""")
+""")
 
 app = VIEW / "llappviewer.cpp"
 patch(app, "void LLAppViewer::loadColorSettings()\n{\n    LLUIColorTable::instance().loadFromSettings();",
