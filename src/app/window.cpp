@@ -801,8 +801,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         const float panelX=width-352.f;
         round_rect(box(panelX,190,324.f,height-280.f),22.f,p.surface);
         label(L"LOCAL AVATAR TELEMETRY",
-              box(panelX+15,206,292,26),
+              box(panelX+15,202,292,24),
               messenger_centered_small_.Get(),p.accent);
+        label(rig::compatibility_label(world_renderer_.skin_compatibility().status),
+              box(panelX+15,222,292,18),
+              messenger_centered_small_.Get(),p.muted);
         const auto& state=world_renderer_.avatar_state();
         const std::wstring values[]={
             avatar::motion_label(state.motion),
