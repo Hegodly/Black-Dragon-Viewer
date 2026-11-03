@@ -287,3 +287,18 @@ It remains possible that the service rejects KAMI's application or
 other authentication details. This commit does not silently switch
 to web SSO, disable TLS verification, downgrade encryption, impersonate
 another viewer, retry automatically, or log credential-bearing traffic.
+
+## KAMI DIAG R5 / transport-stage diagnostics
+
+R5 distinguishes WinHTTP errors raised **sending the login POST**,
+**receiving the HTTP response**, **reading the HTTP status**, and
+**reading a successful response body**. A numeric Windows error code
+is recorded for the stage, without disclosing the request body,
+credentials, any response body, machine identifiers, or cap tokens.
+The persistent HTTP 400 remains separately displayed.
+
+Microsoft defines error 12152 as an invalid server response, not as
+proof of a malformed outgoing XML-RPC document. R5 does not claim a
+live login fix, force different TLS protocols, spoof the SL viewer
+identity, bypass authentication, or retry real credentials.
+All tests are local/CI using synthetic values.
