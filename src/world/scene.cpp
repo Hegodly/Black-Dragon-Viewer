@@ -1,4 +1,5 @@
 #include "kami/world/scene.hpp"
+#include "kami/features/rig.hpp"
 #include <algorithm>
 #include <cmath>
 #include <array>
@@ -58,7 +59,19 @@ void patch_triangle(std::vector<Vertex>& out,P a,P b,P c,
                        point.x*.18f,point.z*.18f,region});
     }
 }
-void physics_patch(std::vector<Vertex>& out,P center,P radius,C color,float region) {
+void physics_patch(std::vector<Vertex>& out,P center,P radius,C color,
+                   float region,rig::Joint joint) {
+    // Four-influence GPU skinning; assign an 80/20 body-part/parent blend.
+    rig::Packed packed{};
+    const std::uint8_t parent=joint==rig::Joint::LeftPec||
+        joint==rig::Joint::RightPec?
+        static_cast<std::uint8_t>(rig::Joint::Chest):
+        static_cast<std::uint8_t>(rig::Joint::Pelvis);
+    const rig::Influences influences{{
+        static_cast<std::uint8_t>(joint),parent,0,0
+    },{.8f,.2f,0.f,0.f}};
+    if(!rig::pack_influences(influences,packed))return;
+    const std::size_t first=out.size();
     constexpr int bands=6,slices=10;
     constexpr float pi=3.14159265358979323846f;
     auto point=[&](int row,int column)->P {
@@ -76,6 +89,10 @@ void physics_patch(std::vector<Vertex>& out,P center,P radius,C color,float regi
         // Exclude degenerate triangles at the north and south poles.
         if(y!=bands-1)patch_triangle(out,a,b,cc,center,radius,color,region);
         if(y!=0)patch_triangle(out,a,cc,d,center,radius,color,region);
+    }
+    for(std::size_t i=first;i<out.size();++i) {
+        out[i].bone_indices=packed.joints;
+        out[i].bone_weights=packed.weights;
     }
 }
 float height(float x,float z) {
@@ -121,15 +138,15 @@ SceneMesh build_test_scene(unsigned divisions) {
     // Slightly inset surfaces make all three physics regions visible in DX12,
     // including when the movement system is running at very high frame rates.
     physics_patch(scene.vertices,{-.225f,2.03f,.268f},{.18f,.17f,.16f},
-                  {.36f,.78f,.91f},1.f);
+                  {.36f,.78f,.91f},1.f,rig::Joint::LeftPec);
     physics_patch(scene.vertices,{ .225f,2.03f,.268f},{.18f,.17f,.16f},
-                  {.36f,.78f,.91f},1.f);
+                  {.36f,.78f,.91f},1.f,rig::Joint::RightPec);
     physics_patch(scene.vertices,{0.f,1.49f,.263f},{.27f,.29f,.15f},
-                  {.57f,.89f,.73f},2.f);
+                  {.57f,.89f,.73f},2.f,rig::Joint::Belly);
     physics_patch(scene.vertices,{-.22f,1.30f,-.265f},{.19f,.21f,.16f},
-                  {.66f,.57f,.92f},3.f);
+                  {.66f,.57f,.92f},3.f,rig::Joint::Butt);
     physics_patch(scene.vertices,{ .22f,1.30f,-.265f},{.19f,.21f,.16f},
-                  {.66f,.57f,.92f},3.f);
+                  {.66f,.57f,.92f},3.f,rig::Joint::Butt);
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
