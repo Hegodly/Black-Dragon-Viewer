@@ -23,3 +23,6 @@ The offline DX12 World screen uses per-user persisted Quality Preset, 50/75/100%
 
 ## DX12 texture upload milestone
 KAMI's new independent renderer uploads a procedural 64x64 RGBA material texture using D3D12 GPU/default and CPU/upload resources, DXGI copyable footprints, GPU copy commands, resource barriers, an SRV descriptor table and HLSL filtered texture sampling. Real SL image decoding/asset streaming remains a separate integration milestone. Device memory lifetime and synchronization require validation with GPU debugging before release.
+
+## Windows GPU end-to-end smoke test
+Original executable KAMI-DX12-Smoke.exe exercises the actual DX12 viewport creation, shader/cache PSOs, PBR and shadow rendering, sampled material upload, dynamic graphics settings, camera and resize. CI marks only unsupported headless-display cases SKIPPED, not a fake rendering PASS. End-to-end rendered appearance on consumer hardware remains to be verified.
