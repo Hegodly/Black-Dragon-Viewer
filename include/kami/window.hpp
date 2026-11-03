@@ -12,6 +12,7 @@
 #include "kami/features/telemetry.hpp"
 #include "kami/features/creator_studio.hpp"
 #include "kami/features/photo_studio.hpp"
+#include "kami/features/messenger.hpp"
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
@@ -27,6 +28,7 @@ public:
 private:
     static LRESULT CALLBACK dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     static LRESULT CALLBACK viewport_dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+    static LRESULT CALLBACK messenger_edit_dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     LRESULT handle(UINT message, WPARAM wp, LPARAM lp);
     LRESULT viewport_handle(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     [[nodiscard]] bool create_resources();
@@ -42,12 +44,21 @@ private:
     void advance_photo(unsigned row);
     void open_creator_obj();
     void save_photo_png();
+    void update_messenger_composer();
+    void messenger_send();
+    void messenger_demo_reply();
+    void messenger_select(messenger::Channel channel);
+
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
     void draw_interface(float width, float height, const ui::Palette& palette);
 
     HWND hwnd_ = nullptr;
     HWND viewport_ = nullptr;
+    HWND messenger_edit_ = nullptr;
+    WNDPROC messenger_edit_original_ = nullptr;
+    HBRUSH messenger_edit_brush_ = nullptr;
+    bool messenger_edit_sync_ = false;
     bool world_initialized_ = false;
     bool world_ready_ = false;
     world::Renderer world_renderer_;
@@ -73,6 +84,7 @@ private:
     unsigned photo_shot_ = 0;
     std::wstring photo_message_ = L"DX12 live preview - capture PNG to save.";
     world::CaptureStatus prior_capture_=world::CaptureStatus::Idle;
+    messenger::Model messenger_{};
     bool light_ = false;
     unsigned page_ = 0;
     protocol::Session session_;
@@ -83,5 +95,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> title_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> body_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> small_font_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> messenger_centered_font_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> messenger_centered_small_;
 };
 }

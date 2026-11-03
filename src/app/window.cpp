@@ -13,11 +13,13 @@
 #include <commdlg.h>
 #include <filesystem>
 #include <utility>
+#include <cwchar>
 
 namespace kami::app {
 namespace {
 constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_Original_Window";
 constexpr wchar_t kViewportClassName[] = L"KAMI_Native_Camera_Viewport";
+constexpr int kMessengerEditId=4101;
 constexpr std::array<std::wstring_view, 8> kPages = {
     L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS",
     L"CREATOR STUDIO", L"PHOTO STUDIO"
@@ -70,7 +72,15 @@ bool Window::create(HINSTANCE instance, int show) {
     if (FAILED(font(42.f, DWRITE_FONT_WEIGHT_BOLD, hero_font_)) ||
         FAILED(font(23.f, DWRITE_FONT_WEIGHT_SEMI_BOLD, title_font_)) ||
         FAILED(font(17.f, DWRITE_FONT_WEIGHT_NORMAL, body_font_)) ||
-        FAILED(font(13.f, DWRITE_FONT_WEIGHT_NORMAL, small_font_))) return false;
+        FAILED(font(13.f, DWRITE_FONT_WEIGHT_NORMAL, small_font_)) ||
+        FAILED(font(16.f, DWRITE_FONT_WEIGHT_NORMAL, messenger_centered_font_)) ||
+        FAILED(font(12.f, DWRITE_FONT_WEIGHT_MEDIUM, messenger_centered_small_)))
+        return false;
+    messenger_centered_font_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    messenger_centered_font_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    messenger_centered_font_->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+    messenger_centered_small_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    messenger_centered_small_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
     WNDCLASSEXW descriptor{};
     descriptor.cbSize = sizeof(descriptor);
@@ -98,6 +108,23 @@ bool Window::create(HINSTANCE instance, int show) {
         CW_USEDEFAULT, CW_USEDEFAULT, 1200, 770,
         nullptr, nullptr, instance, this);
     if (!hwnd_) return false;
+    messenger_edit_=CreateWindowExW(0,L"EDIT",L"",
+        WS_CHILD|WS_TABSTOP|ES_AUTOHSCROLL,
+        0,0,10,30,hwnd_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMessengerEditId)),
+        instance,nullptr);
+    if(!messenger_edit_)return false;
+    SetWindowLongPtrW(messenger_edit_,GWLP_USERDATA,
+                      reinterpret_cast<LONG_PTR>(this));
+    messenger_edit_original_=reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(messenger_edit_,GWLP_WNDPROC,
+                           reinterpret_cast<LONG_PTR>(&Window::messenger_edit_dispatch)));
+    if(!messenger_edit_original_)return false;
+    (void)SendMessageW(messenger_edit_,EM_LIMITTEXT,512,0);
+    (void)SendMessageW(messenger_edit_,WM_SETFONT,
+        reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),TRUE);
+    messenger_edit_brush_=CreateSolidBrush(RGB(27,40,64));
+    if(!messenger_edit_brush_)return false;
 
     const BOOL dark = light_ ? FALSE : TRUE;
     (void)DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
@@ -133,6 +160,19 @@ LRESULT CALLBACK Window::viewport_dispatch(HWND hwnd, UINT message, WPARAM wp, L
     }
     return app?app->viewport_handle(hwnd,message,wp,lp):
                DefWindowProcW(hwnd,message,wp,lp);
+}
+
+LRESULT CALLBACK Window::messenger_edit_dispatch(HWND hwnd,UINT message,
+                                                   WPARAM wp,LPARAM lp) {
+    auto* self=reinterpret_cast<Window*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));
+    if(self && message==WM_KEYDOWN && wp==VK_RETURN) {
+        self->messenger_send();
+        return 0;
+    }
+    if(self && message==WM_CHAR && wp==L'\r')return 0;
+    return self && self->messenger_edit_original_?
+        CallWindowProcW(self->messenger_edit_original_,hwnd,message,wp,lp):
+        DefWindowProcW(hwnd,message,wp,lp);
 }
 
 LRESULT Window::viewport_handle(HWND window, UINT message, WPARAM wp, LPARAM lp) {
@@ -189,6 +229,28 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_SIZE:
         resize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp)));
         return 0;
+    case WM_CTLCOLOREDIT:
+        if(reinterpret_cast<HWND>(lp)==messenger_edit_) {
+            const HDC dc=reinterpret_cast<HDC>(wp);
+            SetTextColor(dc,light_?RGB(18,36,58):RGB(237,244,255));
+            SetBkColor(dc,light_?RGB(247,250,255):RGB(27,40,64));
+            return reinterpret_cast<LRESULT>(messenger_edit_brush_);
+        }
+        break;
+    case WM_COMMAND:
+        if(LOWORD(wp)==kMessengerEditId && HIWORD(wp)==EN_CHANGE &&
+           !messenger_edit_sync_ && messenger_edit_) {
+            const int count=GetWindowTextLengthW(messenger_edit_);
+            if(count>=0 && count<=512) {
+                std::wstring value(static_cast<std::size_t>(count)+1,L'\0');
+                const int copied=GetWindowTextW(messenger_edit_,value.data(),count+1);
+                value.resize(static_cast<std::size_t>(std::max(0,copied)));
+                (void)messenger_.set_draft(std::move(value));
+                InvalidateRect(hwnd_,nullptr,FALSE);
+            }
+            return 0;
+        }
+        break;
     case WM_LBUTTONDOWN:
         SetFocus(hwnd_);
         click(static_cast<float>(GET_X_LPARAM(lp)),
@@ -273,6 +335,8 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND:
         return 1;
     case WM_DESTROY:
+        if(messenger_edit_brush_){DeleteObject(messenger_edit_brush_);messenger_edit_brush_=nullptr;}
+        messenger_edit_=nullptr;
         if(high_resolution_timer_) (void)timeEndPeriod(1);
         (void)KillTimer(hwnd_, 202);
         world_renderer_.shutdown();
@@ -303,6 +367,7 @@ void Window::resize(UINT width, UINT height) {
             target_.Reset();
     }
     update_viewport();
+    update_messenger_composer();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -601,7 +666,110 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         return;
     }
 
-    if(page_==2 || page_==3 || page_==4) {
+    if(page_==4) {
+        const float railX=contentX+18.f;
+        const float panelX=contentX+255.f;
+        const float panelW=std::max(280.f,contentWidth-277.f);
+        const float cardHeight=height-178.f;
+        round_rect(box(contentX,90,contentWidth,cardHeight),29.f,p.elevated);
+        // Separate conversation rail: readable but unmistakably offline.
+        round_rect(box(railX,109,220.f,cardHeight-38.f),22.f,p.surface);
+        label(L"KAMI",box(railX+16,126,188,30),
+              messenger_centered_font_.Get(),p.text);
+        label(L"M E S S E N G E R",box(railX+15,154,190,22),
+              messenger_centered_small_.Get(),p.accent);
+        const wchar_t* tabs[]={L"DESIGN PREVIEW",L"NEARBY CHAT",L"GROUPS"};
+        const wchar_t* subtitles[]={L"Local demo",L"Not connected",L"Not connected"};
+        for(unsigned i=0;i<3;++i) {
+            const float top=211.f+76.f*static_cast<float>(i);
+            const bool selected=static_cast<unsigned>(messenger_.active())==i;
+            round_rect(box(railX+13,top,194,67),16.f,
+                       selected?p.accent_soft:p.elevated);
+            label(tabs[i],box(railX+25,top+9,172,28),
+                  messenger_centered_font_.Get(),selected?p.text:p.muted);
+            label(subtitles[i],box(railX+25,top+39,172,20),
+                  messenger_centered_small_.Get(),selected?p.accent:p.muted);
+        }
+        if(messenger_.can_send()) {
+            const float replyTop=std::min(474.f,height-196.f);
+            round_rect(box(railX+14,replyTop,192,38),13.f,p.accent_soft);
+            label(L"ADD DEMO REPLY",box(railX+23,replyTop+4,174,29),
+                  messenger_centered_small_.Get(),p.accent);
+        }
+        label(L"CONNECTION: OFFLINE",box(railX+20,height-153,181,25),
+              messenger_centered_small_.Get(),p.muted);
+        label(L"No resident data",box(railX+20,height-131,181,21),
+              messenger_centered_small_.Get(),p.muted);
+
+        label(messenger::channel_title(messenger_.active()),
+              box(panelX+12,115,panelW-24,37),
+              messenger_centered_font_.Get(),p.text);
+        label(messenger::channel_subtitle(messenger_.active()),
+              box(panelX+15,150,panelW-30,22),
+              messenger_centered_small_.Get(),p.muted);
+        label(L"NOT CONNECTED TO SECOND LIFE",
+              box(panelX+15,176,panelW-30,24),
+              messenger_centered_small_.Get(),p.accent);
+
+        if(messenger_.can_send()) {
+            // Paint the latest entries backward so the newest are always visible.
+            // Center text *within* bubbles; keep incoming/outgoing sides distinct.
+            const auto& chat=messenger_.messages();
+            float cursor=height-197.f;
+            for(std::size_t offset=0;offset<chat.size();++offset) {
+                const auto& msg=chat[chat.size()-1-offset];
+                const bool system=msg.direction==messenger::Direction::System;
+                const float bubblesW=std::min(395.f,panelW-45.f);
+                const float bubbleH=system?33.f:
+                    (msg.text.size()>96?83.f:msg.text.size()>49?66.f:49.f);
+                const float needed=bubbleH+(system?13.f:25.f);
+                cursor-=needed;
+                if(cursor<207.f)break;
+                if(system) {
+                    label(msg.text,box(panelX+20,cursor,panelW-40,bubbleH),
+                          messenger_centered_small_.Get(),p.muted);
+                    continue;
+                }
+                const float px=msg.direction==messenger::Direction::Outgoing?
+                    panelX+panelW-bubblesW-22.f:panelX+22.f;
+                round_rect(box(px,cursor,bubblesW,bubbleH),18.f,
+                           msg.direction==messenger::Direction::Outgoing?
+                           p.accent_soft:p.surface);
+                label(msg.text,box(px+14,cursor+5,bubblesW-28,bubbleH-10),
+                      messenger_centered_font_.Get(),p.text);
+                const unsigned hh=(msg.clock_minutes/60U)%24U;
+                const unsigned mm=msg.clock_minutes%60U;
+                wchar_t timestamp[48]{};
+                (void)swprintf_s(timestamp,L"LOCAL DEMO  %02u:%02u",hh,mm);
+                label(timestamp,box(px+10,cursor+bubbleH+3,bubblesW-20,18),
+                      messenger_centered_small_.Get(),p.muted);
+            }
+            round_rect(box(panelX+11,height-164.f,panelW-23.f,58.f),
+                       19.f,p.surface);
+            const bool hasText=messenger_.draft().find_first_not_of(L" \t")!=
+                               std::wstring::npos;
+            round_rect(box(panelX+panelW-115.f,height-158.f,103.f,46.f),
+                       15.f,hasText?p.accent_soft:p.elevated);
+            label(L"PREVIEW",box(panelX+panelW-109.f,height-152.f,91.f,34.f),
+                  messenger_centered_small_.Get(),hasText?p.accent:p.muted);
+            label(L"Text stays local  /  No deliveries or read receipts",
+                  box(panelX+16,height-96.f,panelW-31.f,25.f),
+                  messenger_centered_small_.Get(),p.muted);
+        } else {
+            label(L"NO LIVE MESSAGES AVAILABLE",
+                  box(panelX+28,285,panelW-56,36),
+                  messenger_centered_font_.Get(),p.text);
+            label(L"This channel requires KAMI's authenticated network layer.",
+                  box(panelX+30,323,panelW-60,70),
+                  messenger_centered_small_.Get(),p.muted);
+            label(L"No messages have been fetched or sent.",
+                  box(panelX+25,401,panelW-50,30),
+                  messenger_centered_small_.Get(),p.accent);
+        }
+        return;
+    }
+
+    if(page_==2 || page_==3) {
         round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
         label(kPages[page_],box(contentX+28,111,contentWidth-55,42),
               title_font_.Get(),p.text);
@@ -739,6 +907,10 @@ void Window::toggle_appearance() {
     settings::set_light_appearance(light_);
     const BOOL dark = light_ ? FALSE : TRUE;
     (void)DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
+    if(messenger_edit_brush_)DeleteObject(messenger_edit_brush_);
+    messenger_edit_brush_=CreateSolidBrush(
+        light_?RGB(247,250,255):RGB(27,40,64));
+    if(messenger_edit_)InvalidateRect(messenger_edit_,nullptr,TRUE);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -766,6 +938,7 @@ void Window::select_page(unsigned index) {
     fps_epoch_=std::chrono::steady_clock::now();
     next_frame_={};
     update_viewport();
+    update_messenger_composer();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -1005,6 +1178,55 @@ void Window::save_photo_png() {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+void Window::update_messenger_composer() {
+    if(!messenger_edit_||!hwnd_)return;
+    if(page_!=4||!messenger_.can_send()) {
+        ShowWindow(messenger_edit_,SW_HIDE);
+        return;
+    }
+    RECT rect{};GetClientRect(hwnd_,&rect);
+    const float contentWidth=static_cast<float>(rect.right)-305.f;
+    const float panelX=279.f+255.f;
+    const float panelW=std::max(280.f,contentWidth-277.f);
+    const int x=static_cast<int>(panelX+30.f);
+    const int y=static_cast<int>(rect.bottom-144);
+    const int width=std::max(145,static_cast<int>(panelW-158.f));
+    MoveWindow(messenger_edit_,x,y,width,26,TRUE);
+    messenger_edit_sync_=true;
+    SetWindowTextW(messenger_edit_,messenger_.draft().c_str());
+    messenger_edit_sync_=false;
+    ShowWindow(messenger_edit_,SW_SHOW);
+}
+void Window::messenger_select(messenger::Channel channel) {
+    messenger_.select(channel);
+    update_messenger_composer();
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::messenger_send() {
+    if(!messenger_.can_send()||!messenger_edit_)return;
+    const int len=GetWindowTextLengthW(messenger_edit_);
+    if(len<0||len>512)return;
+    std::wstring text(static_cast<std::size_t>(len)+1,L'\0');
+    const int count=GetWindowTextW(messenger_edit_,text.data(),len+1);
+    text.resize(static_cast<std::size_t>(std::max(count,0)));
+    if(!messenger_.set_draft(std::move(text)))return;
+    SYSTEMTIME now{};GetLocalTime(&now);
+    const unsigned minutes=static_cast<unsigned>(now.wHour)*60U+now.wMinute;
+    if(messenger_.send_local(minutes)) {
+        messenger_edit_sync_=true;
+        SetWindowTextW(messenger_edit_,L"");
+        messenger_edit_sync_=false;
+    }
+    SetFocus(messenger_edit_);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::messenger_demo_reply() {
+    SYSTEMTIME now{};GetLocalTime(&now);
+    const unsigned minutes=static_cast<unsigned>(now.wHour)*60U+now.wMinute;
+    if(messenger_.add_demo_reply(minutes))
+        InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
 void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
@@ -1012,6 +1234,31 @@ void Window::click(float x, float y) {
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
         return;
+    }
+    if(page_==4) {
+        const float contentWidth=width-305.f;
+        const float panelX=279.f+255.f;
+        const float panelW=std::max(280.f,contentWidth-277.f);
+        if(x>=310.f && x<=504.f) {
+            for(unsigned i=0;i<3;++i) {
+                const float top=211.f+76.f*static_cast<float>(i);
+                if(y>=top && y<top+67.f) {
+                    messenger_select(static_cast<messenger::Channel>(i));
+                    return;
+                }
+            }
+            const float replyTop=std::min(474.f,
+                static_cast<float>(client.bottom)-196.f);
+            if(messenger_.can_send()&&y>=replyTop&&y<replyTop+38.f){
+                messenger_demo_reply();return;
+            }
+        }
+        if(messenger_.can_send() &&
+           x>=panelX+panelW-115.f && x<panelX+panelW-12.f &&
+           y>=static_cast<float>(client.bottom)-158.f &&
+           y<static_cast<float>(client.bottom)-112.f) {
+            messenger_send();return;
+        }
     }
     if(page_==6 && x>=width-341.f && x<=width-51.f) {
         if(y>=249.f && y<292.f) { open_creator_obj(); return; }
