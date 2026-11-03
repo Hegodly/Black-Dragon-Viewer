@@ -35,7 +35,13 @@ int main(){
        classify_login_http_body("Bad Request")!=L"plain-text error response"||
        describe_login_http_response(true,"",0)!=L"empty response"||
        describe_login_http_response(false,"",12030)!=
-           L"unavailable (WinHTTP 12030)")return 17;
+           L"unavailable (WinHTTP 12030)"||
+       classify_login_http_content_type(L"TEXT/HTML; charset=UTF-8")!=
+           L"HTML error page (Content-Type)"||
+       classify_login_http_content_type(L"application/json")!=
+           L"JSON response (Content-Type)"||
+       classify_login_http_content_type(L"application/octet-stream")!=L"")
+           return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",
