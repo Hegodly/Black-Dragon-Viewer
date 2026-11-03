@@ -287,3 +287,26 @@ It remains possible that the service rejects KAMI's application or
 other authentication details. This commit does not silently switch
 to web SSO, disable TLS verification, downgrade encryption, impersonate
 another viewer, retry automatically, or log credential-bearing traffic.
+
+## Live simulator seed capability negotiation (November 3, 2026)
+
+The current independent KAMI core can authenticate and receive a verified
+LLUDP RegionHandshake plus a session-identified AgentMovementComplete.
+It does NOT yet load a live scene.
+
+After that verified simulator movement state, KAMI now launches a bounded
+asynchronous HTTPS POST to the seed capability URL received *only* from
+the authenticated login reply. It sends a small LLSD XML array requesting
+EventQueueGet, SimulatorFeatures, ViewerAsset and GetMesh. Seed replies
+are parsed with hardened MSXML6, DTD/external entities prohibited, a 1 MiB
+body cap, duplicate-key rejection and HTTPS URL validation. The
+EventQueueGet URL is accepted only from official Second Life/Linden Lab
+hostnames and never printed, logged or retained beyond this diagnostic.
+The UI can then distinguish "REQUESTING SIMULATOR SEED CAPS",
+"SEED CAPS RECEIVED; EVENT QUEUE GRANTED (NOT POLLING)",
+"EVENT QUEUE NOT GRANTED", or an explicit HTTPS/HTTP/parse failure.
+
+**No event queue or live asset pipeline is implemented in this change.**
+It is a narrow, real-world validation of the next dependency before
+rendering live regions. No fabricated simulator results or user logins are
+used in CI; offline tests use synthetic LLSD responses.
