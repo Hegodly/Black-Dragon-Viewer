@@ -45,6 +45,11 @@ assert "make_material_texture()" in renderer
 assert "CopyTextureRegion" in renderer
 assert "GetCopyableFootprints" in renderer
 assert "material_texture_" in renderer
-assert "NumDescriptors=2" in (root/"src/world/shader_cache.cpp").read_text(encoding="utf-8")
+# t0 shadow map, t1 albedo, t2 dynamic skinned-mesh bone palette
+assert "NumDescriptors=3" in (root/"src/world/shader_cache.cpp").read_text(encoding="utf-8")
+assert "skinPalette" in shader and "BLENDINDICES" in shader
+assert "make_skin_palette()" in renderer
+assert (root/"src/features/rig.cpp").is_file()
+assert (root/"src/features/rig_physics.cpp").is_file()
 assert "ggx_distribution" in shader
 print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")
