@@ -516,13 +516,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       box(panel+19,470,290,25),small_font_.Get(),p.text);
                 label(L"Source polygons: "+std::to_wstring(creator_preview_.source_polygons),
                       box(panel+19,498,290,25),small_font_.Get(),p.text);
-                // Clearly-labelled offline estimate, not an SL upload-cost quote.
-                const auto estimate=viewer::estimate_scene_cost(
-                    2048,2048,2,creator_preview_.audit.triangles,512);
-                label(L"2 x 2K textures + mesh estimate:",
-                      box(panel+19,532,290,23),small_font_.Get(),p.muted);
-                label(std::to_wstring(estimate.total_mb)+L" MiB uncompressed",
-                      box(panel+19,559,290,24),small_font_.Get(),p.accent);
+                if(height>=720.f) {
+                    // Clearly labelled offline estimate, not an SL fee quote.
+                    const auto estimate=viewer::estimate_scene_cost(
+                        2048,2048,2,creator_preview_.audit.triangles,512);
+                    label(L"2 x 2K textures + mesh estimate:",
+                          box(panel+19,532,290,23),small_font_.Get(),p.muted);
+                    label(std::to_wstring(estimate.total_mb)+L" MiB uncompressed",
+                          box(panel+19,559,290,24),small_font_.Get(),p.accent);
+                }
             } else {
                 label(L"NO MODEL SELECTED",box(panel+19,398,290,31),
                       body_font_.Get(),p.muted);
@@ -554,8 +556,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 photo_shot_==2?L"DETAIL":L"WIDE"
             };
             for(unsigned i=0;i<7;++i) {
-                const float y=300.f+41.f*static_cast<float>(i);
-                round_rect(box(panel+16,y,294,38),10.f,p.elevated);
+                const float y=300.f+32.f*static_cast<float>(i);
+                round_rect(box(panel+16,y,294,30),9.f,p.elevated);
                 label(names[i],box(panel+27,y+4,150,26),
                       small_font_.Get(),p.muted);
                 label(values[i],box(panel+174,y+5,130,26),
@@ -1024,8 +1026,8 @@ void Window::click(float x, float y) {
     if(page_==7 && x>=width-341.f && x<=width-51.f) {
         if(y>=245.f && y<288.f) { save_photo_png(); return; }
         for(unsigned i=0;i<7;++i) {
-            const float top=300.f+41.f*static_cast<float>(i);
-            if(y>=top && y<top+38.f) { advance_photo(i); return; }
+            const float top=300.f+32.f*static_cast<float>(i);
+            if(y>=top && y<top+30.f) { advance_photo(i); return; }
         }
     }
     if(page_==5 && x>=width-405.f && x<width-239.f && y>=106.f && y<154.f) {
