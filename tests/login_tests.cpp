@@ -64,6 +64,10 @@ int main(){
        valid.find("<name>address_size</name><value><int>64</int>")==std::string::npos||
        valid.find("<name>last_exec_event</name><value><int>0</int>")==std::string::npos||
        valid.find("<name>mfa_hash</name>")==std::string::npos||
+       valid.find("<name>host_id</name>")==std::string::npos||
+       valid.find("<name>platform_version</name>")==std::string::npos||
+       valid.find("<name>platform_string</name>")==std::string::npos||
+       valid.find("<value><string>adult_compliant</string></value>")==std::string::npos||
        valid.find("<name>token</name>")==std::string::npos||
        valid.find("<name>viewer_digest</name>")!=std::string::npos||
        valid.find("<name>agree_to_tos</name><value><boolean>0</boolean>")==std::string::npos||
