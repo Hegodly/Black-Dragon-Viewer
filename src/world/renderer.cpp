@@ -476,7 +476,7 @@ void Renderer::set_graphics(graphics::Settings settings) {
 
 void Renderer::reset_avatar() noexcept {
     avatar_.reset(sample_test_terrain_height);
-    body_physics_.reset();
+    rig_physics_.reset();
     camera_.set_subject({avatar_.state().x,avatar_.state().y,avatar_.state().z},
                         avatar_.state().heading);
     camera_.reset();
