@@ -14,7 +14,7 @@ target_compile_definitions(kami_sl_login_identity PRIVATE
 target_link_libraries(kami_sl_login_identity PRIVATE bcrypt ole32 oleaut32 wbemuuid)
 set_target_properties(kami_sl_login_identity PROPERTIES
     OUTPUT_NAME "KAMI_SL_Login_Identity")
-add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/login.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
+add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/seed_caps.cpp src/protocol/login.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
 target_include_directories(kami_core PUBLIC include)
 target_compile_definitions(kami_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(kami_core PUBLIC kami_sl_login_identity d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
@@ -172,3 +172,8 @@ add_executable(kami_sim_loopback_tests tests/simulator_transport_tests.cpp)
 target_link_libraries(kami_sim_loopback_tests PRIVATE kami_core)
 add_test(NAME KamiSimulatorWinSockLoopbackHandshake COMMAND kami_sim_loopback_tests)
 set_tests_properties(KamiSimulatorWinSockLoopbackHandshake PROPERTIES TIMEOUT 12)
+
+add_executable(kami_seed_caps_tests tests/seed_caps_tests.cpp)
+target_link_libraries(kami_seed_caps_tests PRIVATE kami_core)
+add_test(NAME KamiAuthenticatedSeedCapsXMLAndURLValidation
+    COMMAND kami_seed_caps_tests)
