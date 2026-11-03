@@ -164,6 +164,9 @@ int main(){
        login_http_diagnostic(429).find(L"retry later")==std::wstring::npos||
        login_http_diagnostic(302).find(L"redirect blocked")==std::wstring::npos)
         return 11;
+    // The test DOM is a COM object; release it before CoUninitialize.
+    // Keeping its final Release until after COM teardown crashes in CI.
+    request_doc.Reset();
     CoUninitialize();
     return 0;
 }
