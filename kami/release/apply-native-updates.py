@@ -88,7 +88,7 @@ data = data[:begin] + '''    // KAMI release metadata is checked off the UI thre
 
 ''' + data[end:]
 
-once('#if LL_WINDOWS\\n    LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");', '''#if LL_WINDOWS
+once('#if LL_WINDOWS\n    LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");', '''#if LL_WINDOWS
     getChild<LLButton>("kami_test_update")->setClickedCallback(
         [](LLUICtrl*, const LLSD&) {
             LLNotificationsUtil::add("KAMITestUpdateConfirm", LLSD(), LLSD(),
@@ -96,7 +96,7 @@ once('#if LL_WINDOWS\\n    LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>
         });
     LLCheckBoxCtrl* soundtrack = getChild<LLCheckBoxCtrl>("kami_login_music_enabled");''')
 
-once('void LLPanelLogin::draw()\\n{\\n#if LL_WINDOWS\\n',
+once('void LLPanelLogin::draw()\n{\n#if LL_WINDOWS\n',
 '''void LLPanelLogin::draw()
 {
 #if LL_WINDOWS
