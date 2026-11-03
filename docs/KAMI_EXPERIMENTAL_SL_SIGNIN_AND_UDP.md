@@ -170,11 +170,12 @@ it was not a real finding. The app now reports "Request declined (KAMI DIAG R2)"
 and retains a safe response **format** category, when readable. The new
 marker lets testers distinguish the updated executable from prior builds.
 
-The login POST declares acceptance of XML responses, and offline regression
-tests now parse the entire generated XML-RPC login document using MSXML with
-DTD/external entity handling disabled (in addition to existing serialization
-field checks). These tests verify XML syntax and local protocol structure,
-**not** live Second Life server acceptance.
+The login POST now explicitly accepts XML responses. Offline regression
+tests check generated login fields, required XML-RPC types and error status
+messages. A proposed full-document MSXML test destabilized CI and was removed;
+the existing response parser security tests remain. These tests **do not**
+prove that the server will accept the request or that the serialized body
+is compatible with its current implementation.
 
 For privacy, avoid publishing any real authentication XML, raw HTTP response
 body or token. If HTTP 400 recurs, share only the displayed status and category.
