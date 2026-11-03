@@ -2,6 +2,7 @@
 #include "kami/protocol/bootstrap.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -63,9 +64,29 @@ struct InventoryEntry {
     std::wstring name;
     std::uint32_t permissions=0;
 };
+// Appearance is a validated list of references; actual SL asset decoding,
+// Bento skeleton mapping and textures remain separate implementation stages.
+struct AvatarAttachment {
+    std::string object_id;
+    std::string mesh_asset_id;
+    bool rigged=false;
+};
+struct AvatarManifest {
+    std::string avatar_id;
+    std::string body_mesh_asset_id;
+    std::string physics_wearable_asset_id;
+    std::vector<std::string> texture_asset_ids;
+    std::vector<AvatarAttachment> attachments;
+};
 class LiveData final {
 public:
     explicit LiveData(const Bootstrap& session) noexcept:session_(session){}
+    [[nodiscard]] bool apply_avatar(AvatarManifest value,
+                                    bool verified_appearance_update);
+    [[nodiscard]] const AvatarManifest* avatar() const noexcept {
+        return session_.online() && avatar_generation_==session_.generation()&&
+            avatar_.has_value()?&*avatar_:nullptr;
+    }
     [[nodiscard]] bool apply_objects(std::vector<WorldObject> value,
                                      bool verified_simulator_data);
     [[nodiscard]] bool apply_inventory(std::vector<InventoryEntry> value,
@@ -85,8 +106,10 @@ public:
     }
 private:
     const Bootstrap& session_;
-    std::uint64_t objects_generation_=0,inventory_generation_=0;
+    std::uint64_t objects_generation_=0,inventory_generation_=0,
+                  avatar_generation_=0;
     std::vector<WorldObject> objects_;
     std::vector<InventoryEntry> inventory_;
+    std::optional<AvatarManifest> avatar_;
 };
 } // namespace kami::protocol
