@@ -18,7 +18,7 @@ void write(HKEY key,const wchar_t* name,DWORD number) {
 }
 Settings normalize(Settings value) noexcept {
     const auto preset=static_cast<std::uint32_t>(value.preset);
-    if(preset>2) value.preset=Preset::Balanced;
+    if(preset>3) value.preset=Preset::Balanced;
     switch(value.render_scale_percent) {
         case 50: case 75: case 100: break;
         default: value.render_scale_percent=100; break;
@@ -26,6 +26,10 @@ Settings normalize(Settings value) noexcept {
     switch(value.fps_limit) {
         case 0: case 30: case 60: case 120: case 144: break;
         default: value.fps_limit=60; break;
+    }
+    switch(value.target_fps) {
+        case 30: case 60: case 90: case 120: case 144: break;
+        default: value.target_fps=60; break;
     }
     return value;
 }
@@ -41,6 +45,11 @@ Settings load() {
     settings.pbr=read(key,L"PBR",1)!=0;
     settings.animate_avatar=read(key,L"AvatarPreviewMotion",1)!=0;
     settings.shadows=read(key,L"Shadows",1)!=0;
+    settings.auto_quality=read(key,L"AutoQuality",0)!=0;
+    settings.target_fps=read(key,L"TargetFps",60);
+    settings.atmosphere_haze=read(key,L"AtmosphereHaze",0)!=0;
+    settings.contact_ambient=read(key,L"ContactAmbient",1)!=0;
+    settings.diamond_glints=read(key,L"DiamondGlints",1)!=0;
     RegCloseKey(key);
     return normalize(settings);
 }
@@ -56,10 +65,16 @@ void save(Settings settings) noexcept {
     write(key,L"PBR",settings.pbr?1U:0U);
     write(key,L"AvatarPreviewMotion",settings.animate_avatar?1U:0U);
     write(key,L"Shadows",settings.shadows?1U:0U);
+    write(key,L"AutoQuality",settings.auto_quality?1U:0U);
+    write(key,L"TargetFps",settings.target_fps);
+    write(key,L"AtmosphereHaze",settings.atmosphere_haze?1U:0U);
+    write(key,L"ContactAmbient",settings.contact_ambient?1U:0U);
+    write(key,L"DiamondGlints",settings.diamond_glints?1U:0U);
     RegCloseKey(key);
 }
 const wchar_t* preset_label(Preset preset) noexcept {
     switch(preset) {
+        case Preset::Potato: return L"POTATO  /  8x8 TERRAIN";
         case Preset::Performance: return L"PERFORMANCE  /  16x16 TERRAIN";
         case Preset::Balanced: return L"BALANCED  /  32x32 TERRAIN";
         case Preset::Quality: return L"QUALITY  /  64x64 TERRAIN";
