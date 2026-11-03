@@ -51,6 +51,11 @@ assert "skinRows" in shader and "BLENDINDICES" in shader
 assert "make_skin_palette()" in renderer
 assert (root/"src/features/rig.cpp").is_file()
 assert (root/"src/features/rig_physics.cpp").is_file()
+assert (root/"include/kami/features/creator_limits.hpp").is_file()
+creator=(root/"src/features/creator_studio.cpp").read_text(encoding="utf-8")
+assert "kMaxPreviewTriangles" in creator
+assert "skipped_degenerate_triangles" in creator
+assert "Microsoft::WRL::ComPtr<ID3D12Resource> candidate" in renderer
 assert (root/"src/protocol/transport.cpp").is_file()
 assert (root/"src/protocol/bootstrap.cpp").is_file()
 assert (root/"src/protocol/services.cpp").is_file()
