@@ -12,7 +12,11 @@ constexpr std::array<JointInfo,kJointCount> kBones{{
     {"RIGHT_PEC",2,{.225f,.16f,.268f}},
     {"BELLY",1,{0.f,.56f,.263f}},
     {"BUTT",1,{0.f,.36f,-.265f}},
-    {"mHead",2,{0.f,.80f,0.f}}
+    {"mHead",2,{0.f,.80f,0.f}},
+    // KAMI-only procedural cheek helpers. Standard SL fitted rigs generally
+    // use a shared BUTT physics bone; these are not official SL bone names.
+    {"KAMI_LEFT_BUTT",6,{-.22f,0.f,0.f}},
+    {"KAMI_RIGHT_BUTT",6,{.22f,0.f,0.f}}
 }};
 Matrix mul(Matrix a,Matrix b) noexcept {
     Matrix out{};
