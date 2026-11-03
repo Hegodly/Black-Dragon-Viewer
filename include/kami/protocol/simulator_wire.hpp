@@ -12,6 +12,15 @@ enum class Inbound : std::uint8_t {
     Invalid, Other, StartPing, RegionHandshake, AgentMovementComplete,
     PacketAck
 };
+// Real simulator-sourced data, not a procedural terrain/asset representation.
+// Sanitized to printable ASCII for the diagnostic UI; no raw packet logging.
+struct RegionMetadata {
+    std::string name;
+    float water_height=0.f;
+    bool verified=false;
+};
+[[nodiscard]] bool decode_region_metadata(
+    const lludp::Packet& packet,RegionMetadata& out) noexcept;
 // UUIDs on the LLUDP wire are RFC/network-order bytes, not little-endian
 // native Windows GUID structures. Avoid accidental endianness corruption.
 [[nodiscard]] bool parse_uuid(std::string_view text,
