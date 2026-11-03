@@ -20,6 +20,7 @@ struct LoginRequest {
 struct LoginResult {
     LoginStatus status=LoginStatus::NotAttempted;
     unsigned http_status=0;
+    std::wstring http_response_kind; // safe response format only, not raw text
     std::wstring message;
     LoginHandoff handoff{};
     std::uint32_t circuit_code=0;
@@ -33,6 +34,8 @@ struct LoginResult {
 // Only a category is returned: never expose untrusted HTTP error bodies.
 [[nodiscard]] std::wstring_view classify_login_http_body(
     std::string_view body) noexcept;
+[[nodiscard]] std::wstring describe_login_http_response(
+    bool read_ok,std::string_view sample,unsigned read_error);
 // No password, seed capability, or account identifier is written to logs.
 [[nodiscard]] bool parse_account_name(std::wstring_view input,
                                       std::string& first,
