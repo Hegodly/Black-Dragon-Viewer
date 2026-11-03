@@ -42,6 +42,7 @@ struct LoginResult {
                                              std::string_view last,
                                              std::string_view hashed_password,
                                              std::string_view mac,
+                                             std::string_view volume_id0,
                                              bool terms_accepted);
 // Parse an actual XML-RPC response with MSXML6 DTD/external entities disabled.
 [[nodiscard]] LoginResult parse_login_xmlrpc(std::string_view xml);
