@@ -31,6 +31,10 @@ LEGACY_ROOT = {
 OBSOLETE_ROOT_SCRIPTS = {"start-without-rtx.cmd", "copy_touched.bat"}
 REQUIRED = [
     "app_settings/settings.xml",
+    "app_settings/kami-updater.ps1",
+    "app_settings/kami-test-updater.ps1",
+    "app_settings/KAMI-Test-Update.zip",
+    "app_settings/KAMI-Test-Update.json",
     "app_settings/settings_blackdragon.xml",
     "app_settings/contributors-source.txt",
     "skins/default/xui/en/panel_login.xml",
