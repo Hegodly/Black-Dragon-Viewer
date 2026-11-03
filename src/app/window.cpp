@@ -13,6 +13,7 @@
 namespace kami::app {
 namespace {
 constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_Original_Window";
+constexpr wchar_t kViewportClassName[] = L"KAMI_Native_Camera_Viewport";
 constexpr std::array<std::wstring_view, 6> kPages = {
     L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS"
 };
@@ -40,7 +41,9 @@ D2D1_RECT_F box(float x, float y, float width, float height) {
 bool Window::create(HINSTANCE instance, int show) {
     light_ = settings::light_appearance();
     graphics_ = graphics::load();
+    camera_settings_ = camera::load();
     world_renderer_.set_graphics(graphics_);
+    world_renderer_.set_camera_settings(camera_settings_);
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
                                   factory_.ReleaseAndGetAddressOf()))) return false;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
@@ -68,6 +71,16 @@ bool Window::create(HINSTANCE instance, int show) {
     descriptor.lpszClassName = kClassName;
     descriptor.style = CS_HREDRAW | CS_VREDRAW;
     if (!RegisterClassExW(&descriptor) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+
+    WNDCLASSEXW viewportClass{};
+    viewportClass.cbSize=sizeof(viewportClass);
+    viewportClass.hInstance=instance;
+    viewportClass.lpfnWndProc=&Window::viewport_dispatch;
+    viewportClass.hCursor=LoadCursorW(nullptr,IDC_CROSS);
+    viewportClass.lpszClassName=kViewportClassName;
+    viewportClass.style=CS_HREDRAW|CS_VREDRAW;
+    if (!RegisterClassExW(&viewportClass) &&
+        GetLastError()!=ERROR_CLASS_ALREADY_EXISTS) return false;
 
     hwnd_ = CreateWindowExW(
         0, kClassName, L"KAMI Beyond Reality  |  Original Core (Development)",
@@ -98,6 +111,60 @@ LRESULT CALLBACK Window::dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
     }
     return instance ? instance->handle(message, wp, lp)
                     : DefWindowProcW(hwnd, message, wp, lp);
+}
+
+LRESULT CALLBACK Window::viewport_dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
+    auto* app=reinterpret_cast<Window*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));
+    if(message==WM_NCCREATE) {
+        const auto* create=reinterpret_cast<CREATESTRUCTW*>(lp);
+        app=static_cast<Window*>(create->lpCreateParams);
+        if(!app) return FALSE;
+        SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(app));
+    }
+    return app?app->viewport_handle(hwnd,message,wp,lp):
+               DefWindowProcW(hwnd,message,wp,lp);
+}
+
+LRESULT Window::viewport_handle(HWND window, UINT message, WPARAM wp, LPARAM lp) {
+    switch(message) {
+    case WM_LBUTTONDOWN:
+        SetFocus(hwnd_);
+        SetCapture(window);
+        camera_dragging_=true;
+        pointer_x_=GET_X_LPARAM(lp);
+        pointer_y_=GET_Y_LPARAM(lp);
+        world_renderer_.set_camera_dragging(true);
+        return 0;
+    case WM_MOUSEMOVE:
+        if(camera_dragging_ && GetCapture()==window) {
+            const int x=GET_X_LPARAM(lp),y=GET_Y_LPARAM(lp);
+            world_renderer_.pointer_move(static_cast<float>(x-pointer_x_),
+                                         static_cast<float>(y-pointer_y_));
+            pointer_x_=x;
+            pointer_y_=y;
+        }
+        return 0;
+    case WM_LBUTTONUP:
+        if(GetCapture()==window) ReleaseCapture();
+        camera_dragging_=false;
+        world_renderer_.set_camera_dragging(false);
+        return 0;
+    case WM_CAPTURECHANGED:
+        camera_dragging_=false;
+        world_renderer_.set_camera_dragging(false);
+        return 0;
+    case WM_MOUSEWHEEL:
+        if(world_ready_)
+            world_renderer_.zoom(GET_WHEEL_DELTA_WPARAM(wp)>0?-.35f:.35f);
+        return 0;
+    case WM_RBUTTONDOWN:
+        SetFocus(hwnd_);
+        world_renderer_.cycle_camera_shoulder();
+        return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    }
+    return DefWindowProcW(window,message,wp,lp);
 }
 
 LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
@@ -133,8 +200,14 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
+        if(page_ == 5 && wp == 'C') {
+            camera_settings_page_ = !camera_settings_page_;
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return 0;
+        }
         if(page_ == 5 && wp >= '1' && wp <= '7') {
-            advance_graphics(static_cast<unsigned>(wp - '1'));
+            if(camera_settings_page_) advance_camera(static_cast<unsigned>(wp-'1'));
+            else advance_graphics(static_cast<unsigned>(wp-'1'));
             return 0;
         }
         if (page_ == 1 && world_ready_) {
@@ -145,6 +218,11 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             case VK_DOWN: world_renderer_.orbit(0.f, -.35f); return 0;
             case 'W': world_renderer_.zoom(-.7f); return 0;
             case 'S': world_renderer_.zoom(.7f); return 0;
+            case 'Q': world_renderer_.cycle_camera_shoulder(); return 0;
+            case 'O': world_renderer_.toggle_cinematic_orbit(); return 0;
+            case 'F': world_renderer_.toggle_camera_focus(); return 0;
+            case 'P': world_renderer_.toggle_camera_precision(); return 0;
+            case 'R': world_renderer_.reset_camera(); return 0;
             }
         }
         if (wp >= VK_F1 && wp <= VK_F6) {
@@ -209,11 +287,11 @@ void Window::update_viewport() {
     const int width=std::max<int>(128, client.right-350);
     const int height=std::max<int>(128, client.bottom-306);
     if (!viewport_) {
-        viewport_=CreateWindowExW(0, L"STATIC", L"",
-            WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
-            x, y, width, height, hwnd_, nullptr,
-            reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(hwnd_, GWLP_HINSTANCE)),
-            nullptr);
+        viewport_=CreateWindowExW(0,kViewportClassName,L"",
+            WS_CHILD | WS_VISIBLE,
+            x,y,width,height,hwnd_,nullptr,
+            reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(hwnd_,GWLP_HINSTANCE)),
+            this);
         if (!viewport_) return;
     }
     MoveWindow(viewport_,x,y,width,height,TRUE);
@@ -270,8 +348,47 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
 
     if(page_ == 5) {
         round_rect(box(contentX,90,contentWidth,height-165),29.f,p.elevated);
+        round_rect(box(contentX+contentWidth-194.f,108,164,42),14.f,p.surface);
+        label(camera_settings_page_?L"GRAPHICS  [C]":L"CAMERA  [C]",
+              box(contentX+contentWidth-179.f,120,147,24),small_font_.Get(),p.accent);
+        if(camera_settings_page_) {
+            label(L"KAMI CAMERA  /  ORIGINAL ENGINE",
+                  box(contentX+28,113,contentWidth-225,38),title_font_.Get(),p.text);
+            label(L"Fixed 75 degree FOV  /  Click a row or press 1 through 7",
+                  box(contentX+28,153,contentWidth-55,28),small_font_.Get(),p.muted);
+            const wchar_t* names[]={
+                L"1  MOUSE SENSITIVITY",L"2  CAMERA SMOOTHING",
+                L"3  FOLLOW DISTANCE",L"4  TERRAIN COLLISION",
+                L"5  AUTO RECENTER",L"6  HEAD TARGET TRACKING",
+                L"7  CAMERA SHAKE"
+            };
+            const std::wstring values[]={
+                std::to_wstring(camera_settings_.mouse_sensitivity)+L"%",
+                std::to_wstring(camera_settings_.smoothing)+L"%",
+                std::to_wstring(camera_settings_.follow_distance_cm/100)+L"m",
+                camera_settings_.collision?L"ON":L"OFF",
+                camera_settings_.auto_recenter?L"ON":L"OFF",
+                camera_settings_.head_tracking?L"ON":L"OFF",
+                camera_settings_.camera_shake?L"ON":L"OFF"
+            };
+            for(unsigned i=0;i<7;++i) {
+                const float y=186.f+55.f*static_cast<float>(i);
+                round_rect(box(contentX+24,y,contentWidth-48,51),14.f,p.surface);
+                label(names[i],box(contentX+45,y+4,contentWidth-85,20),
+                      small_font_.Get(),p.muted);
+                label(values[i],box(contentX+45,y+26,contentWidth-85,26),
+                      body_font_.Get(),p.accent);
+            }
+            label(L"Exclusive: Q shoulder swap  |  O cinematic orbit  |  P precision look",
+                  box(contentX+26,height-114,contentWidth-52,28),
+                  small_font_.Get(),p.muted);
+            label(L"F focus lock  |  R reset  |  Mouse drag to orbit in World",
+                  box(contentX+26,height-83,contentWidth-52,28),
+                  small_font_.Get(),p.muted);
+            return;
+        }
         label(L"GRAPHICS + FPS  /  DIRECTX 12",
-              box(contentX+28,113,contentWidth-55,38),title_font_.Get(),p.text);
+              box(contentX+28,113,contentWidth-225,38),title_font_.Get(),p.text);
         label(L"Renderer controls - click a row or press 1 through 7",
               box(contentX+28,153,contentWidth-55,28),small_font_.Get(),p.muted);
         const wchar_t* names[]={
@@ -320,7 +437,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(world_initialized_?world_renderer_.error():L"Loading DX12 viewport...",
                   box(contentX+35,234,contentWidth-70,55),body_font_.Get(),p.muted);
         }
-        label(L"A/D or arrows: orbit  |  W/S or wheel: zoom  |  Up/Down: tilt",
+        label(L"Drag: orbit  |  Wheel: zoom  |  Q: shoulder  |  R: recenter  |  O: cinematic",
               box(contentX+29,height-103,contentWidth-50,30),small_font_.Get(),p.muted);
         label(L"Procedural test scene only. SL region and avatar transport: not connected.",
               box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
@@ -502,6 +619,39 @@ void Window::advance_graphics(unsigned row) {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+void Window::advance_camera(unsigned row) {
+    switch(row) {
+    case 0:
+        camera_settings_.mouse_sensitivity=
+            camera_settings_.mouse_sensitivity>=100?25:
+            camera_settings_.mouse_sensitivity+25;
+        break;
+    case 1:
+        camera_settings_.smoothing=
+            camera_settings_.smoothing==0?15:
+            camera_settings_.smoothing==15?30:
+            camera_settings_.smoothing==30?50:
+            camera_settings_.smoothing==50?75:0;
+        break;
+    case 2:
+        camera_settings_.follow_distance_cm=
+            camera_settings_.follow_distance_cm==200?300:
+            camera_settings_.follow_distance_cm==300?400:
+            camera_settings_.follow_distance_cm==400?600:
+            camera_settings_.follow_distance_cm==600?800:200;
+        break;
+    case 3: camera_settings_.collision=!camera_settings_.collision; break;
+    case 4: camera_settings_.auto_recenter=!camera_settings_.auto_recenter; break;
+    case 5: camera_settings_.head_tracking=!camera_settings_.head_tracking; break;
+    case 6: camera_settings_.camera_shake=!camera_settings_.camera_shake; break;
+    default: return;
+    }
+    camera_settings_=camera::normalize(camera_settings_);
+    camera::save(camera_settings_);
+    world_renderer_.set_camera_settings(camera_settings_);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
 void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
@@ -510,11 +660,17 @@ void Window::click(float x, float y) {
         toggle_appearance();
         return;
     }
+    if(page_==5 && x>=width-220.f && x<width-44.f && y>=106.f && y<154.f) {
+        camera_settings_page_=!camera_settings_page_;
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
     if(page_==5 && x>=303.f && x<width-49.f) {
         for(unsigned i=0;i<7;++i) {
             const float top=186.f+55.f*static_cast<float>(i);
             if(y>=top && y<top+51.f) {
-                advance_graphics(i);
+                if(camera_settings_page_) advance_camera(i);
+                else advance_graphics(i);
                 return;
             }
         }
