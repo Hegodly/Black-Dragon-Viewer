@@ -157,9 +157,16 @@ int main(int argc,char** argv){
            message.find(L"passwd")!=std::wstring::npos||message.size()>120U)
             return 10;
     }
-    if(login_http_diagnostic(400).find(L"KAMI DIAG R3")==std::wstring::npos||
+    if(login_http_diagnostic(400).find(L"KAMI DIAG R5")==std::wstring::npos||
        login_http_diagnostic(400).find(L"check protocol")!=std::wstring::npos)
        return 24;
+    if(login_transport_diagnostic(L"sending request",12029).find(
+           L"sending request / WinHTTP 12029")==std::wstring::npos||
+       login_transport_diagnostic(L"receiving response",12152).find(
+           L"invalid HTTP response")==std::wstring::npos||
+       login_transport_diagnostic(L"reading reply",12175).find(
+           L"TLS validation failed")==std::wstring::npos)
+       return 26;
     if(login_http_diagnostic(403).find(L"refused")==std::wstring::npos||
        login_http_diagnostic(429).find(L"retry later")==std::wstring::npos||
        login_http_diagnostic(302).find(L"redirect blocked")==std::wstring::npos)
