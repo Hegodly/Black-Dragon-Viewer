@@ -1061,7 +1061,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
            sl_login_status_==protocol::LoginStatus::HttpError){
             // Never clip the category onto the end of a long status string.
             label(L"HTTP "+std::to_wstring(sl_login_http_status_)+
-                  L" / KAMI DIAG R3",
+                  L" / KAMI DIAG R5",
                   box(contentX+252,y+3,contentWidth-269,23.f),
                   small_font_.Get(),p.text);
             const auto category=sl_login_response_kind_.empty()?
