@@ -125,3 +125,16 @@ prototype does not support MFA continuation, a full ToS challenge flow,
 caps/event queue, live world assets or actual region rendering.
 
 Protocol reference: https://wiki.secondlife.com/wiki/Current_login_protocols
+
+## Login request correctness follow-up (November 3, 2026)
+
+Experimental login now emits XML-RPC booleans for `agree_to_tos` and
+`read_critical`, initially both false. The local KAMI test warning is not
+the actual Second Life Terms/notice confirmation; KAMI must not silently
+acknowledge a server challenge. The authenticated login HTTP receive timeout
+is now 30 seconds; the password-free TLS probe remains short. The XML parser
+and HTTP reader now share a bounded 8 MiB reply limit so optional large
+inventory data need not invalidate authentication. Offline regression tests
+cover protocol types and a large XML response. This is an unverified client
+fix, **not proof of successful live SL authentication**. Passwords, session
+tokens and capability URLs are not written to diagnostics.
