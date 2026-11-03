@@ -122,5 +122,7 @@ int main() {
     }
     DestroyWindow(window);
     UnregisterClassW(desc.lpszClassName,instance);
+    if(result!=0 && result!=77)
+        std::wcerr<<L"KAMI DX12 smoke failure stage "<<result<<L"\\n";
     return result;
 }
