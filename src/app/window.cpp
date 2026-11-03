@@ -479,6 +479,12 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         }
         label(L"Drag: orbit  |  Wheel: zoom  |  Q: shoulder  |  R: recenter  |  O: cinematic",
               box(contentX+29,height-103,contentWidth-50,30),small_font_.Get(),p.muted);
+        std::wstring perf=L"CPU "+std::to_wstring(static_cast<unsigned>(last_performance_.process_cpu_percent))+
+            L"%  |  RAM "+std::to_wstring(last_performance_.process_ram_mb)+L"MB";
+        if(last_performance_.gpu_readable)
+            perf+=L"  |  DX12 VRAM "+std::to_wstring(last_performance_.gpu_vram_used_mb)+
+                  L"/"+std::to_wstring(last_performance_.gpu_vram_budget_mb)+L"MB";
+        label(perf,box(contentX+28,height-136,contentWidth-48,24),small_font_.Get(),p.accent);
         label(L"Procedural test scene only. SL region and avatar transport: not connected.",
               box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
         return;
@@ -616,6 +622,7 @@ void Window::tick() {
         fps_display_=static_cast<unsigned>(static_cast<double>(fps_frames_)/elapsed+0.5);
         fps_frames_=0;
         fps_epoch_=now;
+        last_performance_=performance_monitor_.sample(world_renderer_.native_device());
         if(adaptive_.sample(graphics_,static_cast<float>(fps_display_),
                             static_cast<float>(elapsed))) {
             world_renderer_.set_graphics(graphics_);
