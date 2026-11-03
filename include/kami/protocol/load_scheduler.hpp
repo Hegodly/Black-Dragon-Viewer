@@ -11,7 +11,7 @@ enum class Kind : std::uint8_t {
     Attachment, NearbyMesh, DistantTexture, Other
 };
 enum class Stage : std::uint8_t {
-    Queued, Downloading, Decoding, ReadyForGPU, Resident, Failed
+    Queued, Downloading, DecodeQueued, Decoding, ReadyForGPU, Resident, Failed
 };
 struct Asset {
     std::string id;
