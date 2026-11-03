@@ -15,6 +15,7 @@ enum class Status { NetworkUnavailable, NoPublishedRelease, Current, Available }
 struct Result {
     Status status = Status::NetworkUnavailable;
     std::string version;
+    bool installable = false;
 };
 
 inline bool parseSemver(const std::string& input, std::array<unsigned,3>& parts)
@@ -37,7 +38,7 @@ inline bool parseSemver(const std::string& input, std::array<unsigned,3>& parts)
             return false;
     }
     // Do not classify beta or oddly tagged releases as mandatory upgrades.
-    return pos == input.size();
+    return pos == input.size() && input.size() < 34;
 }
 
 inline size_t receive(char* bytes, size_t size, size_t count, void* user)
@@ -97,11 +98,39 @@ inline Result check(const std::string local)
         if (!parseSemver(local, localParts)
             || !parseSemver(remoteVersion, remoteParts)) return result;
         result.version = remoteVersion;
+        const auto* assets = object.if_contains("assets");
+        if (assets && assets->is_array())
+        {
+            const std::string expectedUrl =
+                "https://github.com/Hegodly/Black-Dragon-Viewer/releases/download/"
+                + remoteVersion + "/KAMI-Windows-Portable.zip";
+            for (const auto& value : assets->as_array())
+            {
+                if (!value.is_object()) continue;
+                const auto& asset = value.as_object();
+                const auto* name = asset.if_contains("name");
+                const auto* digest = asset.if_contains("digest");
+                const auto* download = asset.if_contains("browser_download_url");
+                if (!name || !name->is_string() || !digest || !digest->is_string()
+                    || !download || !download->is_string()) continue;
+                const std::string hash(digest->as_string().c_str());
+                if (name->as_string() == "KAMI-Windows-Portable.zip"
+                    && std::string(download->as_string().c_str()) == expectedUrl
+                    && hash.size() == 71 && hash.compare(0, 7, "sha256:") == 0
+                    && hash.find_first_not_of("0123456789abcdefABCDEF", 7) == std::string::npos)
+                {
+                    result.installable = true;
+                    break;
+                }
+            }
+        }
         result.status = remoteParts > localParts ? Status::Available : Status::Current;
     }
     catch (...) { return result; }
     return result;
 }
+
+inline std::string& selectedVersion() { static std::string value; return value; }
 
 inline std::future<Result>& pending()
 {
