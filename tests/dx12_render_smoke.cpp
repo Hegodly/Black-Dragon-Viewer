@@ -1,4 +1,5 @@
 #include "kami/world/renderer.hpp"
+#include "kami/protocol/bootstrap.hpp"
 #include "kami/features/creator_studio.hpp"
 #include "kami/graphics/settings.hpp"
 #include <windows.h>
@@ -49,7 +50,7 @@ int main() {
     int result=0;
     {
         kami::world::Renderer renderer;
-        if(!renderer.initialize(window,640,480)) {
+        if(!renderer.initialize(window,640,480,true)) {
             print_failure(L"initialize",renderer);
             // No hardware/display in an automated server VM can prevent
             // an HWND swap chain. Report SKIPPED, not a false GPU pass.
@@ -226,6 +227,54 @@ int main() {
                     }
                     renderer.clear_creator_preview();
                     if(renderer.ready())renderer.draw();
+                }
+                if(!result) {
+                    // Synthetic verified protocol stages only: this verifies
+                    // that already-decoded world triangles use the SAME DX12
+                    // shadow, PBR and color path as the existing scene.
+                    kami::protocol::Bootstrap connected;
+                    constexpr auto agent="12345678-90ab-4cde-8fab-000000000001";
+                    constexpr auto sid="12345678-90ab-4cde-8fab-000000000002";
+                    constexpr auto region="12345678-90ab-4cde-8fab-000000000003";
+                    const bool staged=
+                        connected.endpoint_checked({
+                            kami::protocol::ProbeStatus::TlsEndpointReached,405})&&
+                        connected.login_reply({
+                            agent,sid,"sim1234.agni.lindenlab.com",13000,
+                            L"https://sim1234.agni.lindenlab.com:12345/cap/abc"},true)&&
+                        connected.circuit_ack(agent,true)&&
+                        connected.capability_reply(
+                            L"https://sim1234.agni.lindenlab.com:12345/cap/def",true)&&
+                        connected.region_snapshot(
+                            {region,agent,128.f,128.f,40.f},true);
+                    auto procedural=kami::world::build_test_scene(8);
+                    kami::world::SceneMesh decoded{};
+                    decoded.vertices.assign(
+                        procedural.vertices.begin(),
+                        procedural.vertices.begin()+6);
+                    decoded.terrain_count=decoded.vertices.size();
+                    if(!staged||
+                       renderer.set_decoded_region_geometry(
+                           connected,decoded,false)||
+                       !renderer.set_decoded_region_geometry(
+                           connected,std::move(decoded),true)||
+                       !renderer.region_geometry_active()||
+                       renderer.vertex_count()!=6U) {
+                        print_failure(L"synthetic verified static region DX12 upload",renderer);
+                        result=26;
+                    } else {
+                        renderer.draw();
+                        if(!renderer.ready()) {
+                            print_failure(L"static region PBR and shadow draw",renderer);
+                            result=27;
+                        }
+                        connected.reset();
+                        renderer.clear_decoded_region_geometry();
+                        if(renderer.region_geometry_active()||
+                           renderer.vertex_count()<=6U||!renderer.ready())
+                            result=28;
+                        if(renderer.ready())renderer.draw();
+                    }
                 }
                 if(!result) {
                     wchar_t folder[MAX_PATH]{};
