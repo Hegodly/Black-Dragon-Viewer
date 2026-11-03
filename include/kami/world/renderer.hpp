@@ -1,6 +1,7 @@
 #pragma once
 #include "kami/world/device.hpp"
 #include "kami/graphics/settings.hpp"
+#include "kami/camera/system.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -27,6 +28,15 @@ public:
     void draw();
     void orbit(float yaw_delta, float elevation_delta);
     void zoom(float distance_delta);
+    void set_camera_settings(camera::Settings settings) noexcept { camera_.set_settings(settings); }
+    void pointer_move(float dx, float dy) noexcept { camera_.pointer_delta(dx, dy); }
+    void set_camera_dragging(bool value) noexcept { camera_.set_dragging(value); }
+    void cycle_camera_shoulder() noexcept { camera_.cycle_shoulder(); }
+    void toggle_camera_precision() noexcept { camera_.toggle_precision(); }
+    void toggle_camera_focus() noexcept { camera_.toggle_focus_lock(); }
+    void toggle_cinematic_orbit() noexcept { camera_.toggle_cinematic_orbit(); }
+    void reset_camera() noexcept { camera_.reset(); }
+    [[nodiscard]] const camera::System& camera_system() const noexcept { return camera_; }
     void shutdown() noexcept;
 
     [[nodiscard]] bool ready() const noexcept { return ready_; }
@@ -58,9 +68,8 @@ private:
     bool allow_tearing_ = false;
     graphics::Settings graphics_{};
     bool ready_ = false;
-    float yaw_ = .65f;
-    float elevation_ = 6.8f;
-    float distance_ = 17.f;
+    camera::System camera_{};
+    std::chrono::steady_clock::time_point last_camera_frame_{};
     std::chrono::steady_clock::time_point start_time_ = std::chrono::steady_clock::now();
     std::wstring error_;
 

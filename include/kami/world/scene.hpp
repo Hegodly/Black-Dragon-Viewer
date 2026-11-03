@@ -18,4 +18,5 @@ struct SceneMesh {
 
 // Original procedural test assets, not Second Life content.
 [[nodiscard]] SceneMesh build_test_scene(unsigned divisions = 32);
+[[nodiscard]] float sample_test_terrain_height(float x, float z) noexcept;
 } // namespace kami::world

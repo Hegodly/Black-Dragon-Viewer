@@ -22,7 +22,9 @@ public:
     void tick();
 private:
     static LRESULT CALLBACK dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+    static LRESULT CALLBACK viewport_dispatch(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     LRESULT handle(UINT message, WPARAM wp, LPARAM lp);
+    LRESULT viewport_handle(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
     [[nodiscard]] bool create_resources();
     void paint();
     void resize(UINT width, UINT height);
@@ -31,6 +33,7 @@ private:
     void toggle_appearance();
     void click(float x, float y);
     void advance_graphics(unsigned row);
+    void advance_camera(unsigned row);
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
     void draw_interface(float width, float height, const ui::Palette& palette);
@@ -42,6 +45,10 @@ private:
     world::Renderer world_renderer_;
     world::ShaderWarmup shader_warmup_;
     graphics::Settings graphics_{};
+    camera::Settings camera_settings_{};
+    bool camera_settings_page_ = false;
+    bool camera_dragging_ = false;
+    int pointer_x_ = 0, pointer_y_ = 0;
     bool high_resolution_timer_ = false;
     std::chrono::steady_clock::time_point next_frame_{};
     std::chrono::steady_clock::time_point fps_epoch_{};
