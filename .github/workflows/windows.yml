@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - feature/kami-dx12-only-live-region-bridge
       - feature/kami-sl-xmlrpc-login-and-sim-handshake
       - feature/kami-creator-obj-import-reliability
       - feature/kami-live-sl-connectivity-foundations
