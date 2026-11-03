@@ -239,6 +239,92 @@ bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     }
     return id_found&&events_found;
 }
+bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
+    out={};
+    ComPtr<IXMLDOMDocument2> dom;
+    if(!parse_dom(xml,dom))return false;
+    ComPtr<IXMLDOMNodeList> nodes;
+    if(!child_elements(dom.Get(),nodes))return false;
+    long count=0;
+    if(FAILED(nodes->get_length(&count))||count<4||count>50)return false;
+    bool found_id=false,found_events=false;
+    for(long i=0;i+1<count;++i){
+        ComPtr<IXMLDOMNode> k,v;
+        if(FAILED(nodes->get_item(i,k.GetAddressOf()))||!k||
+           node_name(k.Get())!=L"key")continue;
+        const auto key=node_text(k.Get());
+        if(key!=L"id"&&key!=L"events")continue;
+        if(FAILED(nodes->get_item(i+1,v.GetAddressOf()))||!v)return false;
+        const auto type=node_name(v.Get());
+        if(key==L"id"){
+            if(found_id||(type!=L"integer"&&type!=L"string"&&
+                          type!=L"undef"))return false;
+            found_id=true;
+            if(type==L"undef")continue;
+            const auto id=node_text(v.Get());
+            if(id.empty()||id.size()>64)return false;
+            std::string safe_id;
+            safe_id.reserve(id.size());
+            for(std::size_t j=0;j<id.size();++j){
+                const wchar_t ch=id[j];
+                // Restrict IDs to printable non-markup ASCII. Integers
+                // preserve signed-decimal LLSD type, strings are opaque.
+                if(type==L"integer"){
+                    if(!(ch>=L'0'&&ch<=L'9')&&
+                       !(j==0&&ch==L'-'))return false;
+                }else if(!(ch>=L'0'&&ch<=L'9')&&
+                         !(ch>=L'A'&&ch<=L'Z')&&
+                         !(ch>=L'a'&&ch<=L'z')&&
+                         ch!=L'-'&&ch!=L'_'&&ch!=L'.')return false;
+                safe_id.push_back(static_cast<char>(ch));
+            }
+            if(safe_id=="-")return false;
+            out.id.token=std::move(safe_id);
+            out.id.integer=(type==L"integer");
+        }else {
+            if(found_events||type!=L"array")return false;
+            found_events=true;
+            ComPtr<IXMLDOMNodeList> events;
+            if(FAILED(v->get_childNodes(events.GetAddressOf()))||!events)
+                return false;
+            long n=0;
+            if(FAILED(events->get_length(&n))||n<0||n>512)return false;
+            // Require LLSD map event containers. We don't interpret the
+            // untrusted event bodies until verified message decoders exist.
+            for(long index=0;index<n;++index){
+                ComPtr<IXMLDOMNode> entry;
+                if(FAILED(events->get_item(index,entry.GetAddressOf()))||
+                   !entry||node_name(entry.Get())!=L"map")return false;
+            }
+            out.event_count=static_cast<unsigned>(n);
+        }
+    }
+    return found_id&&found_events;
+}
+std::string build_event_queue_post(const QueueCursor& previous) {
+    std::string body="<llsd><map><key>ack</key>";
+    if(previous.token.empty()){
+        body+="<undef />";
+    }else{
+        if(previous.token.size()>64)return {};
+        for(std::size_t i=0;i<previous.token.size();++i){
+            const auto ch=previous.token[i];
+            if(previous.integer){
+                if(!(ch>='0'&&ch<='9')&&!(i==0&&ch=='-'))
+                    return {};
+            }else if(!((ch>='0'&&ch<='9')||
+                         (ch>='A'&&ch<='Z')||
+                         (ch>='a'&&ch<='z')||
+                         ch=='-'||ch=='_'||ch=='.'))return {};
+        }
+        if(previous.token=="-")return {};
+        body+=previous.integer?"<integer>":"<string>";
+        body+=previous.token;
+        body+=previous.integer?"</integer>":"</string>";
+    }
+    body+="<key>done</key><boolean>false</boolean></map></llsd>";
+    return body;
+}
 SeedResponse request_seed(std::wstring seed_url) {
     SeedResponse result{};
     if(!trusted_caps_url(seed_url)){
@@ -267,14 +353,18 @@ SeedResponse request_seed(std::wstring seed_url) {
     result.diagnostic=L"CAPS seed OK; EventQueueGet granted";
     return result;
 }
-PollResponse probe_event_queue_once(std::wstring queue_url) {
+PollResponse probe_event_queue_once(
+    std::wstring queue_url,const QueueCursor& previous) {
     PollResponse result{};
     if(!trusted_caps_url(queue_url)){
         result.diagnostic=L"EventQueue URL rejected locally";return result;
     }
-    static constexpr char body[]=
-        "<llsd><map><key>ack</key><undef />"
-        "<key>done</key><boolean>false</boolean></map></llsd>";
+    const std::string body=build_event_queue_post(previous);
+    if(body.empty()){
+        result.diagnostic=L"EventQueueGet invalid local acknowledgement";
+        SecureZeroMemory(queue_url.data(),queue_url.size()*sizeof(wchar_t));
+        return result;
+    }
     const auto start=std::chrono::steady_clock::now();
     auto reply=send_signed_post(queue_url,body,45000,4U*1024U*1024U);
     if(!queue_url.empty())
@@ -298,12 +388,25 @@ PollResponse probe_event_queue_once(std::wstring queue_url) {
         result.diagnostic=L"EventQueueGet HTTP "+
             std::to_wstring(reply.status);return result;
     }
-    if(!parse_event_queue_llsd(reply.body,result.event_count)){
+    EventQueueFrame frame{};
+    if(!parse_event_queue_frame(reply.body,frame)){
         result.diagnostic=L"EventQueueGet invalid LLSD envelope";
         return result;
     }
+    result.event_count=frame.event_count;
     result.structurally_valid=true;
-    result.diagnostic=L"EventQueueGet responded; event handlers not yet wired";
+    if(frame.event_count!=0){
+        // Never acknowledge or discard unhandled authoritative events.
+        // Keep the previous ack, freeze automatic polling and ask for
+        // proper handlers in a future build.
+        result.diagnostic=L"EventQueueGet received "+
+            std::to_wstring(frame.event_count)+
+            L" live events; dispatch pending (not acknowledged)";
+        return result;
+    }
+    result.safe_to_ack=true;
+    result.next_ack=std::move(frame.id);
+    result.diagnostic=L"EventQueueGet heartbeat; no events";
     return result;
 }
 } // namespace kami::protocol::caps
