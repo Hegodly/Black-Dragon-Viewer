@@ -54,6 +54,8 @@ assert (root/"src/features/rig_physics.cpp").is_file()
 assert (root/"src/protocol/transport.cpp").is_file()
 assert (root/"src/protocol/bootstrap.cpp").is_file()
 assert (root/"src/protocol/services.cpp").is_file()
+assert (root/"src/protocol/lludp.cpp").is_file()
+assert "src/protocol/lludp.cpp" in cmake
 transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
 assert "WINHTTP_FLAG_SECURE" in transport
 assert "WinHttpSendRequest" in transport
