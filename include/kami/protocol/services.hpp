@@ -71,11 +71,17 @@ public:
     [[nodiscard]] bool apply_inventory(std::vector<InventoryEntry> value,
                                        bool verified_account_data);
     void clear() noexcept;
+    // Invalidate views across disconnect/re-login without displaying stale
+    // avatar, region or inventory data from an earlier session generation.
     [[nodiscard]] const std::vector<WorldObject>& objects() const noexcept {
-        return objects_;
+        static const std::vector<WorldObject> empty;
+        return session_.online() && objects_generation_==session_.generation()?
+            objects_:empty;
     }
     [[nodiscard]] const std::vector<InventoryEntry>& inventory() const noexcept {
-        return inventory_;
+        static const std::vector<InventoryEntry> empty;
+        return session_.online() && inventory_generation_==session_.generation()?
+            inventory_:empty;
     }
 private:
     const Bootstrap& session_;
