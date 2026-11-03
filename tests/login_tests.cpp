@@ -20,6 +20,11 @@ int main(){
     if(!parse_account_name(L"Mira",f,l)||f!="Mira"||l!="Resident"||
        !parse_account_name(L"First Last",f,l)||f!="First"||l!="Last"||
        parse_account_name(L"Invalid Name Here",f,l))return 2;
+    if(!parse_account_name(L"first.last",f,l)||f!="first"||l!="last"||
+       !parse_account_name(L"First Last",f,l)||f!="First"||l!="Last"||
+       parse_account_name(L"first..last",f,l)||
+       parse_account_name(L".last",f,l)||
+       parse_account_name(L"first.",f,l))return 13;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "AB:CD:EF:12:34:56",true);
