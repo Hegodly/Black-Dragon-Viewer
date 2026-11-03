@@ -273,6 +273,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     if(!window || !width || !height) { error_=L"Invalid viewport dimensions"; return false; }
     window_=window;
     avatar_.reset(sample_test_terrain_height);
+    body_physics_.reset();
     client_width_=width;
     client_height_=height;
     width_=scaled(width,graphics_.render_scale_percent);
@@ -430,6 +431,7 @@ void Renderer::set_graphics(graphics::Settings settings) {
 
 void Renderer::reset_avatar() noexcept {
     avatar_.reset(sample_test_terrain_height);
+    body_physics_.reset();
     camera_.set_subject({avatar_.state().x,avatar_.state().y,avatar_.state().z},
                         avatar_.state().heading);
     camera_.reset();
@@ -487,6 +489,7 @@ void Renderer::draw() {
     const float seconds=std::chrono::duration<float>(now-start_time_).count();
     if(!preview_mesh_) {
         avatar_.step(dt,sample_test_terrain_height);
+        body_physics_.step(avatar_.state(),dt);
         const auto& state=avatar_.state();
         camera_.set_subject({state.x,state.y,state.z},state.heading);
     }
@@ -510,7 +513,7 @@ void Renderer::draw() {
     XMFLOAT4X4 viewproj{},lightproj{};
     XMStoreFloat4x4(&viewproj,view*projection);
     XMStoreFloat4x4(&lightproj,lightView*lightProjection);
-    std::array<float,60> constants{};
+    std::array<float,63> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
     constants[17]=-.86f;
@@ -543,6 +546,7 @@ void Renderer::draw() {
     // below the 64 DWORD DX12 root signature limit.
     constants[56]=0.f;constants[57]=0.f;
     constants[58]=0.f;constants[59]=0.f;
+    constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
 
     commands_->SetGraphicsRootSignature(signature_.Get());
     commands_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -571,7 +575,7 @@ void Renderer::draw() {
         commands_->RSSetViewports(1,&shadowView);
         commands_->RSSetScissorRects(1,&shadowRect);
         commands_->SetPipelineState(shadow_pipeline_.Get());
-        commands_->SetGraphicsRoot32BitConstants(0,60,constants.data(),0);
+        commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         if(!preview_mesh_) {
             const auto& a=avatar_.state();
@@ -581,13 +585,18 @@ void Renderer::draw() {
             constants[55]=graphics_.animate_avatar?a.gait:0.f;
             constants[56]=a.x;constants[57]=a.y;
             constants[58]=a.z;constants[59]=a.heading;
+            const auto displacement=body_physics_.offsets();
+            constants[60]=displacement.breast_y;
+            constants[61]=displacement.belly_y;
+            constants[62]=displacement.butt_y;
         }
-        commands_->SetGraphicsRoot32BitConstants(0,60,constants.data(),0);
+        commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                                 static_cast<UINT>(terrain_count_),0);
         constants[25]=0.f;constants[47]=0.f;constants[55]=0.f;
         constants[56]=0.f;constants[57]=0.f;
         constants[58]=0.f;constants[59]=0.f;
+        constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
         auto to_srv=barrier(shadow_map_.Get(),
             D3D12_RESOURCE_STATE_DEPTH_WRITE,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -617,7 +626,7 @@ void Renderer::draw() {
     commands_->SetDescriptorHeaps(1,heaps);
     commands_->SetGraphicsRootDescriptorTable(
         1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
-    commands_->SetGraphicsRoot32BitConstants(0,60,constants.data(),0);
+    commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
     if(!preview_mesh_) {
         const auto& a=avatar_.state();
@@ -627,8 +636,12 @@ void Renderer::draw() {
         constants[55]=graphics_.animate_avatar?a.gait:0.f;
         constants[56]=a.x;constants[57]=a.y;
         constants[58]=a.z;constants[59]=a.heading;
+            const auto displacement=body_physics_.offsets();
+            constants[60]=displacement.breast_y;
+            constants[61]=displacement.belly_y;
+            constants[62]=displacement.butt_y;
     }
-    commands_->SetGraphicsRoot32BitConstants(0,60,constants.data(),0);
+    commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
     Microsoft::WRL::ComPtr<ID3D12Resource> photo_readback;
