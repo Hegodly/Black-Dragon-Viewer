@@ -1,5 +1,6 @@
 #include "kami/window.hpp"
 #include "kami/appearance.hpp"
+#include "kami/features/viewer_foundation.hpp"
 
 #include <windowsx.h>
 #include <dwmapi.h>
@@ -11,6 +12,7 @@
 #include <string>
 #include <commdlg.h>
 #include <filesystem>
+#include <utility>
 
 namespace kami::app {
 namespace {
@@ -514,6 +516,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       box(panel+19,470,290,25),small_font_.Get(),p.text);
                 label(L"Source polygons: "+std::to_wstring(creator_preview_.source_polygons),
                       box(panel+19,498,290,25),small_font_.Get(),p.text);
+                // Clearly-labelled offline estimate, not an SL upload-cost quote.
+                const auto estimate=viewer::estimate_scene_cost(
+                    2048,2048,2,creator_preview_.audit.triangles,512);
+                label(L"2 x 2K textures + mesh estimate:",
+                      box(panel+19,532,290,23),small_font_.Get(),p.muted);
+                label(std::to_wstring(estimate.total_mb)+L" MiB uncompressed",
+                      box(panel+19,559,290,24),small_font_.Get(),p.accent);
             } else {
                 label(L"NO MODEL SELECTED",box(panel+19,398,290,31),
                       body_font_.Get(),p.muted);
@@ -584,6 +593,50 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(perf,box(contentX+28,height-136,contentWidth-48,24),small_font_.Get(),p.accent);
         label(L"Procedural test scene only. SL region and avatar transport: not connected.",
               box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
+        return;
+    }
+
+    if(page_==2 || page_==3 || page_==4) {
+        round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
+        label(kPages[page_],box(contentX+28,111,contentWidth-55,42),
+              title_font_.Get(),p.text);
+        label(L"ORIGINAL KAMI MODULE READINESS / HONEST OFFLINE STATUS",
+              box(contentX+28,151,contentWidth-50,28),small_font_.Get(),p.accent);
+        constexpr viewer::Feature avatar[]={
+            viewer::Feature::AvatarAppearance,viewer::Feature::Gestures,
+            viewer::Feature::OutfitDrafts,viewer::Feature::Camera
+        };
+        constexpr viewer::Feature inventory[]={
+            viewer::Feature::Inventory,viewer::Feature::SmartSort,
+            viewer::Feature::LandmarkDrafts,viewer::Feature::Assets
+        };
+        constexpr viewer::Feature messages[]={
+            viewer::Feature::NearbyChat,viewer::Feature::DirectMessages,
+            viewer::Feature::Friends,viewer::Feature::Groups
+        };
+        const viewer::Feature* selected=page_==2?avatar:page_==3?inventory:messages;
+        const auto& catalog=viewer::feature_catalog();
+        for(unsigned i=0;i<4;++i) {
+            const float y=206.f+73.f*static_cast<float>(i);
+            round_rect(box(contentX+24,y,contentWidth-48,65),14.f,p.surface);
+            const auto f=selected[i];
+            for(const auto& entry:catalog) {
+                if(entry.feature!=f)continue;
+                label(entry.label,box(contentX+42,y+8,contentWidth-85,28),
+                      body_font_.Get(),p.text);
+                const bool local=entry.availability==viewer::Availability::OriginalLocalReady;
+                label(local?L"Local code available / no SL server changes":
+                      entry.availability==viewer::Availability::AssetPipelineRequired?
+                      L"Requires live assets + avatar decoder":
+                      L"Requires authenticated Second Life network adapter",
+                      box(contentX+42,y+36,contentWidth-86,24),
+                      small_font_.Get(),local?p.accent:p.muted);
+                break;
+            }
+        }
+        label(L"Account login, remote chat, editing and inventory actions are not connected.",
+              box(contentX+28,height-105,contentWidth-48,31),
+              small_font_.Get(),p.muted);
         return;
     }
 
