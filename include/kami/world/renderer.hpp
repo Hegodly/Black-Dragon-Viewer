@@ -49,6 +49,7 @@ public:
     void toggle_camera_focus() noexcept { camera_.toggle_focus_lock(); }
     void toggle_cinematic_orbit() noexcept { camera_.toggle_cinematic_orbit(); }
     void reset_camera() noexcept { camera_.reset(); }
+    void apply_studio_shot(camera::StudioShot shot) noexcept {camera_.apply_studio_shot(shot);}
     [[nodiscard]] const camera::System& camera_system() const noexcept { return camera_; }
     void shutdown() noexcept;
 
