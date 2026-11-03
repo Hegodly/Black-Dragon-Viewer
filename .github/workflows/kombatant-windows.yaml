@@ -401,6 +401,10 @@ jobs:
         run: python kami/theme/apply-appearance-mode.py
       - name: Validate KAMI light/dark UI integration
         run: python kami/theme/test-appearance-mode.py
+      - name: Finish user-facing KAMI identity without renaming internal controls
+        run: python kami/theme/finalize-native-identity.py
+      - name: Verify KAMI rebrand retains credits and action callbacks
+        run: python kami/theme/test-native-identity.py
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py
