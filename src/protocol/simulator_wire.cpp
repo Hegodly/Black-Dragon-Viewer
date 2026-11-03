@@ -1,5 +1,7 @@
 #include "kami/protocol/simulator_wire.hpp"
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 namespace kami::protocol::sim {
 namespace {
@@ -125,6 +127,44 @@ Inbound classify(const lludp::Packet& packet) noexcept {
                         Inbound::PacketAck:Inbound::Invalid;
     default:return Inbound::Other;
     }
+}
+bool decode_region_metadata(const lludp::Packet& packet,
+                            RegionMetadata& out) noexcept {
+    out={};
+    if(classify(packet)!=Inbound::RegionHandshake)return false;
+    const auto& bytes=packet.body;
+    // Message id (4), RegionFlags (4), SimAccess (1), SimName length (1).
+    constexpr std::size_t kNameAt=10U;
+    if(bytes.size()<=kNameAt)return false;
+    const std::size_t name_length=bytes[9];
+    if(name_length<2||name_length>64||name_length>bytes.size()-kNameAt)
+        return false;
+    std::string name;
+    name.reserve(name_length);
+    for(std::size_t i=0;i<name_length;++i){
+        const auto ch=bytes[kNameAt+i];
+        if(ch==0){
+            // NUL is valid only at the end of a length-delimited name.
+            if(i+1!=name_length)return false;
+            break;
+        }
+        if(ch<32||ch>126)return false;
+        name.push_back(static_cast<char>(ch));
+    }
+    if(name.empty())return false;
+    // SL RegionHandshake RegionInfo: SimOwner (16), IsEstateManager (1)
+    // and then a little-endian IEEE754 WaterHeight (4).
+    const std::size_t water_at=kNameAt+name_length+16U+1U;
+    if(water_at>bytes.size()||bytes.size()-water_at<sizeof(float))
+        return false;
+    static_assert(sizeof(float)==4);
+    float water=0.f;
+    std::memcpy(&water,bytes.data()+water_at,sizeof(water));
+    if(!std::isfinite(water)||water< -4096.f||water>8192.f)return false;
+    out.name=std::move(name);
+    out.water_height=water;
+    out.verified=true;
+    return true;
 }
 bool movement_complete_identifies(const lludp::Packet& packet,
                                   const LoginResult& login) noexcept {
