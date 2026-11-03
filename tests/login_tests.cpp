@@ -13,7 +13,18 @@ std::string wrap(std::string fields) {
            "<value><struct>"+fields+"</struct></value></param></params></methodResponse>";
 }
 } // namespace
-int main(){
+int main(int argc,char** argv){
+    if(argc==2&&std::string_view(argv[1])=="--emit-synthetic-login-xml"){
+        // This branch emits a fake, offline login fixture only.
+        // NEVER add CLI arguments that read/store real credentials.
+        const auto doc=build_login_xmlrpc(
+            "Synthetic","Resident","$1$00000000000000000000000000000000",
+            "00000000000000000000000000000000",
+            "00000000000000000000000000000000",true);
+        if(doc.empty())return 40;
+        std::cout<<doc<<"\n";
+        return 0;
+    }
     const HRESULT init=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     if(FAILED(init))return 1;
     std::string f,l;
