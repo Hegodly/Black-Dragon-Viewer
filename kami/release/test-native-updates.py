@@ -22,7 +22,12 @@ for forbidden in ("ShellExecute", "CreateProcess", "system(", "WinExec(", "popen
 assert "gDragonLibrary.fetchRemoteVersion()" in script
 assert "callback_show_release_url" in script
 assert "Hegodly/Black-Dragon-Viewer/releases" in script
-assert "No update will be installed automatically" in script
+assert "INSTALL & RESTART" in script
+assert "callback_install_kami_update" in script
+assert "callback_test_kami_update" in script
+assert "launchTestInstall" in script
+assert "KAMI-Test-Update.ps1" in script
+assert "kami-test-updater.ps1" in script
 p=argparse.ArgumentParser()
 p.add_argument("--integrated",action="store_true")
 a=p.parse_args()
@@ -42,4 +47,10 @@ if a.integrated:
     notice=ET.parse(view/"skins/default/xui/en/notifications.xml").getroot()
     template=next(n for n in notice.iter("notification") if n.get("name")=="UpdateAvailable")
     assert "new KAMI Viewer release" in (template.text or "")
-print("PASS: official KAMI release discovery is TLS-verified, user-approved and nonblocking")
+    assert template.find("usetemplate").get("yestext") == "INSTALL & RESTART"
+    assert (view/"app_settings/KAMI-Test-Update.zip").is_file()
+    assert (view/"app_settings/kami-test-updater.ps1").is_file()
+    assert (view/"app_settings/kami-updater.ps1").is_file()
+    assert any(n.get("name") == "kami_test_update" for n in login.iter("button"))
+    assert any(n.get("name") == "KAMITestUpdateConfirm" for n in notice.iter("notification"))
+print("PASS: KAMI release discovery, explicit Install & Restart, offline test update safeguards")
