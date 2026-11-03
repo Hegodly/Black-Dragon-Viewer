@@ -221,3 +221,17 @@ GetLastError numeric code. Empty, HTML, XML-RPC, JSON-like and plain-text
 error replies have distinct labels. A server HTTP 400 is still **not**
 proof of a malformed XML-RPC request; neither this diagnostic patch nor the
 official Windows machine-ID bridge proves the live login works.
+
+## Additional official-login compatibility fields
+
+KAMI now sends its **actual** Windows NT platform version and platform
+description from RtlGetVersion when available, an empty optional
+host_id, and the official viewer's commonly requested options
+(including adult_compliant, inventory library, notifications and maps).
+The user agent declares `KAMI Beyond Reality Dev 0.1.0 (53)` rather
+than claiming to be Linden Lab's viewer. The client still sends
+credentials only to the official Linden Lab TLS endpoint.
+
+These fields match the public structure of Linden Lab's viewer request
+but do not guarantee authorization. Response Content-Type is classified
+safely if the HTTP error body is unreadable. Login remains experimental.
