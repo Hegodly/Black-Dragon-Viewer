@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string_view>
 using namespace kami::avatar;
 int main() {
     BodyPhysics p;
