@@ -48,6 +48,12 @@ float height(float x,float z) {
 }
 } // namespace
 
+float sample_test_terrain_height(float x, float z) noexcept {
+    if (x < -14.f || x > 14.f || z < -14.f || z > 14.f)
+        return -1000.f; // Outside the bounded demo region: no terrain hit.
+    return height(x, z);
+}
+
 SceneMesh build_test_scene(unsigned divisions) {
     SceneMesh scene;
     divisions=std::clamp(divisions,8U,64U);
