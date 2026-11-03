@@ -125,7 +125,7 @@ bool root_signature(ID3D12Device* device,
     D3D12_ROOT_PARAMETER constants{};
     constants.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     constants.Constants.ShaderRegister=0;
-    constants.Constants.Num32BitValues=44;
+    constants.Constants.Num32BitValues=48;
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_DESCRIPTOR_RANGE shadow_range{};
     shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
