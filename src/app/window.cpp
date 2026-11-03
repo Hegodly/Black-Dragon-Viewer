@@ -1074,9 +1074,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   box(contentX+252,y+51,contentWidth-269,22.f),
                   small_font_.Get(),p.muted);
         }else{
-            const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
+            std::wstring status=sl_login_status_==protocol::LoginStatus::Accepted&&
                 sl_circuit_.state()!=protocol::sim::CircuitState::Closed?
                 sl_circuit_.diagnostic():sl_login_message_;
+            if(sl_circuit_.movement_seen()){
+                if(sl_seed_pending_)status=L"SIMULATOR READY; REQUESTING SEED CAPS";
+                else if(sl_seed_started_)status=sl_seed_message_;
+            }
             label(status,box(contentX+252,y+8,contentWidth-269,rowH-12.f),
                   small_font_.Get(),p.muted);
         }
@@ -1459,7 +1463,7 @@ void Window::check_sl_tls_connection() {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 void Window::begin_sl_login() {
-    if(sl_login_pending_)return;
+    if(sl_login_pending_||sl_seed_pending_)return;
     // No hidden account collection, saved secrets, or identity spoofing.
     // Explicit acceptance and Windows native credential input only.
     const int choice=MessageBoxW(hwnd_,
@@ -1513,6 +1517,13 @@ void Window::begin_sl_login() {
     SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
     SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
     sl_circuit_.stop();
+    if(!sl_seed_url_.empty()){
+        SecureZeroMemory(sl_seed_url_.data(),sl_seed_url_.size()*sizeof(wchar_t));
+        sl_seed_url_.clear();
+    }
+    sl_seed_started_=false;
+    sl_seed_pending_=false;
+    sl_seed_message_.clear();
     sl_login_status_=protocol::LoginStatus::NotAttempted;
     sl_login_http_status_=0;
     sl_login_response_kind_.clear();
@@ -1553,10 +1564,14 @@ void Window::update_sl_connection() {
         sl_login_message_=result.message.empty()?
             protocol::login_status_label(result.status):result.message;
         if(result.accepted()) {
-            if(sl_circuit_.start(result))
+            if(sl_circuit_.start(result)) {
+                // Seed capability comes only from an authenticated SL login
+                // response. It is a signed URL, never show it in UI/logs.
+                sl_seed_url_=result.handoff.seed_capability;
                 sl_login_message_=L"Login accepted; contacting simulator...";
-            else
+            } else {
                 sl_login_message_=L"SL accepted login, but simulator UDP failed";
+            }
         }
         if(!result.handoff.seed_capability.empty())
             SecureZeroMemory(result.handoff.seed_capability.data(),
@@ -1566,7 +1581,46 @@ void Window::update_sl_connection() {
     if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed &&
        sl_circuit_.state()!=protocol::sim::CircuitState::Failed)
         sl_circuit_.poll();
-    if(!sl_login_pending_&&
+
+    if(sl_circuit_.movement_seen()&&!sl_seed_started_&&
+       !sl_seed_url_.empty()){
+        sl_seed_started_=true;
+        sl_seed_pending_=true;
+        sl_seed_message_=L"REQUESTING SIMULATOR SEED CAPS VIA HTTPS";
+        sl_seed_future_=std::async(std::launch::async,
+          [url=std::move(sl_seed_url_)]() mutable {
+            protocol::caps::SeedResult answer{};
+            const auto com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+            if(SUCCEEDED(com)){
+                answer=protocol::caps::request_seed_capabilities(url);
+                CoUninitialize();
+            }else{
+                answer.status=protocol::caps::SeedStatus::NetworkError;
+            }
+            if(!url.empty())SecureZeroMemory(url.data(),
+                url.size()*sizeof(wchar_t));
+            return answer;
+          });
+        sl_seed_url_.clear();
+    }
+    if(sl_seed_pending_&&sl_seed_future_.valid()&&
+       sl_seed_future_.wait_for(std::chrono::seconds(0))==
+         std::future_status::ready){
+        protocol::caps::SeedResult caps{};
+        try{
+            caps=sl_seed_future_.get();
+        }catch(...){
+            caps.status=protocol::caps::SeedStatus::NetworkError;
+        }
+        sl_seed_pending_=false;
+        sl_seed_message_=caps.diagnostic();
+        // Do not retain signed EventQueue URLs until the event queue
+        // consumer is implemented. No raw URLs in logs or UI.
+        if(!caps.event_queue_url.empty())
+            SecureZeroMemory(caps.event_queue_url.data(),
+                caps.event_queue_url.size()*sizeof(wchar_t));
+    }
+    if(!sl_login_pending_&&!sl_seed_pending_&&
        (sl_circuit_.state()==protocol::sim::CircuitState::Closed||
         sl_circuit_.state()==protocol::sim::CircuitState::Failed))
         (void)KillTimer(hwnd_,203);
