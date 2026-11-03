@@ -13,11 +13,13 @@
 #include <commdlg.h>
 #include <filesystem>
 #include <utility>
+#include <cwchar>
 
 namespace kami::app {
 namespace {
 constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_Original_Window";
 constexpr wchar_t kViewportClassName[] = L"KAMI_Native_Camera_Viewport";
+constexpr int kMessengerEditId=4101;
 constexpr std::array<std::wstring_view, 8> kPages = {
     L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS",
     L"CREATOR STUDIO", L"PHOTO STUDIO"
@@ -70,7 +72,15 @@ bool Window::create(HINSTANCE instance, int show) {
     if (FAILED(font(42.f, DWRITE_FONT_WEIGHT_BOLD, hero_font_)) ||
         FAILED(font(23.f, DWRITE_FONT_WEIGHT_SEMI_BOLD, title_font_)) ||
         FAILED(font(17.f, DWRITE_FONT_WEIGHT_NORMAL, body_font_)) ||
-        FAILED(font(13.f, DWRITE_FONT_WEIGHT_NORMAL, small_font_))) return false;
+        FAILED(font(13.f, DWRITE_FONT_WEIGHT_NORMAL, small_font_)) ||
+        FAILED(font(16.f, DWRITE_FONT_WEIGHT_NORMAL, messenger_centered_font_)) ||
+        FAILED(font(12.f, DWRITE_FONT_WEIGHT_MEDIUM, messenger_centered_small_)))
+        return false;
+    messenger_centered_font_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    messenger_centered_font_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    messenger_centered_font_->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+    messenger_centered_small_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    messenger_centered_small_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
     WNDCLASSEXW descriptor{};
     descriptor.cbSize = sizeof(descriptor);
@@ -98,6 +108,17 @@ bool Window::create(HINSTANCE instance, int show) {
         CW_USEDEFAULT, CW_USEDEFAULT, 1200, 770,
         nullptr, nullptr, instance, this);
     if (!hwnd_) return false;
+    messenger_edit_=CreateWindowExW(0,L"EDIT",L"",
+        WS_CHILD|WS_TABSTOP|ES_AUTOHSCROLL,
+        0,0,10,30,hwnd_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMessengerEditId)),
+        instance,nullptr);
+    if(!messenger_edit_)return false;
+    (void)SendMessageW(messenger_edit_,EM_LIMITTEXT,512,0);
+    (void)SendMessageW(messenger_edit_,WM_SETFONT,
+        reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),TRUE);
+    messenger_edit_brush_=CreateSolidBrush(RGB(27,40,64));
+    if(!messenger_edit_brush_)return false;
 
     const BOOL dark = light_ ? FALSE : TRUE;
     (void)DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
@@ -189,6 +210,27 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_SIZE:
         resize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp)));
         return 0;
+    case WM_CTLCOLOREDIT:
+        if(reinterpret_cast<HWND>(lp)==messenger_edit_) {
+            const HDC dc=reinterpret_cast<HDC>(wp);
+            SetTextColor(dc,light_?RGB(18,36,58):RGB(237,244,255));
+            SetBkColor(dc,light_?RGB(247,250,255):RGB(27,40,64));
+            return reinterpret_cast<LRESULT>(messenger_edit_brush_);
+        }
+        break;
+    case WM_COMMAND:
+        if(LOWORD(wp)==kMessengerEditId && HIWORD(wp)==EN_CHANGE &&
+           !messenger_edit_sync_ && messenger_edit_) {
+            const int count=GetWindowTextLengthW(messenger_edit_);
+            if(count>=0 && count<=512) {
+                std::wstring value(static_cast<std::size_t>(count)+1,L'\0');
+                const int copied=GetWindowTextW(messenger_edit_,value.data(),count+1);
+                value.resize(static_cast<std::size_t>(std::max(0,copied)));
+                (void)messenger_.set_draft(std::move(value));
+            }
+            return 0;
+        }
+        break;
     case WM_LBUTTONDOWN:
         SetFocus(hwnd_);
         click(static_cast<float>(GET_X_LPARAM(lp)),
@@ -273,6 +315,8 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND:
         return 1;
     case WM_DESTROY:
+        if(messenger_edit_brush_){DeleteObject(messenger_edit_brush_);messenger_edit_brush_=nullptr;}
+        messenger_edit_=nullptr;
         if(high_resolution_timer_) (void)timeEndPeriod(1);
         (void)KillTimer(hwnd_, 202);
         world_renderer_.shutdown();
@@ -303,6 +347,7 @@ void Window::resize(UINT width, UINT height) {
             target_.Reset();
     }
     update_viewport();
+    update_messenger_composer();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -739,6 +784,10 @@ void Window::toggle_appearance() {
     settings::set_light_appearance(light_);
     const BOOL dark = light_ ? FALSE : TRUE;
     (void)DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
+    if(messenger_edit_brush_)DeleteObject(messenger_edit_brush_);
+    messenger_edit_brush_=CreateSolidBrush(
+        light_?RGB(247,250,255):RGB(27,40,64));
+    if(messenger_edit_)InvalidateRect(messenger_edit_,nullptr,TRUE);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -766,6 +815,7 @@ void Window::select_page(unsigned index) {
     fps_epoch_=std::chrono::steady_clock::now();
     next_frame_={};
     update_viewport();
+    update_messenger_composer();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
