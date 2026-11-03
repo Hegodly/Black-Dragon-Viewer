@@ -1048,19 +1048,38 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               small_font_.Get(),p.muted);
     }
     if(page_==0) {
-        const float y=height>=715.f?558.f:536.f;
-        const float rowH=height>=715.f?87.f:56.f;
+        // Allocate enough vertical room for the *whole* HTTP diagnostic.
+        const float rowH=height>=715.f?87.f:76.f;
+        const float y=height>=715.f?558.f:std::max(360.f,height-135.f);
         round_rect(box(contentX,y,contentWidth,rowH),20.f,p.surface);
         round_rect(box(contentX+18,y+19,216.f,42.f),13.f,p.accent_soft);
         label(sl_login_pending_?L"AUTHENTICATING...":
               L"SL LOGIN TEST [L]",
               box(contentX+27,y+29,202.f,24.f),
               small_font_.Get(),p.accent);
-        const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
-            sl_circuit_.state()!=protocol::sim::CircuitState::Closed?
-            sl_circuit_.diagnostic():sl_login_message_;
-        label(status,box(contentX+252,y+8,contentWidth-269,rowH-12.f),
-              small_font_.Get(),p.muted);
+        if(!sl_login_pending_ &&
+           sl_login_status_==protocol::LoginStatus::HttpError){
+            // Never clip the category onto the end of a long status string.
+            label(L"HTTP "+std::to_wstring(sl_login_http_status_)+
+                  L" / KAMI DIAG R3",
+                  box(contentX+252,y+3,contentWidth-269,23.f),
+                  small_font_.Get(),p.text);
+            const auto category=sl_login_response_kind_.empty()?
+                std::wstring(L"unavailable (no response details)") :
+                sl_login_response_kind_;
+            label(L"Response: "+category,
+                  box(contentX+252,y+28,contentWidth-269,22.f),
+                  small_font_.Get(),p.muted);
+            label(L"Login not accepted; DX12 shaders remain ready",
+                  box(contentX+252,y+51,contentWidth-269,22.f),
+                  small_font_.Get(),p.muted);
+        }else{
+            const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
+                sl_circuit_.state()!=protocol::sim::CircuitState::Closed?
+                sl_circuit_.diagnostic():sl_login_message_;
+            label(status,box(contentX+252,y+8,contentWidth-269,rowH-12.f),
+                  small_font_.Get(),p.muted);
+        }
     }
     label(L"ALPHA 0.1 / Experimental SL login + UDP; region content not connected.",
           box(contentX,height-35,contentWidth,23),
@@ -1495,6 +1514,8 @@ void Window::begin_sl_login() {
     SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
     sl_circuit_.stop();
     sl_login_status_=protocol::LoginStatus::NotAttempted;
+    sl_login_http_status_=0;
+    sl_login_response_kind_.clear();
     sl_login_message_=L"Authenticating with Second Life over HTTPS...";
     sl_login_pending_=true;
     sl_login_future_=std::async(std::launch::async,
@@ -1527,6 +1548,8 @@ void Window::update_sl_connection() {
         }
         sl_login_pending_=false;
         sl_login_status_=result.status;
+        sl_login_http_status_=result.http_status;
+        sl_login_response_kind_=result.http_response_kind;
         sl_login_message_=result.message.empty()?
             protocol::login_status_label(result.status):result.message;
         if(result.accepted()) {
