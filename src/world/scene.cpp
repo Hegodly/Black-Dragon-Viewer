@@ -73,8 +73,9 @@ void physics_patch(std::vector<Vertex>& out,P center,P radius,C color,float regi
     for(int y=0;y<bands;++y)for(int x=0;x<slices;++x) {
         const P a=point(y,x),b=point(y+1,x);
         const P d=point(y,x+1),cc=point(y+1,x+1);
-        patch_triangle(out,a,b,cc,center,radius,color,region);
-        patch_triangle(out,a,cc,d,center,radius,color,region);
+        // Exclude degenerate triangles at the north and south poles.
+        if(y!=bands-1)patch_triangle(out,a,b,cc,center,radius,color,region);
+        if(y!=0)patch_triangle(out,a,cc,d,center,radius,color,region);
     }
 }
 float height(float x,float z) {
