@@ -1,5 +1,6 @@
 #include "kami/world/renderer.hpp"
 #include "kami/features/creator_limits.hpp"
+#include "kami/protocol/bootstrap.hpp"
 #include "kami/world/scene.hpp"
 #include "kami/world/shader_cache.hpp"
 #include <DirectXMath.h>
@@ -290,8 +291,13 @@ bool Renderer::make_pipeline() {
 
 bool Renderer::make_geometry() {
     SceneMesh generated;
-    if(!preview_mesh_) generated=build_test_scene(graphics_.terrain_divisions());
-    const SceneMesh& scene=preview_mesh_?*preview_mesh_:generated;
+    if(!preview_mesh_&&!region_mesh_)
+        generated=build_test_scene(graphics_.terrain_divisions());
+    // Local creator preview temporarily overrides a decoded region scene.
+    // Both static and animated scenes go through the SAME DX12 buffers,
+    // shader stages, PBR and depth/shadow passes.
+    const SceneMesh& scene=preview_mesh_?*preview_mesh_:
+        region_mesh_?*region_mesh_:generated;
     if(scene.vertices.empty() ||
        scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
         return false;
@@ -324,7 +330,8 @@ bool Renderer::make_geometry() {
     return true;
 }
 
-bool Renderer::initialize(HWND window,UINT width,UINT height) {
+bool Renderer::initialize(HWND window,UINT width,UINT height,
+                          bool allow_software_dx12) {
     if(ready_) return true;
     if(!window || !width || !height) { error_=L"Invalid viewport dimensions"; return false; }
     window_=window;
@@ -334,7 +341,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     client_height_=height;
     width_=scaled(width,graphics_.render_scale_percent);
     height_=scaled(height,graphics_.render_scale_percent);
-    if(device_.initialize(true)==DeviceStatus::Unavailable) {
+    if(device_.initialize(allow_software_dx12)==DeviceStatus::Unavailable) {
         error_=L"No DirectX 12 device available";
         return false;
     }
@@ -535,6 +542,37 @@ bool Renderer::set_creator_preview(SceneMesh mesh) {
     error_.clear();
     return true;
 }
+bool Renderer::set_decoded_region_geometry(
+    const protocol::Bootstrap& authenticated_region,
+    SceneMesh decoded_static_geometry,bool verified_region_data) {
+    const auto issue=validate_decoded_region(
+        authenticated_region,decoded_static_geometry,verified_region_data);
+    if(issue!=RegionGeometryError::None) {
+        error_=region_geometry_error(issue);
+        return false;
+    }
+    if(ready_)wait_for_gpu();
+    auto prior=std::move(region_mesh_);
+    region_mesh_=std::move(decoded_static_geometry);
+    if(ready_&&!make_geometry()) {
+        region_mesh_=std::move(prior);
+        error_=L"DX12 could not allocate decoded region geometry";
+        return false;
+    }
+    error_.clear();
+    return true;
+}
+void Renderer::clear_decoded_region_geometry() {
+    if(!region_mesh_)return;
+    if(ready_)wait_for_gpu();
+    // Clear server data immediately on disconnect. If restoring the local
+    // scene fails, stop rendering rather than showing stale world geometry.
+    region_mesh_.reset();
+    if(ready_&&!make_geometry()) {
+        ready_=false;
+        error_=L"DX12 could not restore offline scene on disconnect";
+    }
+}
 void Renderer::clear_creator_preview() {
     if(!preview_mesh_)return;
     if(ready_)wait_for_gpu();
@@ -564,7 +602,7 @@ void Renderer::draw() {
         0.f : std::chrono::duration<float>(now-last_camera_frame_).count();
     last_camera_frame_=now;
     const float seconds=std::chrono::duration<float>(now-start_time_).count();
-    if(!preview_mesh_) {
+    if(!preview_mesh_&&!region_mesh_) {
         avatar_.step(dt,sample_test_terrain_height);
         rig_physics_.step(avatar_.state(),dt);
         if(!rig::make_palette(rigphysics::build_pose(rig_physics_.output()),
@@ -664,7 +702,7 @@ void Renderer::draw() {
         commands_->SetPipelineState(shadow_pipeline_.Get());
         commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
-        if(!preview_mesh_) {
+        if(!preview_mesh_&&!region_mesh_) {
             const auto& a=avatar_.state();
             constants[25]=graphics_.animate_avatar && a.motion==avatar::Motion::Idle?
                 .025f*avatar_spring_.position():0.f;
@@ -715,7 +753,7 @@ void Renderer::draw() {
         1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
     commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
-    if(!preview_mesh_) {
+    if(!preview_mesh_&&!region_mesh_) {
         const auto& a=avatar_.state();
         constants[25]=graphics_.animate_avatar && a.motion==avatar::Motion::Idle?
             .025f*avatar_spring_.position():0.f;
