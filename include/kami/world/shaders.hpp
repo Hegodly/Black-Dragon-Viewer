@@ -41,7 +41,7 @@ float3 avatar_position(float3 local) {
     const float lateral=local.x<0.0?1.0:-1.0;
     // Coarse demonstration gait for KAMI's original six-box mannequin.
     // A live SL avatar will require skinned joint transforms and animation assets.
-    if(abs(local.x)<0.51 && local.y<1.22) {
+    if(abs(local.x)<0.46 && local.y<1.22) {
         const float swing=sin(phase)*lateral*gait;
         local.z+=0.27*swing*saturate((1.32-local.y)/1.32);
         local.y+=0.07*abs(swing);
