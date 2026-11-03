@@ -19,4 +19,14 @@ KAMI_SL_LOGIN_IDENTITY_API bool kami_sl_host_volume_id(
 // Pure deterministic offline test helper; never needs a real device ID.
 KAMI_SL_LOGIN_IDENTITY_API bool kami_sl_hash_volume_serial(
     std::uint32_t serial,char* output,std::size_t capacity) noexcept;
+
+// Modern official viewer machine ID uses a folded WMI product UUID
+// (fallback: Win32_OperatingSystem SerialNumber), MD5 hashed to 32 hex.
+// Returns false if WMI unavailable. No raw UUID or serial is returned.
+KAMI_SL_LOGIN_IDENTITY_API bool kami_sl_host_machine_hash(
+    char* output,std::size_t capacity) noexcept;
+
+// Offline deterministic test helper for Linden Lab's six-byte fold.
+KAMI_SL_LOGIN_IDENTITY_API bool kami_sl_hash_machine_serial(
+    const wchar_t* serial,char* output,std::size_t capacity) noexcept;
 }
