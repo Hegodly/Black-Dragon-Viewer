@@ -10,6 +10,8 @@
 #include "kami/graphics/settings.hpp"
 #include "kami/graphics/adaptive.hpp"
 #include "kami/features/telemetry.hpp"
+#include "kami/features/creator_studio.hpp"
+#include "kami/features/photo_studio.hpp"
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
@@ -37,6 +39,9 @@ private:
     void advance_graphics(unsigned row);
     void advance_graphics_effects(unsigned row);
     void advance_camera(unsigned row);
+    void advance_photo(unsigned row);
+    void open_creator_obj();
+    void save_photo_png();
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
     void draw_interface(float width, float height, const ui::Palette& palette);
@@ -61,6 +66,12 @@ private:
     std::chrono::steady_clock::time_point fps_epoch_{};
     unsigned fps_frames_ = 0;
     unsigned fps_display_ = 0;
+    creator::Preview creator_preview_{};
+    std::wstring creator_file_;
+    std::wstring creator_message_ = L"Choose a local OBJ file to preview.";
+    photo::Settings photo_settings_{};
+    std::wstring photo_message_ = L"DX12 live preview - capture PNG to save.";
+    world::CaptureStatus prior_capture_=world::CaptureStatus::Idle;
     bool light_ = false;
     unsigned page_ = 0;
     protocol::Session session_;
