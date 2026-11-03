@@ -28,5 +28,9 @@ public:
         ShaderPreparation& report,
         const Progress& progress = {});
     [[nodiscard]] static std::uint64_t source_version() noexcept;
+    [[nodiscard]] static bool prepare_shadow(
+        ID3D12Device* device,ID3D12RootSignature* signature,
+        Microsoft::WRL::ComPtr<ID3D12PipelineState>& shadow,
+        ShaderPreparation& report);
 };
 } // namespace kami::world

@@ -7,8 +7,11 @@ cbuffer Frame : register(b0) {
     row_major float4x4 viewProjection;
     float4 sunDirectionIntensity;
     float4 cameraWorldPosition;
-    float4 frame; // x=time seconds, y=avatar enabled, z=PBR enabled
+    float4 frame; // x=time seconds, y=avatar enabled, z=PBR enabled, w=shadows
+    row_major float4x4 lightViewProjection;
 };
+Texture2D<float> shadowDepth : register(t0);
+SamplerComparisonState shadowComparison : register(s0);
 struct VertexIn {
     float3 position : POSITION;
     float3 normal : NORMAL;
@@ -34,6 +37,30 @@ Interpolant vertex_main(VertexIn input) {
     output.material = input.material;
     return output;
 }
+float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
+    float3 world=input.position;
+    if(frame.y>0.5)
+        world.y+=0.055*sin(frame.x*2.0+input.position.y*0.25);
+    return mul(float4(world,1.0),lightViewProjection);
+}
+float shadow_factor(float3 position,float3 normal) {
+    if(frame.w<0.5) return 1.0;
+    const float4 clip=mul(float4(position,1.0),lightViewProjection);
+    if(clip.w<=0.001) return 1.0;
+    const float3 ndc=clip.xyz/clip.w;
+    float2 uv=float2(ndc.x*0.5+0.5,0.5-ndc.y*0.5);
+    if(uv.x<=0.0||uv.y<=0.0||uv.x>=1.0||uv.y>=1.0||
+       ndc.z<=0.0||ndc.z>=1.0) return 1.0;
+    const float normalLight=saturate(dot(normalize(normal),
+                                       normalize(-sunDirectionIntensity.xyz)));
+    const float bias=0.0015+0.003*(1.0-normalLight);
+    float total=0.0;
+    [unroll] for(int yy=-1;yy<=1;++yy)
+        [unroll] for(int xx=-1;xx<=1;++xx)
+            total+=shadowDepth.SampleCmpLevelZero(
+                shadowComparison,uv+float2(xx,yy)/1024.0,ndc.z-bias);
+    return total/9.0;
+}
 static const float PI = 3.14159265359;
 float3 fresnel_schlick(float cosine, float3 base) {
     return base+(1.0-base)*pow(saturate(1.0-cosine),5.0);
@@ -57,10 +84,11 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     float NdotH=saturate(dot(N,H));
     float VdotH=saturate(dot(V,H));
     float3 base=saturate(input.albedo);
+    float visibility=shadow_factor(input.position,N);
     float3 radiance=float3(1.25,1.18,1.08)*sunDirectionIntensity.w;
     float3 color;
     if(frame.z<0.5) {
-        color=base*(0.16+0.84*NdotL)*sunDirectionIntensity.w;
+        color=base*(0.16+0.84*NdotL*visibility)*sunDirectionIntensity.w;
     } else {
         float metallic=saturate(input.material.x);
         float roughness=clamp(input.material.y,0.07,1.0);
@@ -72,7 +100,7 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
         float D=ggx_distribution(NdotH,roughness);
         float3 specular=D*G*F/max(4.0*NdotV*NdotL,0.001);
         float3 diffuse=(1.0-F)*(1.0-metallic)*base/PI;
-        color=base*0.075+(diffuse+specular)*radiance*NdotL;
+        color=base*0.075+(diffuse+specular)*radiance*NdotL*visibility;
     }
     // Basic filmic output mapping while maintaining SDR UNORM compatibility.
     color=color/(color+float3(1.0,1.0,1.0));

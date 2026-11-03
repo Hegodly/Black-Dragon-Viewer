@@ -34,4 +34,11 @@ assert "DXGI_PRESENT_ALLOW_TEARING" in renderer
 assert "graphics_.render_scale_percent" in renderer
 assert "graphics_.terrain_divisions()" in renderer
 assert "graphics_.vsync" in renderer
+assert "make_shadow()" in renderer
+assert "D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE" in renderer
+assert "shadow_srv_heap_" in renderer
+shader=(root/"include/kami/world/shaders.hpp").read_text(encoding="utf-8")
+assert "shadow_vertex_main" in shader
+assert "shadow_factor" in shader
+assert "ggx_distribution" in shader
 print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")

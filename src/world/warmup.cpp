@@ -22,15 +22,20 @@ void ShaderWarmup::begin() {
         const bool ok=ShaderCache::prepare(
             device.native_device(),signature,pipeline,report,
             [this](unsigned percent, const wchar_t*) {
-                percent_.store(std::min(percent,100U));
+                percent_.store(std::min(percent*4U/5U,80U));
             });
-        shader_hit_.store(report.shader_cache_hit);
-        pipeline_hit_.store(report.pipeline_cache_hit);
-        cache_written_.store(report.written_to_disk);
+        ShaderPreparation shadow_report;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> shadow;
+        percent_.store(84);
+        const bool shadows_ok=ok && ShaderCache::prepare_shadow(
+            device.native_device(),signature.Get(),shadow,shadow_report);
+        shader_hit_.store(report.shader_cache_hit && shadow_report.shader_cache_hit);
+        pipeline_hit_.store(report.pipeline_cache_hit && shadow_report.pipeline_cache_hit);
+        cache_written_.store(report.written_to_disk && shadow_report.written_to_disk);
         percent_.store(100);
-        result_.store(!ok?WarmupResult::Failed:
-                      report.pipeline_cache_hit?WarmupResult::CacheReady:
-                                                WarmupResult::Optimized);
+        result_.store(!ok || !shadows_ok ? WarmupResult::Failed :
+                      report.pipeline_cache_hit && shadow_report.pipeline_cache_hit ?
+                      WarmupResult::CacheReady : WarmupResult::Optimized);
     });
 }
 WarmupSnapshot ShaderWarmup::snapshot() const noexcept {

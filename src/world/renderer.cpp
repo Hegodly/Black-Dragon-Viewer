@@ -64,6 +64,49 @@ D3D12_CPU_DESCRIPTOR_HANDLE Renderer::rtv_handle(UINT index) const noexcept {
     return handle;
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE Renderer::shadow_dsv() const noexcept {
+    auto handle=dsv_heap_->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr+=device_.native_device()->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    return handle;
+}
+
+bool Renderer::make_shadow() {
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width=kShadowSize;
+    desc.Height=kShadowSize;
+    desc.DepthOrArraySize=1;
+    desc.MipLevels=1;
+    desc.Format=DXGI_FORMAT_R32_TYPELESS;
+    desc.SampleDesc.Count=1;
+    desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    D3D12_CLEAR_VALUE clear{};
+    clear.Format=DXGI_FORMAT_D32_FLOAT;
+    clear.DepthStencil.Depth=1.f;
+    const auto properties=heap(D3D12_HEAP_TYPE_DEFAULT);
+    if(FAILED(device_.native_device()->CreateCommittedResource(
+            &properties,D3D12_HEAP_FLAG_NONE,&desc,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,&clear,
+            IID_PPV_ARGS(shadow_map_.ReleaseAndGetAddressOf()))))
+        return false;
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{};
+    dsv.Format=DXGI_FORMAT_D32_FLOAT;
+    dsv.ViewDimension=D3D12_DSV_DIMENSION_TEXTURE2D;
+    device_.native_device()->CreateDepthStencilView(
+        shadow_map_.Get(),&dsv,shadow_dsv());
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format=DXGI_FORMAT_R32_FLOAT;
+    srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Texture2D.MipLevels=1;
+    device_.native_device()->CreateShaderResourceView(
+        shadow_map_.Get(),&srv,
+        shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart());
+    return true;
+}
+
 bool Renderer::make_targets() {
     auto* graphics=device_.native_device();
     for(UINT i=0;i<kBuffers;++i) {
@@ -104,7 +147,11 @@ bool Renderer::make_depth() {
 
 bool Renderer::make_pipeline() {
     ShaderPreparation report;
-    return ShaderCache::prepare(device_.native_device(),signature_,pipeline_,report);
+    if(!ShaderCache::prepare(device_.native_device(),signature_,pipeline_,report))
+        return false;
+    ShaderPreparation shadow_report;
+    return ShaderCache::prepare_shadow(
+        device_.native_device(),signature_.Get(),shadow_pipeline_,shadow_report);
 }
 
 bool Renderer::make_geometry() {
@@ -191,10 +238,16 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_DESCRIPTOR_HEAP_DESC dsv{};
     dsv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-    dsv.NumDescriptors=1;
+    dsv.NumDescriptors=2;
+    D3D12_DESCRIPTOR_HEAP_DESC srv{};
+    srv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srv.NumDescriptors=1;
+    srv.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if(FAILED(device_.native_device()->CreateDescriptorHeap(
             &dsv,IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf()))) ||
-       !make_targets() || !make_depth()) {
+       FAILED(device_.native_device()->CreateDescriptorHeap(
+            &srv,IID_PPV_ARGS(shadow_srv_heap_.ReleaseAndGetAddressOf()))) ||
+       !make_targets() || !make_depth() || !make_shadow()) {
         error_=L"Depth or color attachments failed";
         return false;
     }
@@ -294,29 +347,6 @@ void Renderer::draw() {
     if(FAILED(allocator_->Reset()) ||
        FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get()))) return;
 
-    const UINT index=swapchain_->GetCurrentBackBufferIndex();
-    auto begin=barrier(buffers_[index].Get(),
-        D3D12_RESOURCE_STATE_PRESENT,D3D12_RESOURCE_STATE_RENDER_TARGET);
-    commands_->ResourceBarrier(1,&begin);
-    const auto rtv=rtv_handle(index);
-    const auto dsv=dsv_heap_->GetCPUDescriptorHandleForHeapStart();
-    const float background[]={.055f,.09f,.15f,1.f};
-    commands_->OMSetRenderTargets(1,&rtv,FALSE,&dsv);
-    commands_->ClearRenderTargetView(rtv,background,0,nullptr);
-    commands_->ClearDepthStencilView(dsv,D3D12_CLEAR_FLAG_DEPTH,1.f,0,0,nullptr);
-
-    const D3D12_VIEWPORT viewport{
-        0.f,0.f,static_cast<float>(width_),static_cast<float>(height_),0.f,1.f
-    };
-    const D3D12_RECT scissor{
-        0,0,static_cast<LONG>(width_),static_cast<LONG>(height_)
-    };
-    commands_->RSSetViewports(1,&viewport);
-    commands_->RSSetScissorRects(1,&scissor);
-    commands_->SetGraphicsRootSignature(signature_.Get());
-    commands_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    commands_->IASetVertexBuffers(0,1,&vertex_view_);
-
     using namespace DirectX;
     const XMVECTOR eye=XMVectorSet(
         std::sin(yaw_)*distance_,elevation_,
@@ -326,25 +356,100 @@ void Renderer::draw() {
     const XMMATRIX projection=XMMatrixPerspectiveFovLH(
         XMConvertToRadians(65.f),static_cast<float>(width_)/height_,
         .08f,200.f);
-    XMFLOAT4X4 viewproj{};
+    const XMVECTOR sunOrigin=XMVectorScale(
+        XMVector3Normalize(XMVectorSet(-.35f,.86f,-.38f,0.f)),27.f);
+    const XMMATRIX lightView=XMMatrixLookAtLH(
+        sunOrigin,XMVectorSet(0,0,0,1),XMVectorSet(0,1,0,0));
+    const XMMATRIX lightProjection=XMMatrixOrthographicLH(
+        40.f,40.f,.1f,80.f);
+
+    XMFLOAT4X4 viewproj{},lightproj{};
     XMStoreFloat4x4(&viewproj,view*projection);
-    std::array<float,28> constants{};
+    XMStoreFloat4x4(&lightproj,lightView*lightProjection);
+    std::array<float,44> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
     constants[17]=-.86f;
     constants[18]=.38f;
     constants[19]=graphics_.sun_strength();
-    XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&constants[20]),eye);
+    constants[20]=XMVectorGetX(eye);
+    constants[21]=XMVectorGetY(eye);
+    constants[22]=XMVectorGetZ(eye);
     constants[23]=1.f;
     const auto elapsed=std::chrono::steady_clock::now()-start_time_;
     constants[24]=std::chrono::duration<float>(elapsed).count();
     constants[25]=0.f;
     constants[26]=graphics_.pbr?1.f:0.f;
-    constants[27]=0.f;
-    commands_->SetGraphicsRoot32BitConstants(0,28,constants.data(),0);
+    constants[27]=graphics_.shadows?1.f:0.f;
+    std::memcpy(constants.data()+28,&lightproj,sizeof(lightproj));
+
+    commands_->SetGraphicsRootSignature(signature_.Get());
+    commands_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commands_->IASetVertexBuffers(0,1,&vertex_view_);
+
+    // The depth-only pass and lit pass share the same geometry and original
+    // GPU animation clock, ensuring the moving mannequin casts a matching
+    // shadow. Skipping this pass when disabled saves the rendering workload.
+    if(graphics_.shadows) {
+        auto to_depth=barrier(shadow_map_.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        commands_->ResourceBarrier(1,&to_depth);
+        const auto shadowHandle=shadow_dsv();
+        commands_->OMSetRenderTargets(0,nullptr,FALSE,&shadowHandle);
+        commands_->ClearDepthStencilView(
+            shadowHandle,D3D12_CLEAR_FLAG_DEPTH,1.f,0,0,nullptr);
+        const D3D12_VIEWPORT shadowView{
+            0.f,0.f,static_cast<float>(kShadowSize),
+            static_cast<float>(kShadowSize),0.f,1.f
+        };
+        const D3D12_RECT shadowRect{
+            0,0,static_cast<LONG>(kShadowSize),
+            static_cast<LONG>(kShadowSize)
+        };
+        commands_->RSSetViewports(1,&shadowView);
+        commands_->RSSetScissorRects(1,&shadowRect);
+        commands_->SetPipelineState(shadow_pipeline_.Get());
+        commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
+        commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
+        constants[25]=graphics_.animate_avatar?1.f:0.f;
+        commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
+        commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
+                                static_cast<UINT>(terrain_count_),0);
+        constants[25]=0.f;
+        auto to_srv=barrier(shadow_map_.Get(),
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        commands_->ResourceBarrier(1,&to_srv);
+    }
+
+    const UINT index=swapchain_->GetCurrentBackBufferIndex();
+    auto begin=barrier(buffers_[index].Get(),
+        D3D12_RESOURCE_STATE_PRESENT,D3D12_RESOURCE_STATE_RENDER_TARGET);
+    commands_->ResourceBarrier(1,&begin);
+    const auto rtv=rtv_handle(index);
+    const auto dsv=dsv_heap_->GetCPUDescriptorHandleForHeapStart();
+    constexpr float background[]={.055f,.09f,.15f,1.f};
+    commands_->OMSetRenderTargets(1,&rtv,FALSE,&dsv);
+    commands_->ClearRenderTargetView(rtv,background,0,nullptr);
+    commands_->ClearDepthStencilView(dsv,D3D12_CLEAR_FLAG_DEPTH,1.f,0,0,nullptr);
+    const D3D12_VIEWPORT viewport{
+        0.f,0.f,static_cast<float>(width_),static_cast<float>(height_),0.f,1.f
+    };
+    const D3D12_RECT scissor{
+        0,0,static_cast<LONG>(width_),static_cast<LONG>(height_)
+    };
+    commands_->RSSetViewports(1,&viewport);
+    commands_->RSSetScissorRects(1,&scissor);
+    commands_->SetPipelineState(pipeline_.Get());
+    ID3D12DescriptorHeap* heaps[]={shadow_srv_heap_.Get()};
+    commands_->SetDescriptorHeaps(1,heaps);
+    commands_->SetGraphicsRootDescriptorTable(
+        1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
+    commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
     constants[25]=graphics_.animate_avatar?1.f:0.f;
-    commands_->SetGraphicsRoot32BitConstants(0,28,constants.data(),0);
+    commands_->SetGraphicsRoot32BitConstants(0,44,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
     auto end=barrier(buffers_[index].Get(),
@@ -356,14 +461,13 @@ void Renderer::draw() {
     const UINT sync=graphics_.vsync?1U:0U;
     const UINT flags=(!graphics_.vsync && allow_tearing_)?
         DXGI_PRESENT_ALLOW_TEARING:0U;
-    const HRESULT result=swapchain_->Present(sync,flags);
-    if(FAILED(result)) {
+    if(FAILED(swapchain_->Present(sync,flags))) {
         error_=L"DX12 presentation failed";
         ready_=false;
         return;
     }
-    // Single in-flight frame prioritizes safe startup/test behavior.
-    // A multiframe allocator/fence ring will replace this before FPS sign-off.
+    // Safe single-frame synchronization; multiframe scheduling is still
+    // pending performance measurements on a real GPU.
     wait_for_gpu();
 }
 void Renderer::shutdown() noexcept {
@@ -371,15 +475,18 @@ void Renderer::shutdown() noexcept {
     ready_=false;
     if(fence_event_) { CloseHandle(fence_event_); fence_event_=nullptr; }
     depth_.Reset();
+    shadow_map_.Reset();
     for(auto& buffer:buffers_) buffer.Reset();
     swapchain_.Reset();
     geometry_.Reset();
     commands_.Reset();
     allocator_.Reset();
     pipeline_.Reset();
+    shadow_pipeline_.Reset();
     signature_.Reset();
     fence_.Reset();
     rtv_heap_.Reset();
     dsv_heap_.Reset();
+    shadow_srv_heap_.Reset();
 }
 } // namespace kami::world

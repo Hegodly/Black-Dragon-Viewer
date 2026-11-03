@@ -40,10 +40,13 @@ public:
 
 private:
     static constexpr UINT kBuffers = 2;
+    static constexpr UINT kShadowSize = 1024;
     [[nodiscard]] bool make_pipeline();
     [[nodiscard]] bool make_geometry();
     [[nodiscard]] bool make_targets();
     [[nodiscard]] bool make_depth();
+    [[nodiscard]] bool make_shadow();
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
     void wait_for_gpu() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle(UINT index) const noexcept;
 
@@ -63,10 +66,13 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain3> swapchain_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadow_srv_heap_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kBuffers> buffers_;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> shadow_map_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> shadow_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commands_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

@@ -21,7 +21,7 @@ constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
 constexpr UINT kCompilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 constexpr std::size_t kMaxShaderBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxPipelineBytes = 32U * 1024U * 1024U;
-constexpr std::string_view kBuildVersion = "kami-dx12-pso-v3-pbr-anim-sm5";
+constexpr std::string_view kBuildVersion = "kami-dx12-pso-v4-shadowmap-pbr-sm5";
 namespace fs = std::filesystem;
 
 std::uint64_t fnv(std::string_view data, std::uint64_t h = 14695981039346656037ULL) noexcept {
@@ -125,11 +125,37 @@ bool root_signature(ID3D12Device* device,
     D3D12_ROOT_PARAMETER constants{};
     constants.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     constants.Constants.ShaderRegister=0;
-    constants.Constants.Num32BitValues=28;
+    constants.Constants.Num32BitValues=44;
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_DESCRIPTOR_RANGE shadow_range{};
+    shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    shadow_range.NumDescriptors=1;
+    shadow_range.BaseShaderRegister=0;
+    shadow_range.OffsetInDescriptorsFromTableStart=D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    D3D12_ROOT_PARAMETER parameters[2]{};
+    parameters[0]=constants;
+    parameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[1].DescriptorTable.NumDescriptorRanges=1;
+    parameters[1].DescriptorTable.pDescriptorRanges=&shadow_range;
+    parameters[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC comparison{};
+    comparison.Filter=D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+    comparison.AddressU=D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    comparison.AddressV=D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    comparison.AddressW=D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    comparison.MipLODBias=0.f;
+    comparison.MaxAnisotropy=1;
+    comparison.ComparisonFunc=D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    comparison.BorderColor=D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+    comparison.MinLOD=0.f;
+    comparison.MaxLOD=D3D12_FLOAT32_MAX;
+    comparison.ShaderRegister=0;
+    comparison.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_ROOT_SIGNATURE_DESC root{};
-    root.NumParameters=1;
-    root.pParameters=&constants;
+    root.NumParameters=2;
+    root.pParameters=parameters;
+    root.NumStaticSamplers=1;
+    root.pStaticSamplers=&comparison;
     root.Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     Microsoft::WRL::ComPtr<ID3DBlob> blob;
     if(FAILED(D3D12SerializeRootSignature(&root,D3D_ROOT_SIGNATURE_VERSION_1,
@@ -266,4 +292,89 @@ bool ShaderCache::prepare(
     notify(100,L"Shader optimization complete");
     return true;
 }
+
+bool ShaderCache::prepare_shadow(
+    ID3D12Device* device,ID3D12RootSignature* signature,
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>& shadow,
+    ShaderPreparation& report) {
+    if(!device || !signature) {
+        report.error=L"Shadow shader requires a DX12 device and root signature";
+        return false;
+    }
+    const fs::path directory=cache_path(device,report);
+    const fs::path shader_path=directory.empty()?fs::path{}:directory/L"shadow_vs.cso";
+    const fs::path pipeline_path=directory.empty()?fs::path{}:directory/L"shadow.pso";
+    std::vector<char> vs=directory.empty()?std::vector<char>{}:read(shader_path,kMaxShaderBytes);
+    const bool shader_cached=!vs.empty();
+    if(vs.empty() && !compile("shadow_vertex_main","vs_5_0",vs,report.error))
+        return false;
+    static constexpr D3D12_INPUT_ELEMENT_DESC input[]={
+        {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"COLOR",0,DXGI_FORMAT_R32G32B32_FLOAT,0,24,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
+    };
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
+    desc.pRootSignature=signature;
+    desc.VS={vs.data(),vs.size()};
+    desc.InputLayout={input,4};
+    desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
+    desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
+    desc.RasterizerState.DepthClipEnable=TRUE;
+    desc.RasterizerState.DepthBias=1400;
+    desc.RasterizerState.SlopeScaledDepthBias=1.35f;
+    desc.DepthStencilState.DepthEnable=TRUE;
+    desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ALL;
+    desc.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_LESS;
+    desc.SampleMask=UINT_MAX;
+    desc.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.NumRenderTargets=0;
+    desc.DSVFormat=DXGI_FORMAT_D32_FLOAT;
+    desc.SampleDesc.Count=1;
+
+    std::vector<char> existing=directory.empty()?std::vector<char>{}:read(pipeline_path,kMaxPipelineBytes);
+    if(!existing.empty()) {
+        desc.CachedPSO={existing.data(),existing.size()};
+        if(SUCCEEDED(device->CreateGraphicsPipelineState(
+                &desc,IID_PPV_ARGS(shadow.ReleaseAndGetAddressOf())))) {
+            report.shader_cache_hit=shader_cached;
+            report.pipeline_cache_hit=true;
+            return true;
+        }
+        desc.CachedPSO={};
+        shadow.Reset();
+        report.driver_cache_invalidated=true;
+    }
+    if(FAILED(device->CreateGraphicsPipelineState(
+            &desc,IID_PPV_ARGS(shadow.ReleaseAndGetAddressOf())))) {
+        // Retry with a fresh shader in case cached bytecode was corrupted.
+        if(!shader_cached || !compile("shadow_vertex_main","vs_5_0",vs,report.error)) {
+            report.error=L"DX12 shadow pipeline creation failed";
+            return false;
+        }
+        desc.VS={vs.data(),vs.size()};
+        if(FAILED(device->CreateGraphicsPipelineState(
+                &desc,IID_PPV_ARGS(shadow.ReleaseAndGetAddressOf())))) {
+            report.error=L"DX12 shadow pipeline creation failed after recompiling";
+            return false;
+        }
+    }
+    if(!directory.empty()) {
+        bool saved=shader_cached ||
+            write(shader_path,vs.data(),vs.size());
+        Microsoft::WRL::ComPtr<ID3DBlob> blob;
+        if(SUCCEEDED(shadow->GetCachedBlob(blob.GetAddressOf())) &&
+           blob && blob->GetBufferSize()>0 &&
+           blob->GetBufferSize()<=kMaxPipelineBytes)
+            saved=write(pipeline_path,blob->GetBufferPointer(),blob->GetBufferSize())&&saved;
+        else saved=false;
+        report.written_to_disk=saved;
+    }
+    return true;
+}
+
 } // namespace kami::world

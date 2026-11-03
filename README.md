@@ -42,3 +42,9 @@ Open **SETTINGS (F6)**. The new Graphics + FPS pane is authored from KAMI C++ an
 - **FPS cap:** a frame pacing loop targets the selected maximum. VSync uses the DXGI presentation interval, with tearing only where hardware/Windows reports support. The real-time World FPS display updates once per second.
 
 These are **only** settings for KAMI's original *offline test scene*. DLSS, XeSS, FSR, real-time ray tracing, SSAO, full PBR asset ingestion, frame generation and a live Second Life world remain unimplemented and have no pretend toggles. This first batch is not yet benchmarked against any existing viewer; average FPS can be bounded by CPU/GPU and OS scheduling.
+
+## DX12 PBR, GPU animation, and depth-based directional shadows
+
+The independent KAMI scene now uses a GGX metallic/roughness shader path, per-vertex material parameters, and a separately toggleable simplified diffuse path. The preview mannequin has its own optional GPU-driven breathing motion (it is not a real Second Life avatar). A second D3D12 depth-only render pass writes a 1024x1024 shadow texture, with a 3x3 percentage-closer filter sampled by the physically based material shader. **Shadows OFF** genuinely skips the shadow pass. These effects are available as settings 5, 6 and 7. The startup GPU shader optimization compiles and caches both the main and shadow DX12 pipelines.
+
+This adds real DirectX 12 material and shadow machinery, **not** SL asset ingestion, network login, server terrain, skeletal avatar playback, physically based glTF texture import, hardware ray tracing, frame generation, or DLSS/FSR/XeSS. Those remain unimplemented. Compilation tests cannot confirm correct imagery on physical GPUs; use the offline F2 scene for visual validation. Real-world viewing requires independent authentication, transport, and asset streaming.

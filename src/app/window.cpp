@@ -133,7 +133,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
-        if(page_ == 5 && wp >= '1' && wp <= '6') {
+        if(page_ == 5 && wp >= '1' && wp <= '7') {
             advance_graphics(static_cast<unsigned>(wp - '1'));
             return 0;
         }
@@ -272,12 +272,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX,90,contentWidth,height-165),29.f,p.elevated);
         label(L"GRAPHICS + FPS  /  DIRECTX 12",
               box(contentX+28,113,contentWidth-55,38),title_font_.Get(),p.text);
-        label(L"Renderer controls - click a row or press 1 through 6",
+        label(L"Renderer controls - click a row or press 1 through 7",
               box(contentX+28,153,contentWidth-55,28),small_font_.Get(),p.muted);
         const wchar_t* names[]={
             L"1  QUALITY PRESET",L"2  WORLD RENDER SCALE",
             L"3  FRAME RATE LIMIT",L"4  VERTICAL SYNC",
-            L"5  PBR MATERIAL LIGHTING",L"6  AVATAR PREVIEW MOTION"
+            L"5  PBR MATERIAL LIGHTING",L"6  AVATAR PREVIEW MOTION",
+            L"7  SOFT SHADOW MAPPING"
         };
         std::wstring preset=graphics::preset_label(graphics_.preset);
         std::wstring scale=std::to_wstring(graphics_.render_scale_percent)+L"%";
@@ -286,9 +287,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         const std::wstring values[]={
             preset,scale,fps,graphics_.vsync?L"ON":L"OFF",
             graphics_.pbr?L"GGX METALLIC / ROUGHNESS":L"OFF / BASIC LAMBERT",
-            graphics_.animate_avatar?L"ON":L"OFF"
+            graphics_.animate_avatar?L"ON":L"OFF",
+            graphics_.shadows?L"DX12 1024px + 3x3 PCF":L"OFF / SKIP SHADOW PASS"
         };
-        for(unsigned i=0;i<6;++i) {
+        for(unsigned i=0;i<7;++i) {
             const float y=186.f+55.f*static_cast<float>(i);
             round_rect(box(contentX+24,y,contentWidth-48,51),14.f,p.surface);
             label(names[i],box(contentX+45,y+4,contentWidth-85,20),
@@ -489,6 +491,7 @@ void Window::advance_graphics(unsigned row) {
     case 3: graphics_.vsync=!graphics_.vsync; break;
     case 4: graphics_.pbr=!graphics_.pbr; break;
     case 5: graphics_.animate_avatar=!graphics_.animate_avatar; break;
+    case 6: graphics_.shadows=!graphics_.shadows; break;
     default: return;
     }
     graphics_=graphics::normalize(graphics_);
@@ -508,7 +511,7 @@ void Window::click(float x, float y) {
         return;
     }
     if(page_==5 && x>=303.f && x<width-49.f) {
-        for(unsigned i=0;i<6;++i) {
+        for(unsigned i=0;i<7;++i) {
             const float top=186.f+55.f*static_cast<float>(i);
             if(y>=top && y<top+51.f) {
                 advance_graphics(i);

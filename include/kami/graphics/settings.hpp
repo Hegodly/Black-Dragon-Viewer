@@ -11,6 +11,7 @@ struct Settings {
     bool vsync=true;
     bool pbr=true;
     bool animate_avatar=true;
+    bool shadows=true;
     [[nodiscard]] unsigned terrain_divisions() const noexcept {
         switch(preset) {
         case Preset::Performance: return 16;

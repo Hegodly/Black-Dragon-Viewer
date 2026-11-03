@@ -40,6 +40,7 @@ Settings load() {
     settings.vsync=read(key,L"VSync",1)!=0;
     settings.pbr=read(key,L"PBR",1)!=0;
     settings.animate_avatar=read(key,L"AvatarPreviewMotion",1)!=0;
+    settings.shadows=read(key,L"Shadows",1)!=0;
     RegCloseKey(key);
     return normalize(settings);
 }
@@ -54,6 +55,7 @@ void save(Settings settings) noexcept {
     write(key,L"VSync",settings.vsync?1U:0U);
     write(key,L"PBR",settings.pbr?1U:0U);
     write(key,L"AvatarPreviewMotion",settings.animate_avatar?1U:0U);
+    write(key,L"Shadows",settings.shadows?1U:0U);
     RegCloseKey(key);
 }
 const wchar_t* preset_label(Preset preset) noexcept {
