@@ -39,6 +39,42 @@ jobs:
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
       - name: Compile independent Windows app
         run: cmake --build build --config Release --parallel
+      - name: Validate synthetic Second Life XML-RPC request
+        shell: pwsh
+        run: |
+          # Synthetic fixture only; never expose real login credentials.
+          $fixture = & "$PWD/build/Release/kami_sl_login_tests.exe" --emit-synthetic-login-xml
+          if ($LASTEXITCODE -ne 0) { throw "Could not generate synthetic XML-RPC request" }
+          $settings = [System.Xml.XmlReaderSettings]::new()
+          $settings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
+          $settings.XmlResolver = $null
+          $reader = [System.Xml.XmlReader]::Create(
+            [System.IO.StringReader]::new($fixture), $settings)
+          $xml = [System.Xml.XmlDocument]::new()
+          $xml.XmlResolver = $null
+          try {
+            $xml.Load($reader)
+            $method = $xml.SelectSingleNode("/methodCall/methodName")
+            $struct = $xml.SelectSingleNode("/methodCall/params/param/value/struct")
+            if ($null -eq $method -or $method.InnerText -ne "login_to_simulator" -or
+                $null -eq $struct) { throw "Malformed XML-RPC method or struct" }
+            $fields = @{}
+            foreach($member in $struct.SelectNodes("member")) {
+              $name = $member.SelectSingleNode("name").InnerText
+              if ($fields.ContainsKey($name)) { throw "Duplicate XML-RPC key" }
+              $fields[$name] = $member
+            }
+            foreach($key in @("first","last","passwd","id0","mac",
+                              "channel","version","platform","options")) {
+              if (!$fields.ContainsKey($key)) { throw "Missing XML-RPC field: $key" }
+            }
+            if ($null -eq $fields["options"].SelectSingleNode("value/array/data")) {
+              throw "Options must be an XML-RPC array"
+            }
+            if ($null -eq $fields["agree_to_tos"].SelectSingleNode("value/boolean")) {
+              throw "ToS flag must be an XML-RPC boolean"
+            }
+          } finally { $reader.Dispose() }
       - name: Test native core
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Package test executable
