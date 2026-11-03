@@ -74,6 +74,8 @@ assert "login_http_diagnostic(code)" in login
 assert "failure.message=login_http_diagnostic(code)" in login
 assert "KAMI Beyond Reality Dev" in login
 assert "src/protocol/load_scheduler.cpp" in cmake
+assert "src/protocol/caps.cpp" in cmake
+assert (root/"include/kami/protocol/caps.hpp").is_file()
 assert "src/protocol/lludp.cpp" in cmake
 assert "src/protocol/simulator_wire.cpp" in cmake
 assert "src/protocol/simulator_transport.cpp" in cmake
