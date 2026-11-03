@@ -47,6 +47,8 @@ int main(int argc,char** argv){
        describe_login_http_response(true,"",0)!=L"empty response"||
        describe_login_http_response(false,"",12030)!=
            L"unavailable (WinHTTP 12030)"||
+       describe_login_http_response(false,"",12152)!=
+           L"cannot parse HTTP response (WinHTTP 12152)"||
        classify_login_http_content_type(L"TEXT/HTML; charset=UTF-8")!=
            L"HTML error page (Content-Type)"||
        classify_login_http_content_type(L"application/json")!=
@@ -57,6 +59,8 @@ int main(int argc,char** argv){
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",
                                               "f6532621685700b88aecbf202dc8f9d2",true);
+    if(!valid.starts_with("<?xml version=\"1.0\"?>")||
+       valid.find("encoding=")!=std::string::npos)return 25;
     if(valid.empty()||valid.find("<methodName>login_to_simulator</methodName>")==
        std::string::npos||
        valid.find("<name>passwd</name>")==std::string::npos||
