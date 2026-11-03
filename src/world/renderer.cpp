@@ -110,6 +110,47 @@ bool Renderer::make_shadow() {
 }
 
 
+
+bool Renderer::make_skin_palette() {
+    if(!device_.native_device()||!shadow_srv_heap_)return false;
+    // A small dynamically updated 8-bone palette; one mapped upload buffer.
+    // GPU frames are fenced before reuse by the existing draw() scheduler.
+    const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
+    const auto desc=buffer_desc(sizeof(rig::Matrix)*rig::kJointCount);
+    if(FAILED(device_.native_device()->CreateCommittedResource(
+        &properties,D3D12_HEAP_FLAG_NONE,&desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+        IID_PPV_ARGS(skin_palette_buffer_.ReleaseAndGetAddressOf()))))
+        return false;
+    const rig::Pose rest{};
+    if(!rig::make_palette(rest,skin_matrices_))return false;
+    if(!update_skin_palette())return false;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format=DXGI_FORMAT_UNKNOWN;
+    srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Buffer.FirstElement=0;
+    srv.Buffer.NumElements=static_cast<UINT>(rig::kJointCount);
+    srv.Buffer.StructureByteStride=sizeof(rig::Matrix);
+    srv.Buffer.Flags=D3D12_BUFFER_SRV_FLAG_NONE;
+    auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr+=2U*device_.native_device()->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    device_.native_device()->CreateShaderResourceView(
+        skin_palette_buffer_.Get(),&srv,handle);
+    return true;
+}
+bool Renderer::update_skin_palette() noexcept {
+    if(!skin_palette_buffer_)return false;
+    void* data=nullptr;
+    const D3D12_RANGE no_read{0,0};
+    if(FAILED(skin_palette_buffer_->Map(0,&no_read,&data))||!data)return false;
+    std::memcpy(data,skin_matrices_.data(),sizeof(skin_matrices_));
+    const D3D12_RANGE write{0,sizeof(skin_matrices_)};
+    skin_palette_buffer_->Unmap(0,&write);
+    return true;
+}
+
 bool Renderer::make_material_texture() {
     // First GPU image is a KAMI-authored procedural 64x64 albedo texture.
     // This creates the real DX12 upload + shader-resource path required
@@ -273,7 +314,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     if(!window || !width || !height) { error_=L"Invalid viewport dimensions"; return false; }
     window_=window;
     avatar_.reset(sample_test_terrain_height);
-    body_physics_.reset();
+    rig_physics_.reset();
     client_width_=width;
     client_height_=height;
     width_=scaled(width,graphics_.render_scale_percent);
@@ -332,7 +373,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     dsv.NumDescriptors=2;
     D3D12_DESCRIPTOR_HEAP_DESC srv{};
     srv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srv.NumDescriptors=2;
+    srv.NumDescriptors=3;
     srv.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if(FAILED(device_.native_device()->CreateDescriptorHeap(
             &dsv,IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf()))) ||
@@ -373,6 +414,10 @@ bool Renderer::initialize(HWND window,UINT width,UINT height) {
     }
     if(!make_material_texture()) {
         error_=L"Could not upload DX12 material texture";
+        return false;
+    }
+    if(!make_skin_palette()) {
+        error_=L"Could not create DX12 skinned-avatar palette";
         return false;
     }
     ready_=true;
@@ -489,7 +534,13 @@ void Renderer::draw() {
     const float seconds=std::chrono::duration<float>(now-start_time_).count();
     if(!preview_mesh_) {
         avatar_.step(dt,sample_test_terrain_height);
-        body_physics_.step(avatar_.state(),dt);
+        rig_physics_.step(avatar_.state(),dt);
+        if(!rig::make_palette(rigphysics::build_pose(rig_physics_.output()),
+                              skin_matrices_)||!update_skin_palette()) {
+            error_=L"Could not update DX12 avatar skin palette";
+            ready_=false;
+            return;
+        }
         const auto& state=avatar_.state();
         camera_.set_subject({state.x,state.y,state.z},state.heading);
     }
@@ -549,6 +600,10 @@ void Renderer::draw() {
     constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
 
     commands_->SetGraphicsRootSignature(signature_.Get());
+    ID3D12DescriptorHeap* resources[]={shadow_srv_heap_.Get()};
+    commands_->SetDescriptorHeaps(1,resources);
+    commands_->SetGraphicsRootDescriptorTable(
+        1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
     commands_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commands_->IASetVertexBuffers(0,1,&vertex_view_);
 
@@ -585,10 +640,10 @@ void Renderer::draw() {
             constants[55]=graphics_.animate_avatar?a.gait:0.f;
             constants[56]=a.x;constants[57]=a.y;
             constants[58]=a.z;constants[59]=a.heading;
-            const auto displacement=body_physics_.offsets();
-            constants[60]=displacement.breast_y;
-            constants[61]=displacement.belly_y;
-            constants[62]=displacement.butt_y;
+            // Rigged fitted-mesh surfaces use the full six-axis GPU skin
+            // palette; keep these old marker offsets at zero to avoid
+            // applying the deformation twice.
+            constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
         }
         commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
@@ -636,10 +691,10 @@ void Renderer::draw() {
         constants[55]=graphics_.animate_avatar?a.gait:0.f;
         constants[56]=a.x;constants[57]=a.y;
         constants[58]=a.z;constants[59]=a.heading;
-            const auto displacement=body_physics_.offsets();
-            constants[60]=displacement.breast_y;
-            constants[61]=displacement.belly_y;
-            constants[62]=displacement.butt_y;
+            // Rigged fitted-mesh surfaces use the full six-axis GPU skin
+            // palette; keep these old marker offsets at zero to avoid
+            // applying the deformation twice.
+            constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
     }
     commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
@@ -740,6 +795,7 @@ void Renderer::shutdown() noexcept {
     shadow_map_.Reset();
     material_texture_.Reset();
     material_upload_.Reset();
+    skin_palette_buffer_.Reset();
     for(auto& buffer:buffers_) buffer.Reset();
     swapchain_.Reset();
     geometry_.Reset();
