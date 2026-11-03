@@ -130,8 +130,8 @@ bool Renderer::make_skin_palette() {
     srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;
     srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srv.Buffer.FirstElement=0;
-    srv.Buffer.NumElements=static_cast<UINT>(rig::kJointCount);
-    srv.Buffer.StructureByteStride=sizeof(rig::Matrix);
+    srv.Buffer.NumElements=static_cast<UINT>(rig::kJointCount*4U);
+    srv.Buffer.StructureByteStride=sizeof(float)*4U;
     srv.Buffer.Flags=D3D12_BUFFER_SRV_FLAG_NONE;
     auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
     handle.ptr+=2U*device_.native_device()->GetDescriptorHandleIncrementSize(
