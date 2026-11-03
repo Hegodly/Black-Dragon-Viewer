@@ -19,6 +19,9 @@ assert "D3D12_COMMAND_LIST_TYPE_DIRECT" in renderer
 assert "DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE" in renderer
 assert "src/world/device.cpp" in cmake
 assert "d3d12 dxgi" in cmake
+assert (root/"src/world/shader_cache.cpp").is_file()
+assert (root/"src/world/warmup.cpp").is_file()
+assert "shader_warmup_.begin()" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
 assert not re.search(r"\b(?:OpenGL|glCreateShader|wglCreateContext|D3D11CreateDevice)\s*\(",renderer)
 
 print("PASS: independent KAMI source boundary; no imported viewer code")

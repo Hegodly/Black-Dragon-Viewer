@@ -10,6 +10,7 @@
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
 #include "kami/world/renderer.hpp"
+#include "kami/world/warmup.hpp"
 
 namespace kami::app {
 class Window final {
@@ -34,6 +35,7 @@ private:
     bool world_initialized_ = false;
     bool world_ready_ = false;
     world::Renderer world_renderer_;
+    world::ShaderWarmup shader_warmup_;
     bool light_ = false;
     unsigned page_ = 0;
     protocol::Session session_;

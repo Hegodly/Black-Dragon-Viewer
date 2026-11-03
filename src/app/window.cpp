@@ -73,7 +73,11 @@ bool Window::create(HINSTANCE instance, int show) {
 
     const BOOL dark = light_ ? FALSE : TRUE;
     (void)DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
+    // COD-like first-run hardware pipeline preparation happens automatically
+    // on the opening KAMI screen, before the World tab is entered.
+    shader_warmup_.begin();
     (void)SetTimer(hwnd_, 201, 33, nullptr);
+    (void)SetTimer(hwnd_, 202, 125, nullptr);
     ShowWindow(hwnd_, show);
     UpdateWindow(hwnd_);
     return true;
@@ -112,6 +116,13 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_TIMER:
         if (wp == 201 && page_ == 1 && world_ready_ && !IsIconic(hwnd_))
             world_renderer_.draw();
+        if (wp == 202) {
+            const auto state=shader_warmup_.snapshot();
+            if (page_ == 0) InvalidateRect(hwnd_, nullptr, FALSE);
+            if (state.result != world::WarmupResult::Idle &&
+                state.result != world::WarmupResult::Optimizing)
+                (void)KillTimer(hwnd_, 202);
+        }
         return 0;
     case WM_MOUSEWHEEL:
         if (page_ == 1 && world_ready_) {
@@ -149,6 +160,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         return 1;
     case WM_DESTROY:
         (void)KillTimer(hwnd_, 201);
+        (void)KillTimer(hwnd_, 202);
         world_renderer_.shutdown();
         target_.Reset();
         PostQuitMessage(0);
@@ -287,13 +299,60 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     label(L"No simulated login",box(contentX+25,475,cardWidth-50,34),
           small_font_.Get(),p.muted);
 
-    label(L"GRAPHICS ENGINE",box(contentX+cardWidth+40,377,cardWidth-52,27),
-          small_font_.Get(),p.muted);
-    label(L"NATIVE UI",box(contentX+cardWidth+40,412,cardWidth-52,44),
-          title_font_.Get(),p.text);
-    label(L"3D world renderer not yet built",
-          box(contentX+cardWidth+40,475,cardWidth-52,34),
-          small_font_.Get(),p.muted);
+    if (page_ == 0) {
+        // Startup preparation is genuine D3D12 bytecode and GPU-specific PSO
+        // compilation. The progress is not a simulated loading animation.
+        const auto state=shader_warmup_.snapshot();
+        label(L"DX12 SHADER OPTIMIZATION",
+              box(contentX+cardWidth+40,377,cardWidth-52,27),
+              small_font_.Get(),p.muted);
+        std::wstring message;
+        std::wstring detail;
+        switch (state.result) {
+        case world::WarmupResult::Idle:
+        case world::WarmupResult::Optimizing:
+            message=L"OPTIMIZING...";
+            detail=std::to_wstring(state.percent)+L"%  /  Preparing GPU shaders";
+            break;
+        case world::WarmupResult::CacheReady:
+            message=L"SHADERS READY";
+            detail=L"Hardware cache reused - no recompilation";
+            break;
+        case world::WarmupResult::Optimized:
+            message=L"COMPLETE";
+            detail=state.cache_written ?
+                L"GPU-specific shaders cached for future launches" :
+                L"Shaders ready - disk cache unavailable";
+            break;
+        case world::WarmupResult::NoHardware:
+            message=L"DX12 UNAVAILABLE";
+            detail=L"No supported hardware GPU detected";
+            break;
+        case world::WarmupResult::Failed:
+            message=L"OPTIMIZATION FAILED";
+            detail=L"World will retry its shader pipeline";
+            break;
+        }
+        label(message,box(contentX+cardWidth+40,414,cardWidth-52,40),
+              title_font_.Get(),p.text);
+        label(detail,box(contentX+cardWidth+40,470,cardWidth-52,25),
+              small_font_.Get(),p.muted);
+        const float barWidth=std::max(18.f,cardWidth-84.f);
+        round_rect(box(contentX+cardWidth+40,510,barWidth,8),4.f,p.accent_soft);
+        if (state.percent>0) {
+            round_rect(box(contentX+cardWidth+40,510,
+                barWidth*(static_cast<float>(state.percent)/100.f),8),
+                4.f,p.accent);
+        }
+    } else {
+        label(L"GRAPHICS ENGINE",box(contentX+cardWidth+40,377,cardWidth-52,27),
+              small_font_.Get(),p.muted);
+        label(L"DIRECTX 12",box(contentX+cardWidth+40,412,cardWidth-52,44),
+              title_font_.Get(),p.text);
+        label(L"Offline 3D scene lab - use F2",
+              box(contentX+cardWidth+40,475,cardWidth-52,34),
+              small_font_.Get(),p.muted);
+    }
     label(L"ALPHA 0.1  /  This application is not yet a Second Life viewer.",
           box(contentX,height-66,contentWidth,32),
           small_font_.Get(),p.muted);
