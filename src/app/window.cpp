@@ -32,7 +32,7 @@ constexpr std::array<std::wstring_view, 8> kPages = {
 };
 constexpr std::array<std::wstring_view, 8> kDescriptions = {
     L"Original Windows foundation. No imported viewer code.",
-    L"Region login and world rendering are not implemented yet.",
+    L"SL login and simulator UDP experimental; live world content not yet connected.",
     L"Native avatar locomotion, gait and terrain contact. Live avatar assets pending.",
     L"Inventory is not connected. No inventory items can be changed.",
     L"Messages and delivery receipts are not implemented yet.",
@@ -42,7 +42,7 @@ constexpr std::array<std::wstring_view, 8> kDescriptions = {
 };
 constexpr std::array<std::wstring_view, 8> kExplanations = {
     L"Written for KAMI  /  Native Direct2D + DirectWrite",
-    L"World access requires independent authentication and transport.",
+    L"Login test is on HOME; region capabilities and live objects still pending.",
     L"Avatar identity will be shown only after real server login.",
     L"Future inventory operations will honor server permissions.",
     L"Nothing on this screen sends a message to another resident.",
@@ -1056,7 +1056,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               L"SL LOGIN TEST [L]",
               box(contentX+27,y+29,202.f,24.f),
               small_font_.Get(),p.accent);
-        const auto status=sl_login_status_==protocol::LoginStatus::Accepted?
+        const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
+            sl_circuit_.state()!=protocol::sim::CircuitState::Closed?
             sl_circuit_.diagnostic():sl_login_message_;
         label(status,box(contentX+252,y+8,contentWidth-269,rowH-12.f),
               small_font_.Get(),p.muted);
@@ -1479,6 +1480,10 @@ void Window::begin_sl_login() {
         CREDUI_FLAGS_ALWAYS_SHOW_UI|CREDUI_FLAGS_DO_NOT_PERSIST);
     if(status!=NO_ERROR){
         SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
+        if(status!=ERROR_CANCELLED){
+            sl_login_message_=L"Windows credential prompt unavailable";
+            InvalidateRect(hwnd_,nullptr,FALSE);
+        }
         return;
     }
     protocol::LoginRequest request{};
