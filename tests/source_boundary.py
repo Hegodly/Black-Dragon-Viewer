@@ -77,13 +77,23 @@ for folder in graphics_roots:
         if not item.is_file() or item.suffix not in (".cpp",".hpp",".h"):
             continue
         shader_source=item.read_text(encoding="utf-8")
-        assert not re.search(r"(?m)^\\s*#\\s*include\\s*[<\\\"](?:GL/|glad|GLFW|d3d11|vulkan/)",shader_source,re.I),item
-        assert not re.search(r"\\b(?:wgl[A-Z]\\w*|glCreateShader|glBindBuffer|glDrawArrays|D3D11CreateDevice|vkCreateInstance)\\s*\\(",shader_source),item
+        assert not re.search(r'(?m)^\s*#\s*include\s*[<"](?:GL/|glad|GLFW|d3d11|vulkan/)',shader_source,re.I),item
+        assert not re.search(r'\b(?:wgl[A-Z]\w*|glCreateShader|glBindBuffer|glDrawArrays|D3D11CreateDevice|vkCreateInstance)\s*\(',shader_source),item
 assert "src/world/region_geometry.cpp" in cmake
 assert "region_mesh_?*region_mesh_:generated" in renderer
 assert "device_.initialize(allow_software_dx12)" in renderer
 assert "bool allow_software_dx12=false" in (root/"include/kami/world/renderer.hpp").read_text(encoding="utf-8")
-assert "d3d11" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
+assert "d3d11" not in re.sub(r'(?m)^\s*#.*
+assert "opengl" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
+
+transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
+assert "WINHTTP_FLAG_SECURE" in transport
+assert "WinHttpSendRequest" in transport
+assert "winhttp" in cmake
+assert "probe_login_tls" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
+assert "ggx_distribution" in shader
+print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")
+, "", cmake.lower())
 assert "opengl" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
 
 transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
