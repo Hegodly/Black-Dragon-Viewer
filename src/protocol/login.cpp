@@ -1,4 +1,6 @@
 #include "kami/protocol/login.hpp"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <winhttp.h>
 #include <bcrypt.h>
