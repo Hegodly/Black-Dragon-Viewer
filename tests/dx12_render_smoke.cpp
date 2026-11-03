@@ -132,13 +132,25 @@ int main() {
                     renderer.set_body_physics_profile(kami::avatar::BodyProfile::Lively);
                     renderer.set_avatar_controls({1.f,0.f,0.f,true,false});
                     float max_motion=0.f;
+                    float max_open_close=0.f,max_chest_twist=0.f;
                     for(int i=0;i<15;++i) {
                         Sleep(25);
                         renderer.draw();
                         const auto physics=renderer.body_physics_offsets();
+                        const auto directional=renderer.detailed_body_physics_offsets();
                         max_motion=std::max(max_motion,
                             std::max(std::abs(physics.breast_y),
                             std::max(std::abs(physics.belly_y),std::abs(physics.butt_y))));
+                        max_open_close=std::max(max_open_close,
+                            std::abs(directional.at(kami::rigphysics::Axis::ButtOpenClose)));
+                        max_chest_twist=std::max(max_chest_twist,
+                            std::abs(directional.at(kami::rigphysics::Axis::ChestTwist)));
+                    }
+                    if(!renderer.ready()||max_open_close<.0001f||
+                       max_chest_twist<.0001f ||
+                       !renderer.skin_compatibility().butt_open_close_ready) {
+                        print_failure(L"KAMI chest twist + opposing butt clap GPU skinning",renderer);
+                        result=22;
                     }
                     if(!renderer.ready()||max_motion<.002f) {
                         print_failure(L"visible avatar body physics",renderer);
