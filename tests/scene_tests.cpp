@@ -6,7 +6,7 @@
 int main() {
     const auto mesh=kami::world::build_test_scene();
     if(mesh.terrain_count!=32U*32U*6U) return 1;
-    if(mesh.avatar_count!=6U*36U+5U*6U*10U*6U) return 2;
+    if(mesh.avatar_count!=6U*36U+5U*10U*10U*3U) return 2;
     if(mesh.vertices.size()!=mesh.terrain_count+mesh.avatar_count) return 3;
     unsigned regions[4]{};
     for(const auto& v:mesh.vertices) {
