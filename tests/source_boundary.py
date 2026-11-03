@@ -93,13 +93,3 @@ assert "winhttp" in cmake
 assert "probe_login_tls" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
 assert "ggx_distribution" in shader
 print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")
-, "", cmake.lower())
-assert "opengl" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
-
-transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
-assert "WINHTTP_FLAG_SECURE" in transport
-assert "WinHttpSendRequest" in transport
-assert "winhttp" in cmake
-assert "probe_login_tls" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
-assert "ggx_distribution" in shader
-print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")
