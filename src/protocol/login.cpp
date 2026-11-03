@@ -510,8 +510,17 @@ LoginResult login_to_simulator(const LoginRequest& request,
     if(!digest_password(password,hash)){
         failure.status=LoginStatus::CryptoUnavailable;return failure;
     }
-    const auto mac=hashed_mac();
-    if(mac.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
+    // Current official SL viewer uses LLMachineID::init's WMI machine
+    // fingerprint first. Only fall back to raw adapter bytes if unavailable.
+    SecureBytes mac;
+    std::array<char,33> wmi_hash{};
+    if(kami_sl_host_machine_hash(wmi_hash.data(),wmi_hash.size())){
+        mac.data.assign(wmi_hash.data(),32);
+    }else{
+        mac.data=hashed_mac();
+    }
+    SecureZeroMemory(wmi_hash.data(),wmi_hash.size());
+    if(mac.data.empty()){failure.status=LoginStatus::CryptoUnavailable;return failure;}
     std::array<char,33> volume_id0{};
     if(!kami_sl_host_volume_id(volume_id0.data(),volume_id0.size())){
         failure.status=LoginStatus::CryptoUnavailable;
@@ -519,7 +528,7 @@ LoginResult login_to_simulator(const LoginRequest& request,
         return failure;
     }
     SecureBytes payload;
-    payload.data=build_login_xmlrpc(first,last,hash.data,mac,
+    payload.data=build_login_xmlrpc(first,last,hash.data,mac.data,
         std::string_view(volume_id0.data(),32),request.terms_accepted);
     SecureZeroMemory(volume_id0.data(),volume_id0.size());
     if(payload.data.empty())return failure;
