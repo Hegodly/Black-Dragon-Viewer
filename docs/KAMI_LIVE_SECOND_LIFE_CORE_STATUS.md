@@ -35,6 +35,23 @@ SL HTTP assets, a disk cache, decoders, or DX12 resource uploads.
 See [fast loading plan](KAMI_SL_FAST_LOAD_PIPELINE.md). No measured
 Second Life login or region-loading speedup can be claimed yet.
 
+## Live simulator connection experiment (new)
+
+A Windows-native credentials dialog on **HOME [L]**, opt-in Terms notice,
+and asynchronous login request now connect to the existing experimental
+auth adapter. When login is accepted, an actual Winsock UDP socket
+connects to the simulator endpoint received from Linden Lab and sends
+**UseCircuitCode** and **CompleteAgentMovement**, then acknowledges reliable
+messages, answers pings, and sends **RegionHandshakeReply** when a valid
+region handshake arrives. The test suite uses an actual loopback UDP
+socket and synthetic server packets.
+
+**The main KAMI session stays offline** because a complete, authenticated
+SL capability/event queue and world data loading are still missing. The
+offline test scene must not be mislabeled as a live region. Unsupported
+server MFA/Terms challenges must not be bypassed. See
+[KAMI_EXPERIMENTAL_SL_SIGNIN_AND_UDP.md](KAMI_EXPERIMENTAL_SL_SIGNIN_AND_UDP.md).
+
 ## What must still be implemented for a real login
 
 1. Official-compatible, consent-based SL authentication flow with a unique

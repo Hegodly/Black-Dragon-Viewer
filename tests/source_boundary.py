@@ -69,6 +69,22 @@ assert "ProhibitDTD" in login
 assert "KAMI Beyond Reality Dev" in login
 assert "src/protocol/load_scheduler.cpp" in cmake
 assert "src/protocol/lludp.cpp" in cmake
+assert "src/protocol/simulator_wire.cpp" in cmake
+assert "src/protocol/simulator_transport.cpp" in cmake
+assert "ws2_32" in cmake
+app=(root/"src/app/window.cpp").read_text(encoding="utf-8")
+assert "CredUIPromptForCredentialsW" in app
+assert "CREDUI_FLAGS_DO_NOT_PERSIST" in app
+assert "CREDUI_FLAGS_ALWAYS_SHOW_UI" in app
+assert "std::async(std::launch::async" in app
+assert "sl_circuit_.poll()" in app
+assert "login.agni.lindenlab.com" in app
+assert "src/protocol/simulator_transport.cpp" in cmake
+wire=(root/"src/protocol/simulator_wire.cpp").read_text(encoding="utf-8")
+assert "use_circuit_code" in wire and "complete_agent_movement" in wire
+sock=(root/"src/protocol/simulator_transport.cpp").read_text(encoding="utf-8")
+assert "recv(socket_" in sock and "connect(candidate" in sock
+assert "packets_received_" in sock
 # Reject accidental reintroduction of legacy 3D renderers anywhere in KAMI.
 # Direct2D/DirectWrite are permitted for *2D UI only*.
 graphics_roots=(root/"src/world",root/"include/kami/world")
