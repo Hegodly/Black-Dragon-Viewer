@@ -69,6 +69,23 @@ assert "ProhibitDTD" in login
 assert "KAMI Beyond Reality Dev" in login
 assert "src/protocol/load_scheduler.cpp" in cmake
 assert "src/protocol/lludp.cpp" in cmake
+# Reject accidental reintroduction of legacy 3D renderers anywhere in KAMI.
+# Direct2D/DirectWrite are permitted for *2D UI only*.
+graphics_roots=(root/"src/world",root/"include/kami/world")
+for folder in graphics_roots:
+    for item in folder.rglob("*"):
+        if not item.is_file() or item.suffix not in (".cpp",".hpp",".h"):
+            continue
+        shader_source=item.read_text(encoding="utf-8")
+        assert not re.search(r"(?m)^\\s*#\\s*include\\s*[<\\\"](?:GL/|glad|GLFW|d3d11|vulkan/)",shader_source,re.I),item
+        assert not re.search(r"\\b(?:wgl[A-Z]\\w*|glCreateShader|glBindBuffer|glDrawArrays|D3D11CreateDevice|vkCreateInstance)\\s*\\(",shader_source),item
+assert "src/world/region_geometry.cpp" in cmake
+assert "region_mesh_?*region_mesh_:generated" in renderer
+assert "device_.initialize(allow_software_dx12)" in renderer
+assert "bool allow_software_dx12=false" in (root/"include/kami/world/renderer.hpp").read_text(encoding="utf-8")
+assert "d3d11" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
+assert "opengl" not in re.sub(r"(?m)^\\s*#.*$", "", cmake.lower())
+
 transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
 assert "WINHTTP_FLAG_SECURE" in transport
 assert "WinHttpSendRequest" in transport
