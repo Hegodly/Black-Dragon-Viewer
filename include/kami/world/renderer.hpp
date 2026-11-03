@@ -5,6 +5,8 @@
 #include "kami/features/physics.hpp"
 #include "kami/features/avatar_motion.hpp"
 #include "kami/features/body_physics.hpp"
+#include "kami/features/rig.hpp"
+#include "kami/features/rig_physics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include <optional>
@@ -41,13 +43,26 @@ public:
     }
     void reset_avatar() noexcept;
     void set_body_physics_profile(avatar::BodyProfile profile) noexcept {
-        body_physics_.set_profile(profile);
+        rig_physics_.set_profile(profile);
     }
     [[nodiscard]] avatar::BodyProfile body_physics_profile() const noexcept {
-        return body_physics_.profile();
+        return rig_physics_.profile();
     }
     [[nodiscard]] avatar::PhysicsOffsets body_physics_offsets() const noexcept {
-        return body_physics_.offsets();
+        const auto state=rig_physics_.output();
+        return {state.at(rigphysics::Axis::ChestVertical),
+                state.at(rigphysics::Axis::BellyVertical),
+                state.at(rigphysics::Axis::ButtVertical)};
+    }
+    [[nodiscard]] rigphysics::Output detailed_body_physics_offsets() const noexcept {
+        return rig_physics_.output();
+    }
+    [[nodiscard]] bool set_decoded_physics_wearable(
+        std::span<const rigphysics::NamedParameter> values) noexcept {
+        rigphysics::Wearable wearable{};
+        if(!rigphysics::decode_named_parameters(values,wearable))return false;
+        rig_physics_.set_wearable(wearable);
+        return true;
     }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
@@ -90,6 +105,8 @@ private:
     [[nodiscard]] bool make_depth();
     [[nodiscard]] bool make_shadow();
     [[nodiscard]] bool make_material_texture();
+    [[nodiscard]] bool make_skin_palette();
+    [[nodiscard]] bool update_skin_palette() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
     void wait_for_gpu() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle(UINT index) const noexcept;
@@ -104,7 +121,8 @@ private:
     camera::System camera_{};
     physics::Spring avatar_spring_{};
     avatar::Controller avatar_{};
-    avatar::BodyPhysics body_physics_{};
+    rigphysics::Solver rig_physics_{};
+    rig::Palette skin_matrices_{};
     std::optional<SceneMesh> preview_mesh_;
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;
@@ -123,6 +141,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> shadow_map_;
     Microsoft::WRL::ComPtr<ID3D12Resource> material_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> material_upload_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> skin_palette_buffer_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> shadow_pipeline_;
