@@ -289,6 +289,9 @@ bool Renderer::make_geometry() {
     if(scene.vertices.empty() ||
        scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
         return false;
+    const auto audit=rig::inspect(scene.vertices);
+    if(audit.status==rig::Compatibility::Invalid)return false;
+    skin_audit_=audit;
     terrain_count_=scene.terrain_count;
     avatar_count_=scene.avatar_count;
     const UINT bytes=static_cast<UINT>(scene.vertices.size()*sizeof(Vertex));
