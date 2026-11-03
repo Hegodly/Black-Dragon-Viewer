@@ -267,3 +267,23 @@ apart from the hashed identifiers sent over TLS to the SL login server.
 
 This is another concrete protocol implementation difference corrected,
 but no live login result is yet verified.
+
+## R4 official XML-RPC wire-format parity
+
+A user test of R3 returned HTTP 400 and a WinHTTP 12152 error when
+reading the server's error body. Microsoft defines 12152 as an invalid
+server response: WinHTTP could not parse it. This is **not** equivalent
+to proof that the outgoing login XML was malformed.
+
+Compared with Linden Lab's current `LLXMLRPCTransaction`,
+KAMI's XML declaration and Content-Type differed. R4 now sends
+`<?xml version="1.0"?>` and `Content-Type: text/xml`, avoiding extra
+request headers not used by Linden Lab's XML-RPC login implementation.
+The payload still goes only to the official login URL over HTTPS,
+with a KAMI-identifying user agent. Offline tests assert the canonical
+XML declaration and explain WinHTTP 12152 explicitly.
+
+It remains possible that the service rejects KAMI's application or
+other authentication details. This commit does not silently switch
+to web SSO, disable TLS verification, downgrade encryption, impersonate
+another viewer, retry automatically, or log credential-bearing traffic.

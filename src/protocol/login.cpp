@@ -291,8 +291,11 @@ std::wstring_view classify_login_http_content_type(
 std::wstring describe_login_http_response(bool read_ok,
                                           std::string_view sample,
                                           unsigned read_error) {
-    if(!read_ok)
+    if(!read_ok){
+        if(read_error==ERROR_WINHTTP_INVALID_SERVER_RESPONSE)
+            return L"cannot parse HTTP response (WinHTTP 12152)";
         return L"unavailable (WinHTTP "+std::to_wstring(read_error)+L")";
+    }
     return std::wstring(classify_login_http_body(sample));
 }
 
@@ -345,7 +348,7 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
        !std::all_of(id0.begin(),id0.end(),[](unsigned char c){
            return std::isxdigit(c)!=0;
        })||!accepted)return {};
-    std::string doc="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    std::string doc="<?xml version=\"1.0\"?>"
         "<methodCall><methodName>login_to_simulator</methodName>"
         "<params><param><value><struct>";
     put_string(doc,"first",first);
@@ -554,9 +557,9 @@ LoginResult login_to_simulator(const LoginRequest& request,
                          &redirects,sizeof(redirects))){
         failure.status=LoginStatus::NetworkError;return failure;
     }
-    constexpr wchar_t headers[]=L"Content-Type: text/xml; charset=UTF-8\r\n"
-                                 L"Accept: text/xml\r\n"
-                                 L"Cache-Control: no-store\r\n";
+    // Linden Lab's current LLXMLRPCTransaction sends exactly text/xml.
+    // Keep the HTTPS XML-RPC request wire format minimal and compatible.
+    constexpr wchar_t headers[]=L"Content-Type: text/xml\r\n";
     if(!WinHttpSendRequest(web.handle,headers,static_cast<DWORD>(-1),
            payload.data.data(),static_cast<DWORD>(payload.data.size()),
            static_cast<DWORD>(payload.data.size()),0)||
