@@ -33,8 +33,9 @@ struct Interpolant {
 Interpolant vertex_main(VertexIn input) {
     Interpolant output;
     float3 world=input.position;
-    if (frame.y > 0.5)
-        world.y += 0.055 * sin(frame.x * 2.0 + input.position.y * 0.25);
+    // Spring motion amplitude is solved on the CPU and shared with shadow pass.
+    if (abs(frame.y) > 0.00001)
+        world.y += frame.y * (0.85 + 0.15*cos(input.position.y*0.25));
     output.clip = mul(float4(world, 1.0), viewProjection);
     output.position = world;
     output.normal = input.normal;
@@ -45,8 +46,8 @@ Interpolant vertex_main(VertexIn input) {
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
     float3 world=input.position;
-    if(frame.y>0.5)
-        world.y+=0.055*sin(frame.x*2.0+input.position.y*0.25);
+    if(abs(frame.y)>0.00001)
+        world.y+=frame.y*(0.85+0.15*cos(input.position.y*0.25));
     return mul(float4(world,1.0),lightViewProjection);
 }
 float shadow_factor(float3 position,float3 normal) {
