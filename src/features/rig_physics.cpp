@@ -86,7 +86,9 @@ Wearable from_profile(avatar::BodyProfile profile) noexcept {
     w.settings={{
         region(p.breast,1.f),region(p.breast,.6f),
         region(p.breast,.45f),region(p.butt,1.f),
-        region(p.butt,.65f),region(p.belly,1.f)
+        region(p.butt,.65f),region(p.belly,1.f),
+        // KAMI-exclusive rotation (radians) and inward/outward cheek motion.
+        region(p.breast,.52f),region(p.butt,.53f)
     }};
     return sanitize(w);
 }
@@ -140,6 +142,17 @@ rig::Pose build_pose(const Output& o) noexcept {
         o.at(Axis::BellyVertical);
     p[static_cast<std::size_t>(rig::Joint::Butt)].translation={
         o.at(Axis::ButtLateral),o.at(Axis::ButtVertical),0.f};
+    // Opposing rotations are evaluated by skinning, not direct vertex offsets.
+    // Only KAMI's preview mesh uses this extra effect until real SL rig
+    // retargeting and compatible mesh deformation are implemented.
+    const float chest_twist=o.at(Axis::ChestTwist);
+    p[static_cast<std::size_t>(rig::Joint::LeftPec)].roll=chest_twist;
+    p[static_cast<std::size_t>(rig::Joint::RightPec)].roll=-chest_twist;
+    // Positive closure value opens the two lobes away from their centerline;
+    // negative closes them. Helpers are children of the common BUTT joint.
+    const float opening=o.at(Axis::ButtOpenClose);
+    p[static_cast<std::size_t>(rig::Joint::LeftButt)].translation.x=-opening;
+    p[static_cast<std::size_t>(rig::Joint::RightButt)].translation.x=opening;
     return p;
 }
 Solver::Solver() noexcept {set_profile(profile_);}
@@ -188,7 +201,11 @@ void Solver::step(avatar::State motion,float delta) noexcept {
         std::sin(phase*2.1f)*walk*.38f+accel*.5f,
         -std::sin(phase*1.8f)*walk*.7f+jump*.45f+landed*.5f,
         std::sin(phase*1.4f)*walk*.5f-turning*.45f,
-        std::sin(phase*1.65f)*walk*.4f+jump*.25f+landed*.75f
+        std::sin(phase*1.65f)*walk*.4f+jump*.25f+landed*.75f,
+        // Rotational chest sway reacts to direction changes and gait.
+        std::cos(phase*1.53f)*walk*.55f+turning*.70f+accel*.14f,
+        // Opposing butt cheek opening / closing, driven by motion and landings.
+        std::sin(phase*1.88f+.40f)*walk*.65f+accel*.36f+landed*.26f
     }};
     float remaining=dt;
     while(remaining>0.000001f) {
