@@ -13,6 +13,7 @@ cbuffer Frame : register(b0) {
     float4 photoGrade; // x=exposure EV, y=contrast, z=saturation, w=vignette
     float4 photoViewport; // x=width, y=height, z=grading enabled, w=avatar gait
     float4 avatarWorld; // local test avatar feet: world x/y/z and heading
+    float3 bodyPhysics; // breast, belly, butt displacement (meters)
 };
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
@@ -24,6 +25,7 @@ struct VertexIn {
     float3 color : COLOR;
     float2 material : MATERIAL;
     float2 uv : TEXCOORD0;
+    float region : TEXCOORD1; // zero unless a local body physics marker
 };
 struct Interpolant {
     float4 clip : SV_POSITION;
@@ -35,8 +37,13 @@ struct Interpolant {
 };
 // The same local avatar transformation is used in the depth/shadow and
 // main passes; this keeps locomotion and shadows synchronized on the GPU.
-float3 avatar_position(float3 local) {
-    const float gait=photoViewport.w;
+float3 avatar_position(float3 local,float region) {
+    // Deformation applies only to explicitly-tagged fitted-physics markers.
+    // Neutral world/OBJ geometry has region=0 and remains unchanged.
+    if(region>2.5) local.y+=bodyPhysics.z;
+    else if(region>1.5) local.y+=bodyPhysics.y;
+    else if(region>.5) local.y+=bodyPhysics.x;
+    const float gait=region<.5?photoViewport.w:0.0;
     const float phase=kamiEffects.w;
     const float lateral=local.x<0.0?1.0:-1.0;
     // Coarse demonstration gait for KAMI's original six-box mannequin.
@@ -61,7 +68,7 @@ float3 avatar_normal(float3 n) {
 }
 Interpolant vertex_main(VertexIn input) {
     Interpolant output;
-    const float3 world=avatar_position(input.position);
+    const float3 world=avatar_position(input.position,input.region);
     output.clip = mul(float4(world, 1.0), viewProjection);
     output.position = world;
     output.normal = avatar_normal(input.normal);
@@ -71,7 +78,7 @@ Interpolant vertex_main(VertexIn input) {
     return output;
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
-    return mul(float4(avatar_position(input.position),1.0),lightViewProjection);
+    return mul(float4(avatar_position(input.position,input.region),1.0),lightViewProjection);
 }
 float shadow_factor(float3 position,float3 normal) {
     if(frame.w<0.5) return 1.0;

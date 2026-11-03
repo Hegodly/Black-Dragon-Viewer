@@ -285,6 +285,10 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             InvalidateRect(hwnd_,nullptr,FALSE);
             return 0;
         }
+        if(page_==2 && wp=='B') {
+            cycle_body_physics();
+            return 0;
+        }
         if(page_ == 5 && wp == 'C') {
             camera_settings_page_ = !camera_settings_page_;
             graphics_effects_page_ = false;
@@ -788,7 +792,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
 
     if(page_==2) {
         round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
-        label(L"KAMI AVATAR  /  MOVEMENT LAB",
+        label(L"KAMI AVATAR  /  MOTION + BODY PHYSICS",
               box(contentX+28,106,contentWidth-55,42),
               title_font_.Get(),p.text);
         label(L"Original DX12 mannequin + terrain physics. Live SL avatar not loaded.",
@@ -814,14 +818,33 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             L"ANIMATION STATE",L"GROUND SPEED",L"TEST WORLD POSITION",
             L"GROUND PHYSICS",L"HEADING"
         };
-        for(unsigned i=0;i<5;++i) {
-            const float y=241.f+std::min(63.f,(height-400.f)/6.f)*static_cast<float>(i);
+        const unsigned rows=height>=700.f?5U:4U;
+        for(unsigned i=0;i<rows;++i) {
+            const float y=241.f+std::min(45.f,(height-480.f)/6.f)*static_cast<float>(i);
             round_rect(box(panelX+16,y,291.f,58.f),12.f,p.elevated);
             label(titles[i],box(panelX+24,y+6,271.f,22.f),
                   messenger_centered_small_.Get(),p.muted);
             label(values[i],box(panelX+24,y+27,271.f,27.f),
                   messenger_centered_font_.Get(),p.text);
         }
+        const auto offsets=world_renderer_.body_physics_offsets();
+        const auto millimeters=[](float value) {
+            return std::to_wstring(static_cast<int>(std::lround(value*1000.f)));
+        };
+        round_rect(box(panelX+16,height-238.f,291.f,45.f),12.f,p.elevated);
+        label(L"VISIBLE TEST DEFORMATION (MM)",
+              box(panelX+21,height-233.f,280.f,18.f),
+              messenger_centered_small_.Get(),p.muted);
+        label(L"CHEST "+millimeters(offsets.breast_y)+
+              L"  BELLY "+millimeters(offsets.belly_y)+
+              L"  BUTT "+millimeters(offsets.butt_y),
+              box(panelX+21,height-214.f,280.f,22.f),
+              messenger_centered_small_.Get(),p.accent);
+        round_rect(box(panelX+16,height-186.f,291.f,34.f),12.f,p.accent_soft);
+        label(L"BODY PHYSICS [B]: "+
+              std::wstring(avatar::profile_label(world_renderer_.body_physics_profile())),
+              box(panelX+23,height-181.f,278.f,26.f),
+              messenger_centered_small_.Get(),p.accent);
         round_rect(box(panelX+18,height-144.f,287.f,38.f),12.f,p.accent_soft);
         label(L"RESET AVATAR POSITION  [H]",
               box(panelX+25,height-138.f,270.f,28.f),
@@ -829,7 +852,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(L"W/S: forward/back  |  A/D: turn  |  Z/C: strafe",
               box(contentX+29,height-105.f,contentWidth-54,25.f),
               small_font_.Get(),p.text);
-        label(L"Arrows: move/turn  |  Shift: run  |  Space: jump  |  Drag: camera",
+        label(L"Arrows: move/turn  |  Shift: run  |  Space: jump  |  B: physics",
               box(contentX+29,height-78.f,contentWidth-54,25.f),
               small_font_.Get(),p.muted);
         if(!world_ready_)label(world_initialized_?world_renderer_.error():
@@ -1144,6 +1167,13 @@ void Window::advance_graphics_effects(unsigned row) {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+void Window::cycle_body_physics() {
+    const auto current=static_cast<unsigned>(world_renderer_.body_physics_profile());
+    const auto next=static_cast<avatar::BodyProfile>((current+1U)%4U);
+    world_renderer_.set_body_physics_profile(next);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
 void Window::advance_camera(unsigned row) {
     switch(row) {
     case 0:
@@ -1319,6 +1349,12 @@ void Window::click(float x, float y) {
     const float width = static_cast<float>(client.right);
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
+        return;
+    }
+    if(page_==2 && y>=static_cast<float>(client.bottom)-186.f &&
+       y<static_cast<float>(client.bottom)-152.f &&
+       x>=width-336.f && x<=width-45.f) {
+        cycle_body_physics();
         return;
     }
     if(page_==2 && y>=static_cast<float>(client.bottom)-144.f &&

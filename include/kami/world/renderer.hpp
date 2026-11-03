@@ -4,6 +4,7 @@
 #include "kami/camera/system.hpp"
 #include "kami/features/physics.hpp"
 #include "kami/features/avatar_motion.hpp"
+#include "kami/features/body_physics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include <optional>
@@ -39,6 +40,15 @@ public:
         return avatar_.state();
     }
     void reset_avatar() noexcept;
+    void set_body_physics_profile(avatar::BodyProfile profile) noexcept {
+        body_physics_.set_profile(profile);
+    }
+    [[nodiscard]] avatar::BodyProfile body_physics_profile() const noexcept {
+        return body_physics_.profile();
+    }
+    [[nodiscard]] avatar::PhysicsOffsets body_physics_offsets() const noexcept {
+        return body_physics_.offsets();
+    }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
     [[nodiscard]] bool creator_preview_active() const noexcept {return preview_mesh_.has_value();}
@@ -94,6 +104,7 @@ private:
     camera::System camera_{};
     physics::Spring avatar_spring_{};
     avatar::Controller avatar_{};
+    avatar::BodyPhysics body_physics_{};
     std::optional<SceneMesh> preview_mesh_;
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;

@@ -125,7 +125,7 @@ bool root_signature(ID3D12Device* device,
     D3D12_ROOT_PARAMETER constants{};
     constants.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     constants.Constants.ShaderRegister=0;
-    constants.Constants.Num32BitValues=60;
+    constants.Constants.Num32BitValues=63;
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_DESCRIPTOR_RANGE shadow_range{};
     shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -183,7 +183,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc(
     desc.pRootSignature=root;
     desc.VS={vs.data(),vs.size()};
     desc.PS={ps.data(),ps.size()};
-    desc.InputLayout={input,5};
+    desc.InputLayout={input,6};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.FrontCounterClockwise=FALSE;
@@ -248,6 +248,8 @@ bool ShaderCache::prepare(
         {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,44,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",1,DXGI_FORMAT_R32_FLOAT,0,52,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     auto desc=pipeline_desc(signature.Get(),vs,ps,input);
@@ -331,12 +333,14 @@ bool ShaderCache::prepare_shadow(
         {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,44,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",1,DXGI_FORMAT_R32_FLOAT,0,52,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature=signature;
     desc.VS={vs.data(),vs.size()};
-    desc.InputLayout={input,5};
+    desc.InputLayout={input,6};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.DepthClipEnable=TRUE;

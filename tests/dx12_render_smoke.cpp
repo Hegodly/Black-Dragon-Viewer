@@ -2,6 +2,8 @@
 #include "kami/graphics/settings.hpp"
 #include <windows.h>
 #include <iostream>
+#include <cmath>
+#include <algorithm>
 #include <string>
 #include <filesystem>
 #include <objbase.h>
@@ -118,6 +120,36 @@ int main() {
                         print_failure(L"avatar reset and shadow draw",renderer);
                         result=16;
                     }
+                }
+                if(!result) {
+                    // Body physics must affect real DX12 geometry, with the
+                    // exact same deform values used for shadow and color passes.
+                    renderer.reset_avatar();
+                    renderer.set_body_physics_profile(kami::avatar::BodyProfile::Lively);
+                    renderer.set_avatar_controls({1.f,0.f,0.f,true,false});
+                    float max_motion=0.f;
+                    for(int i=0;i<15;++i) {
+                        Sleep(25);
+                        renderer.draw();
+                        const auto physics=renderer.body_physics_offsets();
+                        max_motion=std::max(max_motion,
+                            std::max(std::abs(physics.breast_y),
+                            std::max(std::abs(physics.belly_y),std::abs(physics.butt_y))));
+                    }
+                    if(!renderer.ready()||max_motion<.002f) {
+                        print_failure(L"visible avatar body physics",renderer);
+                        result=17;
+                    }
+                    renderer.set_body_physics_profile(kami::avatar::BodyProfile::Off);
+                    renderer.draw();
+                    const auto disabled=renderer.body_physics_offsets();
+                    if(!renderer.ready()||disabled.breast_y!=0.f||
+                       disabled.belly_y!=0.f||disabled.butt_y!=0.f){
+                        print_failure(L"body physics off",renderer);
+                        result=18;
+                    }
+                    renderer.reset_avatar();
+                    renderer.set_avatar_controls({});
                 }
                 if(!result) {
                     auto preview=kami::world::build_test_scene(8);

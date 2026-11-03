@@ -41,6 +41,7 @@ private:
     void advance_graphics(unsigned row);
     void advance_graphics_effects(unsigned row);
     void advance_camera(unsigned row);
+    void cycle_body_physics();
     void advance_photo(unsigned row);
     void open_creator_obj();
     void save_photo_png();
