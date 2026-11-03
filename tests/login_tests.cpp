@@ -27,12 +27,12 @@ int main(){
        parse_account_name(L"first.",f,l))return 13;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
-                                              "AB:CD:EF:12:34:56",true);
+                                              "abcdef0123456789abcdef0123456789",true);
     if(valid.empty()||valid.find("<methodName>login_to_simulator</methodName>")==
        std::string::npos||
        valid.find("<name>passwd</name>")==std::string::npos||
        valid.find("KAMI Beyond Reality Dev")==std::string::npos||
-       !build_login_xmlrpc("First","Last",hashed,"AB:CD:EF:12:34:56",false).empty())
+       !build_login_xmlrpc("First","Last",hashed,"abcdef0123456789abcdef0123456789",false).empty())
        return 3;
     // Confirm required field, valid XML-RPC boolean and no impersonation of
     // an official viewer. Legacy KAMI missed id0 on every login request.
@@ -43,6 +43,14 @@ int main(){
        valid.find("<name>options</name><value><array>")==std::string::npos||
        valid.find("<name>viewer_digest</name>")!=std::string::npos)
        return 12;
+    // Current protocol submits a 32-hex pseudonymous machine marker, not
+    // a raw physical MAC address, and rejects old/invalid MAC inputs.
+    if(valid.find("AB:CD:EF:12:34:56")!=std::string::npos||
+       !build_login_xmlrpc("First","Last",hashed,
+          "AB:CD:EF:12:34:56",true).empty()||
+       !build_login_xmlrpc("First","Last",hashed,
+          "not-a-hashed-identifier-12345678",true).empty())
+       return 14;
     const auto accepted=wrap(
         m("login","true")+m("agent_id","12345678-90ab-4cde-8fab-000000000001")+
         m("session_id","12345678-90ab-4cde-8fab-000000000002")+
