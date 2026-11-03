@@ -17,8 +17,8 @@ PUBLIC_FIELDS = {
 }
 VISIBLE_TEXT = {"text", "string", "text_editor", "static_text"}
 PATTERNS = (
-    (re.compile(r"\\bBlack[ -]?Dragon\\b", re.I), "KAMI"),
-    (re.compile(r"\\bKombatant\\b", re.I), "KAMI"),
+    (re.compile(r"\bBlack[ -]?Dragon\b", re.I), "KAMI"),
+    (re.compile(r"\bKombatant\b", re.I), "KAMI"),
 )
 # Keep source acknowledgement intact wherever it appears (and all About pages).
 ATTRIBUTION = re.compile(r"niranv|copyright|licen[cs]e|attribution|based on|original author", re.I)
