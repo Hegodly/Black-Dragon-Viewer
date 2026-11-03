@@ -9,6 +9,7 @@ struct Vertex {
     float r, g, b;
     float metallic, roughness;
     float u, v;
+    float body_region=0.f; // 0=none; local marker 1=breast, 2=belly, 3=butt
 };
 struct SceneMesh {
     std::vector<Vertex> vertices;
