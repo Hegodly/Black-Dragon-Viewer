@@ -61,6 +61,13 @@ int wmain(int argc, wchar_t** argv)
         std::wcout << L"PASS native DX12 indexed 3D meshes, MVP, depth occlusion "
                    << dimension << L"x" << dimension << L'\n';
     }
+    if (!renderer.renderGlassOffscreenTest(128, 128))
+    {
+        failure(renderer, "native GPU Gaussian glass compositor/readback");
+        return 10;
+    }
+    std::wcout << L"PASS real D3D12 Gaussian backdrop blur inside a glass panel, "
+                  L"unaltered scene outside" << L'\\n';
     if (visibleWindow)
     {
         const HINSTANCE instance = GetModuleHandleW(nullptr);

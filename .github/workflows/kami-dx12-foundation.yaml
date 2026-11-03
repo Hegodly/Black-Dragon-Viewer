@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/kami-dx12-renderer-foundation
+      - feature/kami-imessage-messenger
     paths:
       - 'kami/dx12/**'
       - '.github/workflows/kami-dx12-foundation.yaml'

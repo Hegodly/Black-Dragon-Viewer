@@ -77,6 +77,9 @@ public:
     bool renderWorldFrame(const WorldFrame& scene, bool vsync = true);
     bool worldFrameAvailable() const noexcept;
     bool renderWorldOffscreenTest(UINT width = 128, UINT height = 128);
+    // Real D3D12 compute Gaussian + translucent glass, offscreen only.
+    // Does not yet run in the live Second Life UI.
+    bool renderGlassOffscreenTest(UINT width = 128, UINT height = 128);
     void shutdown() noexcept;
 
     bool deviceReady() const noexcept { return device_ != nullptr; }
