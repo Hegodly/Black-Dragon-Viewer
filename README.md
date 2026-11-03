@@ -1,6 +1,6 @@
 # KAMI Beyond Reality — Original Core
 
-KAMI is a new, independently authored Windows application. This project does not import Black Dragon, Firestorm or official Second Life viewer source, assets, skins, shaders, or build scripts.
+KAMI is a new Windows application with an independently authored DX12 renderer and UI. It does not include Black Dragon or Firestorm renderer source or themes. A **separate LGPL-2.1 Windows DLL** now adapts the official Second Life viewer\'s volume serial login-identity algorithm, with source, attribution and license in `src/sl_reference/` and `third_party/secondlife-lgpl/`. The official viewer\'s entire authentication and simulator networking implementations have not been ported.
 
 ## Current status
 KAMI is a Windows-only independent prototype with a working **offline DX12
@@ -166,3 +166,23 @@ the independently built SL protocol and asset streaming layers exist.
 
 These studios are real native code paths for an **offline DX12 development
 prototype**, not evidence that the viewer is ready for Second Life.
+
+
+## Official Second Life login identity component
+
+KAMI now includes a **separately built and replaceable DLL**
+(`KAMI_SL_Login_Identity.dll`) implementing the same Windows `id0`
+device-identity hashing algorithm as the official Second Life viewer:
+MD5 of the four raw bytes of the Windows C: volume serial number.
+This replaces KAMI's prior, incompatible **36-character all-zero UUID**
+placeholder. The resulting pseudonymous 32-hex `id0` is sent only to
+the official login endpoint over TLS; no raw serial is transmitted.
+
+The DLL is a legally separate LGPL 2.1 component and is included
+with its source and full license. See
+`third_party/secondlife-lgpl/NOTICE.md`. KAMI's DX12 renderer stays
+independent; the rest of Linden Lab's login / LLSD / LLCore networking
+modules are not included or claimed to be working.
+
+A successful compilation/test does not prove Second Life login succeeds.
+Use a test account and report the HTTP status/response category only.
