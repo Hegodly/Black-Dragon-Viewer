@@ -31,7 +31,11 @@ int main(){
        L"HTML error page"||
        classify_login_http_body("<?xml")!=
        L"XML-RPC response"||
-       classify_login_http_body("")!=L"empty response")return 17;
+       classify_login_http_body("")!=L"empty response"||
+       classify_login_http_body("Bad Request")!=L"plain-text error response"||
+       describe_login_http_response(true,"",0)!=L"empty response"||
+       describe_login_http_response(false,"",12030)!=
+           L"unavailable (WinHTTP 12030)")return 17;
     const std::string hashed="$1$0123456789abcdef0123456789abcdef";
     const std::string valid=build_login_xmlrpc("First","Last",hashed,
                                               "abcdef0123456789abcdef0123456789",
@@ -128,7 +132,7 @@ int main(){
            message.find(L"passwd")!=std::wstring::npos||message.size()>120U)
             return 10;
     }
-    if(login_http_diagnostic(400).find(L"KAMI DIAG R2")==std::wstring::npos||
+    if(login_http_diagnostic(400).find(L"KAMI DIAG R3")==std::wstring::npos||
        login_http_diagnostic(400).find(L"check protocol")!=std::wstring::npos)
        return 24;
     if(login_http_diagnostic(403).find(L"refused")==std::wstring::npos||
