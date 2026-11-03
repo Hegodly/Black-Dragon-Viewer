@@ -57,6 +57,7 @@ private:
     void messenger_select(messenger::Channel channel);
     void check_sl_tls_connection();
     void begin_sl_login();
+    void start_caps_poll();
     void update_sl_connection();
 
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
@@ -109,7 +110,12 @@ private:
     // Bearer CAPS URLs are retained only for the authenticated region
     // connection. Never display signed URLs or event payloads.
     std::wstring caps_seed_url_;
+    std::wstring caps_event_queue_url_; // secret signed bearer URL, never shown
+    protocol::caps::QueueCursor caps_ack_{};
     std::wstring caps_status_;
+    unsigned caps_completed_polls_=0;
+    bool caps_dispatch_blocked_=false;
+    std::chrono::steady_clock::time_point caps_next_poll_{};
     bool caps_seed_started_=false;
     bool caps_poll_started_=false;
     std::future<protocol::caps::SeedResponse> caps_seed_future_;

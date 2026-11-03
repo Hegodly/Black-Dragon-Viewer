@@ -112,6 +112,8 @@ int main() {
     }
     mock.join();
     const bool ok=started&&server_result==0&&circuit.region_seen()&&
+                  circuit.region_metadata().verified&&
+                  circuit.region_metadata().name=="Test"&&
                   circuit.movement_seen()&&
                   circuit.state()==sim::CircuitState::MovementConfirmed&&
                   circuit.packets_received()>=3;

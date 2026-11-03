@@ -122,6 +122,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             (void)send_packet(std::move(reply));
     }
     if(type==Inbound::RegionHandshake) {
+        // Region label and water elevation are extracted from the actual
+        // connected simulator, never from KAMI's offline DX12 test scene.
+        RegionMetadata parsed{};
+        if(decode_region_metadata(incoming,parsed))
+            region_metadata_=std::move(parsed);
         region_seen_=true;
         if(!handshake_replied_){
             lludp::Packet reply{};
@@ -174,6 +179,7 @@ void Circuit::stop() noexcept {
     if(socket_!=INVALID_SOCKET){closesocket(socket_);socket_=INVALID_SOCKET;}
     if(winsock_ready_){WSACleanup();winsock_ready_=false;}
     clear_login(login_);
+    region_metadata_={};
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
     packets_received_=0;sequence_=1;attempts_=0;last_retry_={};started_={};

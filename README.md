@@ -207,3 +207,14 @@ structural/HTTP error. This test does **not** implement sustained
 event polling, dispatch simulator events, enable inventory or load
 actual region assets. UI status names distinguish that limitation.
 The DX12 renderer remains independently implemented.
+
+### R7: early real-world networking, not live terrain rendering
+
+The R7 experimental branch collects sanitized, verified **region name
+and water-level metadata** from the connected simulator's
+`RegionHandshake` packet. It also maintains a session-bound
+`EventQueueGet` request across empty long-polls, with typed
+acknowledgement IDs and a hard stop before acknowledging any
+unimplemented event. KAMI's DX12 preview remains an *offline demo*
+until terrain/object/asset decoders produce authenticated geometry.
+Do not interpret a valid EventQueueGet response as a live-world render.
