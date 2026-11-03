@@ -88,6 +88,7 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
     }
     login_=accepted_login;
     state_=CircuitState::WaitingForSimulator;
+    started_=std::chrono::steady_clock::now();
     if(!send_startup_messages()){
         stop();state_=CircuitState::Failed;return false;
     }
@@ -136,9 +137,14 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
 }
 void Circuit::maybe_retry() noexcept {
-    if(socket_==INVALID_SOCKET||attempts_>=4U)return;
+    if(socket_==INVALID_SOCKET||state_==CircuitState::Failed||
+       movement_seen_)return;
     const auto now=std::chrono::steady_clock::now();
-    if(now-last_retry_<std::chrono::seconds(1))return;
+    if(started_!=std::chrono::steady_clock::time_point{}&&
+       now-started_>std::chrono::seconds(15)){
+        state_=CircuitState::Failed;return;
+    }
+    if(attempts_>=4U ||now-last_retry_<std::chrono::seconds(1))return;
     if(use_acked_&&move_acked_)return;
     if(!send_startup_messages())state_=CircuitState::Failed;
 }
@@ -170,7 +176,7 @@ void Circuit::stop() noexcept {
     clear_login(login_);
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
-    packets_received_=0;sequence_=1;attempts_=0;last_retry_={};
+    packets_received_=0;sequence_=1;attempts_=0;last_retry_={};started_={};
 }
 std::wstring Circuit::diagnostic() const {
     switch(state_){
