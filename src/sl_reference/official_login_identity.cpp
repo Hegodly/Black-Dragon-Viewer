@@ -12,9 +12,10 @@
  * a standalone DLL to retain KAMI's separate software boundary.
  * Full terms: third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt.
  *
- * No physical volume serial is transmitted. Only the 32-digit MD5 hash
- * required by Second Life's documented Windows viewer login behavior
- * is returned. This is NOT a security hash and is not for passwords.
+ * No raw volume, motherboard or OS serial is transmitted. The DLL also
+ * adapts llmachineid.cpp + llhasheduniqueid.cpp's WMI-first 6-byte
+ * folded machine ID hashing. These are pseudonymous identifiers, not
+ * cryptographic security or password hashing.
  */
 #include "kami/official_login_identity.hpp"
 #include <windows.h>
@@ -23,6 +24,7 @@
 #include <cstring>
 #include <cwchar>
 #include <string>
+#include <string_view>
 #include <wbemidl.h>
 #include <wrl/client.h>
 #include <oleauto.h>
