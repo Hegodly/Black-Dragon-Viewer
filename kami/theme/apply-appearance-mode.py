@@ -2,7 +2,7 @@
 """Bake native KAMI light/dark appearance into the Windows viewer build.
 
 Runs during CI after Workspaces XUI generation, not on user machines.
-Light mode changes only named UI color tokens. It does not add a world render
+Both appearance modes change only named UI color tokens. It does not add a world render
 pass, imitate Apple's assets, or claim real-time backdrop blur.
 """
 from pathlib import Path
@@ -83,64 +83,95 @@ void kami_apply_appearance()
     auto& palette = LLUIColorTable::instance();
     palette.clearKAMIRuntimePalette();
     const F32 opacity = llclamp(gSavedSettings.getF32("KamiGlassOpacity"), .80f, 1.f);
-    if (!gSavedSettings.getBOOL("KamiLightMode"))
-    {
-        // Dark mode keeps its original tonal palette; only panel opacity is adjustable.
-        LLColor4 background = palette.getColor("FloaterDefaultBackgroundColor").get();
-        background.mV[3] = opacity;
-        palette.setKAMIRuntimeColor("FloaterDefaultBackgroundColor", background);
-        return;
-    }
-
-    // Original KAMI palette: cool silver, soft frost, graphite typography.
-    // Mutate existing named colors so controls holding LLUIColor references
-    // update without being recreated. User-customized colors retain priority.
+    // Original KAMI interface, inspired by iOS system colors, not Apple's assets.
+    // Live mode switching only edits existing UI colors; never touches world lighting.
+    const bool light = gSavedSettings.getBOOL("KamiLightMode");
     struct Swatch { const char* name; LLColor4 value; };
-    const Swatch light[] = {
-        {"FloaterDefaultBackgroundColor", LLColor4(.94f,.96f,.985f,.94f)},
-        {"FloaterFocusBackgroundColor", LLColor4(.96f,.97f,.995f,.97f)},
-        {"FloaterFocusBorderColor", LLColor4(.40f,.53f,.67f,.72f)},
-        {"FloaterUnfocusBorderColor", LLColor4(.63f,.70f,.77f,.44f)},
-        {"PanelDefaultBackgroundColor", LLColor4(.94f,.96f,.985f,.94f)},
-        {"PanelFocusBackgroundColor", LLColor4(.96f,.97f,.995f,.97f)},
-        {"MenuBarBgColor", LLColor4(.91f,.94f,.975f,.96f)},
-        {"MenuDefaultBgColor", LLColor4(.94f,.96f,.985f,.97f)},
-        {"MenuPopupBgColor", LLColor4(.95f,.97f,.99f,.98f)},
-        {"MenuItemEnabledColor", LLColor4(.10f,.14f,.22f,1.f)},
-        {"MenuItemDisabledColor", LLColor4(.42f,.48f,.55f,.78f)},
-        {"MenuItemHighlightBgColor", LLColor4(.74f,.83f,.94f,.95f)},
-        {"MenuItemHighlightFgColor", LLColor4(.06f,.11f,.19f,1.f)},
-        {"ButtonColor", LLColor4(.85f,.90f,.96f,.98f)},
-        {"ButtonLabelColor", LLColor4(.09f,.14f,.22f,1.f)},
-        {"ButtonLabelSelectedColor", LLColor4(.07f,.12f,.20f,1.f)},
-        {"LabelTextColor", LLColor4(.12f,.17f,.25f,1.f)},
-        {"LabelSelectedColor", LLColor4(.06f,.12f,.20f,1.f)},
-        {"InventoryBackgroundColor", LLColor4(.96f,.97f,.99f,.98f)},
-        {"ChatHistoryBgColor", LLColor4(.95f,.97f,.99f,.95f)},
-        {"ChatHistoryTextColor", LLColor4(.10f,.15f,.22f,1.f)},
-        {"FilterBackgroundColor", LLColor4(.93f,.95f,.98f,.96f)},
-        {"FilterTextColor", LLColor4(.13f,.24f,.37f,1.f)},
-        {"TextDefaultColor", LLColor4(.09f,.14f,.22f,1.f)},
-        {"TextFgColor", LLColor4(.09f,.14f,.22f,1.f)},
-        {"TextFgReadOnlyColor", LLColor4(.27f,.32f,.39f,1.f)},
-        {"TextBgWriteableColor", LLColor4(.99f,.995f,1.f,.98f)},
-        {"TextBgReadOnlyColor", LLColor4(.93f,.95f,.97f,.96f)},
-        {"ScrollBgReadOnlyColor", LLColor4(.95f,.96f,.98f,.98f)},
-        {"ScrollBgWriteableColor", LLColor4(.99f,.995f,1.f,.98f)},
-        {"ScrollSelectedBGColor", LLColor4(.69f,.81f,.94f,.90f)},
-        {"ScrollSelectedFGColor", LLColor4(.05f,.10f,.18f,1.f)},
-        {"ScrollUnselectedColor", LLColor4(.10f,.15f,.22f,1.f)},
-        {"ToolTipBgColor", LLColor4(.94f,.96f,.985f,.97f)},
-        {"ToolTipBorderColor", LLColor4(.49f,.57f,.68f,.7f)},
-        {"ToolTipTextColor", LLColor4(.10f,.15f,.22f,1.f)}
+    const Swatch dark[] = {
+        {"FloaterDefaultBackgroundColor", LLColor4(.075f,.085f,.11f,opacity)},
+        {"FloaterFocusBackgroundColor", LLColor4(.10f,.11f,.14f,.97f)},
+        {"FloaterFocusBorderColor", LLColor4(.31f,.63f,.99f,.77f)},
+        {"FloaterUnfocusBorderColor", LLColor4(.46f,.48f,.53f,.42f)},
+        {"PanelDefaultBackgroundColor", LLColor4(.10f,.11f,.14f,opacity)},
+        {"PanelFocusBackgroundColor", LLColor4(.13f,.14f,.17f,.96f)},
+        {"MenuBarBgColor", LLColor4(.08f,.09f,.12f,.96f)},
+        {"MenuDefaultBgColor", LLColor4(.10f,.11f,.14f,.97f)},
+        {"MenuPopupBgColor", LLColor4(.13f,.14f,.17f,.97f)},
+        {"MenuItemEnabledColor", LLColor4(.96f,.97f,.99f,1.f)},
+        {"MenuItemDisabledColor", LLColor4(.53f,.56f,.62f,.9f)},
+        {"MenuItemHighlightBgColor", LLColor4(.04f,.51f,1.f,.78f)},
+        {"MenuItemHighlightFgColor", LLColor4(1.f,1.f,1.f,1.f)},
+        {"ButtonColor", LLColor4(.17f,.19f,.24f,.97f)},
+        {"ButtonLabelColor", LLColor4(.94f,.96f,1.f,1.f)},
+        {"ButtonLabelSelectedColor", LLColor4(1.f,1.f,1.f,1.f)},
+        {"LabelTextColor", LLColor4(.93f,.94f,.98f,1.f)},
+        {"InventoryBackgroundColor", LLColor4(.10f,.11f,.14f,.96f)},
+        {"ChatHistoryBgColor", LLColor4(.09f,.10f,.13f,.96f)},
+        {"ChatHistoryTextColor", LLColor4(.94f,.95f,.97f,1.f)},
+        {"FilterBackgroundColor", LLColor4(.17f,.18f,.22f,.97f)},
+        {"FilterTextColor", LLColor4(.88f,.92f,.98f,1.f)},
+        {"TextDefaultColor", LLColor4(.95f,.96f,.99f,1.f)},
+        {"TextFgColor", LLColor4(.94f,.95f,.98f,1.f)},
+        {"TextFgReadOnlyColor", LLColor4(.72f,.76f,.83f,1.f)},
+        {"TextBgWriteableColor", LLColor4(.16f,.17f,.21f,.97f)},
+        {"TextBgReadOnlyColor", LLColor4(.13f,.14f,.17f,.96f)},
+        {"ScrollBgReadOnlyColor", LLColor4(.12f,.13f,.17f,.98f)},
+        {"ScrollBgWriteableColor", LLColor4(.16f,.17f,.21f,.98f)},
+        {"ScrollSelectedBGColor", LLColor4(.04f,.51f,1.f,.78f)},
+        {"ScrollSelectedFGColor", LLColor4(1.f,1.f,1.f,1.f)},
+        {"ScrollUnselectedColor", LLColor4(.91f,.93f,.97f,1.f)},
+        {"ToolTipBgColor", LLColor4(.17f,.18f,.22f,.98f)},
+        {"ToolTipBorderColor", LLColor4(.38f,.52f,.73f,.75f)},
+        {"ToolTipTextColor", LLColor4(.97f,.98f,1.f,1.f)},
+        {"EmphasisColor", LLColor4(.04f,.51f,1.f,.5f)},
+        {"EmphasisColor_13", LLColor4(.04f,.51f,1.f,.13f)},
+        {"EmphasisColor_35", LLColor4(.04f,.51f,1.f,.35f)}
     };
-    for (const auto& swatch : light)
-        palette.setKAMIRuntimeColor(swatch.name, swatch.value);
-    // Opacity changes are cheap color updates, not additional blur shaders.
-    palette.setKAMIRuntimeColor("FloaterDefaultBackgroundColor",
-        LLColor4(.94f,.96f,.985f,opacity));
-    palette.setKAMIRuntimeColor("PanelDefaultBackgroundColor",
-        LLColor4(.94f,.96f,.985f,opacity));
+    const Swatch lightColors[] = {
+        {"FloaterDefaultBackgroundColor", LLColor4(.95f,.96f,.98f,opacity)},
+        {"FloaterFocusBackgroundColor", LLColor4(.98f,.985f,1.f,.98f)},
+        {"FloaterFocusBorderColor", LLColor4(.0f,.48f,1.f,.72f)},
+        {"FloaterUnfocusBorderColor", LLColor4(.62f,.65f,.72f,.46f)},
+        {"PanelDefaultBackgroundColor", LLColor4(.96f,.965f,.985f,opacity)},
+        {"PanelFocusBackgroundColor", LLColor4(.98f,.985f,1.f,.98f)},
+        {"MenuBarBgColor", LLColor4(.96f,.97f,.99f,.97f)},
+        {"MenuDefaultBgColor", LLColor4(.97f,.975f,.995f,.97f)},
+        {"MenuPopupBgColor", LLColor4(.98f,.985f,1.f,.99f)},
+        {"MenuItemEnabledColor", LLColor4(.10f,.12f,.17f,1.f)},
+        {"MenuItemDisabledColor", LLColor4(.49f,.52f,.58f,.9f)},
+        {"MenuItemHighlightBgColor", LLColor4(.02f,.48f,.99f,.88f)},
+        {"MenuItemHighlightFgColor", LLColor4(1.f,1.f,1.f,1.f)},
+        {"ButtonColor", LLColor4(.89f,.91f,.95f,.98f)},
+        {"ButtonLabelColor", LLColor4(.10f,.13f,.19f,1.f)},
+        {"ButtonLabelSelectedColor", LLColor4(.04f,.27f,.60f,1.f)},
+        {"LabelTextColor", LLColor4(.12f,.14f,.20f,1.f)},
+        {"InventoryBackgroundColor", LLColor4(.99f,.99f,1.f,.98f)},
+        {"ChatHistoryBgColor", LLColor4(.97f,.98f,.995f,.96f)},
+        {"ChatHistoryTextColor", LLColor4(.12f,.14f,.19f,1.f)},
+        {"FilterBackgroundColor", LLColor4(.92f,.94f,.97f,.98f)},
+        {"FilterTextColor", LLColor4(.15f,.22f,.35f,1.f)},
+        {"TextDefaultColor", LLColor4(.10f,.12f,.17f,1.f)},
+        {"TextFgColor", LLColor4(.10f,.12f,.17f,1.f)},
+        {"TextFgReadOnlyColor", LLColor4(.34f,.37f,.44f,1.f)},
+        {"TextBgWriteableColor", LLColor4(1.f,1.f,1.f,.99f)},
+        {"TextBgReadOnlyColor", LLColor4(.94f,.95f,.98f,.98f)},
+        {"ScrollBgReadOnlyColor", LLColor4(.95f,.96f,.98f,.99f)},
+        {"ScrollBgWriteableColor", LLColor4(1.f,1.f,1.f,.99f)},
+        {"ScrollSelectedBGColor", LLColor4(.02f,.48f,.99f,.88f)},
+        {"ScrollSelectedFGColor", LLColor4(1.f,1.f,1.f,1.f)},
+        {"ScrollUnselectedColor", LLColor4(.14f,.17f,.23f,1.f)},
+        {"ToolTipBgColor", LLColor4(.99f,.995f,1.f,.98f)},
+        {"ToolTipBorderColor", LLColor4(.55f,.62f,.75f,.76f)},
+        {"ToolTipTextColor", LLColor4(.12f,.14f,.2f,1.f)},
+        {"EmphasisColor", LLColor4(.0f,.48f,1.f,.5f)},
+        {"EmphasisColor_13", LLColor4(.0f,.48f,1.f,.13f)},
+        {"EmphasisColor_35", LLColor4(.0f,.48f,1.f,.35f)}
+    };
+    const Swatch* swatches = light ? lightColors : dark;
+    const size_t count = light ? sizeof(lightColors)/sizeof(lightColors[0])
+                               : sizeof(dark)/sizeof(dark[0]);
+    for (size_t i = 0; i < count; ++i)
+        palette.setKAMIRuntimeColor(swatches[i].name, swatches[i].value);
 }
 
 void settings_setup_listeners()
@@ -183,11 +214,11 @@ def add_setting(name, typename, element, value, comment):
 
 add_setting(
     "KamiLightMode", "Boolean", "integer", "0",
-    "Use KAMI silver light interface; off restores the native dark palette."
+    "Use KAMI iOS-style light glass; off selects iOS-style dark glass with system blue accents."
 )
 add_setting(
     "KamiGlassOpacity", "F32", "real", "0.96",
-    "Native KAMI floating panel opacity. No fullscreen blur shader."
+    "KAMI native glass opacity; changes the panel color alpha without fullscreen blur."
 )
 ET.indent(settings_tree, space=" ")
 settings_tree.write(settings, encoding="utf-8", xml_declaration=True)
