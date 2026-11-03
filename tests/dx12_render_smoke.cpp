@@ -59,6 +59,10 @@ int main() {
             if(renderer.vertex_count()==0) {
                 print_failure(L"empty scene",renderer);
                 result=2;
+            } else if(renderer.skin_compatibility().status!=
+                      kami::rig::Compatibility::PhysicsReady) {
+                print_failure(L"weighted fitted-mesh skin integrity",renderer);
+                result=19;
             } else {
                 renderer.draw();
                 if(!renderer.ready()) {
@@ -140,6 +144,14 @@ int main() {
                         print_failure(L"visible avatar body physics",renderer);
                         result=17;
                     }
+                    const auto directional=renderer.detailed_body_physics_offsets();
+                    if(!renderer.ready() ||
+                       (!std::isfinite(directional.at(kami::rigphysics::Axis::ChestLateral))) ||
+                       (!std::isfinite(directional.at(kami::rigphysics::Axis::ChestDepth))) ||
+                       (!std::isfinite(directional.at(kami::rigphysics::Axis::ButtLateral)))) {
+                        print_failure(L"six-axis GPU rig update",renderer);
+                        result=20;
+                    }
                     renderer.set_body_physics_profile(kami::avatar::BodyProfile::Off);
                     renderer.draw();
                     const auto disabled=renderer.body_physics_offsets();
@@ -153,9 +165,19 @@ int main() {
                 }
                 if(!result) {
                     auto preview=kami::world::build_test_scene(8);
-                    if(!renderer.set_creator_preview(preview)) {
+                    auto malicious=preview;
+                    if(malicious.vertices.size()>malicious.terrain_count) {
+                        auto& v=malicious.vertices[malicious.terrain_count];
+                        v.bone_weights=255U;
+                        v.bone_indices=200U;
+                        if(renderer.set_creator_preview(std::move(malicious))) {
+                            print_failure(L"rejected invalid skin weights",renderer);
+                            result=21;
+                        }
+                    }
+                    if(!result && !renderer.set_creator_preview(preview)) {
                         print_failure(L"OBJ preview geometry",renderer);result=7;
-                    } else {
+                    } else if(!result) {
                         renderer.draw();
                         if(!renderer.ready()){print_failure(L"preview draw",renderer);result=8;}
                         renderer.clear_creator_preview();

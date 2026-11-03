@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - feature/kami-rigged-avatar-physics-foundation
       - feature/kami-avatar-body-physics-dx12
       - feature/kami-avatar-locomotion-dx12
       - feature/kami-native-messenger-offline-preview
