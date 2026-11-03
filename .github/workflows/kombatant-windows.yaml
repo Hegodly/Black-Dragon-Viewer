@@ -27,6 +27,8 @@ jobs:
         run: python3 kami/branding/verify-userdata-branding.py
       - name: Preflight KAMI Messenger session and UI contract
         run: python3 kami/messenger/verify-kami-messenger.py
+      - name: Validate KAMI-only HTTPS release checker and update safeguards
+        run: python3 kami/release/test-native-updates.py
       - name: Preflight KAMI Messenger opt-in read receipt protocol
         run: python3 kami/messenger/verify-read-receipts.py
       - name: Execute Kami receipt protocol and messaging integration tests
@@ -397,6 +399,12 @@ jobs:
       - name: Remove experimental runtime paths and finish release UI
         shell: pwsh
         run: python kami/release/prepare-release.py
+      - name: Integrate native KAMI release discovery and update notification
+        shell: pwsh
+        run: python kami/release/apply-native-updates.py
+      - name: Verify native KAMI update notification and nonblocking checker
+        shell: pwsh
+        run: python kami/release/test-native-updates.py --integrated
       - name: Bake KAMI native light/dark appearance into Windows viewer
         run: python kami/theme/apply-appearance-mode.py
       - name: Validate KAMI light/dark UI integration
