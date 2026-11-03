@@ -1047,8 +1047,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               small_font_.Get(),p.muted);
     }
     if(page_==0) {
-        const float y=std::min(558.f,height-150.f);
-        round_rect(box(contentX,y,contentWidth,87.f),20.f,p.surface);
+        const float y=height>=715.f?558.f:536.f;
+        const float rowH=height>=715.f?87.f:56.f;
+        round_rect(box(contentX,y,contentWidth,rowH),20.f,p.surface);
         round_rect(box(contentX+18,y+19,216.f,42.f),13.f,p.accent_soft);
         label(sl_login_pending_?L"AUTHENTICATING...":
               L"SL LOGIN TEST [L]",
@@ -1056,11 +1057,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               small_font_.Get(),p.accent);
         const auto status=sl_login_status_==protocol::LoginStatus::Accepted?
             sl_circuit_.diagnostic():sl_login_message_;
-        label(status,box(contentX+252,y+14,contentWidth-269,59),
+        label(status,box(contentX+252,y+8,contentWidth-269,rowH-12.f),
               small_font_.Get(),p.muted);
     }
-    label(L"ALPHA 0.1  /  Login and UDP experimental; NOT in-world without caps + assets.",
-          box(contentX,height-55,contentWidth,28),
+    label(L"ALPHA 0.1 / Experimental SL login + UDP; region content not connected.",
+          box(contentX,height-35,contentWidth,23),
           small_font_.Get(),p.muted);
 }
 
@@ -1533,10 +1534,12 @@ void Window::update_sl_connection() {
                 result.handoff.seed_capability.size()*sizeof(wchar_t));
         result.handoff={};
     }
-    if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed)
+    if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed &&
+       sl_circuit_.state()!=protocol::sim::CircuitState::Failed)
         sl_circuit_.poll();
     if(!sl_login_pending_&&
-       sl_circuit_.state()==protocol::sim::CircuitState::Closed)
+       (sl_circuit_.state()==protocol::sim::CircuitState::Closed||
+        sl_circuit_.state()==protocol::sim::CircuitState::Failed))
         (void)KillTimer(hwnd_,203);
     if(page_==0)InvalidateRect(hwnd_,nullptr,FALSE);
 }
@@ -1555,8 +1558,8 @@ void Window::click(float x, float y) {
         return;
     }
     if(page_==0 && x>=297.f && x<=530.f &&
-       y>=std::min(558.f,static_cast<float>(client.bottom)-150.f)+17.f &&
-       y<std::min(558.f,static_cast<float>(client.bottom)-150.f)+64.f) {
+       y>=(client.bottom>=715?558.f:536.f)+17.f &&
+       y<(client.bottom>=715?558.f:536.f)+64.f) {
         begin_sl_login();
         return;
     }
