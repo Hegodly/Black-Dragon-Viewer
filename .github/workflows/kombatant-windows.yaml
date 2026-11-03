@@ -452,6 +452,18 @@ jobs:
       - name: Finalize KAMI-only portable branding and verify runtime completeness
         shell: pwsh
         run: python kami/packaging/finalize-kami-standalone.py
+      - name: Validate bundled test and production updater scripts
+        shell: pwsh
+        run: |
+          $token = $null
+          $errs = $null
+          foreach ($relative in @('kami/release/KAMIUpdater.ps1', 'kami/release/KAMI-Test-Update.ps1', 'build-vc170-64/newview/Release/app_settings/kami-updater.ps1', 'build-vc170-64/newview/Release/app_settings/kami-test-updater.ps1')) {
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $relative), [ref]$token, [ref]$errs) | Out-Null
+            if ($errs.Count -gt 0) { throw ("Invalid KAMI updater script: " + $relative + " : " + ($errs -join '; ')) }
+          }
+      - name: Package updater-compatible complete KAMI Windows release ZIP
+        shell: pwsh
+        run: python kami/release/package-full-release.py
       - name: Package compiled Windows hotfix with backup installer
         shell: pwsh
         run: python kami/messenger/package-live-hotfix.py build-vc170-64/newview/Release kami-hotfix/KAMI-Windows-Hotfix.zip
@@ -484,5 +496,15 @@ jobs:
         with:
           name: kami-viewer-windows-release-output
           path: build-vc170-64/newview/Release/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve updater-compatible full ZIP and checksum report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAMI-Windows-Portable
+          path: |
+            kami-release/KAMI-Windows-Portable.zip
+            kami-release/KAMI-Windows-Portable.json
           if-no-files-found: error
           retention-days: 7
