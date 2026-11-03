@@ -51,5 +51,13 @@ assert "skinRows" in shader and "BLENDINDICES" in shader
 assert "make_skin_palette()" in renderer
 assert (root/"src/features/rig.cpp").is_file()
 assert (root/"src/features/rig_physics.cpp").is_file()
+assert (root/"src/protocol/transport.cpp").is_file()
+assert (root/"src/protocol/bootstrap.cpp").is_file()
+assert (root/"src/protocol/services.cpp").is_file()
+transport=(root/"src/protocol/transport.cpp").read_text(encoding="utf-8")
+assert "WINHTTP_FLAG_SECURE" in transport
+assert "WinHttpSendRequest" in transport
+assert "winhttp" in cmake
+assert "probe_login_tls" in (root/"src/app/window.cpp").read_text(encoding="utf-8")
 assert "ggx_distribution" in shader
 print("PASS: original KAMI graphics controls are wired to DX12 backend; no imported viewer code")
