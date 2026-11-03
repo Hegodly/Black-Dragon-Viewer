@@ -45,5 +45,6 @@ private:
     std::uint32_t sequence_=1;
     unsigned attempts_=0;
     std::chrono::steady_clock::time_point last_retry_{};
+    std::chrono::steady_clock::time_point started_{};
 };
 } // namespace kami::protocol::sim
