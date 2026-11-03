@@ -190,8 +190,18 @@ bool parse_account_name(std::wstring_view account,std::string& first,
         }
         return true;
     };
-    if(delimiter==std::wstring_view::npos)return convert(account,first)&&
-        (last="Resident",true);
+    if(delimiter==std::wstring_view::npos) {
+        // SL's one-field login accepts modern usernames and the legacy
+        // "first.last" spelling. Old KAMI treated "first.last" as a modern
+        // first name and silently submitted the wrong last name.
+        const auto dot=account.find(L'.');
+        if(dot==std::wstring_view::npos)
+            return convert(account,first)&&(last="Resident",true);
+        if(dot==0||dot+1==account.size()||
+           account.find(L'.',dot+1)!=std::wstring_view::npos)return false;
+        return convert(account.substr(0,dot),first)&&
+               convert(account.substr(dot+1),last);
+    }
     auto first_part=account.substr(0,delimiter);
     auto last_part=account.substr(delimiter+1);
     if(last_part.find(L' ')!=std::wstring_view::npos)return false;
