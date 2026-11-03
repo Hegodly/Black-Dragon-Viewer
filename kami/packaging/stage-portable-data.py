@@ -3,6 +3,8 @@
 from pathlib import Path
 import argparse
 import hashlib
+import json
+import zipfile
 import shutil
 import xml.etree.ElementTree as ET
 R=Path(__file__).resolve().parents[2]
@@ -17,6 +19,22 @@ shutil.copytree(fonts,out/'fonts',dirs_exist_ok=True)
 for name in ('featuretable.txt','cube.dae'):
  shutil.copyfile(source/name,out/name)
 shutil.copyfile(source/'licenses-win32.txt',out/'licenses.txt')
+# Stage an OFFLINE test update in all development builds. This is not an
+# executable update: the only ZIP entry is an inert text marker. It exercises
+# checksum verification, staging, post-exit directory swaps and rollback.
+for item in ('kami-updater.ps1','kami-test-updater.ps1'):
+ assert (out/'app_settings'/item).is_file(), f'Missing bundled updater: {item}'
+test_package=out/'app_settings/KAMI-Test-Update.zip'
+test_marker='app_settings/KAMI-TEST-UPDATE-INSTALLED.txt'
+with zipfile.ZipFile(test_package,'w',zipfile.ZIP_DEFLATED) as archive:
+ info=zipfile.ZipInfo(test_marker,date_time=(2026,11,2,0,0,0))
+ info.compress_type=zipfile.ZIP_DEFLATED
+ archive.writestr(info,b'KAMI TEST UPDATE INSTALLED - NO EXECUTABLE CHANGES\n')
+with zipfile.ZipFile(test_package) as archive:
+ assert archive.namelist()==[test_marker]
+ assert archive.testzip() is None
+manifest={'schema':1,'overlay':test_marker,'sha256':hashlib.sha256(test_package.read_bytes()).hexdigest().upper()}
+(out/'app_settings/KAMI-Test-Update.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 # Keep source attribution available in the portable copy.
 shutil.copyfile(R/'doc/contributions.txt',out/'app_settings/contributors-source.txt')
 # The KAMI login soundtrack chooser is compiled into LLPanelLogin and
