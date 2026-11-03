@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdint>
 #include <map>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -228,7 +229,7 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
 LoginResult parse_login_xmlrpc(std::string_view xml){
     LoginResult result{};
     result.status=LoginStatus::MalformedReply;
-    if(xml.empty()||xml.size()>512*1024)return result;
+    if(xml.empty()||xml.size()>8U*1024U*1024U)return result;
     const std::wstring document=wide(xml);
     if(document.empty())return result;
     ComPtr<IXMLDOMDocument2> dom;
@@ -255,9 +256,17 @@ LoginResult parse_login_xmlrpc(std::string_view xml){
         ComPtr<IXMLDOMNode> member;
         if(FAILED(members->get_item(i,&member))||!member)return result;
         auto key=get_text(child(member.Get(),L"name").Get());
-        auto val=get_text(child(member.Get(),L"value").Get());
-        if(key.empty()||key.size()>100||val.size()>4096||
-           !fields.emplace(key,val).second)return result;
+        if(key.empty()||key.size()>100)return result;
+        // Inventory skeleton and other fields may be large arrays: never
+        // flatten a giant XML subtree into one string or reject the login
+        // because of unrelated optional data.
+        auto scalar=child(member.Get(),L"value/string");
+        if(!scalar)scalar=child(member.Get(),L"value/int");
+        if(!scalar)scalar=child(member.Get(),L"value/i4");
+        if(!scalar)scalar=child(member.Get(),L"value/boolean");
+        if(!scalar)continue;
+        auto val=get_text(scalar.Get());
+        if(val.size()>4096||!fields.emplace(key,val).second)return result;
     }
     const auto lookup=[&](const wchar_t* key)->std::wstring{
         auto it=fields.find(key);
@@ -265,7 +274,10 @@ LoginResult parse_login_xmlrpc(std::string_view xml){
     };
     const auto login=lookup(L"login");
     if(login!=L"true"&&login!=L"1"){
-        result.status=login==L"indeterminate"||login==L"mfa_required"?
+        const auto reason=lookup(L"reason");
+        result.status=login==L"indeterminate"||login==L"mfa_required"||
+            reason==L"mfa_challenge"||reason==L"tos"||
+            reason==L"critical"||reason==L"update"?
             LoginStatus::RequiresUserAction:LoginStatus::Rejected;
         result.message=safe_message(lookup(L"message"));
         if(result.message.empty())result.message=L"Login rejected by Second Life";
@@ -350,7 +362,7 @@ LoginResult login_to_simulator(const LoginRequest& request,
     failure.http_status=code;
     if(code!=200){failure.status=LoginStatus::HttpError;return failure;}
     std::string body;
-    while(body.size()<=512*1024){
+    while(body.size()<=8U*1024U*1024U){
         char chunk[8192]{};
         DWORD read=0;
         if(!WinHttpReadData(web.handle,chunk,sizeof(chunk),&read)){
@@ -359,7 +371,7 @@ LoginResult login_to_simulator(const LoginRequest& request,
         if(!read)break;
         body.append(chunk,read);
     }
-    if(body.size()>512*1024){
+    if(body.size()>8U*1024U*1024U){
         failure.status=LoginStatus::MalformedReply;return failure;
     }
     auto reply=parse_login_xmlrpc(body);
