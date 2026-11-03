@@ -9,6 +9,7 @@
 #include <chrono>
 #include "kami/graphics/settings.hpp"
 #include "kami/graphics/adaptive.hpp"
+#include "kami/features/telemetry.hpp"
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
@@ -48,6 +49,8 @@ private:
     world::ShaderWarmup shader_warmup_;
     graphics::Settings graphics_{};
     graphics::AdaptiveQuality adaptive_{};
+    telemetry::Monitor performance_monitor_{};
+    telemetry::Snapshot last_performance_{};
     bool graphics_effects_page_ = false;
     camera::Settings camera_settings_{};
     bool camera_settings_page_ = false;
