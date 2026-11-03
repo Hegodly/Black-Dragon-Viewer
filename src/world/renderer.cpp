@@ -111,6 +111,11 @@ bool Renderer::make_shadow() {
 
 
 
+static_assert(sizeof(Vertex)==64U,
+              "KAMI GPU vertex input layout must match 64-byte packed vertices");
+static_assert(sizeof(rig::Matrix)==64U,
+              "KAMI GPU skinning palette must pack four float4 rows per joint");
+
 bool Renderer::make_skin_palette() {
     if(!device_.native_device()||!shadow_srv_heap_)return false;
     // A small dynamically updated 8-bone palette; one mapped upload buffer.
