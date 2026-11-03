@@ -26,6 +26,9 @@ public:
     [[nodiscard]] CircuitState state() const noexcept {return state_;}
     [[nodiscard]] bool region_seen() const noexcept {return region_seen_;}
     [[nodiscard]] bool movement_seen() const noexcept {return movement_seen_;}
+    [[nodiscard]] const RegionMetadata& region_metadata() const noexcept {
+        return region_metadata_;
+    }
     [[nodiscard]] bool simulator_responded() const noexcept {return packets_received_>0;}
     [[nodiscard]] std::uint32_t packets_received() const noexcept {
         return packets_received_;
@@ -39,6 +42,7 @@ private:
     SOCKET socket_=INVALID_SOCKET;
     bool winsock_ready_=false;
     LoginResult login_{};
+    RegionMetadata region_metadata_{};
     CircuitState state_=CircuitState::Closed;
     bool region_seen_=false,movement_seen_=false;
     bool use_acked_=false,move_acked_=false,handshake_replied_=false;
