@@ -1,4 +1,5 @@
 #include "kami/world/renderer.hpp"
+#include "kami/features/creator_limits.hpp"
 #include "kami/world/scene.hpp"
 #include "kami/world/shader_cache.hpp"
 #include <DirectXMath.h>
@@ -296,21 +297,27 @@ bool Renderer::make_geometry() {
         return false;
     const auto audit=rig::inspect(scene.vertices);
     if(audit.status==rig::Compatibility::Invalid)return false;
-    skin_audit_=audit;
-    terrain_count_=scene.terrain_count;
-    avatar_count_=scene.avatar_count;
     const UINT bytes=static_cast<UINT>(scene.vertices.size()*sizeof(Vertex));
     const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
     const auto desc=buffer_desc(bytes);
+    // GPU uploads are transactional. Never release a known-good world
+    // buffer until CreateCommittedResource AND Map both succeed.
+    Microsoft::WRL::ComPtr<ID3D12Resource> candidate;
     if(FAILED(device_.native_device()->CreateCommittedResource(
             &properties,D3D12_HEAP_FLAG_NONE,&desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
-            IID_PPV_ARGS(geometry_.ReleaseAndGetAddressOf()))))
+            IID_PPV_ARGS(candidate.GetAddressOf()))))
         return false;
     void* mapped=nullptr;
-    if(FAILED(geometry_->Map(0,nullptr,&mapped))) return false;
+    const D3D12_RANGE no_read{0,0};
+    if(FAILED(candidate->Map(0,&no_read,&mapped))||!mapped)return false;
     std::memcpy(mapped,scene.vertices.data(),bytes);
-    geometry_->Unmap(0,nullptr);
+    const D3D12_RANGE written{0,bytes};
+    candidate->Unmap(0,&written);
+    geometry_=std::move(candidate);
+    skin_audit_=audit;
+    terrain_count_=scene.terrain_count;
+    avatar_count_=scene.avatar_count;
     vertex_view_.BufferLocation=geometry_->GetGPUVirtualAddress();
     vertex_view_.SizeInBytes=bytes;
     vertex_view_.StrideInBytes=sizeof(Vertex);
@@ -497,18 +504,35 @@ void Renderer::zoom(float distance_delta) {
 }
 
 bool Renderer::set_creator_preview(SceneMesh mesh) {
-    if(mesh.vertices.empty() || mesh.vertices.size()>1000000 ||
-       mesh.terrain_count+mesh.avatar_count!=mesh.vertices.size()) return false;
+    if(mesh.vertices.empty() ||
+       mesh.terrain_count+mesh.avatar_count!=mesh.vertices.size()) {
+        error_=L"OBJ preview has an invalid triangle section layout";
+        return false;
+    }
+    if(mesh.vertices.size()>creator::kMaxPreviewVertices) {
+        error_=L"OBJ too dense for KAMI preview; reduce polygons in Blender";
+        return false;
+    }
+    const auto audited=rig::inspect(mesh.vertices);
+    if(audited.status==rig::Compatibility::Invalid) {
+        error_=L"OBJ contains non-finite geometry or invalid rig data";
+        return false;
+    }
     if(ready_)wait_for_gpu();
     auto previous=std::move(preview_mesh_);
     preview_mesh_=std::move(mesh);
     if(ready_ && !make_geometry()) {
+        // make_geometry is transactional: old GPU geometry remains valid
+        // even after allocation/map failure; no risky second upload.
         preview_mesh_=std::move(previous);
-        if(!make_geometry()){ready_=false;error_=L"Could not restore original mesh";}
+        error_=L"DX12 could not allocate OBJ preview buffer; try a lighter mesh";
         return false;
     }
-    camera_.set_subject({0.f,-1.2f,0.f});
+    // Center the normalized OBJ (0..3.2 m tall) regardless of head tracking.
+    const float head=camera_.settings().head_tracking?2.77f:1.7f;
+    camera_.set_subject({0.f,1.6f-head,0.f});
     camera_.reset();
+    error_.clear();
     return true;
 }
 void Renderer::clear_creator_preview() {
