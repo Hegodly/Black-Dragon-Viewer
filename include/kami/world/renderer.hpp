@@ -10,6 +10,7 @@
 #include "kami/features/rig_diagnostics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
+#include "kami/world/region_geometry.hpp"
 #include <optional>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -32,7 +33,9 @@ public:
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
-    [[nodiscard]] bool initialize(HWND window, UINT width, UINT height);
+    // Software DX12 WARP may be enabled explicitly by test hosts only.
+    [[nodiscard]] bool initialize(HWND window, UINT width, UINT height,
+                                  bool allow_software_dx12=false);
     void resize(UINT width, UINT height);
     void set_graphics(graphics::Settings settings);
     void draw();
@@ -67,6 +70,15 @@ public:
     }
     [[nodiscard]] const rig::Audit& skin_compatibility() const noexcept {
         return skin_audit_;
+    }
+    // Takes a validated, decoded STATIC region triangle batch. No OpenGL,
+    // D3D11 or alternate renderer. Does not download SL assets by itself.
+    [[nodiscard]] bool set_decoded_region_geometry(
+        const protocol::Bootstrap& authenticated_region,
+        SceneMesh decoded_static_geometry,bool verified_region_data);
+    void clear_decoded_region_geometry();
+    [[nodiscard]] bool region_geometry_active() const noexcept {
+        return region_mesh_.has_value();
     }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
@@ -129,6 +141,7 @@ private:
     rig::Palette skin_matrices_{};
     rig::Audit skin_audit_{};
     std::optional<SceneMesh> preview_mesh_;
+    std::optional<SceneMesh> region_mesh_;
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;
     std::wstring capture_path_;
