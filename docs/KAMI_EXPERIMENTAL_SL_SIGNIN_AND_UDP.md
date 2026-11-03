@@ -203,3 +203,21 @@ grid configuration and event-driven login handling. Those modules
 would require a much larger dependency-aware port, license compliance
 and simulator validation. Full SL login and region loading remain
 experimental and must be confirmed on the live grid.
+
+## KAMI DIAG R3: visible, structured HTTP 400 information
+
+The R2 login diagnostic displayed the HTTP status, response classification
+and advice in one clipped line; when the WinHTTP response-body read failed,
+the classification was omitted entirely.
+
+R3 always stores the HTTP status and a *safe* response category in the login
+result. UI shows HTTP status + diagnostic revision, response classification,
+and pending simulator state on three distinct lines; it does not reveal the
+HTTP body, password/hash, account name, signed simulator capability URL,
+cookies, token or machine fingerprint.
+
+If WinHTTP cannot read the response body, the category displays a WinHTTP
+GetLastError numeric code. Empty, HTML, XML-RPC, JSON-like and plain-text
+error replies have distinct labels. A server HTTP 400 is still **not**
+proof of a malformed XML-RPC request; neither this diagnostic patch nor the
+official Windows machine-ID bridge proves the live login works.
