@@ -7,8 +7,9 @@
 #include <string>
 
 namespace kami::protocol::sim {
-// A live WinSock *UDP circuit transport*; not a complete authenticated
-// in-world session (capabilities, EventQueueGet, AgentUpdate still absent).
+// A live WinSock *UDP circuit transport*; not a complete in-world
+// session. R6 negotiates initial CAPS separately; event dispatch,
+// AgentUpdate, live assets and world rendering are still absent.
 enum class CircuitState : std::uint8_t {
     Closed, WaitingForSimulator, SimulatorResponded,
     RegionHandshakeReceived, MovementConfirmed, Failed
