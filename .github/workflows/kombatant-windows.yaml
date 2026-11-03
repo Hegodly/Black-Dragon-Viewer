@@ -397,6 +397,10 @@ jobs:
       - name: Remove experimental runtime paths and finish release UI
         shell: pwsh
         run: python kami/release/prepare-release.py
+      - name: Bake KAMI native light/dark appearance into Windows viewer
+        run: python kami/theme/apply-appearance-mode.py
+      - name: Validate KAMI light/dark UI integration
+        run: python kami/theme/test-appearance-mode.py
       - name: Validate all KAMI native graphics patches with named assertions
         shell: pwsh
         run: python kami/stability/validate-next-build.py

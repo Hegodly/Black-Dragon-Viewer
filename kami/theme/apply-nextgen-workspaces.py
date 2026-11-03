@@ -59,7 +59,7 @@ floater = ET.Element("floater", {
     "bg_alpha_color": "FloaterDefaultBackgroundColor",
 })
 
-def text(name, value, x, y, w, h, *, font="SansSerif", color="0.93 0.95 0.97 1"):
+def text(name, value, x, y, w, h, *, font="SansSerif", color="LabelTextColor"):
     e = ET.SubElement(floater, "text", {
         "name": name, "layout": "topleft", "left": str(x), "top": str(y),
         "width": str(w), "height": str(h), "font": font,
@@ -76,10 +76,10 @@ ET.SubElement(floater, "icon", {
 text("kami_workspaces_name", "K A M I", 112, 42, 490, 34,
      font="SansSerifBoldLarge")
 text("kami_workspaces_tagline", "BEYOND REALITY  /  WORKSPACE NAVIGATOR", 114, 78, 580, 24,
-     color="0.65 0.78 0.85 1")
+     color="LabelTextColor")
 text("kami_workspaces_intro",
      "Native tools. Original Second Life actions. A new way to work.",
-     26, 130, 730, 27, color="0.78 0.83 0.88 1")
+     26, 130, 730, 27, color="LabelTextColor")
 
 # Four workspaces and a 3x4 grid. Sections are arranged as two columns
 # of 2-button rows for discoverability and predictable keyboard navigation.
@@ -109,7 +109,7 @@ groups = [
 
 for title, left, top, buttons in groups:
     text(f"kami_group_{title.lower()}", title, left, top, 350, 26,
-         font="SansSerifBold", color="0.84 0.88 0.92 1")
+         font="SansSerifBold", color="LabelTextColor")
     border = ET.SubElement(floater, "view_border", {
         "name": f"kami_group_{title.lower()}_rule",
         "layout": "topleft", "left": str(left), "top": str(top+29),
@@ -132,7 +132,7 @@ for title, left, top, buttons in groups:
 text("kami_workspaces_footer",
      "BEYOND REALITY  |  Built on Black Dragon by NiranV Dean",
      26, 558, 700, 23, font="SansSerifSmall",
-     color="0.59 0.67 0.72 1")
+     color="LabelTextColor")
 workspace_file = XUI / "floater_kami_workspaces.xml"
 ET.indent(floater, space=" ")
 ET.ElementTree(floater).write(workspace_file, encoding="utf-8", xml_declaration=True)
