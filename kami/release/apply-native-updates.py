@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Integrate safe, nonblocking, KAMI-only release discovery into the Windows login.
 
-This is NOT an automatic updater. Only official GitHub release metadata is read
-with TLS verification; no response is executed, installed, or trusted as a URL.
-The KAMI release page is opened only when the resident chooses to visit it.
+This integrates an opt-in restart installer for a full SHA256-verified release
+ZIP. The installer waits for viewer exit and retains the prior build to restore
+on failure. Neither update checks nor downloads block the UI thread.
 """
 from pathlib import Path
 import shutil
@@ -14,8 +14,12 @@ VIEW = ROOT / "indra/newview"
 XUI = VIEW / "skins/default/xui/en"
 
 header = VIEW / "kami_update_checker.h"
-assert not header.exists(), "KAMI release checker already integrated"
+installer_header = VIEW / "kami_update_install.h"
+installer_script = VIEW / "app_settings/kami-updater.ps1"
+assert not header.exists() and not installer_header.exists() and not installer_script.exists(), "KAMI update system already integrated"
 shutil.copyfile(ROOT / "kami/release/kami_update_checker.h", header)
+shutil.copyfile(ROOT / "kami/release/kami_update_install.h", installer_header)
+shutil.copyfile(ROOT / "kami/release/KAMIUpdater.ps1", installer_script)
 
 login = VIEW / "llpanellogin.cpp"
 data = login.read_text(encoding="utf-8-sig")
@@ -28,9 +32,30 @@ def once(old, new):
     data = data.replace(old, new, 1)
 
 once('#include "llpanellogin.h"\n',
-     '#include "llpanellogin.h"\n#if LL_WINDOWS\n#include "kami_update_checker.h"\n#endif\n')
+     '#include "llpanellogin.h"\n#if LL_WINDOWS\n#include "kami_update_checker.h"\n#include "kami_update_install.h"\n#endif\n')
 once('https://github.com/NiranV/Black-Dragon-Viewer/releases',
      'https://github.com/Hegodly/Black-Dragon-Viewer/releases')
+once('    return false;\n}\n\nLLPointer<LLCredential> load_user_credentials', '''    return false;
+}
+
+#if LL_WINDOWS
+bool callback_install_kami_update(const LLSD& notification, const LLSD& response)
+{
+    if (LLNotificationsUtil::getSelectedOption(notification, response) != 0)
+        return false;
+    const auto tag = kami::updates::selectedVersion();
+    if (!kami::updates::launchInstall(tag))
+    {
+        LLNotificationsUtil::add("KAMIUpdateLauncherError");
+        return false;
+    }
+    LLAppViewer::instance()->requestQuit();
+    return false;
+}
+#endif
+
+LLPointer<LLCredential> load_user_credentials''')
+
 begin = data.index('    //BD - Fetch latest version.')
 end = data.index('    LLButton* new_version_text = getChild<LLButton>("new_version");', begin)
 assert begin > 0 and end > begin
@@ -61,8 +86,17 @@ once('void LLPanelLogin::draw()\n{\n#if LL_WINDOWS\n',
             {
             case kami::updates::Status::Available:
                 status->setLabelArg("[UPDATE_STRING]", "NEW KAMI RELEASE AVAILABLE");
-                LLNotificationsUtil::add("UpdateAvailable", LLSD(), LLSD(),
-                    callback_show_release_url);
+                kami::updates::selectedVersion() = release.version;
+                if (release.installable)
+                {
+                    LLNotificationsUtil::add("UpdateAvailable", LLSD(), LLSD(),
+                        callback_install_kami_update);
+                }
+                else
+                {
+                    LLNotificationsUtil::add("KAMIUpdateManual", LLSD(), LLSD(),
+                        callback_show_release_url);
+                }
                 break;
             case kami::updates::Status::Current:
                 status->setLabelArg("[UPDATE_STRING]", "UP TO DATE");
@@ -98,11 +132,32 @@ tree = ET.parse(notice)
 matches = [x for x in tree.getroot().iter("notification") if x.get("name") == "UpdateAvailable"]
 assert len(matches) == 1
 matches[0].text = (
-    "A new KAMI Viewer release is available. Open the official KAMI releases "
-    "page to review and download it? No update will be installed automatically.\n"
+    "A new KAMI Viewer release is available. Install and restart now? "
+    "KAMI will verify the full update package, close and restart, with a "
+    "backup of the previous build available for recovery.\n"
 )
+# Preserve the native confirmation layout; it now starts a local installer.
+templ = matches[0]
+buttons = templ.find("usetemplate")
+assert buttons is not None
+buttons.set("yestext", "INSTALL & RESTART")
+buttons.set("notext", "LATER")
+manual = ET.SubElement(tree.getroot(), "notification", {
+    "name": "KAMIUpdateManual", "icon": "notify.tga", "type": "alertmodal"
+})
+manual.text = "A newer KAMI release is available, but it has no verified automatic installation package. Open the official KAMI releases page?\\n"
+ET.SubElement(manual, "tag").text = "confirm"
+ET.SubElement(manual, "usetemplate", {
+    "name": "okcancelbuttons", "yestext": "VIEW RELEASE", "notext": "LATER"
+})
+fail = ET.SubElement(tree.getroot(), "notification", {
+    "name": "KAMIUpdateLauncherError", "icon": "alertmodal.tga", "type": "alertmodal"
+})
+fail.text = "Unable to start the bundled KAMI updater. Your current installation was not changed.\\n"
+ET.SubElement(fail, "tag").text = "confirm"
+ET.SubElement(fail, "usetemplate", {"name": "okbutton", "yestext": "OK"})
 ET.indent(tree, space=" ")
 tree.write(notice, encoding="utf-8", xml_declaration=True)
 for path in (login_ui, notice):
     ET.parse(path)
-print("PASS: KAMI-only asynchronous release discovery, opt-in official release link")
+print("PASS: KAMI-only release discovery plus user-approved verified install & restart")
