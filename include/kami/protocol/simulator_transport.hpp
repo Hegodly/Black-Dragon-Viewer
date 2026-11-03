@@ -1,6 +1,7 @@
 #pragma once
 #include "kami/protocol/login.hpp"
 #include "kami/protocol/lludp.hpp"
+#include "kami/protocol/simulator_wire.hpp"
 #include <winsock2.h>
 #include <chrono>
 #include <cstdint>
