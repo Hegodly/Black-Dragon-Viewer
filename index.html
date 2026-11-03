@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>KAMI — Second Life Connection Diagnostic</title>
+<style>
+  :root{font-family:Inter,"Segoe UI",-apple-system,BlinkMacSystemFont,Arial,sans-serif;background:#07090d;color:#e9eef6;--border:rgba(202,221,255,.12);--muted:#97a6ba;--accent:#8db6ff;--ok:#83d7b8;--warn:#f0c787;--bad:#f3a2a0}
+  *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100dvh;background:radial-gradient(ellipse 90% 43% at 68% -9%,rgba(79,105,168,.24),transparent 72%),radial-gradient(ellipse 55% 33% at 2% 12%,rgba(57,78,124,.16),transparent 80%),#07090d}
+  a{color:#bbd4ff;text-decoration:none}a:hover{text-decoration:underline}button,select{font:inherit}button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #adcaff;outline-offset:4px}
+  .shell{max-width:1050px;margin:auto;padding:28px 20px 80px}.top{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:46px}.brand{display:flex;align-items:center;gap:12px;font-size:14px;letter-spacing:.24em;font-weight:800}.mark{display:grid;place-items:center;width:36px;height:36px;border:1px solid rgba(210,226,255,.3);border-radius:12px;background:linear-gradient(135deg,rgba(170,193,231,.19),rgba(51,60,85,.1));font-size:19px}.toplabel{border:1px solid var(--border);border-radius:99px;padding:8px 13px;font-size:11px;letter-spacing:.13em;color:#a9b6c9;text-transform:uppercase}
+  .hero{padding:0 4px 26px;max-width:810px}.eyebrow{color:#90a9d3;font-size:11px;text-transform:uppercase;letter-spacing:.22em;font-weight:700}.hero h1{font-size:clamp(34px,5.4vw,66px);font-weight:740;letter-spacing:-.058em;line-height:1.06;margin:17px 0 19px}.gradient{background:linear-gradient(95deg,#eef4ff,#9cbced);-webkit-background-clip:text;background-clip:text;color:transparent}.lead{color:#a8b6c8;max-width:705px;font-size:15px;line-height:1.75;margin:0 0 23px}.notice{max-width:800px;display:flex;align-items:flex-start;gap:11px;border-left:2px solid #9abafb;background:rgba(100,135,193,.09);border-radius:0 12px 12px 0;padding:15px 16px;font-size:13px;line-height:1.65;color:#bcc9da}.notice svg{flex-shrink:0;margin-top:2px}
+  .grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr);gap:16px;margin-top:22px}.panel{background:linear-gradient(145deg,rgba(28,35,48,.8),rgba(16,21,30,.86));border:1px solid var(--border);border-radius:22px;padding:24px;box-shadow:0 14px 55px rgba(0,0,0,.12);min-width:0}.sectionhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}.sectionhead h2{font-size:18px;letter-spacing:-.02em;margin:0 0 6px}.sub{font-size:12.5px;color:var(--muted);line-height:1.65;margin:0}.index{font-size:11px;color:#8191aa;letter-spacing:.12em;font-weight:700}.results{display:grid;gap:10px}.result{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:14px;background:rgba(225,237,255,.035);border:1px solid rgba(210,228,255,.075)}.indicator{width:11px;height:11px;margin-top:4px;flex:0 0 11px;border-radius:50%;background:#6d798a;box-shadow:0 0 0 4px rgba(113,126,147,.1)}.indicator.ok{background:var(--ok);box-shadow:0 0 0 4px rgba(131,215,184,.1)}.indicator.warn{background:var(--warn);box-shadow:0 0 0 4px rgba(240,199,135,.11)}.indicator.bad{background:var(--bad);box-shadow:0 0 0 4px rgba(243,162,160,.1)}.indicator.wait{background:#95b8f8;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.3}}.result strong{display:block;font-size:13px;margin-bottom:5px}.result p{font-size:12px;line-height:1.6;margin:0;color:var(--muted)}.statusbox{margin-top:17px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:#b9c8dd}.statusbox strong{font-weight:600;color:#e2eaf7}
+  .btn{border:1px solid rgba(164,199,255,.24);border-radius:12px;padding:13px 18px;color:#eaf2ff;background:linear-gradient(125deg,#375585,#273f62);box-shadow:0 6px 22px rgba(44,79,135,.13);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:9px;transition:transform .14s,filter .14s}.btn:hover{filter:brightness(1.12);transform:translateY(-1px)}.btn:disabled{opacity:.58;cursor:wait}.btn.secondary{background:rgba(224,235,255,.06);box-shadow:none;border-color:var(--border)}.btnbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .smallheading{font-size:11px;letter-spacing:.14em;color:#8ea2be;text-transform:uppercase;font-weight:700;margin:0 0 13px}.guide{display:grid;gap:13px}.guideitem{display:flex;gap:12px;align-items:flex-start}.num{display:grid;place-items:center;flex:0 0 26px;height:26px;font-size:11px;font-weight:800;border:1px solid rgba(171,196,233,.2);border-radius:9px;color:#9eb9e4;background:rgba(130,163,221,.08)}.guideitem strong{display:block;font-size:13px;margin:2px 0 4px}.guideitem p{font-size:12px;line-height:1.6;color:var(--muted);margin:0}.divider{height:1px;background:var(--border);margin:24px 0}.linklist{display:flex;flex-direction:column;gap:10px}.linklist a{display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(190,214,255,.045);border-radius:11px;padding:12px;font-size:12px}
+  .question{margin:18px 0 0}.question label{display:block;color:#dbe4ef;font-size:12px;font-weight:700;margin-bottom:9px}.question select{width:100%;background:#101723;color:#e5eef9;border:1px solid rgba(200,221,255,.18);border-radius:11px;padding:13px;outline:none}.summary{margin:15px 0 0;border:1px solid rgba(165,192,226,.13);border-radius:14px;padding:17px;background:rgba(131,157,191,.06)}.summary strong{font-size:13px}.summary p{margin:7px 0 0;font-size:12.5px;line-height:1.7;color:#abbad0}.foot{font-size:11px;color:#73849a;line-height:1.7;max-width:790px;margin:22px 4px 0}.privacy{font-size:11px;color:#93a6bf;border-radius:12px;background:rgba(130,160,203,.065);padding:13px 14px;margin-top:14px;line-height:1.7}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#bed5ff;font-size:11.5px;overflow-wrap:anywhere}.chip{display:inline-flex;padding:5px 9px;background:rgba(114,147,200,.12);border:1px solid rgba(154,187,234,.2);border-radius:40px;color:#adc7f1;font-weight:650;font-size:10px;letter-spacing:.04em}.footlinks{display:flex;gap:16px;flex-wrap:wrap;padding-top:22px}
+  @media(max-width:790px){.grid{grid-template-columns:1fr}.top{margin-bottom:34px}.panel{padding:19px}.shell{padding:20px 14px 60px}.statusbox{align-items:flex-start;flex-direction:column}}@media(prefers-reduced-motion:reduce){.indicator.wait{animation:none}.btn{transition:none}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true">神</span><span>KAMI <span style="font-weight:450;color:#96a6bf">/ BEYOND REALITY</span></span></div>
+    <span class="toplabel">Browser diagnostics • v1.0</span>
+  </header>
+  <section class="hero">
+    <div class="eyebrow">Connection analyzer / Second Life</div>
+    <h1>See what’s <span class="gradient">actually connecting.</span></h1>
+    <p class="lead">A lightweight, password-free set of browser checks for troubleshooting KAMI’s <span class="mono">SL LOGIN HTTP 400</span> error. It tests only what browsers can observe, then helps you narrow down the next step.</p>
+    <div class="notice">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#aac8ff" stroke-width="1.6" stroke-linecap="round"><path d="M12 3 3 7v5c0 6 4 9 9 10 5-1 9-4 9-10V7l-9-4Z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div><strong style="color:#d7e8ff">No login credentials. No tracking.</strong> This page does not ask for your Second Life username or password, submit login requests, or store personal data. Browser checks cannot prove KAMI’s Windows XML-RPC authentication works.</div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="checkTitle">
+      <div class="sectionhead"><div><div class="smallheading">01 / Live checks</div><h2 id="checkTitle">Connection overview</h2><p class="sub">Each test runs only when you click the button.</p></div><span class="chip">NO PASSWORD</span></div>
+      <div class="results">
+        <div class="result"><span class="indicator" id="dotBrowser" aria-hidden="true"></span><div><strong>Browser network hint</strong><p id="textBrowser">Not checked. Your browser can report whether it believes it is online, but this is not a connection test.</p></div></div>
+        <div class="result"><span class="indicator" id="dotStatus" aria-hidden="true"></span><div><strong>Second Life published service status</strong><p id="textStatus">Not checked. This requests public data from the official status provider, if cross-origin access is permitted.</p></div></div>
+        <div class="result"><span class="indicator" id="dotHost" aria-hidden="true"></span><div><strong>Login host HTTP reachability</strong><p id="textHost">Not checked. Uses one password-free HEAD request. Browsers hide the real HTTP status for cross-origin requests.</p></div></div>
+      </div>
+      <div class="statusbox"><span id="lastRun">No tests run yet.</span><span>Host: <strong class="mono">login.agni.lindenlab.com</strong></span></div>
+      <div class="btnbar"><button type="button" class="btn" id="runTests">▶ Run connection checks</button><button type="button" class="btn secondary" id="copyBtn">Copy safe report</button></div>
+      <div class="privacy">Important: a completed browser request may still correspond to HTTP 400, 403, or another error. Browser security intentionally hides those codes. A failure can also be caused by browser restrictions; it is <strong>not</strong> proof the Second Life server is down.</div>
+    </section>
+
+    <aside class="panel" aria-labelledby="guideTitle">
+      <div class="smallheading">How to read the results</div><h2 id="guideTitle" style="font-size:18px;margin:0 0 20px">What this can and can’t test</h2>
+      <div class="guide">
+        <div class="guideitem"><span class="num">01</span><div><strong>Public service status</strong><p>Find out whether the official grid reports maintenance or login issues.</p></div></div>
+        <div class="guideitem"><span class="num">02</span><div><strong>Basic HTTP route</strong><p>Try to contact the login host without credentials. The browser cannot reveal its response code.</p></div></div>
+        <div class="guideitem"><span class="num">03</span><div><strong>Windows KAMI login</strong><p>Only the installed executable can test its actual XML-RPC POST, account flow, UDP handshake, and world loading.</p></div></div>
+      </div>
+      <div class="divider"></div>
+      <div class="smallheading">Official resources</div>
+      <div class="linklist"><a href="https://status.secondlifegrid.net/" target="_blank" rel="noopener noreferrer">Second Life grid status <span aria-hidden="true">↗</span></a><a href="https://lindenlab.freshdesk.com/support/solutions/articles/31000133832-login-failure" target="_blank" rel="noopener noreferrer">Login troubleshooting <span aria-hidden="true">↗</span></a></div>
+      <p class="sub" style="margin-top:17px">Status data may not load if the provider blocks cross-origin requests. You can always view its official page directly.</p>
+    </aside>
+  </div>
+
+  <section class="panel" style="margin-top:16px" aria-labelledby="triageTitle">
+    <div class="sectionhead"><div><div class="smallheading">02 / Error isolation</div><h2 id="triageTitle">Narrow down the KAMI problem</h2><p class="sub">Choose what you saw in the Windows viewer. These choices stay on this page.</p></div></div>
+    <div class="grid" style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr))">
+      <div class="question"><label for="kamiError">What error does KAMI show?</label><select id="kamiError"><option value="400">SL LOGIN HTTP 400</option><option value="403">SL LOGIN HTTP 403</option><option value="timeout">Connection timed out / network error</option><option value="tls">TLS / certificate error</option><option value="world">Login accepted but no region loads</option><option value="other">Something else</option></select></div>
+      <div class="question"><label for="otherWorks">Can you sign in through another SL viewer?</label><select id="otherWorks"><option value="unknown">Not tested / not sure</option><option value="yes">Yes, Firestorm or official viewer works</option><option value="no">No, other viewers also fail</option></select></div>
+    </div>
+    <div class="summary" id="advice" aria-live="polite"><strong id="adviceTitle">Likely next step</strong><p id="adviceText">Choose the two answers above to see what the results mean.</p></div>
+    <div class="btnbar"><button type="button" class="btn secondary" id="copyReport">Copy troubleshooting summary</button></div>
+  </section>
+  <p class="foot">KAMI Browser Diagnostic is an independent development aid, not a Linden Lab service. It makes no authenticated requests and cannot read SL login error response bodies, diagnose local UDP access, or prove that the viewer is compatible with the login server. Designed to work as one self-contained HTML file in Edge, Chrome, Firefox, or Safari.</p>
+  <div class="footlinks"><a href="https://status.secondlifegrid.net/" target="_blank" rel="noopener noreferrer">Status page ↗</a><a href="https://github.com/Hegodly/Black-Dragon-Viewer/pull/58" target="_blank" rel="noopener noreferrer">KAMI login code / test branch ↗</a></div>
+</main>
+<script>
+(()=>{'use strict';
+ const $=(id)=>document.getElementById(id);
+ const state={browser:'Not run',status:'Not run',host:'Not run',date:'Never'};
+ const set=(key,kind,description)=>{
+   const suffix=key[0].toUpperCase()+key.slice(1);
+   $('dot'+suffix).className='indicator '+kind;
+   $('text'+suffix).textContent=description;
+   state[key]=description;
+ };
+ const timedFetch=async(url,init={},timeout=8000)=>{
+   const controller=new AbortController();
+   const timer=setTimeout(()=>controller.abort(),timeout);
+   try{return await fetch(url,{...init,signal:controller.signal})}
+   finally{clearTimeout(timer)}
+ };
+ const statusLabel=(status)=>({operational:'Operational',degraded_performance:'Degraded performance',partial_outage:'Partial outage',major_outage:'Major outage',under_maintenance:'Under maintenance'})[status]||String(status).replaceAll('_',' ');
+ const run=async()=>{
+   $('runTests').disabled=true;
+   $('runTests').textContent='Checking…';
+   set('browser','wait','Checking the browser network indicator…');
+   set('status','wait','Requesting public grid status…');
+   set('host','wait','Attempting a credential-free HTTP HEAD request…');
+   state.date=new Date().toLocaleString();
+   const online=navigator.onLine;
+   set('browser',online?'ok':'warn',online?'Browser reports online. This is only a browser hint; it does not confirm Second Life connectivity.':'Browser reports offline. Check your network connection, but verify independently.');
+   const [statusResult,hostResult]=await Promise.allSettled([
+     timedFetch('https://secondlife-status.statuspage.io/api/v2/summary.json',{method:'GET',mode:'cors',cache:'no-store',credentials:'omit'},8500).then(async r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}),
+     timedFetch('https://login.agni.lindenlab.com/cgi-bin/login.cgi',{method:'HEAD',mode:'no-cors',credentials:'omit',redirect:'error',cache:'no-store'},8500)
+   ]);
+   if(statusResult.status==='fulfilled'){
+     const data=statusResult.value;
+     const comps=Array.isArray(data.components)?data.components:[];
+     const login=comps.find(c=>/^logins?$/i.test(c.name||''));
+     const overall=data.status&&data.status.description?String(data.status.description):'Status published';
+     if(login){
+       const label=statusLabel(login.status);
+       const good=login.status==='operational';
+       set('status',good?'ok':'warn','Official login component: '+label+'. Overall grid: '+overall+'. This is published status, not a test of your account.');
+     }else{set('status','warn','Published overall status: '+overall+'. Login component not found in API data. Check the official status page for details.');}
+   }else{
+     set('status','warn','Could not read the public status API from this browser (CORS, network, or timeout). This does not mean Second Life is offline. Use the official status link.');
+   }
+   if(hostResult.status==='fulfilled'){
+     const result=hostResult.value;
+     if(result.type==='opaque'){
+       set('host','ok','An opaque browser HTTP response was received. Browser security hides its status (could be 200, 400, 403, 405, etc.). Authentication was NOT tested.');
+     }else{
+       set('host','warn','The browser received an HTTP response, but this check does not establish a successful SL login.');
+     }
+   }else{
+     set('host','warn','No readable response: browser restrictions, redirect policy, CORS, TLS, or network conditions may be responsible. This is NOT proof that the login server is down.');
+   }
+   $('lastRun').textContent='Last checked: '+state.date;
+   $('runTests').disabled=false;
+   $('runTests').textContent='↻ Run checks again';
+   updateAdvice();
+ };
+ const advice=()=>{
+   const error=$('kamiError').value,other=$('otherWorks').value;
+   if(error==='400'&&other==='yes')return ['KAMI-specific request is a leading suspect','If Firestorm or the official viewer can authenticate, but KAMI returns HTTP 400, compare KAMI’s XML-RPC body fields, types, identity, and request headers against the documented protocol. This browser page cannot see the server’s 400 response or establish its exact cause.'];
+   if(error==='400'&&other==='no')return ['Check shared services first','Because another viewer also fails, check grid maintenance and your account/network first. HTTP 400 still does not, by itself, identify a password problem. Do not retry rapidly.'];
+   if(error==='400')return ['Compare against a known-working viewer','HTTP 400 means the server or an intermediary rejected an HTTP request; it does not prove exactly why. First confirm whether the same test account logs in through Firestorm or the official viewer, then inspect KAMI’s safe HTTP response category.'];
+   if(error==='403')return ['A request was refused','HTTP 403 can be returned by login or security infrastructure. Compare with a supported viewer and look at official service notices. A texture-CDN 403 in the old viewer is a different problem from login HTTP 403.'];
+   if(error==='timeout')return ['Trace connectivity and timeouts','Check Wi‑Fi reliability, DNS, local security software and the SL status page. A browser HEAD test cannot validate the Windows app’s actual XML-RPC POST or its simulator UDP connection.'];
+   if(error==='tls')return ['Inspect local TLS validation','Verify Windows date/time, certificate updates and HTTPS interception settings. Do not bypass SSL certificate verification to make the login succeed.'];
+   if(error==='world')return ['Authentication and world loading are separate','KAMI’s standalone DX12 prototype does not yet implement full SL capabilities, asset loading, and live-world rendering. A successful login alone will not produce a fully playable region.'];
+   return ['Capture the precise error category','Record the status code and safe response category shown by the latest KAMI Windows build. Do not share credentials, login request XML, session IDs, or capability URLs.'];
+ };
+ function updateAdvice(){const [title,message]=advice();$('adviceTitle').textContent=title;$('adviceText').textContent=message;}
+ const report=()=>[
+   'KAMI — browser connection diagnostic (safe summary)',
+   'Checked locally: '+state.date,
+   'Browser: '+state.browser,
+   'Published SL status: '+state.status,
+   'Password-free login host check: '+state.host,
+   'KAMI app symptom: '+$('kamiError').selectedOptions[0].text,
+   'Other viewer login: '+$('otherWorks').selectedOptions[0].text,
+   'Interpretation: '+advice().join(' — '),
+   'NOTE: This browser tool did not authenticate to Second Life or inspect private HTTP response bodies.'
+ ].join('\n');
+ const copy=async(button)=>{
+   const text=report();
+   try{if(!navigator.clipboard||!navigator.clipboard.writeText)throw new Error('Clipboard unavailable');await navigator.clipboard.writeText(text);button.textContent='✓ Report copied';}
+   catch(e){const popup=window.prompt('Copy this safe summary:',text);button.textContent=popup===null?'Copy manually':'Summary displayed';}
+   setTimeout(()=>{button.textContent='Copy safe report'},1800);
+ };
+ $('runTests').addEventListener('click',run);
+ $('copyBtn').addEventListener('click',()=>copy($('copyBtn')));
+ $('copyReport').addEventListener('click',()=>copy($('copyReport')));
+ $('kamiError').addEventListener('change',updateAdvice);
+ $('otherWorks').addEventListener('change',updateAdvice);
+ updateAdvice();
+})();
+</script>
+</body>
+</html>
