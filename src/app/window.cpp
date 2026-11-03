@@ -312,7 +312,8 @@ void Window::update_viewport() {
     RECT client{};
     GetClientRect(hwnd_, &client);
     const int x=302, y=188;
-    const int width=std::max<int>(128, client.right-350);
+    const int width=std::max<int>(128, client.right-
+        ((page_==6||page_==7)?690:350));
     const int height=std::max<int>(128, client.bottom-306);
     if (!viewport_) {
         viewport_=CreateWindowExW(0,kViewportClassName,L"",
@@ -481,6 +482,82 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(L"No fake DLSS, frame generation, or ray tracing toggles.",
               box(contentX+26,height-83,contentWidth-52,28),
               small_font_.Get(),p.muted);
+        return;
+    }
+
+    if(page_==6 || page_==7) {
+        const bool creator=page_==6;
+        round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
+        label(creator?L"KAMI CREATOR STUDIO":L"KAMI PHOTO STUDIO",
+              box(contentX+28,105,contentWidth-56,44),title_font_.Get(),p.text);
+        label(creator?L"Local mesh inspection / DX12 preview":
+                      L"Live DX12 color grading / PNG export",
+              box(contentX+28,151,contentWidth-55,27),small_font_.Get(),p.accent);
+        const float panel=width-359.f;
+        round_rect(box(panel,188,326.f,height-306),20.f,p.surface);
+        if(creator) {
+            label(L"MESH PREVIEW",box(panel+18,204,290,30),body_font_.Get(),p.text);
+            round_rect(box(panel+18,249,290,43),13.f,p.accent_soft);
+            label(L"IMPORT OBJ   [I]",box(panel+33,260,260,26),
+                  body_font_.Get(),p.accent);
+            round_rect(box(panel+18,301,290,42),13.f,p.accent_soft);
+            label(L"RESTORE SCENE   [R]",box(panel+33,311,260,26),
+                  body_font_.Get(),p.accent);
+            label(L"Audit result",box(panel+19,365,285,24),small_font_.Get(),p.muted);
+            if(world_renderer_.creator_preview_active()) {
+                label(creator_preview_.audit.valid?L"VALID TRIANGLE GEOMETRY":
+                       L"INVALID MESH",
+                      box(panel+19,398,288,31),body_font_.Get(),p.accent);
+                label(L"Triangles: "+std::to_wstring(creator_preview_.audit.triangles),
+                      box(panel+19,442,290,25),small_font_.Get(),p.text);
+                label(L"Positions: "+std::to_wstring(creator_preview_.source_positions),
+                      box(panel+19,470,290,25),small_font_.Get(),p.text);
+                label(L"Source polygons: "+std::to_wstring(creator_preview_.source_polygons),
+                      box(panel+19,498,290,25),small_font_.Get(),p.text);
+            } else {
+                label(L"NO MODEL SELECTED",box(panel+19,398,290,31),
+                      body_font_.Get(),p.muted);
+            }
+            label(creator_message_,box(contentX+30,height-109,contentWidth-60,32),
+                  small_font_.Get(),p.accent);
+            label(L"Local preview only; simulator upload not connected.",
+                  box(contentX+30,height-76,contentWidth-60,28),
+                  small_font_.Get(),p.muted);
+        } else {
+            label(L"PHOTO CONTROLS",box(panel+18,204,290,30),
+                  body_font_.Get(),p.text);
+            round_rect(box(panel+18,245,290,43),13.f,p.accent_soft);
+            label(L"CAPTURE PNG",box(panel+34,254,260,29),
+                  body_font_.Get(),p.accent);
+            const wchar_t* names[]={
+                L"1  STYLE",L"2  EXPOSURE",L"3  CONTRAST",
+                L"4  SATURATION",L"5  VIGNETTE",L"6  LIVE GRADING"
+            };
+            const std::wstring values[]={
+                photo::preset_name(photo_settings_.preset),
+                std::to_wstring(photo_settings_.exposure_tenths)+L" / 10 EV",
+                std::to_wstring(photo_settings_.contrast_percent)+L"%",
+                std::to_wstring(photo_settings_.saturation_percent)+L"%",
+                std::to_wstring(photo_settings_.vignette_percent)+L"%",
+                photo_settings_.enabled?L"ON":L"OFF"
+            };
+            for(unsigned i=0;i<6;++i) {
+                const float y=300.f+41.f*static_cast<float>(i);
+                round_rect(box(panel+16,y,294,38),10.f,p.elevated);
+                label(names[i],box(panel+27,y+4,150,26),
+                      small_font_.Get(),p.muted);
+                label(values[i],box(panel+174,y+5,130,26),
+                      small_font_.Get(),p.accent);
+            }
+            label(photo_message_,box(contentX+29,height-109,contentWidth-58,30),
+                  small_font_.Get(),p.accent);
+            label(L"Exports the actual DX12 scene. No external filters.",
+                  box(contentX+29,height-76,contentWidth-55,29),
+                  small_font_.Get(),p.muted);
+        }
+        if(!world_ready_)label(world_initialized_?world_renderer_.error():
+             L"Starting DX12 viewport...",box(contentX+30,190,400,45),
+             small_font_.Get(),p.muted);
         return;
     }
 
@@ -783,6 +860,88 @@ void Window::advance_camera(unsigned row) {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+void Window::advance_photo(unsigned row) {
+    switch(row) {
+    case 0:
+        photo_settings_=photo::for_preset(static_cast<photo::Preset>(
+            (static_cast<unsigned>(photo_settings_.preset)+1U)%4U));
+        break;
+    case 1:
+        photo_settings_.exposure_tenths=
+            photo_settings_.exposure_tenths>=10?-10:
+            photo_settings_.exposure_tenths+2;
+        break;
+    case 2:
+        photo_settings_.contrast_percent=
+            photo_settings_.contrast_percent>=160?60:
+            photo_settings_.contrast_percent+10;
+        break;
+    case 3:
+        photo_settings_.saturation_percent=
+            photo_settings_.saturation_percent>=140?0:
+            photo_settings_.saturation_percent+20;
+        break;
+    case 4:
+        photo_settings_.vignette_percent=
+            photo_settings_.vignette_percent>=80?0:
+            photo_settings_.vignette_percent+10;
+        break;
+    case 5: photo_settings_.enabled=!photo_settings_.enabled;break;
+    default: return;
+    }
+    photo_settings_=photo::normalize(photo_settings_);
+    photo::save(photo_settings_);
+    world_renderer_.set_photo_settings(photo_settings_);
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::open_creator_obj() {
+    wchar_t path[32768]{};
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize=sizeof(dialog);
+    dialog.hwndOwner=hwnd_;
+    dialog.lpstrFile=path;
+    dialog.nMaxFile=static_cast<DWORD>(std::size(path));
+    dialog.lpstrFilter=L"Wavefront OBJ (*.obj)\0*.obj\0All files (*.*)\0*.*\0\0";
+    dialog.nFilterIndex=1;
+    dialog.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_EXPLORER;
+    if(!GetOpenFileNameW(&dialog))return;
+    creator::Preview imported;
+    std::string problem;
+    if(!creator::import_obj_file(path,imported,problem)) {
+        creator_message_=L"Import failed: "+
+            std::wstring(problem.begin(),problem.end());
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    if(!world_renderer_.set_creator_preview(imported.scene)) {
+        creator_message_=L"DX12 could not allocate preview geometry.";
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    creator_preview_=std::move(imported);
+    creator_file_=path;
+    creator_message_=L"OBJ loaded into KAMI DX12 preview.";
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+void Window::save_photo_png() {
+    wchar_t path[32768]=L"KAMI-Photo.png";
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize=sizeof(dialog);
+    dialog.hwndOwner=hwnd_;
+    dialog.lpstrFile=path;
+    dialog.nMaxFile=static_cast<DWORD>(std::size(path));
+    dialog.lpstrFilter=L"PNG Image (*.png)\0*.png\0\0";
+    dialog.lpstrDefExt=L"png";
+    dialog.nFilterIndex=1;
+    dialog.Flags=OFN_OVERWRITEPROMPT|OFN_PATHMUSTEXIST|OFN_EXPLORER;
+    if(!GetSaveFileNameW(&dialog))return;
+    if(world_renderer_.capture_png(path)) {
+        photo_message_=L"DX12 capture queued; PNG output will be written.";
+        prior_capture_=world::CaptureStatus::Pending;
+    } else photo_message_=L"DX12 renderer not ready for capture.";
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
 void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
@@ -790,6 +949,23 @@ void Window::click(float x, float y) {
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
         return;
+    }
+    if(page_==6 && x>=width-341.f && x<=width-51.f) {
+        if(y>=249.f && y<292.f) { open_creator_obj(); return; }
+        if(y>=301.f && y<343.f) {
+            world_renderer_.clear_creator_preview();
+            creator_preview_={};creator_file_.clear();
+            creator_message_=L"Original scene restored.";
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return;
+        }
+    }
+    if(page_==7 && x>=width-341.f && x<=width-51.f) {
+        if(y>=245.f && y<288.f) { save_photo_png(); return; }
+        for(unsigned i=0;i<6;++i) {
+            const float top=300.f+41.f*static_cast<float>(i);
+            if(y>=top && y<top+38.f) { advance_photo(i); return; }
+        }
     }
     if(page_==5 && x>=width-405.f && x<width-239.f && y>=106.f && y<154.f) {
         graphics_effects_page_=!graphics_effects_page_;
