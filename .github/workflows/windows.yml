@@ -10,6 +10,7 @@ on:
       - fix/kami-r4-official-xmlrpc-wire-20261103
       - fix/kami-r5-login-transport-stage-diagnostics-20261103
       - feature/kami-r6-caps-seed-eventqueue-20261103
+      - feature/kami-r7-live-region-metadata-event-poll-20261103
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
