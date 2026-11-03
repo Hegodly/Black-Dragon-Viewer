@@ -217,8 +217,16 @@ std::string build_login_xmlrpc(std::string_view first,std::string_view last,
     put_string(doc,"version","0.1.0.53");
     put_string(doc,"platform","Win");
     put_string(doc,"mac",mac);
+    // Required by the documented SL XML-RPC login contract. KAMI avoids
+    // exposing a disk serial number by sending the documented anonymous
+    // placeholder until a user-consented machine-ID design is reviewed.
+    put_string(doc,"id0","00000000-0000-0000-0000-000000000000");
     put_string(doc,"agree_to_tos","true");
     put_string(doc,"read_critical","false");
+    // Ask for structured (non-secret) error reasons from the login service.
+    // Unlike authentication success, these are optional hints.
+    doc+="<member><name>extended_errors</name>"
+         "<value><boolean>1</boolean></value></member>";
     doc+="<member><name>options</name><value><array><data>";
     for(const char* option:{"login-flags","inventory-root","inventory-skeleton",
                             "buddy-list","gestures","global-textures"}){
@@ -313,7 +321,7 @@ std::wstring login_http_diagnostic(unsigned code) {
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"server rejected login request format";
+    case 400:return prefix+L"Bad Request (cause unconfirmed; check protocol)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
