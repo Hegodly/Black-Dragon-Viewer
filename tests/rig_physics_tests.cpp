@@ -71,6 +71,7 @@ int main() {
     // New channels must oscillate under gait, and OFF must disable both.
     solver.set_profile(kami::avatar::BodyProfile::Natural);
     float twist_peak=0.f,closure_peak=0.f;
+    float smallest_open_close=0.f,largest_open_close=0.f;
     state.grounded=true;
     for(int i=0;i<240;++i) {
         state.horizontal_speed=4.2f;
@@ -78,9 +79,15 @@ int main() {
         state.heading=std::sin(i*.02f)*.15f;
         solver.step(state,1.f/60.f);
         twist_peak=std::max(twist_peak,std::abs(solver.output().at(Axis::ChestTwist)));
-        closure_peak=std::max(closure_peak,std::abs(solver.output().at(Axis::ButtOpenClose)));
+        const float clap=solver.output().at(Axis::ButtOpenClose);
+        closure_peak=std::max(closure_peak,std::abs(clap));
+        smallest_open_close=std::min(smallest_open_close,clap);
+        largest_open_close=std::max(largest_open_close,clap);
+        if(clap<-.02901f||!std::isfinite(clap))return 19;
     }
-    if(twist_peak<.001f||closure_peak<.001f)return 14;
+    // Opening AND closing, rather than whole-body side sway.
+    if(twist_peak<.001f||closure_peak<.001f||
+       smallest_open_close>-.001f||largest_open_close<.001f)return 14;
     Output specified{};
     specified.offsets[static_cast<int>(Axis::ButtOpenClose)]=.04f;
     specified.offsets[static_cast<int>(Axis::ChestTwist)]=.06f;
@@ -97,6 +104,16 @@ int main() {
     if(!(closed[static_cast<int>(J::LeftButt)].translation.x>0.f &&
          closed[static_cast<int>(J::RightButt)].translation.x<0.f))
         return 17;
+    // Custom KAMI parameter must stay distinct from SL wearable settings.
+    Wearable custom{};
+    constexpr std::array<NamedParameter,2> enhanced{{
+        {"KAMI_Butt_OpenClose_Max_Effect",.20f},
+        {"KAMI_Chest_Twist_Max_Effect",.90f}
+    }};
+    if(!decode_named_parameters(enhanced,custom)||
+       custom.settings[static_cast<int>(Axis::ButtOpenClose)].max_effect_m>.09001f||
+       custom.settings[static_cast<int>(Axis::ChestTwist)].max_effect_m>.20001f)
+        return 20;
     solver.set_profile(kami::avatar::BodyProfile::Off);
     solver.step(state,1.f/60.f);
     if(solver.output().at(Axis::ButtOpenClose)!=0.f||
