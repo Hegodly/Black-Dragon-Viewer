@@ -67,7 +67,7 @@ int wmain(int argc, wchar_t** argv)
         return 10;
     }
     std::wcout << L"PASS real D3D12 Gaussian backdrop blur inside a glass panel, "
-                  L"unaltered scene outside" << L'\\n';
+                  L"unaltered scene outside" << L'\n';
     if (visibleWindow)
     {
         const HINSTANCE instance = GetModuleHandleW(nullptr);
