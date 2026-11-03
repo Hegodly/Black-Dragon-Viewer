@@ -24,18 +24,21 @@ int main(){
     const auto first=queue.next_download();
     if(!first||first->id!=a||queue.statistics().downloading!=1)return 5;
     if(!queue.download_finished(a,150U,true)||
-       queue.find(a)->stage!=Stage::Decoding)return 6;
+       queue.find(a)->stage!=Stage::DecodeQueued)return 6;
     const auto second=queue.next_download();
     if(!second||second->id!=b)return 7;
-    if(queue.decode_finished(a,false)||
-       !queue.decode_finished(a,true)||
-       !queue.next_gpu_upload(150U)||queue.next_gpu_upload(149U))return 8;
+    const auto decode_a=queue.next_decode();
+    if(!decode_a||decode_a->id!=a||queue.next_decode()||
+       !queue.decode_finished(a,true)||queue.decode_finished(a,false)||
+       !queue.next_gpu_upload(150U)||queue.next_gpu_upload(149U))
+       return 8;
     if(!queue.gpu_uploaded(a)||queue.gpu_uploaded(a)||
        queue.statistics().resident!=1||
        queue.statistics().gpu_uploaded_bytes!=150U)return 9;
     if(!queue.download_finished(b,0U,false)||
        queue.find(b)->stage!=Stage::Failed)return 10;
-    if(!queue.next_download()||queue.next_download()->id!=d)return 11;
+    const auto third=queue.next_download(),fourth=queue.next_download();
+    if(!third||!fourth||third->id!=c||fourth->id!=d)return 11;
     queue.set_online(false);
     if(queue.statistics().resident!=0||queue.find(a)!=nullptr||
        queue.next_download()||queue.request(a,Kind::OwnAvatar,1.f,true,1U))
