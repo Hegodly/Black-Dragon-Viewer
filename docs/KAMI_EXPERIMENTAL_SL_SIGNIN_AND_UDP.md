@@ -138,3 +138,27 @@ inventory data need not invalidate authentication. Offline regression tests
 cover protocol types and a large XML response. This is an unverified client
 fix, **not proof of successful live SL authentication**. Passwords, session
 tokens and capability URLs are not written to diagnostics.
+
+## Further investigation after repeated HTTP 400
+
+A second user test still returned HTTP 400, disproving the hypothesis
+that the earlier booleans/timeouts alone would resolve the problem.
+
+This follow-up corrects the machine identifier to hash the **six raw
+adapter bytes** rather than the printable colon-separated address,
+matching the official viewer's hashing semantics; the physical address
+is never sent. It also adds non-secret typed request metadata used by
+the current official login implementation, without impersonating its
+channel/version or claiming the user acknowledged SL's Terms.
+
+For non-200 replies, KAMI now reads no more than 512 bytes *only to
+classify the response format*: empty, XML-RPC, HTML, JSON-like, or
+unrecognized. The response bytes are then cleared, never shown or
+logged; this helps distinguish login-service replies from intervening
+HTML error pages without exposing any account or capability data.
+
+These are **candidate compatibility changes**. Neither a real login
+nor a useful Second Life session is proven by compilation/tests. Re-test
+once with a dedicated test account and report only the HTTP code plus
+response **category**. Do not supply raw HTTP bodies, SL credentials,
+signed URLs or login payloads to issues or chats.
