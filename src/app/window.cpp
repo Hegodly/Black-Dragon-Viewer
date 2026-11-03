@@ -606,19 +606,23 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       box(panel+19,470,290,25),small_font_.Get(),p.text);
                 label(L"Source polygons: "+std::to_wstring(creator_preview_.source_polygons),
                       box(panel+19,498,290,25),small_font_.Get(),p.text);
-                if(creator_preview_.skipped_degenerate_triangles>0) {
+                if(height>=720.f &&
+                   creator_preview_.skipped_degenerate_triangles>0) {
                     label(L"Skipped zero-area triangles: "+
                           std::to_wstring(creator_preview_.skipped_degenerate_triangles),
-                          box(panel+19,521,290,21),small_font_.Get(),p.muted);
+                          box(panel+19,522,290,21),small_font_.Get(),p.muted);
                 }
                 if(height>=720.f) {
                     // Clearly labelled offline estimate, not an SL fee quote.
                     const auto estimate=viewer::estimate_scene_cost(
                         2048,2048,2,creator_preview_.audit.triangles,512);
+                    const float metricsY=
+                        creator_preview_.skipped_degenerate_triangles>0?
+                        547.f:532.f;
                     label(L"2 x 2K textures + mesh estimate:",
-                          box(panel+19,532,290,23),small_font_.Get(),p.muted);
+                          box(panel+19,metricsY,290,21),small_font_.Get(),p.muted);
                     label(std::to_wstring(estimate.total_mb)+L" MiB uncompressed",
-                          box(panel+19,559,290,24),small_font_.Get(),p.accent);
+                          box(panel+19,metricsY+22.f,290,21),small_font_.Get(),p.accent);
                 }
             } else {
                 label(L"NO MODEL SELECTED",box(panel+19,398,290,31),
