@@ -1313,7 +1313,9 @@ void Window::open_creator_obj() {
         InvalidateRect(hwnd_,nullptr,FALSE);
         return;
     }
-    if(!world_renderer_.set_creator_preview(imported.scene)) {
+    // Transfer the potentially large CPU triangle buffer once; do not
+    // duplicate up to 64 MiB just to display source audit counts.
+    if(!world_renderer_.set_creator_preview(std::move(imported.scene))) {
         creator_message_=world_renderer_.error().empty()?
             L"KAMI OBJ preview rejected this geometry":
             world_renderer_.error();
