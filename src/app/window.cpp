@@ -73,6 +73,7 @@ bool Window::create(HINSTANCE instance, int show) {
 
     const BOOL dark = light_ ? FALSE : TRUE;
     (void)DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
+    (void)SetTimer(hwnd_, 201, 33, nullptr);
     ShowWindow(hwnd_, show);
     UpdateWindow(hwnd_);
     return true;
@@ -108,7 +109,27 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         click(static_cast<float>(GET_X_LPARAM(lp)),
               static_cast<float>(GET_Y_LPARAM(lp)));
         return 0;
+    case WM_TIMER:
+        if (wp == 201 && page_ == 1 && world_ready_ && !IsIconic(hwnd_))
+            world_renderer_.draw();
+        return 0;
+    case WM_MOUSEWHEEL:
+        if (page_ == 1 && world_ready_) {
+            world_renderer_.zoom(GET_WHEEL_DELTA_WPARAM(wp) > 0 ? -0.7f : 0.7f);
+            return 0;
+        }
+        break;
     case WM_KEYDOWN:
+        if (page_ == 1 && world_ready_) {
+            switch (wp) {
+            case VK_LEFT: case 'A': world_renderer_.orbit(-.11f, 0.f); return 0;
+            case VK_RIGHT: case 'D': world_renderer_.orbit(.11f, 0.f); return 0;
+            case VK_UP: world_renderer_.orbit(0.f, .35f); return 0;
+            case VK_DOWN: world_renderer_.orbit(0.f, -.35f); return 0;
+            case 'W': world_renderer_.zoom(-.7f); return 0;
+            case 'S': world_renderer_.zoom(.7f); return 0;
+            }
+        }
         if (wp >= VK_F1 && wp <= VK_F6) {
             select_page(static_cast<unsigned>(wp - VK_F1));
             return 0;
@@ -127,6 +148,8 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND:
         return 1;
     case WM_DESTROY:
+        (void)KillTimer(hwnd_, 201);
+        world_renderer_.shutdown();
         target_.Reset();
         PostQuitMessage(0);
         return 0;
@@ -153,7 +176,39 @@ void Window::resize(UINT width, UINT height) {
         if (target_->Resize(D2D1::SizeU(width, height)) == D2DERR_RECREATE_TARGET)
             target_.Reset();
     }
+    update_viewport();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void Window::update_viewport() {
+    if (!hwnd_ || page_ != 1) {
+        if (viewport_) ShowWindow(viewport_, SW_HIDE);
+        return;
+    }
+    RECT client{};
+    GetClientRect(hwnd_, &client);
+    const int x=302, y=188;
+    const int width=std::max<int>(128, client.right-350);
+    const int height=std::max<int>(128, client.bottom-306);
+    if (!viewport_) {
+        viewport_=CreateWindowExW(0, L"STATIC", L"",
+            WS_CHILD | WS_VISIBLE | SS_BLACKRECT,
+            x, y, width, height, hwnd_, nullptr,
+            reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(hwnd_, GWLP_HINSTANCE)),
+            nullptr);
+        if (!viewport_) return;
+    }
+    MoveWindow(viewport_,x,y,width,height,TRUE);
+    if (!world_initialized_) {
+        world_initialized_=true;
+        world_ready_=world_renderer_.initialize(
+            viewport_,static_cast<UINT>(width),static_cast<UINT>(height));
+    } else if (world_ready_) {
+        world_renderer_.resize(
+            static_cast<UINT>(width),static_cast<UINT>(height));
+        world_ready_=world_renderer_.ready();
+    }
+    ShowWindow(viewport_, world_ready_ ? SW_SHOW : SW_HIDE);
 }
 
 void Window::round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color) {
@@ -194,6 +249,23 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     round_rect(box(width-195,23,163,44),22.f,p.surface);
     label(light_?L"LIGHT MODE   [T]":L"DARK MODE   [T]",
           box(width-176,36,145,24),small_font_.Get(),p.accent);
+
+    if (page_ == 1) {
+        round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
+        label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
+              title_font_.Get(),p.text);
+        label(L"Offline KAMI scene lab: GPU geometry, lighting, depth and materials",
+              box(contentX+30,151,contentWidth-50,30),small_font_.Get(),p.accent);
+        if (!world_ready_) {
+            label(world_initialized_?world_renderer_.error():L"Loading DX12 viewport...",
+                  box(contentX+35,234,contentWidth-70,55),body_font_.Get(),p.muted);
+        }
+        label(L"A/D or arrows: orbit  |  W/S or wheel: zoom  |  Up/Down: tilt",
+              box(contentX+29,height-103,contentWidth-50,30),small_font_.Get(),p.muted);
+        label(L"Procedural test scene only. SL region and avatar transport: not connected.",
+              box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
+        return;
+    }
 
     round_rect(box(contentX,90,contentWidth,241),30.f,p.elevated);
     label(kPages[page_],box(contentX+30,115,contentWidth-55,62),
@@ -248,6 +320,7 @@ void Window::toggle_appearance() {
 void Window::select_page(unsigned index) {
     if (index >= kPages.size()) return;
     page_ = index;
+    update_viewport();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

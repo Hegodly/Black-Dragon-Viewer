@@ -9,6 +9,7 @@
 
 #include "kami/palette.hpp"
 #include "kami/session.hpp"
+#include "kami/world/renderer.hpp"
 
 namespace kami::app {
 class Window final {
@@ -20,6 +21,7 @@ private:
     [[nodiscard]] bool create_resources();
     void paint();
     void resize(UINT width, UINT height);
+    void update_viewport();
     void select_page(unsigned page);
     void toggle_appearance();
     void click(float x, float y);
@@ -28,6 +30,10 @@ private:
     void draw_interface(float width, float height, const ui::Palette& palette);
 
     HWND hwnd_ = nullptr;
+    HWND viewport_ = nullptr;
+    bool world_initialized_ = false;
+    bool world_ready_ = false;
+    world::Renderer world_renderer_;
     bool light_ = false;
     unsigned page_ = 0;
     protocol::Session session_;

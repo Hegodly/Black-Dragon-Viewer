@@ -21,3 +21,7 @@ Then start build/Release/KAMIViewer.exe.
 F1-F6 changes screens; T toggles light/dark and saves the preference in the Windows user registry.
 
 This clean source tree lives on a separate branch in the owner's existing GitHub repository. The old repository name and earlier branches remain until a new repository is created or the existing one renamed. No inherited viewer files are included in this branch's source tree. The user has not yet selected a license for their newly authored code.
+
+
+## Original DX12 scene milestone
+The World tab now hosts a **DirectX 12 rendering viewport**. It renders a locally generated terrain mesh and a primitive anonymous mannequin using vertex-colored materials, directional HLSL lighting, depth testing, and a movable camera. Use F2 to open World; A/D or arrow keys orbit; W/S or wheel zoom; Up/Down adjusts height. This is offline demonstration data, not an actual Second Life region or avatar. Native Windows 2D UI remains Direct2D; no OpenGL world rendering.
