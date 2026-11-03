@@ -85,17 +85,22 @@ bool Scheduler::download_finished(std::string_view id,
         asset->stage=Stage::Failed;return true;
     }
     asset->actual_bytes=bytes;
-    asset->stage=Stage::Decoding;
+    asset->stage=Stage::DecodeQueued;
     return true;
 }
 std::optional<Asset> Scheduler::next_decode() {
     // In the initial pipeline the download completion moves directly to
     // decoding; real workers take the resulting jobs off-thread.
     if(!online_)return std::nullopt;
+    unsigned active=0;
+    for(const auto& entry:entries_)if(entry.stage==Stage::Decoding)++active;
+    if(active>=kMaxConcurrentDecodes)return std::nullopt;
     Asset* next=nullptr;
-    for(auto& entry:entries_)if(entry.stage==Stage::Decoding&&
+    for(auto& entry:entries_)if(entry.stage==Stage::DecodeQueued&&
        (!next||better(entry,*next)))next=&entry;
-    return next?std::optional<Asset>(*next):std::nullopt;
+    if(!next)return std::nullopt;
+    next->stage=Stage::Decoding;
+    return *next;
 }
 bool Scheduler::decode_finished(std::string_view id,bool success) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
@@ -123,6 +128,7 @@ Stats Scheduler::statistics() const noexcept {
     for(const auto& asset:entries_)switch(asset.stage){
     case Stage::Queued:++s.queued;break;
     case Stage::Downloading:++s.downloading;break;
+    case Stage::DecodeQueued:++s.decoding;break;
     case Stage::Decoding:++s.decoding;break;
     case Stage::ReadyForGPU:++s.ready_gpu;break;
     case Stage::Resident:++s.resident;break;
