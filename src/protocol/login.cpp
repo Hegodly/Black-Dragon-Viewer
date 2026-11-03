@@ -247,7 +247,16 @@ std::wstring_view classify_login_http_body(std::string_view body) noexcept{
     if(begins("<!doctype html")||begins("<html"))
         return L"HTML error page";
     if(begins("{")||begins("["))return L"JSON/error gateway response";
+    if(begins("Bad Request")||begins("400 Bad Request")||begins("error"))
+        return L"plain-text error response";
     return L"unrecognized error response";
+}
+std::wstring describe_login_http_response(bool read_ok,
+                                          std::string_view sample,
+                                          unsigned read_error) {
+    if(!read_ok)
+        return L"unavailable (WinHTTP "+std::to_wstring(read_error)+L")";
+    return std::wstring(classify_login_http_body(sample));
 }
 
 
@@ -425,7 +434,7 @@ std::wstring login_http_diagnostic(unsigned code) {
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"Request declined (KAMI DIAG R2)";
+    case 400:return prefix+L"Request declined (KAMI DIAG R3)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
@@ -511,14 +520,14 @@ LoginResult login_to_simulator(const LoginRequest& request,
         // the body, which may contain credentials, tokens or signed URLs.
         char sample[512]{};
         DWORD count=0;
-        if(WinHttpReadData(web.handle,sample,sizeof(sample),&count)){
-            const auto kind=classify_login_http_body(
-                std::string_view(sample,static_cast<std::size_t>(count)));
-            failure.message+=L" [";
-            failure.message+=kind;
-            failure.message+=L"]";
-        }
+        const BOOL read_ok=WinHttpReadData(web.handle,sample,sizeof(sample),&count);
+        const DWORD read_error=read_ok?0:GetLastError();
+        failure.http_response_kind=describe_login_http_response(read_ok!=FALSE,
+            std::string_view(sample,static_cast<std::size_t>(count)),read_error);
         SecureZeroMemory(sample,sizeof(sample));
+        failure.message+=L" [";
+        failure.message+=failure.http_response_kind;
+        failure.message+=L"]";
         return failure;
     }
     std::string body;
