@@ -118,7 +118,7 @@ static_assert(sizeof(rig::Matrix)==64U,
 
 bool Renderer::make_skin_palette() {
     if(!device_.native_device()||!shadow_srv_heap_)return false;
-    // A small dynamically updated 8-bone palette; one mapped upload buffer.
+    // A small dynamically updated 10-bone palette; one mapped upload buffer.
     // GPU frames are fenced before reuse by the existing draw() scheduler.
     const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
     const auto desc=buffer_desc(sizeof(rig::Matrix)*rig::kJointCount);
