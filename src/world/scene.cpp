@@ -41,6 +41,42 @@ void box(std::vector<Vertex>& out,P center,P half,C color,
     quad(out,p[3],p[7],p[6],p[2],color,metallic,roughness);
     quad(out,p[0],p[1],p[5],p[4],color,metallic,roughness);
 }
+// Low-cost colored fitted-physics markers on the original six-box mannequin.
+// Markers are an offline visualization, not skinned Second Life mesh.
+void patch_triangle(std::vector<Vertex>& out,P a,P b,P c,
+                    P center,P radius,C color,float region) {
+    for(const P point:{a,b,c}) {
+        const P n={(point.x-center.x)/(radius.x*radius.x),
+                   (point.y-center.y)/(radius.y*radius.y),
+                   (point.z-center.z)/(radius.z*radius.z)};
+        const float len=std::sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
+        const P normal=len>0.00001f?
+            P{n.x/len,n.y/len,n.z/len}:P{0.f,1.f,0.f};
+        out.push_back({point.x,point.y,point.z,
+                       normal.x,normal.y,normal.z,
+                       color.r,color.g,color.b,.1f,.48f,
+                       point.x*.18f,point.z*.18f,region});
+    }
+}
+void physics_patch(std::vector<Vertex>& out,P center,P radius,C color,float region) {
+    constexpr int bands=6,slices=10;
+    constexpr float pi=3.14159265358979323846f;
+    auto point=[&](int row,int column)->P {
+        const float latitude=-pi*.5f+
+            pi*static_cast<float>(row)/static_cast<float>(bands);
+        const float longitude=2.f*pi*
+            static_cast<float>(column)/static_cast<float>(slices);
+        return {center.x+radius.x*std::cos(latitude)*std::cos(longitude),
+                center.y+radius.y*std::sin(latitude),
+                center.z+radius.z*std::cos(latitude)*std::sin(longitude)};
+    };
+    for(int y=0;y<bands;++y)for(int x=0;x<slices;++x) {
+        const P a=point(y,x),b=point(y+1,x);
+        const P d=point(y,x+1),cc=point(y+1,x+1);
+        patch_triangle(out,a,b,cc,center,radius,color,region);
+        patch_triangle(out,a,cc,d,center,radius,color,region);
+    }
+}
 float height(float x,float z) {
     const float wave=0.36f*std::sin(x*.47f)*std::cos(z*.40f);
     const float hill=0.5f*std::exp(-(x*x+z*z)/85.f);
@@ -58,7 +94,7 @@ SceneMesh build_test_scene(unsigned divisions) {
     SceneMesh scene;
     divisions=std::clamp(divisions,8U,64U);
     const float step=28.f/static_cast<float>(divisions);
-    scene.vertices.reserve(divisions*divisions*6+6*36);
+    scene.vertices.reserve(divisions*divisions*6+6*36+5*6*10*6);
     for(int z=0;z<divisions;++z) {
         for(int x=0;x<divisions;++x) {
             const float x0=-14.f+x*step,x1=x0+step;
@@ -81,6 +117,18 @@ SceneMesh build_test_scene(unsigned divisions) {
     box(scene.vertices,{.74f,1.70f,0},{.19f,.67f,.20f},{.17f,.44f,.78f},.35f,.28f);
     box(scene.vertices,{-.24f,.55f,0},{.19f,.56f,.23f},{.15f,.23f,.39f},.05f,.83f);
     box(scene.vertices,{.24f,.55f,0},{.19f,.56f,.23f},{.15f,.23f,.39f},.05f,.83f);
+    // Slightly inset surfaces make all three physics regions visible in DX12,
+    // including when the movement system is running at very high frame rates.
+    physics_patch(scene.vertices,{-.225f,2.03f,.268f},{.18f,.17f,.16f},
+                  {.36f,.78f,.91f},1.f);
+    physics_patch(scene.vertices,{ .225f,2.03f,.268f},{.18f,.17f,.16f},
+                  {.36f,.78f,.91f},1.f);
+    physics_patch(scene.vertices,{0.f,1.49f,.263f},{.27f,.29f,.15f},
+                  {.57f,.89f,.73f},2.f);
+    physics_patch(scene.vertices,{-.22f,1.30f,-.265f},{.19f,.21f,.16f},
+                  {.66f,.57f,.92f},3.f);
+    physics_patch(scene.vertices,{ .22f,1.30f,-.265f},{.19f,.21f,.16f},
+                  {.66f,.57f,.92f},3.f);
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
