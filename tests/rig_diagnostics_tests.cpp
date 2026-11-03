@@ -7,6 +7,7 @@ int main() {
     auto audit=rig::inspect(scene.vertices);
     if(audit.status!=rig::Compatibility::PhysicsReady||
        !audit.left_pec||!audit.right_pec||!audit.belly||!audit.butt||
+       !audit.butt_open_close_ready||!audit.left_butt||!audit.right_butt||
        audit.weighted_vertices==0)return 1;
     std::array<world::Vertex,3> bare{};
     for(auto& v:bare) {v.ny=1.f;}

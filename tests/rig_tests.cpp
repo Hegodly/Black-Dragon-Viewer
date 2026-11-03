@@ -39,5 +39,30 @@ int main() {
     pose={};pose[static_cast<int>(Joint::Chest)].translation.y=.07f;
     if(!make_palette(pose,matrix)||!deform(p,n,packed,matrix,out,normal)||
        std::abs(out.y-p.y-.07f)>.0001f)return 17;
+    // Both butt lobes must follow the common BUTT bone and diverge when
+    // KAMI's local two-cheek helper pose opens the gap.
+    pose={};
+    pose[static_cast<int>(Joint::LeftButt)].translation.x=-.045f;
+    pose[static_cast<int>(Joint::RightButt)].translation.x=.045f;
+    if(kJointCount!=10 || !make_palette(pose,matrix))return 18;
+    Packed l={},r={};
+    if(!pack_influences({{static_cast<std::uint8_t>(Joint::LeftButt),0,0,0},
+                         {1.f,0.f,0.f,0.f}},l) ||
+       !pack_influences({{static_cast<std::uint8_t>(Joint::RightButt),0,0,0},
+                         {1.f,0.f,0.f,0.f}},r))return 19;
+    Vec3 left{},right{},left_normal{},right_normal{};
+    if(!deform({-.22f,1.30f,-.265f},n,l,matrix,left,left_normal)||
+       !deform({ .22f,1.30f,-.265f},n,r,matrix,right,right_normal))
+        return 20;
+    if(std::abs(left.x-(-.265f))>.0001f ||
+       std::abs(right.x-.265f)>.0001f ||
+       std::abs(left_normal.y-1.f)>.0001f)return 21;
+    pose[static_cast<int>(Joint::LeftButt)].translation.x=.02f;
+    pose[static_cast<int>(Joint::RightButt)].translation.x=-.02f;
+    if(!make_palette(pose,matrix)||
+       !deform({-.22f,1.30f,-.265f},n,l,matrix,left,left_normal)||
+       !deform({ .22f,1.30f,-.265f},n,r,matrix,right,right_normal))
+        return 22;
+    if(!(left.x>-.22f && right.x<.22f))return 23;
     return 0;
 }

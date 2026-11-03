@@ -42,6 +42,11 @@ Audit inspect(std::span<const world::Vertex> vertices) noexcept {
     result.right_pec=result.joint_affected_vertices[static_cast<int>(Joint::RightPec)]>0;
     result.belly=result.joint_affected_vertices[static_cast<int>(Joint::Belly)]>0;
     result.butt=result.joint_affected_vertices[static_cast<int>(Joint::Butt)]>0;
+    result.left_butt=
+        result.joint_affected_vertices[static_cast<int>(Joint::LeftButt)]>0;
+    result.right_butt=
+        result.joint_affected_vertices[static_cast<int>(Joint::RightButt)]>0;
+    result.butt_open_close_ready=result.left_butt&&result.right_butt;
     result.status=result.left_pec&&result.right_pec&&result.belly&&result.butt?
         Compatibility::PhysicsReady:Compatibility::Partial;
     return result;

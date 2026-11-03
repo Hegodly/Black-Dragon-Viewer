@@ -7,7 +7,8 @@ namespace kami::rig {
 // Small original procedural test rig. Names correspond to common fitted-mesh
 // concepts, not a complete decoded Second Life/Bento skeleton.
 enum class Joint : std::uint8_t {
-    Root, Pelvis, Chest, LeftPec, RightPec, Belly, Butt, Head, Count
+    Root, Pelvis, Chest, LeftPec, RightPec, Belly, Butt, Head,
+    LeftButt, RightButt, Count
 };
 inline constexpr std::size_t kJointCount=static_cast<std::size_t>(Joint::Count);
 inline constexpr std::size_t kInfluences=4;

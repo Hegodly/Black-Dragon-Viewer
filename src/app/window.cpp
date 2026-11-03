@@ -835,20 +835,25 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             return std::to_wstring(static_cast<int>(std::lround(value*1000.f)));
         };
         round_rect(box(panelX+16,height-269.f,291.f,76.f),12.f,p.elevated);
-        label(L"SIX-AXIS RIG PHYSICS (MM)",
+        label(L"EIGHT-AXIS RIG PHYSICS (LOCAL)",
               box(panelX+21,height-263.f,280.f,19.f),
               messenger_centered_small_.Get(),p.muted);
-        label(L"CHEST  UP "+millimeters(offsets.at(rigphysics::Axis::ChestVertical))+
-              L"   SIDE "+millimeters(offsets.at(rigphysics::Axis::ChestLateral)),
+        const auto twist_degrees=std::to_wstring(static_cast<int>(
+            std::lround(offsets.at(rigphysics::Axis::ChestTwist)*57.29578f)));
+        const float open_close=offsets.at(rigphysics::Axis::ButtOpenClose);
+        label(L"CHEST UP "+millimeters(offsets.at(rigphysics::Axis::ChestVertical))+
+              L" SIDE "+millimeters(offsets.at(rigphysics::Axis::ChestLateral))+
+              L" TW "+twist_degrees+L" deg",
               box(panelX+21,height-242.f,280.f,21.f),
               messenger_centered_small_.Get(),p.accent);
-        label(L"DEPTH "+millimeters(offsets.at(rigphysics::Axis::ChestDepth))+
-              L"  BUTT "+millimeters(offsets.at(rigphysics::Axis::ButtVertical))+
-              L"  SIDE "+millimeters(offsets.at(rigphysics::Axis::ButtLateral)),
+        label(L"BUTT UP "+millimeters(offsets.at(rigphysics::Axis::ButtVertical))+
+              L" SIDE "+millimeters(offsets.at(rigphysics::Axis::ButtLateral))+
+              (open_close<0.f?L" CLOSE ":L" OPEN ")+millimeters(open_close),
               box(panelX+21,height-224.f,280.f,21.f),
               messenger_centered_small_.Get(),p.accent);
-        label(L"BELLY "+millimeters(offsets.at(rigphysics::Axis::BellyVertical))+
-              L"   /   WEIGHTED DX12 BONES",
+        label(L"CHEST DEPTH "+millimeters(offsets.at(rigphysics::Axis::ChestDepth))+
+              L"  BELLY "+millimeters(offsets.at(rigphysics::Axis::BellyVertical))+
+              L"  (mm)",
               box(panelX+21,height-205.f,280.f,18.f),
               messenger_centered_small_.Get(),p.accent);
         round_rect(box(panelX+16,height-186.f,291.f,34.f),12.f,p.accent_soft);

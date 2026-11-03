@@ -8,13 +8,15 @@
 #include <string_view>
 
 namespace kami::rigphysics {
-// Independent six-axis physics model. This is NOT copied from any other viewer.
+// Independent eight-axis physics model. This is NOT copied from any other viewer.
 enum class Axis : std::uint8_t {
     ChestVertical, ChestLateral, ChestDepth,
-    ButtVertical, ButtLateral, BellyVertical, Count
+    ButtVertical, ButtLateral, BellyVertical,
+    ChestTwist, ButtOpenClose, Count
 };
 inline constexpr std::size_t kAxes=static_cast<std::size_t>(Axis::Count);
 struct AxisSettings {
+    // Maximum translation in meters, except ChestTwist (radians).
     float max_effect_m=0.f,spring=50.f,gain=1.f,damping=13.f;
     float mass=1.f,gravity=0.f,drag=0.f;
 };
