@@ -3,6 +3,7 @@
 #include "kami/graphics/settings.hpp"
 #include "kami/camera/system.hpp"
 #include "kami/features/physics.hpp"
+#include "kami/features/avatar_motion.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include <optional>
@@ -31,6 +32,13 @@ public:
     void resize(UINT width, UINT height);
     void set_graphics(graphics::Settings settings);
     void draw();
+    void set_avatar_controls(avatar::Controls controls) noexcept {
+        avatar_.set_controls(controls);
+    }
+    [[nodiscard]] const avatar::State& avatar_state() const noexcept {
+        return avatar_.state();
+    }
+    void reset_avatar() noexcept;
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
     [[nodiscard]] bool creator_preview_active() const noexcept {return preview_mesh_.has_value();}
@@ -85,6 +93,7 @@ private:
     bool ready_ = false;
     camera::System camera_{};
     physics::Spring avatar_spring_{};
+    avatar::Controller avatar_{};
     std::optional<SceneMesh> preview_mesh_;
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;

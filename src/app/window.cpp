@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <utility>
 #include <cwchar>
+#include <cmath>
 
 namespace kami::app {
 namespace {
@@ -27,7 +28,7 @@ constexpr std::array<std::wstring_view, 8> kPages = {
 constexpr std::array<std::wstring_view, 8> kDescriptions = {
     L"Original Windows foundation. No imported viewer code.",
     L"Region login and world rendering are not implemented yet.",
-    L"Avatar syncing, attachments and animation are not yet available.",
+    L"Native avatar locomotion, gait and terrain contact. Live avatar assets pending.",
     L"Inventory is not connected. No inventory items can be changed.",
     L"Messages and delivery receipts are not implemented yet.",
     L"Change appearance with the button above or press T.",
@@ -266,7 +267,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         return 0;
     case WM_MOUSEWHEEL:
-        if ((page_ == 1 || page_ == 6 || page_ == 7) && world_ready_) {
+        if ((page_ == 1 || page_ == 2 || page_ == 6 || page_ == 7) && world_ready_) {
             world_renderer_.zoom(GET_WHEEL_DELTA_WPARAM(wp) > 0 ? -0.7f : 0.7f);
             return 0;
         }
@@ -302,7 +303,17 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             else advance_graphics(static_cast<unsigned>(wp-'1'));
             return 0;
         }
-        if ((page_ == 1 || page_ == 6 || page_ == 7) && world_ready_) {
+        if ((page_ == 1 || page_ == 2) && world_ready_) {
+            // Movement keys are sampled continuously while the viewport runs;
+            // they must not also orbit or zoom the camera on key-repeat.
+            switch(wp) {
+            case 'W':case 'A':case 'S':case 'D':
+            case 'Z':case 'C':case VK_UP:case VK_DOWN:
+            case VK_LEFT:case VK_RIGHT:case VK_SPACE:case VK_SHIFT:
+                return 0;
+            }
+        }
+        if ((page_ == 1 || page_ == 2 || page_ == 6 || page_ == 7) && world_ready_) {
             switch (wp) {
             case VK_LEFT: case 'A': world_renderer_.orbit(-.11f, 0.f); return 0;
             case VK_RIGHT: case 'D': world_renderer_.orbit(.11f, 0.f); return 0;
@@ -310,6 +321,12 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             case VK_DOWN: world_renderer_.orbit(0.f, -.35f); return 0;
             case 'W': world_renderer_.zoom(-.7f); return 0;
             case 'S': world_renderer_.zoom(.7f); return 0;
+            case 'H':
+                if(page_==1||page_==2) {
+                    world_renderer_.reset_avatar();
+                    InvalidateRect(hwnd_,nullptr,FALSE);
+                }
+                return 0;
             case 'Q': world_renderer_.cycle_camera_shoulder(); return 0;
             case 'O': world_renderer_.toggle_cinematic_orbit(); return 0;
             case 'F': world_renderer_.toggle_camera_focus(); return 0;
@@ -372,7 +389,7 @@ void Window::resize(UINT width, UINT height) {
 }
 
 void Window::update_viewport() {
-    if (!hwnd_ || (page_ != 1 && page_ != 6 && page_ != 7)) {
+    if (!hwnd_ || (page_ != 1 && page_ != 2 && page_ != 6 && page_ != 7)) {
         if (viewport_) ShowWindow(viewport_, SW_HIDE);
         return;
     }
@@ -380,7 +397,7 @@ void Window::update_viewport() {
     GetClientRect(hwnd_, &client);
     const int x=302, y=188;
     const int width=std::max<int>(128, client.right-
-        ((page_==6||page_==7)?690:350));
+        ((page_==2)?700:((page_==6||page_==7)?690:350)));
     const int height=std::max<int>(128, client.bottom-306);
     if (!viewport_) {
         viewport_=CreateWindowExW(0,kViewportClassName,L"",
@@ -653,7 +670,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(world_initialized_?world_renderer_.error():L"Loading DX12 viewport...",
                   box(contentX+35,234,contentWidth-70,55),body_font_.Get(),p.muted);
         }
-        label(L"Drag: orbit  |  Wheel: zoom  |  Q: shoulder  |  R: recenter  |  O: cinematic",
+        label(L"WASD / arrows: walk + turn  |  Shift: run  |  Space: jump  |  Z/C: strafe",
               box(contentX+29,height-103,contentWidth-50,30),small_font_.Get(),p.muted);
         std::wstring perf=L"CPU "+std::to_wstring(static_cast<unsigned>(last_performance_.process_cpu_percent))+
             L"%  |  RAM "+std::to_wstring(last_performance_.process_ram_mb)+L"MB";
@@ -769,7 +786,59 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         return;
     }
 
-    if(page_==2 || page_==3) {
+    if(page_==2) {
+        round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
+        label(L"KAMI AVATAR  /  MOVEMENT LAB",
+              box(contentX+28,106,contentWidth-55,42),
+              title_font_.Get(),p.text);
+        label(L"Original DX12 mannequin + terrain physics. Live SL avatar not loaded.",
+              box(contentX+28,152,contentWidth-55,28),
+              small_font_.Get(),p.accent);
+        const float panelX=width-352.f;
+        round_rect(box(panelX,190,324.f,height-280.f),22.f,p.surface);
+        label(L"LOCAL AVATAR TELEMETRY",
+              box(panelX+15,206,292,26),
+              messenger_centered_small_.Get(),p.accent);
+        const auto& state=world_renderer_.avatar_state();
+        const std::wstring values[]={
+            avatar::motion_label(state.motion),
+            std::to_wstring(static_cast<int>(std::lround(state.horizontal_speed*100.f)))+
+                L" cm/s",
+            L"X "+std::to_wstring(static_cast<int>(std::lround(state.x*100.f)))+
+                L"cm  /  Z "+std::to_wstring(static_cast<int>(std::lround(state.z*100.f)))+L"cm",
+            state.grounded?L"TERRAIN CONTACT":L"AIRBORNE",
+            std::to_wstring(static_cast<int>(std::lround(state.heading*57.29578f)))+
+                L" degrees"
+        };
+        const wchar_t* titles[]={
+            L"ANIMATION STATE",L"GROUND SPEED",L"TEST WORLD POSITION",
+            L"GROUND PHYSICS",L"HEADING"
+        };
+        for(unsigned i=0;i<5;++i) {
+            const float y=241.f+std::min(63.f,(height-400.f)/6.f)*static_cast<float>(i);
+            round_rect(box(panelX+16,y,291.f,58.f),12.f,p.elevated);
+            label(titles[i],box(panelX+24,y+6,271.f,22.f),
+                  messenger_centered_small_.Get(),p.muted);
+            label(values[i],box(panelX+24,y+27,271.f,27.f),
+                  messenger_centered_font_.Get(),p.text);
+        }
+        round_rect(box(panelX+18,height-144.f,287.f,38.f),12.f,p.accent_soft);
+        label(L"RESET AVATAR POSITION  [H]",
+              box(panelX+25,height-138.f,270.f,28.f),
+              messenger_centered_small_.Get(),p.accent);
+        label(L"W/S: forward/back  |  A/D: turn  |  Z/C: strafe",
+              box(contentX+29,height-105.f,contentWidth-54,25.f),
+              small_font_.Get(),p.text);
+        label(L"Arrows: move/turn  |  Shift: run  |  Space: jump  |  Drag: camera",
+              box(contentX+29,height-78.f,contentWidth-54,25.f),
+              small_font_.Get(),p.muted);
+        if(!world_ready_)label(world_initialized_?world_renderer_.error():
+             L"Loading avatar preview...",box(contentX+30,218,510,32),
+             small_font_.Get(),p.muted);
+        return;
+    }
+
+    if(page_==3) {
         round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
         label(kPages[page_],box(contentX+28,111,contentWidth-55,42),
               title_font_.Get(),p.text);
@@ -916,8 +985,8 @@ void Window::toggle_appearance() {
 
 void Window::select_page(unsigned index) {
     if (index >= kPages.size()) return;
-    const bool was_world=(page_==1 || page_==6 || page_==7);
-    const bool next_world=(index==1 || index==6 || index==7);
+    const bool was_world=(page_==1 || page_==2 || page_==6 || page_==7);
+    const bool next_world=(index==1 || index==2 || index==6 || index==7);
     if(was_world && !next_world && high_resolution_timer_) {
         (void)timeEndPeriod(1);
         high_resolution_timer_=false;
@@ -943,7 +1012,7 @@ void Window::select_page(unsigned index) {
 }
 
 bool Window::wants_realtime_render() const noexcept {
-    return (page_ == 1 || page_ == 6 || page_ == 7) && world_ready_ && hwnd_ &&
+    return (page_ == 1 || page_ == 2 || page_ == 6 || page_ == 7) && world_ready_ && hwnd_ &&
            IsWindowVisible(hwnd_) && !IsIconic(hwnd_);
 }
 
@@ -952,6 +1021,23 @@ void Window::tick() {
     using Clock=std::chrono::steady_clock;
     const auto now=Clock::now();
     if(graphics_.fps_limit!=0 && now<next_frame_) return;
+    avatar::Controls controls{};
+    const bool focused=GetForegroundWindow()==hwnd_ ||
+                       IsChild(hwnd_,GetForegroundWindow())!=FALSE;
+    if((page_==1||page_==2)&&focused) {
+        const auto down=[](int key) noexcept {
+            return (GetAsyncKeyState(key)&0x8000)!=0;
+        };
+        controls.forward=static_cast<float>(down('W')||down(VK_UP))-
+                         static_cast<float>(down('S')||down(VK_DOWN));
+        controls.turn=static_cast<float>(down('D')||down(VK_RIGHT))-
+                      static_cast<float>(down('A')||down(VK_LEFT));
+        controls.strafe=static_cast<float>(down('C'))-
+                        static_cast<float>(down('Z'));
+        controls.run=down(VK_SHIFT);
+        controls.jump=down(VK_SPACE);
+    }
+    world_renderer_.set_avatar_controls(controls);
     world_renderer_.draw();
     if(page_==7 && world_renderer_.capture_status()!=prior_capture_) {
         prior_capture_=world_renderer_.capture_status();
@@ -1233,6 +1319,13 @@ void Window::click(float x, float y) {
     const float width = static_cast<float>(client.right);
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
+        return;
+    }
+    if(page_==2 && y>=static_cast<float>(client.bottom)-144.f &&
+       y<static_cast<float>(client.bottom)-106.f &&
+       x>=width-334.f && x<=width-47.f) {
+        world_renderer_.reset_avatar();
+        InvalidateRect(hwnd_,nullptr,FALSE);
         return;
     }
     if(page_==4) {

@@ -93,6 +93,33 @@ int main() {
                     result=6;
                 }
                 if(!result) {
+                    const float previous_z=renderer.avatar_state().z;
+                    renderer.set_avatar_controls({1.f,0.f,0.f,true,false});
+                    Sleep(35);
+                    renderer.draw();
+                    Sleep(35);
+                    renderer.draw();
+                    if(renderer.avatar_state().z<=previous_z+.001f ||
+                       !renderer.ready()) {
+                        print_failure(L"avatar world movement",renderer);
+                        result=14;
+                    }
+                    renderer.set_avatar_controls({0.f,0.f,0.f,false,true});
+                    Sleep(35);
+                    renderer.draw();
+                    if(renderer.avatar_state().grounded || !renderer.ready()) {
+                        print_failure(L"avatar jump and DX12 animation",renderer);
+                        result=15;
+                    }
+                    renderer.reset_avatar();
+                    renderer.set_avatar_controls({});
+                    renderer.draw();
+                    if(!renderer.ready()) {
+                        print_failure(L"avatar reset and shadow draw",renderer);
+                        result=16;
+                    }
+                }
+                if(!result) {
                     auto preview=kami::world::build_test_scene(8);
                     if(!renderer.set_creator_preview(preview)) {
                         print_failure(L"OBJ preview geometry",renderer);result=7;

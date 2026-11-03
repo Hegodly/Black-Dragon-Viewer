@@ -11,7 +11,8 @@ cbuffer Frame : register(b0) {
     row_major float4x4 lightViewProjection;
     float4 kamiEffects; // x=haze, y=contact shading, z=metallic microglints
     float4 photoGrade; // x=exposure EV, y=contrast, z=saturation, w=vignette
-    float4 photoViewport; // x=width, y=height, z=grading enabled
+    float4 photoViewport; // x=width, y=height, z=grading enabled, w=avatar gait
+    float4 avatarWorld; // local test avatar feet: world x/y/z and heading
 };
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
@@ -32,25 +33,45 @@ struct Interpolant {
     float2 material : TEXCOORD3;
     float2 uv : TEXCOORD4;
 };
+// The same local avatar transformation is used in the depth/shadow and
+// main passes; this keeps locomotion and shadows synchronized on the GPU.
+float3 avatar_position(float3 local) {
+    const float gait=photoViewport.w;
+    const float phase=kamiEffects.w;
+    const float lateral=local.x<0.0?1.0:-1.0;
+    // Coarse demonstration gait for KAMI's original six-box mannequin.
+    // A live SL avatar will require skinned joint transforms and animation assets.
+    if(abs(local.x)<0.46 && local.y<1.22) {
+        const float swing=sin(phase)*lateral*gait;
+        local.z+=0.27*swing*saturate((1.32-local.y)/1.32);
+        local.y+=0.07*abs(swing);
+    } else if(abs(local.x)>0.53 && local.y>0.95 && local.y<2.5) {
+        local.z-=0.24*sin(phase)*lateral*gait;
+    }
+    const float co=cos(avatarWorld.w),si=sin(avatarWorld.w);
+    const float3 result=float3(
+        co*local.x+si*local.z+avatarWorld.x,
+        local.y+avatarWorld.y+frame.y,
+        -si*local.x+co*local.z+avatarWorld.z);
+    return result;
+}
+float3 avatar_normal(float3 n) {
+    const float co=cos(avatarWorld.w),si=sin(avatarWorld.w);
+    return float3(co*n.x+si*n.z,n.y,-si*n.x+co*n.z);
+}
 Interpolant vertex_main(VertexIn input) {
     Interpolant output;
-    float3 world=input.position;
-    // Spring motion amplitude is solved on the CPU and shared with shadow pass.
-    if (abs(frame.y) > 0.00001)
-        world.y += frame.y * (0.85 + 0.15*cos(input.position.y*0.25));
+    const float3 world=avatar_position(input.position);
     output.clip = mul(float4(world, 1.0), viewProjection);
     output.position = world;
-    output.normal = input.normal;
+    output.normal = avatar_normal(input.normal);
     output.albedo = input.color;
     output.material = input.material;
     output.uv = input.uv;
     return output;
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
-    float3 world=input.position;
-    if(abs(frame.y)>0.00001)
-        world.y+=frame.y*(0.85+0.15*cos(input.position.y*0.25));
-    return mul(float4(world,1.0),lightViewProjection);
+    return mul(float4(avatar_position(input.position),1.0),lightViewProjection);
 }
 float shadow_factor(float3 position,float3 normal) {
     if(frame.w<0.5) return 1.0;
