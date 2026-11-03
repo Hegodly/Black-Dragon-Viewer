@@ -61,7 +61,7 @@ void skin_vertex(VertexIn input,out float3 position,out float3 normal) {
     float3 n=float3(0.0,0.0,0.0);
     [unroll] for(uint i=0U;i<4U;++i) {
         if(w[i]>0.0) {
-            const uint offset=min(joint[i],7U)*4U;
+            const uint offset=min(joint[i],9U)*4U;
             const float4 xrow=skinRows[offset];
             const float4 yrow=skinRows[offset+1U];
             const float4 zrow=skinRows[offset+2U];
