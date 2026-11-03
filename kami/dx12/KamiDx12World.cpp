@@ -13,27 +13,36 @@ constexpr const char* kWorldShader = R"(
 cbuffer PerMesh : register(b0)
 {
     row_major float4x4 worldViewProjection;
+    float4 material; // enabled texture, alpha cutoff, reserved, reserved
 }
+Texture2D<float4> albedo : register(t0);
+SamplerState samplerNearest : register(s0);
 struct VSIn
 {
     float3 position : POSITION;
     float4 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 struct PSIn
 {
     float4 position : SV_Position;
     float4 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 PSIn VSWorld(VSIn input)
 {
     PSIn output;
     output.position = mul(float4(input.position, 1.0), worldViewProjection);
     output.color = input.color;
+    output.uv = input.uv;
     return output;
 }
 float4 PSWorld(PSIn input) : SV_Target0
 {
-    return input.color;
+    float4 color = input.color;
+    if (material.x > 0.5) color *= albedo.Sample(samplerNearest, input.uv);
+    if (material.y > 0.0) clip(color.a - material.y);
+    return color;
 }
 )";
 
@@ -56,16 +65,30 @@ bool Renderer::prepareWorldPipeline()
     if (worldPipeline_ && worldRootSignature_) return true;
     if (!device_) return fail("World pass requires D3D12 device", E_FAIL);
 
-    D3D12_ROOT_PARAMETER constants{};
-    constants.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    constants.Constants.ShaderRegister = 0;
-    constants.Constants.RegisterSpace = 0;
-    constants.Constants.Num32BitValues = 16;
-    constants.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
+    D3D12_ROOT_PARAMETER params[2]{};
+    params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[0].Constants.ShaderRegister = 0;
+    params[0].Constants.Num32BitValues = 20;
+    params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_DESCRIPTOR_RANGE range{};
+    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    range.NumDescriptors = 1;
+    params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[1].DescriptorTable.NumDescriptorRanges = 1;
+    params[1].DescriptorTable.pDescriptorRanges = &range;
+    params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
     D3D12_ROOT_SIGNATURE_DESC root{};
-    root.NumParameters = 1;
-    root.pParameters = &constants;
+    root.NumParameters = 2;
+    root.pParameters = params;
+    root.NumStaticSamplers = 1;
+    root.pStaticSamplers = &sampler;
     root.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     ComPtr<ID3DBlob> signature, errors;
     HRESULT hr = D3D12SerializeRootSignature(&root, D3D_ROOT_SIGNATURE_VERSION_1,
@@ -87,16 +110,18 @@ bool Renderer::prepareWorldPipeline()
                     D3DCOMPILE_ENABLE_STRICTNESS, 0, &ps, &errors);
     if (FAILED(hr)) return fail("Compile D3D12 world pixel shader", hr);
 
-    D3D12_INPUT_ELEMENT_DESC inputs[2]{};
+    D3D12_INPUT_ELEMENT_DESC inputs[3]{};
     inputs[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
                  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
     inputs[1] = {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12,
+                 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+    inputs[2] = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 28,
                  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
     pso.pRootSignature = worldRootSignature_.Get();
     pso.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
     pso.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-    pso.InputLayout = {inputs, 2};
+    pso.InputLayout = {inputs, 3};
     pso.SampleMask = UINT_MAX;
     pso.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pso.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;

@@ -32,14 +32,20 @@ struct WorldVertex
 {
     std::array<float, 3> position{};
     std::array<float, 4> color{1.f, 1.f, 1.f, 1.f};
+    std::array<float, 2> uv{0.f, 0.f};
 };
-static_assert(sizeof(WorldVertex) == sizeof(float) * 7,
-              "D3D12 input layout requires tightly packed position + color");
+static_assert(sizeof(WorldVertex) == sizeof(float) * 9,
+              "D3D12 input requires tightly packed position/color/UV");
 
 struct WorldMesh
 {
     std::vector<WorldVertex> vertices;
     std::vector<std::uint32_t> indices;
+    // RGBA8 image data supplied by CPU; optional, maximum 1024x1024.
+    std::uint32_t textureWidth = 0;
+    std::uint32_t textureHeight = 0;
+    std::vector<std::uint8_t> albedoRGBA8;
+    float alphaCutoff = 0.f;
     // Row-major matrix, multiplied as row-vector * transform in HLSL.
     std::array<float, 16> worldViewProjection{
         1.f, 0.f, 0.f, 0.f,
@@ -106,7 +112,8 @@ private:
                           UINT width, UINT height,
                           D3D12_RESOURCE_STATES from,
                           D3D12_RESOURCE_STATES to,
-                          std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>& liveUploads);
+                          std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>& liveUploads,
+                           Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& liveDescriptors);
 
     Microsoft::WRL::ComPtr<IDXGIFactory6> factory_;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
@@ -125,6 +132,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> worldDepthHeap_;
     // Upload buffers may only be freed after the corresponding GPU fence.
     std::array<std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>, kFrameCount> frameUploads_;
+    // SRV heaps must remain alive until their backbuffer fences retire.
+    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kFrameCount> frameWorldDescriptors_;
     UINT worldDepthWidth_ = 0, worldDepthHeight_ = 0;
     HANDLE fenceEvent_ = nullptr;
     std::array<UINT64, kFrameCount> frameFenceValues_{};
