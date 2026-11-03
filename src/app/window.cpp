@@ -1076,11 +1076,25 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         }else if(sl_login_status_==protocol::LoginStatus::Accepted&&
                  sl_circuit_.movement_seen()){
             label(L"SIMULATOR MOVEMENT CONFIRMED",
-                  box(contentX+252,y+6,contentWidth-269,22.f),
+                  box(contentX+252,y+3,contentWidth-269,20.f),
                   small_font_.Get(),p.text);
+            const auto& region=sl_circuit_.region_metadata();
+            if(region.verified) {
+                std::wstring name(region.name.begin(),region.name.end());
+                // Server-derived name, bounded and sanitized by the
+                // RegionHandshake decoder. Not offline procedurally generated.
+                if(name.size()>32)name.resize(32);
+                label(L"Region: "+name+L" (live simulator)",
+                      box(contentX+252,y+28,contentWidth-269,21.f),
+                      small_font_.Get(),p.text);
+            } else {
+                label(L"Region metadata: waiting for verified handshake",
+                      box(contentX+252,y+28,contentWidth-269,21.f),
+                      small_font_.Get(),p.muted);
+            }
             label(caps_status_.empty()?
                   L"CAPS negotiation not started":caps_status_,
-                  box(contentX+252,y+35,contentWidth-269,30.f),
+                  box(contentX+252,y+54,contentWidth-269,24.f),
                   small_font_.Get(),p.muted);
         }else{
             const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
@@ -1491,7 +1505,17 @@ void Window::begin_sl_login() {
     if(!caps_seed_url_.empty())
         SecureZeroMemory(caps_seed_url_.data(),
                           caps_seed_url_.size()*sizeof(wchar_t));
+    if(!caps_event_queue_url_.empty())
+        SecureZeroMemory(caps_event_queue_url_.data(),
+                         caps_event_queue_url_.size()*sizeof(wchar_t));
+    if(!caps_ack_.token.empty())
+        SecureZeroMemory(caps_ack_.token.data(),caps_ack_.token.size());
     caps_seed_url_.clear();
+    caps_event_queue_url_.clear();
+    caps_ack_={};
+    caps_completed_polls_=0;
+    caps_dispatch_blocked_=false;
+    caps_next_poll_={};
     caps_status_.clear();
     caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
@@ -1570,6 +1594,32 @@ void Window::begin_sl_login() {
     (void)SetTimer(hwnd_,203,100,nullptr);
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
+void Window::start_caps_poll() {
+    if(!caps_poll_started_||caps_dispatch_blocked_||
+       caps_event_queue_url_.empty()||caps_poll_future_.valid()||
+       sl_login_status_!=protocol::LoginStatus::Accepted||
+       !sl_circuit_.movement_seen()||
+       std::chrono::steady_clock::now()<caps_next_poll_)
+        return;
+    auto url=caps_event_queue_url_; // keep trusted URL only for this session
+    auto ack=caps_ack_;              // preserve server-provided LLSD type
+    caps_status_=L"EventQueueGet polling (R7, completed "+
+        std::to_wstring(caps_completed_polls_)+L")";
+    caps_poll_future_=std::async(std::launch::async,
+        [url=std::move(url),ack=std::move(ack)]() mutable {
+            const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+            protocol::caps::PollResponse response{};
+            if(SUCCEEDED(init)){
+                response=protocol::caps::probe_event_queue_once(url,ack);
+                CoUninitialize();
+            }else response.diagnostic=L"EventQueue COM init failed";
+            if(!url.empty())
+                SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+            if(!ack.token.empty())
+                SecureZeroMemory(ack.token.data(),ack.token.size());
+            return response;
+        });
+}
 void Window::update_sl_connection() {
     if(sl_login_pending_&&sl_login_future_.valid()&&
        sl_login_future_.wait_for(std::chrono::seconds(0))==
@@ -1636,20 +1686,11 @@ void Window::update_sl_connection() {
         if(result.granted&&
            sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
             caps_poll_started_=true;
-            caps_status_=L"CAPS seed OK; first EventQueueGet poll...";
-            caps_poll_future_=std::async(std::launch::async,
-                [url=std::move(result.event_queue_url)]()mutable {
-                    const HRESULT init=CoInitializeEx(
-                        nullptr,COINIT_MULTITHREADED);
-                    protocol::caps::PollResponse response{};
-                    if(SUCCEEDED(init)){
-                        response=protocol::caps::probe_event_queue_once(url);
-                        CoUninitialize();
-                    }else response.diagnostic=L"EventQueue COM init failed";
-                    if(!url.empty())
-                        SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
-                    return response;
-                });
+            // Retain the signed capability only for this simulator session;
+            // R6 lost it after a single poll and could not resume.
+            caps_event_queue_url_=std::move(result.event_queue_url);
+            caps_status_=L"CAPS seed OK; EventQueueGet starting...";
+            start_caps_poll();
         }
         if(!result.event_queue_url.empty())
             SecureZeroMemory(result.event_queue_url.data(),
@@ -1660,9 +1701,40 @@ void Window::update_sl_connection() {
           std::future_status::ready){
         try{
             auto result=caps_poll_future_.get();
-            caps_status_=result.diagnostic;
-        }catch(...){caps_status_=L"EventQueue worker failed";}
+            if(result.structurally_valid){
+                ++caps_completed_polls_;
+                if(result.event_count>0){
+                    // No event-body handlers yet; NEVER send an ACK that
+                    // would lose live region/inventory/chat events.
+                    caps_dispatch_blocked_=true;
+                    caps_status_=result.diagnostic;
+                }else if(result.safe_to_ack){
+                    if(!caps_ack_.token.empty())
+                        SecureZeroMemory(caps_ack_.token.data(),
+                                         caps_ack_.token.size());
+                    caps_ack_=std::move(result.next_ack);
+                    caps_status_=L"Event queue live: "+
+                        std::to_wstring(caps_completed_polls_)+
+                        L" empty polls (no event dispatch yet)";
+                    caps_next_poll_=std::chrono::steady_clock::now()+
+                                    std::chrono::milliseconds(800);
+                }
+            } else if(result.idle){
+                caps_status_=L"Event queue alive; idle long-poll";
+                caps_next_poll_=std::chrono::steady_clock::now()+
+                                std::chrono::milliseconds(800);
+            }else{
+                caps_dispatch_blocked_=true;
+                caps_status_=result.diagnostic;
+            }
+        }catch(...){
+            caps_dispatch_blocked_=true;
+            caps_status_=L"EventQueue worker failed";
+        }
     }
+    // Exactly one outstanding request at a time, same simulator session.
+    // Never acknowledge events until their handlers commit state.
+    start_caps_poll();
     if(!sl_login_pending_&&
        (sl_circuit_.state()==protocol::sim::CircuitState::Closed||
         sl_circuit_.state()==protocol::sim::CircuitState::Failed))
