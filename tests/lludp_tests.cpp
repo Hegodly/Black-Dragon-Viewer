@@ -8,7 +8,7 @@ int main(){
     p.flags=kReliable|kAppendedAcks|kZerocoded;
     p.sequence=0x12345678U;
     p.extra_header={0x12U,0x34U};
-    p.body={0xffU,0xffU,0x00U,0xfbU,1U,0U,0U,0U,7U,9U};
+    p.body={0xffU,0xffU,0xffU,0xfbU,1U,0U,0U,0U,7U,9U};
     p.appended_acks={0x01020304U,0xaabbccddU};
     std::vector<std::uint8_t> bytes{};
     if(!encode(p,bytes)||bytes.size()<15U)return 1;
