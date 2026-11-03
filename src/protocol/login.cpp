@@ -482,12 +482,22 @@ LoginResult parse_login_xmlrpc(std::string_view xml){
     result.message=L"Second Life login accepted; simulator connection pending";
     return result;
 }
+std::wstring login_transport_diagnostic(
+    std::wstring_view stage,unsigned winhttp_error) {
+    const auto prefix=L"KAMI R5 / "+std::wstring(stage)+
+                      L" / WinHTTP "+std::to_wstring(winhttp_error);
+    if(winhttp_error==ERROR_WINHTTP_INVALID_SERVER_RESPONSE)
+        return prefix+L" (invalid HTTP response)";
+    if(winhttp_error==ERROR_WINHTTP_SECURE_FAILURE)
+        return prefix+L" (TLS validation failed)";
+    return prefix;
+}
 std::wstring login_http_diagnostic(unsigned code) {
     const std::wstring prefix=L"SL LOGIN HTTP "+std::to_wstring(code)+L" / ";
     switch(code){
     case 301:case 302:case 303:case 307:case 308:
         return prefix+L"redirect blocked to protect credentials";
-    case 400:return prefix+L"Request declined (KAMI DIAG R3)";
+    case 400:return prefix+L"Request declined (KAMI DIAG R5)";
     case 401:return prefix+L"HTTP authentication required";
     case 403:return prefix+L"request refused by login server";
     case 404:return prefix+L"login endpoint not found";
@@ -562,18 +572,27 @@ LoginResult login_to_simulator(const LoginRequest& request,
     constexpr wchar_t headers[]=L"Content-Type: text/xml\r\n";
     if(!WinHttpSendRequest(web.handle,headers,static_cast<DWORD>(-1),
            payload.data.data(),static_cast<DWORD>(payload.data.size()),
-           static_cast<DWORD>(payload.data.size()),0)||
-       !WinHttpReceiveResponse(web.handle,nullptr)){
-        failure.status=GetLastError()==ERROR_WINHTTP_SECURE_FAILURE?
+           static_cast<DWORD>(payload.data.size()),0)){
+        const DWORD error=GetLastError();
+        failure.status=error==ERROR_WINHTTP_SECURE_FAILURE?
             LoginStatus::TlsFailure:LoginStatus::NetworkError;
+        failure.message=login_transport_diagnostic(L"sending request",error);
+        return failure;
+    }
+    if(!WinHttpReceiveResponse(web.handle,nullptr)){
+        const DWORD error=GetLastError();
+        failure.status=error==ERROR_WINHTTP_SECURE_FAILURE?
+            LoginStatus::TlsFailure:LoginStatus::NetworkError;
+        failure.message=login_transport_diagnostic(L"receiving response",error);
         return failure;
     }
     DWORD code=0,length=sizeof(code);
     if(!WinHttpQueryHeaders(web.handle,
        WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,
        WINHTTP_HEADER_NAME_BY_INDEX,&code,&length,WINHTTP_NO_HEADER_INDEX)){
+        const DWORD error=GetLastError();
         failure.status=LoginStatus::HttpError;
-        failure.message=L"SL login HTTP response did not include a status code";
+        failure.message=login_transport_diagnostic(L"reading status",error);
         return failure;
     }
     failure.http_status=code;
@@ -618,7 +637,12 @@ LoginResult login_to_simulator(const LoginRequest& request,
         char chunk[8192]{};
         DWORD read=0;
         if(!WinHttpReadData(web.handle,chunk,sizeof(chunk),&read)){
-            failure.status=LoginStatus::NetworkError;return failure;
+            const DWORD error=GetLastError();
+            failure.status=LoginStatus::NetworkError;
+            failure.http_status=code;
+            failure.message=login_transport_diagnostic(L"reading reply",error);
+            SecureZeroMemory(chunk,sizeof(chunk));
+            return failure;
         }
         if(!read)break;
         body.append(chunk,read);
