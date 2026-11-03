@@ -425,11 +425,10 @@ void Renderer::set_graphics(graphics::Settings settings) {
 }
 
 void Renderer::orbit(float yaw_delta,float elevation_delta) {
-    yaw_+=yaw_delta;
-    elevation_=std::clamp(elevation_+elevation_delta,1.f,18.f);
+    camera_.orbit(yaw_delta,elevation_delta);
 }
 void Renderer::zoom(float distance_delta) {
-    distance_=std::clamp(distance_+distance_delta,5.f,40.f);
+    camera_.zoom(distance_delta);
 }
 
 void Renderer::draw() {
@@ -438,14 +437,20 @@ void Renderer::draw() {
        FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get()))) return;
 
     using namespace DirectX;
-    const XMVECTOR eye=XMVectorSet(
-        std::sin(yaw_)*distance_,elevation_,
-        std::cos(yaw_)*distance_,0.f);
+    const auto now=std::chrono::steady_clock::now();
+    const float dt=last_camera_frame_==std::chrono::steady_clock::time_point{} ?
+        0.f : std::chrono::duration<float>(now-last_camera_frame_).count();
+    last_camera_frame_=now;
+    const float seconds=std::chrono::duration<float>(now-start_time_).count();
+    camera_.update(dt,seconds,sample_test_terrain_height,graphics_.animate_avatar);
+    const auto camera=camera_.pose();
+    const XMVECTOR eye=XMVectorSet(camera.eye.x,camera.eye.y,camera.eye.z,0.f);
+    const XMVECTOR focus=XMVectorSet(camera.focus.x,camera.focus.y,camera.focus.z,0.f);
     const XMMATRIX view=XMMatrixLookAtLH(
-        eye,XMVectorSet(0,1,0,0),XMVectorSet(0,1,0,0));
+        eye,focus,XMVectorSet(0,1,0,0));
     const XMMATRIX projection=XMMatrixPerspectiveFovLH(
-        XMConvertToRadians(65.f),static_cast<float>(width_)/height_,
-        .08f,200.f);
+        XMConvertToRadians(camera.fov_y_degrees),
+        static_cast<float>(width_)/height_,.08f,200.f);
     const XMVECTOR sunOrigin=XMVectorScale(
         XMVector3Normalize(XMVectorSet(-.35f,.86f,-.38f,0.f)),27.f);
     const XMMATRIX lightView=XMMatrixLookAtLH(
