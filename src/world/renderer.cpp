@@ -1,8 +1,8 @@
 #include "kami/world/renderer.hpp"
 #include "kami/world/scene.hpp"
-#include "kami/world/shaders.hpp"
+#include "kami/world/shader_cache.hpp"
 #include <DirectXMath.h>
-#include <d3dcompiler.h>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -98,68 +98,8 @@ bool Renderer::make_depth() {
 }
 
 bool Renderer::make_pipeline() {
-    auto* graphics=device_.native_device();
-    D3D12_ROOT_PARAMETER constants{};
-    constants.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    constants.Constants.ShaderRegister=0;
-    constants.Constants.RegisterSpace=0;
-    constants.Constants.Num32BitValues=20;
-    constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_ROOT_SIGNATURE_DESC root{};
-    root.NumParameters=1;
-    root.pParameters=&constants;
-    root.Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    Microsoft::WRL::ComPtr<ID3DBlob> serialized;
-    Microsoft::WRL::ComPtr<ID3DBlob> errors;
-    if(FAILED(D3D12SerializeRootSignature(
-            &root,D3D_ROOT_SIGNATURE_VERSION_1,
-            serialized.GetAddressOf(),errors.GetAddressOf())))
-        return false;
-    if(FAILED(graphics->CreateRootSignature(
-            0,serialized->GetBufferPointer(),serialized->GetBufferSize(),
-            IID_PPV_ARGS(signature_.ReleaseAndGetAddressOf()))))
-        return false;
-
-    Microsoft::WRL::ComPtr<ID3DBlob> vs,ps;
-    constexpr UINT flags=D3DCOMPILE_ENABLE_STRICTNESS;
-    if(FAILED(D3DCompile(kSceneShader,sizeof(kSceneShader)-1,nullptr,nullptr,nullptr,
-            "vertex_main","vs_5_0",flags,0,
-            vs.GetAddressOf(),errors.ReleaseAndGetAddressOf()))) return false;
-    if(FAILED(D3DCompile(kSceneShader,sizeof(kSceneShader)-1,nullptr,nullptr,nullptr,
-            "pixel_main","ps_5_0",flags,0,
-            ps.GetAddressOf(),errors.ReleaseAndGetAddressOf()))) return false;
-
-    const D3D12_INPUT_ELEMENT_DESC input[] = {
-        {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
-        {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
-        {"COLOR",0,DXGI_FORMAT_R32G32B32_FLOAT,0,24,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
-    };
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
-    desc.pRootSignature=signature_.Get();
-    desc.VS={vs->GetBufferPointer(),vs->GetBufferSize()};
-    desc.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
-    desc.InputLayout={input,3};
-    desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
-    desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
-    desc.RasterizerState.FrontCounterClockwise=FALSE;
-    desc.RasterizerState.DepthClipEnable=TRUE;
-    desc.BlendState.RenderTarget[0].RenderTargetWriteMask=D3D12_COLOR_WRITE_ENABLE_ALL;
-    desc.DepthStencilState.DepthEnable=TRUE;
-    desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ALL;
-    desc.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_LESS;
-    desc.SampleMask=UINT_MAX;
-    desc.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    desc.NumRenderTargets=1;
-    desc.RTVFormats[0]=kColorFormat;
-    desc.DSVFormat=kDepthFormat;
-    desc.SampleDesc.Count=1;
-    return SUCCEEDED(graphics->CreateGraphicsPipelineState(
-        &desc,IID_PPV_ARGS(pipeline_.ReleaseAndGetAddressOf())));
+    ShaderPreparation report;
+    return ShaderCache::prepare(device_.native_device(),signature_,pipeline_,report);
 }
 
 bool Renderer::make_geometry() {
