@@ -137,10 +137,15 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     std::vector<std::uint32_t> ids;
     ids.reserve(16U);
     for(const auto& [id,state]:missing_objects_){
-        if(state.attempts>=2U)continue;
+        // Lost cached-root responses used to strand entire linked sets.
+        // Bound retries to five, with a growing quiet period to avoid
+        // flooding simulators if an object can never be recovered.
+        if(state.attempts>=5U)continue;
+        const auto quiet=std::chrono::seconds(8+4*state.attempts);
         if(state.sent_at!=std::chrono::steady_clock::time_point{}&&
-           now-state.sent_at<std::chrono::seconds(8))continue;
-        if(spatial_objects_.contains(id))continue;
+           now-state.sent_at<quiet)continue;
+        if(spatial_objects_.contains(id)||linked_objects_.contains(id))
+            continue;
         ids.push_back(id);
         if(ids.size()==16U)break;
     }
