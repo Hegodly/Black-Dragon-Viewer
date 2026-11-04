@@ -183,10 +183,20 @@ PrimitiveBatch build_live_primitive_geometry(
     std::vector<Draw> chosen;
     chosen.reserve(roots.size()+children.size());
     const auto collect=[&](const Transform& t,Pose p,bool child){
-        if(t.primitive==Kind::Unknown||!finite(p.pos))return;
+        if(t.primitive==Kind::Unknown)return;
+        if(!finite(p.pos)||!valid_quat(p.rot)){
+            ++result.invalid_pose_shapes;
+            return;
+        }
         const V d=sub(p.pos,origin);
-        if(std::abs(d.x)>96.f||std::abs(d.y)>96.f||
-           std::abs(d.z)>60.f)return;
+        // Allow structures beyond the old 96m horizontal / 60m vertical
+        // gate. The 64-shape closest-first budget still caps GPU uploads.
+        if(std::abs(d.x)>144.f||std::abs(d.y)>144.f||
+           std::abs(d.z)>96.f){
+            ++result.out_of_range_shapes;
+            return;
+        }
+        ++result.eligible_shapes;
         chosen.push_back({&t,p,child,d.x*d.x+d.y*d.y+d.z*d.z});
     };
     for(const auto& [id,t]:roots){
@@ -197,10 +207,14 @@ PrimitiveBatch build_live_primitive_geometry(
         (void)id;
         Pose p{};
         if(resolve(t,roots,children,p))collect(t,p,true);
+        else if(t.primitive!=Kind::Unknown)++result.unresolved_parent_shapes;
     }
     std::sort(chosen.begin(),chosen.end(),
         [](const Draw& a,const Draw& b){return a.distance<b.distance;});
-    if(chosen.size()>limit)chosen.resize(limit);
+    if(chosen.size()>limit){
+        result.budget_deferred_shapes=chosen.size()-limit;
+        chosen.resize(limit);
+    }
     auto& vertices=result.scene.vertices;
     vertices.reserve(chosen.size()*1200U);
     for(const auto& item:chosen){
