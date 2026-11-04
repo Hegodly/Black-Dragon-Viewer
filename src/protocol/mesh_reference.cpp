@@ -25,13 +25,13 @@ std::string uuid(std::span<const std::uint8_t> raw) {
     return result;
 }
 } // namespace
-std::string mesh_asset_from_extras(std::span<const std::uint8_t> extras)
-    noexcept {
-    if(extras.empty()||extras.size()>8192U)return {};
+ExtraParamScan inspect_extra_params(
+    std::span<const std::uint8_t> extras) noexcept {
+    ExtraParamScan out{};
+    if(extras.empty()||extras.size()>8192U)return out;
     const unsigned count=extras[0];
-    if(count>32U)return {};
+    if(count>32U)return out;
     std::size_t at=1U;
-    std::string result;
     for(unsigned i=0;i<count;++i){
         if(at>extras.size()||extras.size()-at<6U)return {};
         const std::uint16_t kind=le16(extras,at);
@@ -39,17 +39,25 @@ std::string mesh_asset_from_extras(std::span<const std::uint8_t> extras)
         at+=6U;
         if(length>extras.size()-at||length>4096U)return {};
         auto value=extras.subspan(at,length);
-        // 0x30 is LLNetworkData::PARAMS_SCULPT. Byte 17 is the
-        // sculpt type; its lower six bits = 5 for real mesh.
+        ++out.records;
         if(kind==0x30U){
-            if(length!=17U)return {};
-            if((value[16]&0x3fU)==5U&&
+            ++out.sculpt_records;
+            if(length==17U&&
+               (value[16]&0x3fU)==5U&&
                std::any_of(value.begin(),value.begin()+16U,
-                           [](std::uint8_t x){return x!=0U;}))
-                result=uuid(value.first(16U));
+                           [](std::uint8_t x){return x!=0U;})){
+                ++out.mesh_records;
+                out.mesh_id=uuid(value.first(16U));
+            }
         }
         at+=length;
     }
-    return at==extras.size()?result:std::string{};
+    if(at!=extras.size())return {};
+    out.valid=true;
+    return out;
+}
+std::string mesh_asset_from_extras(
+    std::span<const std::uint8_t> extras) noexcept {
+    return inspect_extra_params(extras).mesh_id;
 }
 } // namespace kami::protocol::mesh
