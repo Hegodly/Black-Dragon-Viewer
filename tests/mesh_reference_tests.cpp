@@ -23,5 +23,15 @@ int main(){
     malformed=input;
     for(unsigned i=7U;i<23U;++i)malformed[i]=0U;
     if(!mesh::mesh_asset_from_extras(malformed).empty())return 8;
+    const auto inspected=mesh::inspect_extra_params(input);
+    if(!inspected.valid||inspected.records!=1U||
+       inspected.sculpt_records!=1U)return 9;
+    if(mesh::inspect_extra_params(malformed).valid)return 10;
+    std::vector<std::uint8_t> light{1U,0x20U,0U,16U,0U,0U,0U};
+    light.insert(light.end(),16U,0U);
+    const auto light_stats=mesh::inspect_extra_params(light);
+    if(!light_stats.valid||light_stats.records!=1U||
+       light_stats.sculpt_records!=0U||
+       !light_stats.mesh_id.empty())return 11;
     return 0;
 }
