@@ -40,4 +40,4 @@ int main(){
     twice.push_back(9U); // trailing bytes invalidate entire object blob
     if(mesh::inspect_extra_params(twice).valid)return 12;
     return 0;
-
+}
