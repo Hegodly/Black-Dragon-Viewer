@@ -548,9 +548,12 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Requested "+std::to_wstring(
                     sl_circuit_.requested_object_ids());
             }
-            label(detail,
-                  box(contentX+36,y+25,contentWidth-76,20),
-                  small_font_.Get(),p.muted);
+            if(i==4U && sl_circuit_.state()==
+               protocol::sim::CircuitState::MovementConfirmed){
+                detail=L"Nearby chat live UDP | TX packets "+
+                    std::to_wstring(sl_circuit_.sent_chat_packets())+
+                    L" | group/IM/inventory pending";
+            }
             if(i==2U){
                 detail+=L" | AvatarAppearance packets "+
                     std::to_wstring(sl_circuit_.avatar_appearance_packets())+
@@ -558,26 +561,29 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     std::to_wstring(sl_circuit_.own_avatar_visual_params())+
                     L" | actual body NOT loaded";
             }
+            label(detail,
+                  box(contentX+36,y+25,contentWidth-76,20),
+                  small_font_.Get(),p.muted);
             if(i==0U && rowHeight>=62.f){
                 const auto& audit=sl_circuit_.full_decode_audit();
                 // Surface why solid geometry is missing, not just totals.
                 const std::wstring reasons=
-                    L"Volume "+std::to_wstring(audit.volume)+
-                    L" | Unsupported "+std::to_wstring(audit.unsupported_shapes)+
-                    L" | Texture IDs "+std::to_wstring(audit.texture_references)+
+                    L"Mesh refs "+std::to_wstring(audit.mesh_references)+
+                    L" | Mesh queued "+std::to_wstring(
+                        sl_circuit_.mesh_asset_stats().queued)+
                     L" | Eligible "+std::to_wstring(
                         world_renderer_.live_primitive_eligible())+
-                    L" | No parent "+std::to_wstring(
-                        world_renderer_.live_primitive_unresolved())+
-                    L" | Far "+std::to_wstring(
-                        world_renderer_.live_primitive_distant())+
-                    L" | Budget "+std::to_wstring(
-                        world_renderer_.live_primitive_deferred());
+                    L" | Missing root "+std::to_wstring(
+                        world_renderer_.live_missing_anchor_shapes())+
+                    L" | Avatar parent "+std::to_wstring(
+                        world_renderer_.live_avatar_attachment_shapes())+
+                    L" | Cyclic "+std::to_wstring(
+                        world_renderer_.live_cycle_shapes());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"Partial / Local Only is NOT a complete live Second Life feature",
+        label(L"R33: mesh requests queued, NOT downloaded | full avatar/IM/inventory pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
