@@ -421,6 +421,8 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 if(objectspatial::decode_compressed_transforms(
                        incoming,objects,&linked,&frame)){
                     compressed_decode_audit_.extras_seen+=frame.extras_seen;
+                    compressed_decode_audit_.extra_records+=frame.extra_records;
+                    compressed_decode_audit_.sculpt_records+=frame.sculpt_records;
                     compressed_decode_audit_.shape_fields+=frame.shape_fields;
                     compressed_decode_audit_.supported_shapes+=frame.supported_shapes;
                     compressed_decode_audit_.mesh_references+=frame.mesh_references;

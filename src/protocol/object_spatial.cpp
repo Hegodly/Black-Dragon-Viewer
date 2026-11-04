@@ -56,6 +56,7 @@ struct CompressedVolume {
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
+    std::uint32_t extra_records=0,sculpt_records=0;
 };
 CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
                                     std::size_t at,std::uint32_t special){
@@ -67,9 +68,16 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
         if(!has(1U))return out;
         ++at;
     }else if(special&0x01U){
-        // Scratch pad includes a second length-prefixed binary payload.
-        // Keep it unsupported rather than guess the mesh offset.
-        out.unsupported=true;return out;
+        // Official LLViewerObject reads ScratchPadSize (U32 LE), then
+        // unpackBinaryData reads a second length (S32 LE) and payload.
+        // Declared and embedded sizes must agree before parsing extras.
+        if(!has(8U))return out;
+        const auto declared=u32(data,at);
+        const auto embedded=u32(data,at+4U);
+        at+=8U;
+        if(declared>4096U||embedded!=declared||!has(embedded))
+            return out;
+        at+=embedded;
     }
     const auto str=[&]() -> bool {
         for(std::size_t i=0;i<2048U&&has(1U);++i){
@@ -89,9 +97,12 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     if(count>32U)return out;
     for(unsigned i=0;i<count;++i){
         if(!has(6U))return out;
+        const auto type=u16(data,at);
         const std::size_t length=u32(data,at+2U);
         at+=6U;
         if(length>4096U||!has(length))return out;
+        ++out.extra_records;
+        if(type==0x30U && length==17U)++out.sculpt_records;
         at+=length;
     }
     out.extras=true;
@@ -164,6 +175,8 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.primitive=shape.primitive;
         t.volume_params_seen=shape.shape;
         if(shape.extras)++frame.extras_seen;
+        frame.extra_records+=shape.extra_records;
+        frame.sculpt_records+=shape.sculpt_records;
         if(shape.shape)++frame.shape_fields;
         if(shape.primitive!=PrimitiveKind::Unknown)++frame.supported_shapes;
         if(!shape.mesh.empty())++frame.mesh_references;
