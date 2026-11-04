@@ -29,7 +29,7 @@ void var2(Bytes& b,const Bytes& data={}) {
     b.insert(b.end(),data.begin(),data.end());
 }
 Bytes block(std::uint32_t id,std::uint32_t parent=0,
-            Byte pcode=9,float x=128.f) {
+            Byte pcode=9,float x=128.f,const Bytes& extras={}) {
     Bytes b;
     u32(b,id); // LocalID
     b.push_back(0U); // State
@@ -46,7 +46,7 @@ Bytes block(std::uint32_t id,std::uint32_t parent=0,
     b.insert(b.end(),23U,0U); // Prim path/profile shape
     var2(b);var1(b);var2(b);var2(b);var1(b);
     b.insert(b.end(),4U,0U); // TextColor
-    var1(b);var1(b);var1(b); // MediaURL, particles, extra
+    var1(b);var1(b);var1(b,extras); // MediaURL, particles, extra
     b.insert(b.end(),66U,0U); // sound + joint data
     return b;
 }
@@ -118,10 +118,26 @@ int main(){
        out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
        audit.unsupported_shapes!=1U)return 10;
+    // Mesh id comes from a real 0x30 sculpt ExtraParam, not a fake prim.
+    Bytes sculpt{1U,0x30U,0U,17U,0U,0U,0U};
+    for(unsigned i=0U;i<16U;++i)sculpt.push_back(
+        static_cast<Byte>(i+1U));
+    sculpt.push_back(5U);
+    auto mesh_block=block(94U,0U,9U,128.f,sculpt);
+    mesh_block[109]=0x10U;mesh_block[110]=0x01U;
+    mesh_block[115]=100U;mesh_block[116]=100U;
+    if(!objectspatial::decode_full_transforms(
+         packet({mesh_block}),out,&audit)||out.size()!=1U||
+       out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       audit.mesh_references!=1U)return 12;
     auto bot=packet({block(81U,0,47U)});
-    if(!objectspatial::decode_full_transforms(bot,out,&audit,&parents)||
+    std::vector<std::uint32_t> avatar_roots;
+    if(!objectspatial::decode_full_transforms(
+         bot,out,&audit,&parents,nullptr,&avatar_roots)||
        !out.empty()||!parents.empty()||audit.non_volume!=1U||
-       audit.accepted_roots!=0U)return 3;
+       audit.accepted_roots!=0U||avatar_roots.size()!=1U||
+       avatar_roots[0]!=81U)return 3;
     auto badpos=packet({block(82U,0,9U,800.f)});
     if(!objectspatial::decode_full_transforms(badpos,out,&audit)||
        !out.empty()||audit.invalid_transform!=1U||

@@ -517,3 +517,16 @@ from build/test passes alone.
 This is an integrated experimental test build. Do not distribute as a full
 Second Life viewer until complete asset streaming, avatar wearables,
 inventory/services, privacy/security review and live in-world validation.
+
+
+## R33: validated avatar-parent distinctions and mesh asset queue
+
+Real ObjectUpdate PCode 47 avatar local IDs are recorded as nonrenderable
+attachment anchors (identifiers only; never invented positions).
+A bounded 16-level hierarchy categorizes missing ancestor IDs, avatar
+attachments, cyclic or invalid links. F9 reports these separately.
+
+Real Sculpt ExtraParams 0x30 type 5 mesh asset IDs are extracted from
+validated simulator updates, deduped and queued for future CAP requests.
+**The queue does not download, decode or render meshes yet.**
+Texture JPEG2000 and avatar skin/attachments also remain pending.
