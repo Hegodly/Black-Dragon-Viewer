@@ -45,6 +45,7 @@ on:
       - release/kami-r41-legacy-mesh-cdn-20261104
       - release/kami-r42-mesh-discovery-20261104
       - release/kami-r43-full-object-shape-audit-20261104
+      - feature/kami-official-sl-bridge-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -62,6 +63,7 @@ on:
   pull_request:
     branches:
       - release/kami-r42-mesh-discovery-20261104
+      - release/kami-r43-full-object-shape-audit-20261104
   workflow_dispatch:
 
 jobs:
