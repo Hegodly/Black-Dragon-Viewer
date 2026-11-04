@@ -179,6 +179,28 @@ HttpReply send_signed_post(std::wstring_view url,std::string_view body,
     return reply;
 }
 }
+bool retryable_event_queue_http_error(unsigned code) noexcept {
+    switch(code){
+    case ERROR_WINHTTP_TIMEOUT:
+    case ERROR_WINHTTP_CONNECTION_ERROR:
+    case ERROR_WINHTTP_CANNOT_CONNECT:
+    case ERROR_WINHTTP_RESEND_REQUEST:
+    case ERROR_WINHTTP_INVALID_SERVER_RESPONSE:
+        return true;
+    default:
+        return false;
+    }
+}
+bool possible_idle_event_queue_http_error(unsigned code,
+                                          bool held_long) noexcept {
+    // Some EventQueueGet long polls end in an HTTP/1.0 502/upstream
+    // response. If WinHTTP cannot parse that response, keep polling
+    // conservatively. The response was NOT successfully processed,
+    // and the last ACK must remain unchanged.
+    return held_long &&
+        (code==ERROR_WINHTTP_INVALID_SERVER_RESPONSE||
+         code==ERROR_WINHTTP_TIMEOUT);
+}
 bool trusted_caps_url(std::wstring_view url) noexcept {
     Parts dummy;
     return parse_url(url,dummy);
@@ -431,18 +453,18 @@ PollResponse probe_event_queue_once(
     // Long-poll may return a timeout when there are no new messages.
     // Treat long-held 502–504 as expected idle; short-lived 502–504
     // and WinHTTP timeouts are transient with a bounded UI-side retry.
-    if((reply.status==502||reply.status==503||reply.status==504||
-        (reply.error==ERROR_WINHTTP_TIMEOUT))&&
-       elapsed>=std::chrono::seconds(10)){
+    const bool held_long=elapsed>=std::chrono::seconds(10);
+    if(((reply.status==502||reply.status==503||reply.status==504)&&
+         held_long) ||
+       possible_idle_event_queue_http_error(reply.error,held_long)){
         result.idle=true;
-        result.diagnostic=L"EventQueueGet reached; no events yet";
+        result.diagnostic=reply.error==ERROR_WINHTTP_INVALID_SERVER_RESPONSE?
+            L"EventQueueGet HTTP 12152 after long poll; retrying (not ACKed)":
+            L"EventQueueGet long poll ended; polling again";
         return result;
     }
     if(reply.error){
-        result.transient=reply.error==ERROR_WINHTTP_TIMEOUT||
-            reply.error==ERROR_WINHTTP_CONNECTION_ERROR||
-            reply.error==ERROR_WINHTTP_CANNOT_CONNECT||
-            reply.error==ERROR_WINHTTP_RESEND_REQUEST;
+        result.transient=retryable_event_queue_http_error(reply.error);
         result.diagnostic=L"EventQueueGet HTTPS error "+
             std::to_wstring(reply.error);return result;
     }

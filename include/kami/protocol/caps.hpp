@@ -53,6 +53,11 @@ struct PollResponse {
 // Deterministic, offline-testable version of the live HTTP envelope observer.
 // Observation can advance a typed cursor but never implies event actions ran.
 [[nodiscard]] PollResponse observe_event_queue_response(std::string_view xml);
+// A malformed WinHTTP response (12152) may be a long-poll edge response,
+// but is not proof of a healthy event queue. Retry without advancing ACK.
+[[nodiscard]] bool retryable_event_queue_http_error(unsigned code) noexcept;
+[[nodiscard]] bool possible_idle_event_queue_http_error(unsigned code,
+                                                       bool held_long) noexcept;
 [[nodiscard]] SeedResponse request_seed(std::wstring seed_url);
 [[nodiscard]] PollResponse probe_event_queue_once(
     std::wstring queue_url,const QueueCursor& previous={});

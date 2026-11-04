@@ -1788,7 +1788,8 @@ void Window::update_sl_connection() {
                                 std::chrono::milliseconds(500);
             }else if(result.idle){
                 caps_consecutive_failures_=0;
-                caps_status_=L"R9 CAPS live; waiting for new events";
+                // Preserve the warning for an unparseable idle response.
+                caps_status_=result.diagnostic;
                 caps_next_poll_=std::chrono::steady_clock::now()+
                                 std::chrono::milliseconds(500);
             }else if(result.transient){
@@ -1800,7 +1801,7 @@ void Window::update_sl_connection() {
                     1U<<caps_consecutive_failures_,30U);
                 caps_next_poll_=std::chrono::steady_clock::now()+
                     std::chrono::seconds(backoff);
-                caps_status_=L"R9 CAPS transient: reconnect in "+
+                caps_status_=result.diagnostic+L"; retrying in "+
                     std::to_wstring(backoff)+L"s";
             }else{
                 // Invalid LLSD, expired CAPS or non-recoverable failures

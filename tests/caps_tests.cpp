@@ -1,5 +1,6 @@
 #include "kami/protocol/caps.hpp"
 #include <objbase.h>
+#include <winhttp.h>
 #include <string>
 using namespace kami::protocol::caps;
 namespace {
@@ -123,6 +124,20 @@ int exercise(){
     if(!no_event.structurally_valid||!no_event.safe_to_ack||
        no_event.event_count!=0||no_event.unsupported_events!=0)
         return 25;
+    // Regression: WinHTTP 12152 must not permanently block the live
+    // EventQueueGet loop. Only a long-held failure can be treated as
+    // a possible idle upstream reply; no ACK is advanced on this path.
+    if(!retryable_event_queue_http_error(ERROR_WINHTTP_INVALID_SERVER_RESPONSE)||
+       !retryable_event_queue_http_error(ERROR_WINHTTP_TIMEOUT)||
+       retryable_event_queue_http_error(ERROR_WINHTTP_SECURE_FAILURE))
+        return 26;
+    if(!possible_idle_event_queue_http_error(
+            ERROR_WINHTTP_INVALID_SERVER_RESPONSE,true)||
+       possible_idle_event_queue_http_error(
+            ERROR_WINHTTP_INVALID_SERVER_RESPONSE,false)||
+       possible_idle_event_queue_http_error(
+            ERROR_WINHTTP_SECURE_FAILURE,true))
+        return 27;
     return 0;
 }
 }
