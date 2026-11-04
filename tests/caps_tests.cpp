@@ -84,6 +84,45 @@ int exercise(){
     if(!parse_event_queue_frame(unsafe,frame)||
        frame.event_types.size()!=1||
        frame.event_types[0]!="UnknownEvent")return 18;
+    // Regression: R8/R9 froze after the first legitimate event batch.
+    // R9 fix safely accepts bounded metadata and advances the ACK cursor.
+    const auto received=observe_event_queue_response(events);
+    if(!received.structurally_valid||!received.safe_to_ack||
+       received.event_count!=1||received.unsupported_events!=1||
+       received.event_types.size()!=1||
+       received.event_types[0]!="EnableSimulator"||
+       received.next_ack.token!="12345")return 19;
+    if(build_event_queue_post(received.next_ack).find(
+        "<key>ack</key><integer>12345</integer>")==std::string::npos)
+        return 20;
+    const std::string two=
+        "<llsd><map><key>id</key><integer>3001</integer>"
+        "<key>events</key><array>"
+        "<map><key>message</key><string>EnableSimulator</string>"
+        "<key>body</key><map/></map>"
+        "<map><key>message</key><string>EstablishAgentCommunication</string>"
+        "<key>body</key><map/></map></array></map></llsd>";
+    const auto batch=observe_event_queue_response(two);
+    if(!batch.structurally_valid||!batch.safe_to_ack||
+       batch.event_count!=2||batch.unsupported_events!=2||
+       batch.next_ack.token!="3001"||batch.event_types.size()!=2||
+       batch.event_types[1]!="EstablishAgentCommunication")return 21;
+    if(build_event_queue_post(batch.next_ack).find(
+        "<integer>3001</integer>")==std::string::npos)return 22;
+    const auto invalid=observe_event_queue_response(
+        "<llsd><map><key>id</key><undef />"
+        "<key>events</key><array><map><key>message</key>"
+        "<string>EnableSimulator</string></map></array></map></llsd>");
+    if(invalid.structurally_valid||invalid.safe_to_ack)return 23;
+    const auto malformed=observe_event_queue_response(
+        "<!DOCTYPE x [<!ENTITY x SYSTEM \"file:///C:/secret\">]>"
+        "<llsd><map><key>id</key><integer>1</integer>"
+        "<key>events</key><array/></map></llsd>");
+    if(malformed.structurally_valid||malformed.safe_to_ack)return 24;
+    const auto no_event=observe_event_queue_response(empty);
+    if(!no_event.structurally_valid||!no_event.safe_to_ack||
+       no_event.event_count!=0||no_event.unsupported_events!=0)
+        return 25;
     return 0;
 }
 }
