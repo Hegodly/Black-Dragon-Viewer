@@ -189,5 +189,15 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(
            compressed(cylinder),out)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Cylinder)return 20;
+    // Identical updates must not force redundant CPU/DX12 geometry rebuilds.
+    objectspatial::Transform stable{501U,128.f,140.f,35.f,2.f,2.f,2.f};
+    auto again=stable;
+    if(!objectspatial::same_spatial_transform(stable,again))return 23;
+    again.x+=.1f;
+    if(objectspatial::same_spatial_transform(stable,again))return 24;
+    again=stable;again.mesh_asset_id="01020304-0506-0708-090a-0b0c0d0e0f10";
+    if(objectspatial::same_spatial_transform(stable,again))return 25;
+    again=stable;again.primitive=objectspatial::PrimitiveKind::Box;
+    if(objectspatial::same_spatial_transform(stable,again))return 26;
     return 0;
 }
