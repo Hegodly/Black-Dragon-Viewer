@@ -382,17 +382,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         // preserve an earlier verified full-update shape.
                         auto updated=child;
                         const auto previous=linked_objects_.find(child.local_id);
-                        if(previous!=linked_objects_.end()){
-                            if(!updated.volume_params_seen){
-                                updated.primitive=previous->second.primitive;
-                                if(updated.mesh_asset_id.empty())
-                                    updated.mesh_asset_id=previous->second.mesh_asset_id;
-                            }
-                            updated.default_texture_present=
-                                previous->second.default_texture_present;
-                            if(!updated.mesh_asset_id.empty())
-                                updated.primitive=objectspatial::PrimitiveKind::Unknown;
-                        }
+                        if(previous!=linked_objects_.end())
+                            updated=objectspatial::merge_compressed_transform(
+                                child,previous->second);
                         linked_objects_.insert_or_assign(child.local_id,updated);
                         if(!updated.mesh_asset_id.empty())
                             (void)mesh_scheduler_.request(updated.mesh_asset_id,
@@ -405,17 +397,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                            !spatial_objects_.contains(obj.local_id))continue;
                         auto updated=obj;
                         const auto previous=spatial_objects_.find(obj.local_id);
-                        if(previous!=spatial_objects_.end()){
-                            if(!updated.volume_params_seen){
-                                updated.primitive=previous->second.primitive;
-                                if(updated.mesh_asset_id.empty())
-                                    updated.mesh_asset_id=previous->second.mesh_asset_id;
-                            }
-                            updated.default_texture_present=
-                                previous->second.default_texture_present;
-                            if(!updated.mesh_asset_id.empty())
-                                updated.primitive=objectspatial::PrimitiveKind::Unknown;
-                        }
+                        if(previous!=spatial_objects_.end())
+                            updated=objectspatial::merge_compressed_transform(
+                                obj,previous->second);
                         spatial_objects_.insert_or_assign(obj.local_id,updated);
                         if(!updated.mesh_asset_id.empty()){
                             const float distance=std::hypot(
