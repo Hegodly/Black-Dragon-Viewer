@@ -23,5 +23,14 @@ int main(){
     malformed=input;
     for(unsigned i=7U;i<23U;++i)malformed[i]=0U;
     if(!mesh::mesh_asset_from_extras(malformed).empty())return 8;
+    // Official LLViewerObject maps 0x60 PARAMS_MESH to 0x30 PARAMS_SCULPT.
+    // Real 0x60 mesh references must not disappear into FOther.
+    auto legacy=input;
+    legacy[1]=0x60U;
+    if(mesh::mesh_asset_from_extras(legacy)!=uuid)return 9;
+    legacy.back()=3U;
+    if(!mesh::mesh_asset_from_extras(legacy).empty())return 10;
+    legacy=input;legacy[1]=0x70U; // extended flags are not mesh UUIDs
+    if(!mesh::mesh_asset_from_extras(legacy).empty())return 11;
     return 0;
 }
