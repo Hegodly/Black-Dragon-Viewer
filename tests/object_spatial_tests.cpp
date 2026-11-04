@@ -145,8 +145,8 @@ int main(){
     auto cbox=packed(110U);
     cbox.push_back(0U); // ExtraParam count = 0
     std::vector<std::uint8_t> shape(23U,0U);
-    shape[0]=0x10U;shape[1]=0x01U;
-    shape[6]=100U;shape[7]=100U;
+    shape[0]=0x10U;shape[16]=0x01U;
+    shape[5]=100U;shape[6]=100U;
     cbox.insert(cbox.end(),shape.begin(),shape.end());
     if(!objectspatial::decode_compressed_transforms(
           compressed(cbox),out)||out.size()!=1U||
@@ -162,5 +162,32 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(
           compressed(linkedbox),out,&children)||children.size()!=1U||
        children[0].primitive!=objectspatial::PrimitiveKind::Box)return 18;
+
+    // One fully specified compressed mesh with a true SL volume tail.
+    auto meshblock=packed(112U,9U,110U);
+    meshblock.push_back(1U);
+    meshblock.insert(meshblock.end(),{0x30U,0U,17U,0U,0U,0U});
+    for(unsigned i=0U;i<16U;++i)
+        meshblock.push_back(static_cast<std::uint8_t>(i+1U));
+    meshblock.push_back(5U);
+    meshblock.insert(meshblock.end(),shape.begin(),shape.end());
+    objectspatial::CompressedDecodeAudit audit{};
+    if(!objectspatial::decode_compressed_transforms(
+         compressed(meshblock),out,&children,&audit)||
+       children.size()!=1U||
+       children[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       !children[0].volume_params_seen||
+       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       audit.mesh_references!=1U||audit.shape_fields!=1U)return 19;
+    // Without a sculpt/mesh marker a genuine cylinder can use the
+    // same path bytes; no speculative mesh identity is introduced.
+    auto cylinder=packed(113U);
+    auto round_shape=shape;
+    round_shape[16]=0U;
+    cylinder.push_back(0U);
+    cylinder.insert(cylinder.end(),round_shape.begin(),round_shape.end());
+    if(!objectspatial::decode_compressed_transforms(
+           compressed(cylinder),out)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Cylinder)return 20;
     return 0;
 }
