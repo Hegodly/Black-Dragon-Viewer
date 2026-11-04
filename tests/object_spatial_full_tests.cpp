@@ -210,5 +210,14 @@ int main(){
            packet({block(105U,0U,9U,128.f,light)}),out,&audit)||
        audit.malformed_extra_envelopes!=1U||audit.extra_records!=0U||
        audit.mesh_references!=0U)return 20;
+    // A malformed sculpt/ExtraParams envelope must never render as
+    // a fabricated simple box even if its path/profile looks like one.
+    auto malformed_box=block(110U,0U,9U,128.f,light);
+    malformed_box[109]=0x10U;malformed_box[110]=0x01U;
+    malformed_box[115]=100U;malformed_box[116]=100U;
+    if(!objectspatial::decode_full_transforms(
+           packet({malformed_box}),out,&audit)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       audit.malformed_extra_envelopes!=1U)return 21;
     return 0;
 }
