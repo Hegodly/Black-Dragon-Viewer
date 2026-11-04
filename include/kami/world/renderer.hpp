@@ -108,7 +108,13 @@ public:
     // Geometry successfully accepted into the active DX12 scene buffer,
     // NOT proof it is currently visible in the camera's frustum.
     [[nodiscard]] std::size_t uploaded_live_land_vertices() const noexcept {
-        return region_mesh_?region_mesh_->terrain_count:0U;
+        // The scene's terrain pass includes unskinned amber object bounds.
+        // Exclude the proxy vertices from the land-only metric.
+        return region_mesh_?
+            region_mesh_->terrain_count-uploaded_root_bounds_*432U:0U;
+    }
+    [[nodiscard]] std::size_t uploaded_root_bounds() const noexcept {
+        return region_mesh_?uploaded_root_bounds_:0U;
     }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
@@ -172,6 +178,7 @@ private:
     rig::Audit skin_audit_{};
     std::optional<SceneMesh> preview_mesh_;
     std::optional<SceneMesh> region_mesh_;
+    std::size_t uploaded_root_bounds_=0;
     std::optional<SceneMesh> live_water_mesh_;
     LiveAvatarPreview live_avatar_preview_{};
     avatar::Controls live_preview_controls_{};

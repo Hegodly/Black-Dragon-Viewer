@@ -7,7 +7,7 @@ namespace kami::diagnostics {
 // Observing one packet or a local preview NEVER means complete live SL parity.
 enum class Stage : std::uint8_t { Waiting, Partial, LocalOnly };
 struct Evidence {
-    std::uint32_t object_packets=0;
+    std::uint32_t object_bounds_drawn=0;
     bool live_terrain_uploaded=false;
     bool local_avatar_visible=false;
     std::uint32_t movement_packets_sent=0;
@@ -23,10 +23,10 @@ struct Check {
     const Evidence& e) noexcept {
     return {{
        {L"1  OBJECTS AND BUILDINGS",
-        e.object_packets>0U?
-        L"Live object packets seen; prim/mesh drawing NOT implemented":
-        L"Object packets not seen; prim/mesh drawing pending",
-        e.object_packets>0U?Stage::Partial:Stage::Waiting},
+        e.object_bounds_drawn>0U?
+        L"Live SL root bounds drawn; prim/mesh NOT implemented":
+        L"No verified root bounds drawn; real meshes pending",
+        e.object_bounds_drawn>0U?Stage::Partial:Stage::Waiting},
        {L"2  TERRAIN AND TEXTURES",
         e.live_terrain_uploaded?
         L"Live SL terrain in DX12; textures/materials NOT loaded":

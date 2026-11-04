@@ -25,6 +25,7 @@ on:
       - release/kami-r16-live-avatar-placeholder-20261104
       - fix/kami-r17-visible-avatar-turning-20261104
       - release/kami-r18-seven-system-diagnostics-20261104
+      - release/kami-r19-inworld-object-bounds-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -106,9 +107,9 @@ jobs:
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R18-Seven-Systems-One-Test.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R19-Inworld-Object-Bounds.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R18-Seven-Systems-One-Test
-          path: dist/KAMI-R18-Seven-Systems-One-Test.zip
+          name: KAMI-R19-Inworld-Object-Bounds
+          path: dist/KAMI-R19-Inworld-Object-Bounds.zip
           retention-days: 14

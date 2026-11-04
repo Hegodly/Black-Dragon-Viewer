@@ -1,5 +1,6 @@
 #include "kami/world/renderer.hpp"
 #include "kami/world/live_terrain.hpp"
+#include "kami/world/object_proxies.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
@@ -590,6 +591,16 @@ bool Renderer::set_verified_live_terrain(
     auto built=build_live_terrain_mesh(patches,nearest,
                                             agent.x,agent.y,agent.z);
     SceneMesh scene=std::move(built.scene);
+    // Draw only server-sourced spatial root *bounding frames* in amber.
+    // They are not prim meshes: profiles, rotations, textures and
+    // hierarchies have NOT been decoded. The same DX12 geometry buffer
+    // holds land + spatial proxy frames + local avatar.
+    const auto proxies=build_live_object_spatial_proxies(
+        circuit.decoded_spatial_objects(),agent.x,agent.y,agent.z);
+    const auto new_proxy_count=proxies.vertices.size()/432U;
+    scene.vertices.insert(scene.vertices.end(),
+                          proxies.vertices.begin(),proxies.vertices.end());
+    scene.terrain_count+=proxies.vertices.size();
     // Actual SL land stays in the terrain section. Append only an
     // obvious generic local placeholder in the separate avatar section.
     if(live_avatar_preview_.active()){
@@ -610,6 +621,7 @@ bool Renderer::set_verified_live_terrain(
         error_=L"R12 DX12 land mesh upload failed";
         return false;
     }
+    uploaded_root_bounds_=new_proxy_count;
     if(first_live_land&&!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;
@@ -692,6 +704,7 @@ void Renderer::clear_decoded_region_geometry() {
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
+    uploaded_root_bounds_=0;
     live_avatar_preview_.clear();
     live_preview_controls_={};
     camera_.set_subject({0.f,0.f,0.f});

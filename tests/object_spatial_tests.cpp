@@ -1,0 +1,99 @@
+#include "kami/protocol/object_spatial.hpp"
+#include "kami/world/object_proxies.hpp"
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <vector>
+
+using namespace kami;
+namespace {
+void u16(std::vector<std::uint8_t>& b,std::uint16_t v){
+    b.push_back(static_cast<std::uint8_t>(v));
+    b.push_back(static_cast<std::uint8_t>(v>>8));
+}
+void u32(std::vector<std::uint8_t>& b,std::uint32_t v){
+    for(unsigned i=0;i<4;++i)b.push_back(
+        static_cast<std::uint8_t>(v>>(i*8)));
+}
+void f32(std::vector<std::uint8_t>& b,float v){
+    std::uint32_t bits=0;
+    std::memcpy(&bits,&v,sizeof(v));
+    u32(b,bits);
+}
+std::vector<std::uint8_t> packed(std::uint32_t id,
+                                 std::uint8_t pcode=9,
+                                 std::uint32_t parent=0){
+    std::vector<std::uint8_t> b(16,0); // object UUID
+    u32(b,id);
+    b.push_back(pcode);b.push_back(0); // PCode, State
+    u32(b,123U);b.push_back(0);b.push_back(0); // CRC/material/action
+    f32(b,2.f);f32(b,3.f);f32(b,4.f); // SL scale
+    f32(b,128.f);f32(b,140.f);f32(b,35.f); // SL position
+    f32(b,0.f);f32(b,0.f);f32(b,0.f); // rotation vector
+    u32(b,parent!=0U?0x20U:0U); // special code
+    b.insert(b.end(),16,0); // owner UUID
+    if(parent!=0U)u32(b,parent);
+    return b;
+}
+lludp::Packet compressed(const std::vector<std::uint8_t>& one){
+    lludp::Packet p{};
+    p.body.push_back(13);
+    p.body.insert(p.body.end(),10,0); // region handle, time dilation
+    p.body.push_back(1);
+    u32(p.body,0U); // UpdateFlags
+    u16(p.body,static_cast<std::uint16_t>(one.size()));
+    p.body.insert(p.body.end(),one.begin(),one.end());
+    return p;
+}
+}
+int main(){
+    using namespace protocol;
+    const auto valid=compressed(packed(77U));
+    std::vector<objectspatial::Transform> out;
+    if(!objectspatial::decode_compressed_transforms(valid,out)||
+       out.size()!=1U||out[0].local_id!=77U||
+       out[0].x!=128.f||out[0].y!=140.f||out[0].z!=35.f||
+       out[0].sx!=2.f||out[0].sy!=3.f||out[0].sz!=4.f)
+        return 1;
+    std::map<std::uint32_t,objectspatial::Transform> objects;
+    objects.emplace(77U,out[0]);
+    const auto mesh=world::build_live_object_spatial_proxies(
+        objects,128.f,140.f,35.f);
+    if(mesh.terrain_count!=432U||mesh.avatar_count!=0U||
+       mesh.vertices.size()!=432U)return 2;
+    for(const auto& v:mesh.vertices){
+        if(!std::isfinite(v.px)||!std::isfinite(v.py)||
+           !std::isfinite(v.pz)||v.bone_weights!=0U)return 3;
+    }
+    // Linked child is parent-relative: cannot be rendered at its
+    // apparent region coordinate until hierarchy transforms exist.
+    if(!objectspatial::decode_compressed_transforms(
+        compressed(packed(78U,9U,77U)),out)||!out.empty())
+        return 4;
+    // Avatar PCode must never masquerade as object volume.
+    if(!objectspatial::decode_compressed_transforms(
+        compressed(packed(78U,47U)),out)||!out.empty())
+        return 5;
+    auto broken=valid;
+    broken.body.pop_back();
+    if(objectspatial::decode_compressed_transforms(broken,out))return 6;
+    auto poisoned=packed(80U);
+    const float nan=std::nanf("");
+    std::uint32_t bits=0;
+    std::memcpy(&bits,&nan,sizeof(bits));
+    for(unsigned n=0;n<4;++n)
+        poisoned[40+n]=static_cast<std::uint8_t>(bits>>(8*n));
+    if(!objectspatial::decode_compressed_transforms(
+        compressed(poisoned),out)||!out.empty())return 7;
+    lludp::Packet killed{};
+    killed.body={16,2,77,0,0,0,78,0,0,0};
+    std::vector<std::uint32_t> ids;
+    if(!objectspatial::decode_killed_ids(killed,ids)||
+       ids.size()!=2U||ids[0]!=77U||ids[1]!=78U)return 8;
+    killed.body.pop_back();
+    if(objectspatial::decode_killed_ids(killed,ids))return 9;
+    if(world::build_live_object_spatial_proxies(
+        objects,0.f,0.f,0.f).terrain_count!=0U)return 10;
+    return 0;
+}

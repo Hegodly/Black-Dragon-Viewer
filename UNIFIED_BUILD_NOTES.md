@@ -147,3 +147,51 @@ another SL viewer. Open F9 and check all seven statuses. Open SETTINGS,
 AVATAR, INVENTORY, MESSAGES, CREATOR STUDIO and PHOTO STUDIO to
 smoke-test local UI tools; none implies unimplemented live services.
 Report the seven displayed status strings and any crashes.
+
+## R19: first in-world object geometry from REAL simulator transforms
+
+R19 retains R9–R18's login, live terrain, visible blue avatar,
+server-directed movement, camera and F9 dashboard. It adds a bounded
+parser for ObjectUpdateCompressed (High 13), using the official
+LLViewerObject packed field layout: UUID, local ID, PCode, state, CRC,
+material, click action, XYZ scale, XYZ position, XYZ rotation vector,
+special flags, owner UUID and optional angular velocity/parent ID.
+
+- Only root (not linked-child), PCode 9 volume transforms with finite,
+  reasonable simulator-local position and scale are accepted. Invalid
+  packets never overwrite known-good transforms.
+- ObjectKill removes cached root transforms; at most 512 roots retained.
+- The nearest at most 64 roots within 96m horizontally and 60m vertically
+  of the authenticated login position are rendered as narrow AMBER
+  spatial bounding frames, not made-up solid buildings.
+- The frames share the same DirectX 12 scene buffer/lighting pass as
+  the decoded untextured SL terrain, while the local blue avatar retains
+  its separate per-frame GPU transform.
+- Both land and object revisions coalesce to a single upload no more
+  often than every 800ms, protecting GUI responsiveness.
+- The WORLD footer now says LIVE AMBER OBJECT BOUNDS [count]. F9's
+  object row reports PARTIAL only after at least one root bounding
+  frame has actually been uploaded to the renderer.
+- New automated regression tests cover packed offsets, parent
+  rejection, non-volume rejection, missing-length rejection,
+  NaN rejection, KillObject framing and budgeted DX12 proxy geometry.
+
+IMPORTANT LIMITATIONS:
+- ObjectUpdate (High 12), cached objects, linked-child transforms,
+  sculpt, mesh geometry and actual SL materials/textures are NOT
+  decoded/rendered. Some regions send no root compressed messages,
+  so a legitimate R19 run can display zero amber bounds.
+- The decoded XYZ rotation is NOT yet applied to the amber frames.
+  These are axis-aligned transform-size outlines, not final SL shapes.
+- Own-avatar continuous live position correction is STILL missing:
+  the blue avatar moves from a local estimate anchored to initial
+  verified simulator spawn. This build is a meaningful in-world
+  packet/render step, NOT full SL visual parity.
+
+LIVE TEST:
+Login to Attalia; verify prior walking/turning and terrain. Press F9
+and check object row. In WORLD, look for amber bounding outlines
+over terrain and read LIVE AMBER OBJECT BOUNDS count. A count of zero
+means no supported root-volume compressed transform reached the
+renderer; it does not prove absence of in-world objects. Compare
+screenshots with Firestorm and report missing/corrupt bounds.

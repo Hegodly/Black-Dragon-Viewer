@@ -112,6 +112,7 @@ private:
     bool live_water_attempted_=false;
     std::wstring live_water_status_;
     std::uint64_t live_land_uploaded_revision_=0;
+    std::uint64_t live_spatial_uploaded_revision_=0;
     std::chrono::steady_clock::time_point live_land_last_upload_{};
     // Bearer CAPS URLs are retained only for the authenticated region
     // connection. Never display signed URLs or event payloads.

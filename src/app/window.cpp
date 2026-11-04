@@ -501,7 +501,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               box(contentX+28,147,contentWidth-55,26),
               small_font_.Get(),p.accent);
         const diagnostics::Evidence ev{
-            sl_circuit_.object_update_packets(),
+            static_cast<std::uint32_t>(
+                world_renderer_.uploaded_root_bounds()),
             world_renderer_.region_geometry_active(),
             world_renderer_.live_avatar_placeholder_active(),
             sl_circuit_.movement_control_packets_sent(),
@@ -772,13 +773,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             world_status=L"SL controls TX (experimental) | ";
         }
         if(world_renderer_.region_geometry_active()){
-            world_status+=L"LIVE land GPU vertices "+
+            world_status+=L"SL land vertices "+
                 std::to_wstring(world_renderer_.uploaded_live_land_vertices())+
-                L" | decoded patches "+
+                L" | patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
-                (world_renderer_.live_avatar_placeholder_active()?
-                 L" | AVATAR LOCAL ESTIMATE (not SL-synced)":
-                 L" | Avatar placeholder pending");
+                L" | LIVE AMBER OBJECT BOUNDS "+
+                std::to_wstring(world_renderer_.uploaded_root_bounds())+
+                L" | avatar LOCAL ESTIMATE";
         }else if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
             world_status+=L"Connected to region | land patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
@@ -1694,6 +1695,7 @@ void Window::begin_sl_login() {
     world_renderer_.clear_decoded_region_geometry();
     world_renderer_.clear_live_water_preview();
     live_land_uploaded_revision_=0;
+    live_spatial_uploaded_revision_=0;
     live_land_last_upload_={};
     live_water_attempted_=false;
     live_water_status_.clear();
@@ -1800,19 +1802,22 @@ void Window::update_sl_connection() {
             live_water_status_=L"R9 water DX12 upload unavailable";
     }
     const auto land_revision=sl_circuit_.land_revision();
+    const auto spatial_revision=sl_circuit_.spatial_object_revision();
     const auto now=std::chrono::steady_clock::now();
     // Coalesce bursts of land patches. Upload only verified, finite
     // decoded elevations and never block the UI on every network packet.
     if(sl_login_status_==protocol::LoginStatus::Accepted&&
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
        world_renderer_.ready()&&land_revision>0U&&
-       land_revision!=live_land_uploaded_revision_&&
+       (land_revision!=live_land_uploaded_revision_||
+        spatial_revision!=live_spatial_uploaded_revision_)&&
        (live_land_last_upload_==std::chrono::steady_clock::time_point{}||
         now-live_land_last_upload_>=std::chrono::milliseconds(800))){
         live_land_last_upload_=now;
         if(world_renderer_.set_verified_live_terrain(sl_circuit_)){
             live_land_uploaded_revision_=land_revision;
-            live_water_status_=L"R12 real land heights uploaded to DX12 (untextured)";
+            live_spatial_uploaded_revision_=spatial_revision;
+            live_water_status_=L"R19 DX12 live land and object bounds";
         }else{
             live_water_status_=L"R12 land geometry could not be uploaded";
         }
@@ -1824,6 +1829,7 @@ void Window::update_sl_connection() {
         if(world_renderer_.live_water_preview_active())
             world_renderer_.clear_live_water_preview();
         live_land_uploaded_revision_=0;
+        live_spatial_uploaded_revision_=0;
         live_land_last_upload_={};
         live_water_attempted_=false;
         live_water_status_.clear();

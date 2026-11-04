@@ -3,6 +3,7 @@
 #include "kami/protocol/lludp.hpp"
 #include "kami/protocol/simulator_wire.hpp"
 #include "kami/protocol/terrain.hpp"
+#include "kami/protocol/object_spatial.hpp"
 #include <winsock2.h>
 #include <chrono>
 #include <cstdint>
@@ -68,6 +69,17 @@ public:
     [[nodiscard]] std::uint64_t land_revision() const noexcept {
         return land_revision_;
     }
+    [[nodiscard]] std::uint64_t spatial_object_revision() const noexcept {
+        return spatial_object_revision_;
+    }
+    [[nodiscard]] const std::map<std::uint32_t,objectspatial::Transform>&
+    decoded_spatial_objects() const noexcept {return spatial_objects_;}
+    [[nodiscard]] std::uint32_t spatial_object_frames() const noexcept {
+        return spatial_object_frames_;
+    }
+    [[nodiscard]] std::uint32_t rejected_spatial_frames() const noexcept {
+        return rejected_spatial_frames_;
+    }
     [[nodiscard]] const std::map<std::uint16_t,terrain::Patch>&
     decoded_land_patches() const noexcept {return land_patches_;}
     [[nodiscard]] std::uint32_t wind_packets() const noexcept {return wind_packets_;}
@@ -118,6 +130,11 @@ private:
     std::uint32_t decoded_land_packets_=0,rejected_land_packets_=0;
     std::uint64_t land_revision_=0;
     std::map<std::uint16_t,terrain::Patch> land_patches_;
+    // Untextured root volume positions/sizes from verified connected
+    // ObjectUpdateCompressed frames, NOT actual mesh or texture assets.
+    std::map<std::uint32_t,objectspatial::Transform> spatial_objects_;
+    std::uint64_t spatial_object_revision_=0;
+    std::uint32_t spatial_object_frames_=0,rejected_spatial_frames_=0;
     std::uint32_t cloud_packets_=0,unknown_layer_packets_=0;
     std::uint32_t object_update_packets_=0;
     std::uint32_t object_full_packets_=0,object_compressed_packets_=0;

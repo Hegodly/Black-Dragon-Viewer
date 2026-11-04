@@ -1,6 +1,7 @@
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/protocol/simulator_wire.hpp"
 #include "kami/protocol/world_wire.hpp"
+#include "kami/protocol/object_spatial.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
 #include <climits>
@@ -157,10 +158,37 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     }else{
         switch(world.kind){
         case worldwire::Kind::ObjectFull:++object_full_packets_;break;
-        case worldwire::Kind::ObjectCompressed:++object_compressed_packets_;break;
+        case worldwire::Kind::ObjectCompressed:{
+            ++object_compressed_packets_;
+            if(region_seen_&&movement_seen_&&region_metadata_.verified&&
+               movement_position_.verified){
+                std::vector<objectspatial::Transform> objects;
+                if(objectspatial::decode_compressed_transforms(incoming,objects)){
+                    ++spatial_object_frames_;
+                    for(const auto& obj:objects){
+                        if(spatial_objects_.size()>=512U &&
+                           !spatial_objects_.contains(obj.local_id))continue;
+                        spatial_objects_.insert_or_assign(obj.local_id,obj);
+                        ++spatial_object_revision_;
+                    }
+                }else ++rejected_spatial_frames_;
+            }
+            break;
+        }
         case worldwire::Kind::ObjectCached:++object_cached_packets_;break;
         case worldwire::Kind::ObjectTerse:++object_terse_packets_;break;
-        case worldwire::Kind::ObjectKilled:++object_killed_packets_;break;
+        case worldwire::Kind::ObjectKilled:{
+            ++object_killed_packets_;
+            if(region_seen_&&movement_seen_){
+                std::vector<std::uint32_t> ids;
+                if(objectspatial::decode_killed_ids(incoming,ids))
+                    for(const auto id:ids){
+                        if(spatial_objects_.erase(id)>0U)
+                            ++spatial_object_revision_;
+                    }
+            }
+            break;
+        }
         default:break;
         }
         if(world.kind==worldwire::Kind::ObjectFull||
@@ -270,6 +298,9 @@ void Circuit::stop() noexcept {
     terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;
     decoded_land_packets_=rejected_land_packets_=0;
     land_revision_=0;land_patches_.clear();
+    spatial_object_revision_=0;
+    spatial_object_frames_=rejected_spatial_frames_=0;
+    spatial_objects_.clear();
     object_full_packets_=object_compressed_packets_=0;
     object_cached_packets_=object_terse_packets_=object_killed_packets_=0;
     sequence_=3;attempts_=0;last_retry_={};started_={};
