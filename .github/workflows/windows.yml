@@ -43,6 +43,7 @@ on:
       - release/kami-r39-cdn-caps-20261104
       - release/kami-r40-caps-failure-classification-20261104
       - release/kami-r41-legacy-mesh-cdn-20261104
+      - release/kami-r42-object-mesh-intake-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -133,10 +134,11 @@ jobs:
           Copy-Item R39_STATUS.md dist/KAMI
           Copy-Item R40_STATUS.md dist/KAMI
           Copy-Item R41_STATUS.md dist/KAMI
+          Copy-Item R42_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R41-Legacy-Mesh-CDN-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R42-Mesh-Intake-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R41-Legacy-Mesh-CDN-DX12
-          path: dist/KAMI-R41-Legacy-Mesh-CDN-DX12.zip
+          name: KAMI-R42-Mesh-Intake-DX12
+          path: dist/KAMI-R42-Mesh-Intake-DX12.zip
           retention-days: 14
