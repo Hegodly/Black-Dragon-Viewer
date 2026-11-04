@@ -19,6 +19,9 @@ target_include_directories(kami_core PUBLIC include)
 target_compile_definitions(kami_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(kami_core PUBLIC kami_sl_login_identity d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
 add_executable(KAMIViewer WIN32 src/app/main.cpp src/app/window.cpp)
+# Unique EXE filename guarantees a test cannot accidentally launch an
+# old KAMIViewer.exe from a prior extracted ZIP or desktop shortcut.
+set_target_properties(KAMIViewer PROPERTIES OUTPUT_NAME "KAMI-R9-VERIFY")
 target_include_directories(KAMIViewer PRIVATE include)
 target_link_libraries(KAMIViewer PRIVATE kami_core ole32)
 if(MSVC)
