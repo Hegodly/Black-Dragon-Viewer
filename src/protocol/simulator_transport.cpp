@@ -1,5 +1,6 @@
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/protocol/simulator_wire.hpp"
+#include "kami/protocol/world_wire.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
 #include <climits>
@@ -96,6 +97,20 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     ++packets_received_;
+    // These are bounded packet/framing observations from the actual
+    // authenticated simulator UDP circuit. No geometry is synthesized.
+    const auto world=worldwire::inspect(incoming);
+    if(world.kind==worldwire::Kind::LayerData){
+        ++layer_packets_;
+    }else if(world.kind==worldwire::Kind::ObjectFull||
+             world.kind==worldwire::Kind::ObjectCompressed||
+             world.kind==worldwire::Kind::ObjectCached||
+             world.kind==worldwire::Kind::ObjectTerse||
+             world.kind==worldwire::Kind::ObjectKilled){
+        ++object_update_packets_;
+    }else if(world.kind==worldwire::Kind::Invalid){
+        ++invalid_world_packets_;
+    }
     if(state_==CircuitState::WaitingForSimulator)
         state_=CircuitState::SimulatorResponded;
     // Inspect ACKs before dispatching received messages.
@@ -182,7 +197,9 @@ void Circuit::stop() noexcept {
     region_metadata_={};
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
-    packets_received_=0;sequence_=1;attempts_=0;last_retry_={};started_={};
+    packets_received_=0;
+    layer_packets_=object_update_packets_=invalid_world_packets_=0;
+    sequence_=1;attempts_=0;last_retry_={};started_={};
 }
 std::wstring Circuit::diagnostic() const {
     switch(state_){
