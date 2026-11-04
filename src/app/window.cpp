@@ -1,6 +1,7 @@
 #include "kami/window.hpp"
 #include "kami/appearance.hpp"
 #include "kami/features/viewer_foundation.hpp"
+#include "kami/diagnostics/seven_systems.hpp"
 
 #include <windowsx.h>
 #include <wincred.h>
@@ -282,11 +283,18 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
-        if(page_==0 && wp=='L') {
+        if(wp==VK_F9){
+            const bool open=!seven_systems_open_;
+            select_page(0);
+            seven_systems_open_=open;
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return 0;
+        }
+        if(page_==0 && !seven_systems_open_ && wp=='L') {
             begin_sl_login();
             return 0;
         }
-        if(page_==0 && wp=='N') {
+        if(page_==0 && !seven_systems_open_ && wp=='N') {
             check_sl_tls_connection();
             return 0;
         }
@@ -472,6 +480,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(kPages[index],box(49,y+10,175,28),body_font_.Get(),
               page_==index?p.accent:p.muted);
     }
+    label(L"7 SYSTEMS TEST [F9]",box(41,height-93,200,25),
+          small_font_.Get(),p.accent);
     label(L"ORIGINAL CORE / v0.1",box(42,height-65,189,25),small_font_.Get(),p.muted);
 
     const float contentX = 279.f;
@@ -481,6 +491,44 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     round_rect(box(width-195,23,163,44),22.f,p.surface);
     label(light_?L"LIGHT MODE   [T]":L"DARK MODE   [T]",
           box(width-176,36,145,24),small_font_.Get(),p.accent);
+
+    if(seven_systems_open_){
+        round_rect(box(contentX,90,contentWidth,height-154),27.f,p.elevated);
+        label(L"KAMI / SEVEN-IN-ONE TEST",
+              box(contentX+26,108,contentWidth-52,37),
+              title_font_.Get(),p.text);
+        label(L"F9 closes | Real evidence, local previews, and missing SL systems",
+              box(contentX+28,147,contentWidth-55,26),
+              small_font_.Get(),p.accent);
+        const diagnostics::Evidence ev{
+            sl_circuit_.object_update_packets(),
+            world_renderer_.region_geometry_active(),
+            world_renderer_.live_avatar_placeholder_active(),
+            sl_circuit_.movement_control_packets_sent(),
+            sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed,
+            world_renderer_.ready()
+        };
+        const auto checks=diagnostics::evaluate(ev);
+        const float rowHeight=std::clamp((height-270.f)/7.f,47.f,70.f);
+        for(unsigned i=0;i<checks.size();++i){
+            const float y=180.f+rowHeight*static_cast<float>(i);
+            round_rect(box(contentX+23,y,contentWidth-47,rowHeight-4.f),
+                       12.f,p.surface);
+            label(checks[i].title,
+                  box(contentX+36,y+3,contentWidth-190,22),
+                  small_font_.Get(),p.text);
+            label(diagnostics::stage_label(checks[i].stage),
+                  box(contentX+contentWidth-153,y+3,128,22),
+                  small_font_.Get(),p.accent);
+            label(checks[i].details,
+                  box(contentX+36,y+25,contentWidth-76,20),
+                  small_font_.Get(),p.muted);
+        }
+        label(L"Partial / Local Only is NOT a complete live Second Life feature",
+              box(contentX+25,height-89,contentWidth-54,24),
+              small_font_.Get(),p.muted);
+        return;
+    }
 
     if(page_ == 5) {
         round_rect(box(contentX,90,contentWidth,height-165),29.f,p.elevated);
@@ -1192,6 +1240,7 @@ void Window::toggle_appearance() {
 
 void Window::select_page(unsigned index) {
     if (index >= kPages.size()) return;
+    seven_systems_open_=false;
     const bool was_world=(page_==1 || page_==2 || page_==6 || page_==7);
     const bool next_world=(index==1 || index==2 || index==6 || index==7);
     if(was_world && !next_world && high_resolution_timer_) {
@@ -1902,6 +1951,16 @@ void Window::click(float x, float y) {
     RECT client{};
     GetClientRect(hwnd_, &client);
     const float width = static_cast<float>(client.right);
+    if(x>=30.f&&x<=245.f &&
+       y>=static_cast<float>(client.bottom)-98.f &&
+       y<static_cast<float>(client.bottom)-62.f){
+        const bool open=!seven_systems_open_;
+        select_page(0);
+        seven_systems_open_=open;
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    if(seven_systems_open_)return;
     if (x >= width-195.f && x <= width-32.f && y >= 23.f && y < 67.f) {
         toggle_appearance();
         return;

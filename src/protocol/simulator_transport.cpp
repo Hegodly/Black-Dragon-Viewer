@@ -116,6 +116,8 @@ void Circuit::maybe_send_agent_update() noexcept {
         ++sequence_;
         ++agent_updates_sent_;
         last_controls_sent_=controls;
+        if(controls!=0U && movement_control_packets_sent_!=UINT_MAX)
+            ++movement_control_packets_sent_;
         last_agent_update_=now;
     }
 }
@@ -262,6 +264,7 @@ void Circuit::stop() noexcept {
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
     packets_received_=agent_updates_sent_=0;
     requested_controls_=last_controls_sent_=0;
+    movement_control_packets_sent_=0;
     last_controls_at_={};
     layer_packets_=object_update_packets_=invalid_world_packets_=0;
     terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;

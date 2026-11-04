@@ -30,6 +30,11 @@ public:
     [[nodiscard]] std::uint32_t last_controls_sent() const noexcept {
         return last_controls_sent_;
     }
+    // Counts nonzero AgentUpdate controls actually sent, not movement
+    // accepted or authoritative pose replicated by the simulator.
+    [[nodiscard]] std::uint32_t movement_control_packets_sent() const noexcept {
+        return movement_control_packets_sent_;
+    }
     void stop() noexcept;
     [[nodiscard]] CircuitState state() const noexcept {return state_;}
     [[nodiscard]] bool region_seen() const noexcept {return region_seen_;}
@@ -106,6 +111,7 @@ private:
     std::uint32_t packets_received_=0;
     std::uint32_t agent_updates_sent_=0;
     std::uint32_t requested_controls_=0,last_controls_sent_=0;
+    std::uint32_t movement_control_packets_sent_=0;
     std::chrono::steady_clock::time_point last_controls_at_{};
     std::uint32_t layer_packets_=0;
     std::uint32_t terrain_packets_=0,wind_packets_=0;

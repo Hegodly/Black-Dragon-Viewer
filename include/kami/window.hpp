@@ -98,6 +98,7 @@ private:
     world::CaptureStatus prior_capture_=world::CaptureStatus::Idle;
     messenger::Model messenger_{};
     bool light_ = false;
+    bool seven_systems_open_ = false;
     unsigned page_ = 0;
     protocol::Session session_;
     protocol::ProbeResult sl_tls_probe_{};

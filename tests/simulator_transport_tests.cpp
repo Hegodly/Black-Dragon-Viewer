@@ -203,7 +203,10 @@ int main() {
         }
     }
     mock.join();
+    const bool sent_nonzero_controls=
+        circuit.movement_control_packets_sent()>0U;
     const bool ok=started&&server_result==0&&circuit.region_seen()&&
+                  sent_nonzero_controls&&
                   circuit.agent_updates_sent()>=1U&&
                   circuit.layer_packets()==2U&&
                   circuit.terrain_packets()==2U&&
@@ -226,7 +229,8 @@ int main() {
                   circuit.state()==sim::CircuitState::MovementConfirmed&&
                   circuit.packets_received()>=3;
     circuit.stop();closesocket(server);WSACleanup();
-    if(!ok||circuit.agent_updates_sent()!=0U)return 12;
+    if(!ok||circuit.agent_updates_sent()!=0U||
+       circuit.movement_control_packets_sent()!=0U)return 12;
     sim::Circuit rejected{};
     auto invalid=login;
     invalid.status=LoginStatus::Rejected;

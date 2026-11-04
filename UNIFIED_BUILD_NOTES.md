@@ -107,3 +107,43 @@ Existing R15 server-directed movement packet flags and verified R9–R16
 terrain/login flows are preserved. The visible marker is a LOCAL
 ESTIMATE, not yet the real SL skinned avatar nor authoritative server-
 replicated orientation.
+
+## R18: All seven development workstreams in ONE test executable
+
+Press F9 (or click 7 SYSTEMS TEST in the sidebar) in the Windows
+application for a single read-only panel containing seven bounded,
+live/local evidence checks:
+
+1. **Objects and buildings:** counts authenticated simulator object wire
+   packets (full/compressed/cached/terse/kill). These are NOT yet decoded
+   into visible meshes or buildings.
+2. **Terrain and textures:** checks whether real authenticated SL terrain
+   is currently uploaded into DirectX 12. Actual SL textures, PBR material
+   assets and objects are still missing.
+3. **Real avatar appearance:** checks for the locally predicted blue
+   placeholder. Real wearable/mesh/head/body/skin assets are not loaded.
+4. **Movement and interaction:** counts nonzero, authenticated movement
+   AgentUpdate packets actually transmitted. The user's separate-viewer
+   test established real server movement earlier, but the panel alone
+   does not prove current live position sync or teleports.
+5. **Messaging and inventory:** explicitly says local previews only;
+   SL chat/IM/friends/inventory network integration remains undone.
+6. **Security and performance:** reports whether DX12 initialized.
+   Security audit, MFA, reconnect/recovery and representative FPS
+   benchmarks are unfinished. The graphics settings remain testable.
+7. **Final UI and graphics:** local KAMI theme, camera settings, creator
+   OBJ inspection, photo PNG capture and graphics previews remain
+   available. No production updater or full asset parity yet.
+
+An automated diagnostic regression test ensures missing features are
+never reported as complete. The existing R9–R17 connection, terrain,
+avatar placeholder, real movement controls and camera turning fixes
+are inherited in the same app and ZIP.
+
+### Recommended single-session live test
+Login to Attalia. Open WORLD to confirm land vertex counts and visible
+turning; use W/A/S/D, Shift and Space, observing the real avatar from
+another SL viewer. Open F9 and check all seven statuses. Open SETTINGS,
+AVATAR, INVENTORY, MESSAGES, CREATOR STUDIO and PHOTO STUDIO to
+smoke-test local UI tools; none implies unimplemented live services.
+Report the seven displayed status strings and any crashes.

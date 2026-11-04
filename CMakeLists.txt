@@ -38,6 +38,11 @@ add_executable(kami_dx12_tests tests/dx12_backend_tests.cpp)
 target_link_libraries(kami_dx12_tests PRIVATE kami_core)
 add_test(NAME KamiOriginalDX12DeviceContract COMMAND kami_dx12_tests)
 
+add_executable(kami_seven_systems_tests tests/seven_systems_tests.cpp)
+target_link_libraries(kami_seven_systems_tests PRIVATE kami_core)
+add_test(NAME KamiSevenInOneEvidenceAndReadinessNotExaggerated
+         COMMAND kami_seven_systems_tests)
+
 add_executable(kami_live_avatar_tests tests/live_avatar_tests.cpp)
 target_link_libraries(kami_live_avatar_tests PRIVATE kami_core)
 add_test(NAME KamiSpawnAnchoredDX12AvatarPlaceholderTracking
