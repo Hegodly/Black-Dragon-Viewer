@@ -168,7 +168,12 @@ bool decode_full_transforms(const lludp::Packet& packet,
             continue;
         }
         ++frame.volume;
-        t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+        const auto scanned=mesh::inspect_extra_params(extras);
+        if(scanned.valid){
+            frame.extra_records+=scanned.records;
+            frame.sculpt_records+=scanned.sculpt_records;
+        }else ++frame.malformed_extras;
+        t.mesh_asset_id=scanned.mesh_id;
         if(!t.mesh_asset_id.empty()){
             t.primitive=PrimitiveKind::Unknown;
             ++frame.mesh_references;
