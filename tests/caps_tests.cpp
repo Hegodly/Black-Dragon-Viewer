@@ -210,6 +210,31 @@ int exercise(){
     // An empty or syntactically invalid seed never grants a service.
     if(parse_seed_llsd("<llsd><map/></llsd>",cap,&mesh_cap,&parse_report)||
        !parse_report.xml_map)return 31;
+    // The failure category is URL-free and remains safe to share.
+    // EventQueue may still be granted even when the mesh URL is bad.
+    const auto bad_scheme=
+        "<llsd><map><key>EventQueueGet</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/events</string>"
+        "<key>ViewerAsset</key><uri>http://cdn.public-assets.org/m</uri>"
+        "</map></llsd>";
+    if(!parse_seed_llsd(bad_scheme,cap,&mesh_cap,&parse_report)||
+       !mesh_cap.empty()||
+       parse_report.mesh_issue!=L"non-HTTPS scheme")return 35;
+    const auto bad_host=
+        "<llsd><map><key>EventQueueGet</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/events</string>"
+        "<key>ViewerAsset</key><uri>https://127.0.0.1/mesh</uri>"
+        "</map></llsd>";
+    if(!parse_seed_llsd(bad_host,cap,&mesh_cap,&parse_report)||
+       !mesh_cap.empty()||
+       parse_report.mesh_issue!=L"hostname not public")return 36;
+    const auto wrong_type=
+        "<llsd><map><key>EventQueueGet</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/events</string>"
+        "<key>ViewerAsset</key><undef/></map></llsd>";
+    if(!parse_seed_llsd(wrong_type,cap,&mesh_cap,&parse_report)||
+       !mesh_cap.empty()||
+       parse_report.mesh_issue!=L"unsupported LLSD grant type")return 37;
     return 0;
 }
 }

@@ -53,6 +53,7 @@ struct SeedParseReport {
     bool xml_map=false;
     bool event_named=false,mesh_named=false;
     bool event_rejected=false,mesh_rejected=false;
+    std::wstring mesh_issue; // safe category only; no hostname or bearer path
 };
 // These parse only the bounded LLSD XML envelope, never execute events.
 // Returns true when at least one supported, trusted capability is present.

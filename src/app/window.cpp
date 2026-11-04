@@ -608,7 +608,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R39: authenticated CDN mesh CAPS support | avatars, textures, IM pending",
+        label(L"R40: mesh URL rejection classification | avatar, textures, IM pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;

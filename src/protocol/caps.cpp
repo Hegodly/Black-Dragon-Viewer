@@ -117,6 +117,44 @@ bool parse_url(std::wstring_view input,Parts& result,
     result.port=u.nPort?u.nPort:INTERNET_DEFAULT_HTTPS_PORT;
     return true;
 }
+// A bounded, non-sensitive rejection category for a server-provided URL.
+// Never expose a capability hostname, signed path, query, or credential.
+std::wstring mesh_url_problem(std::wstring_view url,
+                              std::wstring_view type) noexcept {
+    if(type!=L"uri"&&type!=L"string")return L"unsupported LLSD grant type";
+    if(url.empty())return L"empty grant";
+    if(!url.starts_with(L"https://"))return L"non-HTTPS scheme";
+    if(url.size()>2048U||url.size()<12U||
+       url.find_first_of(L"\r\n\t#@\\")!=std::wstring_view::npos||
+       url.find(wchar_t{0})!=std::wstring_view::npos)
+        return L"unsafe URL syntax";
+    URL_COMPONENTS u{};
+    u.dwStructSize=sizeof(u);
+    u.dwSchemeLength=DWORD(-1);
+    u.dwHostNameLength=DWORD(-1);
+    u.dwUrlPathLength=DWORD(-1);
+    u.dwExtraInfoLength=DWORD(-1);
+    if(!WinHttpCrackUrl(url.data(),static_cast<DWORD>(url.size()),0,&u))
+        return L"unparseable URL";
+    if(u.nScheme!=INTERNET_SCHEME_HTTPS)return L"non-HTTPS scheme";
+    if(!u.lpszHostName||u.dwHostNameLength==0U)return L"missing hostname";
+    std::wstring host(u.lpszHostName,u.dwHostNameLength);
+    std::transform(host.begin(),host.end(),host.begin(),[](wchar_t x){
+        return x>=L'A'&&x<=L'Z'?static_cast<wchar_t>(x+32):x;
+    });
+    if(!public_mesh_host(host))return L"hostname not public";
+    std::wstring path;
+    if(u.lpszUrlPath&&u.dwUrlPathLength)
+        path.assign(u.lpszUrlPath,u.dwUrlPathLength);
+    if(path.empty())path=L"/";
+    if(u.lpszExtraInfo&&u.dwExtraInfoLength)
+        path.append(u.lpszExtraInfo,u.dwExtraInfoLength);
+    if(path.size()>2048U||path.empty()||path[0]!=L'/')
+        return L"invalid URL path";
+    for(wchar_t ch:path)
+        if(ch<32||ch==127)return L"invalid URL path";
+    return L"unsupported URL layout";
+}
 bool to_wide(std::string_view source,std::wstring& output) {
     if(source.empty()||source.size()>4U*1024U*1024U)return false;
     const int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
@@ -311,7 +349,11 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
             if(name==L"ViewerAsset")viewer_asset=url;
             else if(name==L"GetMesh2")getmesh2=url;
             else getmesh=url;
-        }else if(report)report->mesh_rejected=true;
+        }else if(report){
+            report->mesh_rejected=true;
+            if(report->mesh_issue.empty())
+                report->mesh_issue=mesh_url_problem(url,type);
+        }
     }
     if(mesh_capability_url){
         *mesh_capability_url=!viewer_asset.empty()?std::move(viewer_asset):
@@ -606,10 +648,12 @@ SeedResponse request_seed(std::wstring seed_url) {
         result.diagnostic=L"CAPS seed OK: EventQueue + mesh granted";
     else if(result.event_queue_granted)
         result.diagnostic=report.mesh_rejected?
-            L"CAPS seed: EventQueue OK; mesh URL rejected by host policy":
+            L"CAPS: EventQueue OK; mesh rejected ("+
+                (report.mesh_issue.empty()?std::wstring(L"unknown reason"):
+                                           report.mesh_issue)+L")":
             report.mesh_named?
-            L"CAPS seed: EventQueue OK; mesh grant missing valid URL":
-            L"CAPS seed: EventQueue OK; mesh grant not offered";
+            L"CAPS: EventQueue OK; mesh grant missing usable URL":
+            L"CAPS: EventQueue OK; mesh grant not offered";
     else
         result.diagnostic=report.event_rejected?
             L"CAPS mesh granted; EventQueue URL rejected":
