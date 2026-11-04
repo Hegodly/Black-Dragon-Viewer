@@ -4,11 +4,15 @@
 #include "kami/protocol/simulator_wire.hpp"
 #include "kami/protocol/terrain.hpp"
 #include "kami/protocol/object_spatial.hpp"
+#include "kami/protocol/live_chat.hpp"
+#include "kami/protocol/avatar_appearance.hpp"
 #include <winsock2.h>
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <map>
+#include <vector>
+#include <string_view>
 
 namespace kami::protocol::sim {
 // A live WinSock *UDP circuit transport*; not a complete in-world
@@ -28,6 +32,20 @@ public:
     void poll(unsigned packet_budget=12U) noexcept;
     // UI must refresh controls; after 300ms they automatically release.
     void set_requested_controls(std::uint32_t flags) noexcept;
+    // Only the connected simulator can send/receive nearby chat.
+    [[nodiscard]] bool send_nearby_chat(std::wstring_view text) noexcept;
+    [[nodiscard]] const std::vector<ChatLine>& nearby_chat() const noexcept {
+        return nearby_chat_;
+    }
+    [[nodiscard]] std::uint32_t sent_chat_packets() const noexcept {
+        return sent_chat_packets_;
+    }
+    [[nodiscard]] std::uint32_t own_avatar_visual_params() const noexcept {
+        return own_avatar_visual_params_;
+    }
+    [[nodiscard]] std::uint32_t avatar_appearance_packets() const noexcept {
+        return avatar_appearance_packets_;
+    }
     [[nodiscard]] std::uint32_t last_controls_sent() const noexcept {
         return last_controls_sent_;
     }
@@ -148,6 +166,10 @@ private:
     std::uint32_t agent_updates_sent_=0;
     std::uint32_t requested_controls_=0,last_controls_sent_=0;
     std::uint32_t movement_control_packets_sent_=0;
+    std::vector<ChatLine> nearby_chat_;
+    std::uint32_t sent_chat_packets_=0;
+    std::uint32_t avatar_appearance_packets_=0,own_avatar_visual_params_=0;
+    std::chrono::steady_clock::time_point last_chat_sent_{};
     std::chrono::steady_clock::time_point last_controls_at_{};
     std::uint32_t layer_packets_=0;
     std::uint32_t terrain_packets_=0,wind_packets_=0;

@@ -2,6 +2,8 @@
 #include "kami/protocol/simulator_wire.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/object_spatial.hpp"
+#include "kami/protocol/live_chat.hpp"
+#include "kami/protocol/avatar_appearance.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
 #include <climits>
@@ -96,6 +98,22 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
     }
     return true;
 }
+bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
+    if(state_!=CircuitState::MovementConfirmed||
+       !region_metadata_.verified||!movement_position_.verified||
+       socket_==INVALID_SOCKET)return false;
+    const auto now=std::chrono::steady_clock::now();
+    if(last_chat_sent_!=std::chrono::steady_clock::time_point{}&&
+       now-last_chat_sent_<std::chrono::milliseconds(600))return false;
+    lludp::Packet packet{};
+    if(!build_nearby_chat(login_,text,sequence_,packet))return false;
+    if(!send_packet(std::move(packet)))return false;
+    ++sequence_;
+    ++sent_chat_packets_;
+    last_chat_sent_=now;
+    // No local bubble: packet send is NOT server delivery confirmation.
+    return true;
+}
 void Circuit::set_requested_controls(std::uint32_t flags) noexcept {
     requested_controls_=(flags&kAllowedMovement);
     last_controls_at_=std::chrono::steady_clock::now();
@@ -170,6 +188,25 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     // These are bounded packet/framing observations from the actual
     // authenticated simulator UDP circuit. No geometry is synthesized.
     const auto world=worldwire::inspect(incoming);
+    // These packet bodies are only admitted from the already connected,
+    // authenticated simulator socket. Keep only bounded user-visible chat
+    // and appearance counts; never persist message/asset identities.
+    if(state_==CircuitState::MovementConfirmed&&
+       region_metadata_.verified&&movement_position_.verified){
+        ChatLine line{};
+        if(decode_simulator_chat(incoming,line)){
+            if(nearby_chat_.size()>=40U)nearby_chat_.erase(nearby_chat_.begin());
+            nearby_chat_.push_back(std::move(line));
+        }
+        appearance::Observation avatar{};
+        if(appearance::decode_avatar_appearance(incoming,avatar)){
+            if(avatar_appearance_packets_<UINT_MAX)++avatar_appearance_packets_;
+            std::array<std::uint8_t,16> self_id{};
+            if(parse_uuid(login_.handoff.agent_id,self_id)&&
+               avatar.avatar_id==self_id)
+                own_avatar_visual_params_=avatar.visual_parameter_count;
+        }
+    }
     if(world.kind==worldwire::Kind::LayerData){
         ++layer_packets_;
         switch(world.layer_type){
@@ -421,6 +458,9 @@ void Circuit::stop() noexcept {
     packets_received_=agent_updates_sent_=0;
     requested_controls_=last_controls_sent_=0;
     movement_control_packets_sent_=0;
+    nearby_chat_.clear();
+    sent_chat_packets_=avatar_appearance_packets_=own_avatar_visual_params_=0;
+    last_chat_sent_={};
     last_controls_at_={};
     layer_packets_=object_update_packets_=invalid_world_packets_=0;
     terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;
