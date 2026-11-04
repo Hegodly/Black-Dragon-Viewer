@@ -250,3 +250,36 @@ Second Life content.
 
 Source for the message IDs: Linden Lab's published
 `master-message-template/message_template.msg` (High 11-16).
+
+## R9: first authenticated water-height DX12 surface (partial world)
+
+R9 retains the R8 authenticated login, simulator handshake, EventQueueGet
+event-name diagnostics, and real terrain/object frame counters.
+
+- `AgentMovementComplete` (Low 250) is decoded for finite, bounded X/Y/Z
+  **only after its agent and session UUIDs match the login**. The
+  authenticated WinSock circuit stores and clears this position per session.
+- R7 already decoded `RegionHandshake` (Low 148) region water height and
+  region name; R9 combines these two independently verified elevations.
+- The existing pure-DX12 vertex uploader draws a **six-vertex flat water
+  patch** at `water_height - agent_z` relative to the avatar's local origin.
+  Its original colored material is a visualization, not an actual Linden
+  water texture or underwater effect.
+- No water preview can be accepted without a connected MovementConfirmed
+  circuit, valid region metadata and session-matched position. The preview
+  is cleared when disconnecting or beginning a new login, and never feeds
+  fabricated `Bootstrap::RegionSynced` evidence.
+- Renderer retains priority for authenticated fully decoded geometry,
+  and for the creator preview. Only when neither is present does the
+  verified-water-only preview replace the offline test scene.
+- CTest covers malformed/NaN movement, session UUID mismatch, synthetic
+  simulator WinSock loopback and water mesh bounds.
+
+**Known limitations:** R9 does NOT decode terrain heightfields, land
+occlusion, individual prims, mesh/texture assets or avatar appearance,
+and it does not know whether land would cover that water at the current
+camera location. It shows only a server-height plane; if the avatar is
+well above sea level, the plane may be below the camera view. The region
+remains unrendered except this partial visual. The app must not market
+this as a complete Second Life scene or use it to bypass asset
+permissions. Live server behavior still requires a user test.
