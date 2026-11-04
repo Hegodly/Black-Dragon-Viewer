@@ -150,8 +150,12 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         }
     }
     if(type==Inbound::AgentMovementComplete &&
-       movement_complete_identifies(incoming,login_))
+       movement_complete_identifies(incoming,login_)){
         movement_seen_=true;
+        AgentPosition parsed{};
+        if(decode_agent_movement_position(incoming,login_,parsed))
+            movement_position_=parsed;
+    }
     if(region_seen_&&movement_seen_)
         state_=CircuitState::MovementConfirmed;
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
@@ -195,6 +199,7 @@ void Circuit::stop() noexcept {
     if(winsock_ready_){WSACleanup();winsock_ready_=false;}
     clear_login(login_);
     region_metadata_={};
+    movement_position_={};
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
     packets_received_=0;
