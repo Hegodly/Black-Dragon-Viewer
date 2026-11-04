@@ -180,6 +180,26 @@ SceneMesh build_live_avatar_placeholder() {
     scene.avatar_count=scene.vertices.size();
     return scene;
 }
+SceneMesh build_live_region_water_preview(
+    float relative_water_y,float agent_x,float agent_y) {
+    SceneMesh out{};
+    if(!std::isfinite(relative_water_y)||!std::isfinite(agent_x)||
+       !std::isfinite(agent_y)||relative_water_y<-8192.f||
+       relative_water_y>8192.f||agent_x<0.f||agent_x>=256.f||
+       agent_y<0.f||agent_y>=256.f)return out;
+    const float x0=-agent_x,x1=256.f-agent_x;
+    const float z0=-agent_y,z1=256.f-agent_y;
+    auto vertex=[&](float x,float z)->Vertex{
+        return {x,relative_water_y,z,0.f,1.f,0.f,
+                .075f,.34f,.46f,.12f,.19f,
+                (x+agent_x)*.022f,(z+agent_y)*.022f};
+    };
+    out.vertices={
+        vertex(x0,z0),vertex(x0,z1),vertex(x1,z1),
+        vertex(x0,z0),vertex(x1,z1),vertex(x1,z0)};
+    out.terrain_count=out.vertices.size();
+    return out;
+}
 SceneMesh build_live_water_preview(float relative_water_y) {
     SceneMesh result{};
     if(!std::isfinite(relative_water_y)||

@@ -1,4 +1,5 @@
 #include "kami/world/live_terrain.hpp"
+#include "kami/world/terrain_palette.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -27,7 +28,9 @@ struct Position {
     return std::isfinite(out.x)&&std::isfinite(out.y)&&
            std::isfinite(out.z);
 }
-void triangle(SceneMesh& out,Position a,Position b,Position c) {
+void triangle(SceneMesh& out,Position a,Position b,Position c,
+              float agent_x,float agent_y,float agent_z,
+              float verified_water_z) {
     const float ux=b.x-a.x,uy=b.y-a.y,uz=b.z-a.z;
     const float vx=c.x-a.x,vy=c.y-a.y,vz=c.z-a.z;
     const float nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
@@ -35,19 +38,15 @@ void triangle(SceneMesh& out,Position a,Position b,Position c) {
     if(!std::isfinite(length)||length<1.e-6f)return;
     const float inv=1.f/length;
     auto emit=[&](Position p){
-        // Untextured diagnostic color only. Sampled geometry is live SL
-        // terrain; this is NOT an SL land material or a fetched texture.
-        // Highlight steep slopes to make terrain elevations easier to read
-        // before the real terrain texture/asset pipeline is implemented.
-        const float steep=std::clamp(1.f-std::fabs(ny*inv),0.f,1.f);
-        const float altitude=std::clamp((p.y+6.f)/45.f,0.f,1.f);
-        const float rock=steep*.65f+altitude*.15f;
-        const float r=.16f+rock*.29f;
-        const float g=.33f-rock*.06f+altitude*.07f;
-        const float b=.19f+rock*.19f;
+        // Height and surface normal are authentic SL land samples.
+        // RGB is KAMI's native DX12 terrain styling, NOT an SL texture.
+        const auto color=terraincolor::sample(
+            p.x+agent_x,p.y+agent_z,p.z+agent_y,
+            ny*inv,verified_water_z);
         out.vertices.push_back({p.x,p.y,p.z,
-           nx*inv,ny*inv,nz*inv,r,g,b,0.f,.92f,
-           p.x*.025f,p.z*.025f});
+           nx*inv,ny*inv,nz*inv,
+           color.r,color.g,color.b,0.f,.86f,
+           (p.x+agent_x)*.025f,(p.z+agent_y)*.025f});
     };
     emit(a);emit(b);emit(c);
 }
@@ -56,7 +55,8 @@ void triangle(SceneMesh& out,Position a,Position b,Position c) {
 LiveTerrainMesh build_live_terrain_mesh(
     const std::map<std::uint16_t,protocol::terrain::Patch>& decoded,
     const std::vector<const protocol::terrain::Patch*>& selected,
-    float agent_x,float agent_y,float agent_z) {
+    float agent_x,float agent_y,float agent_z,
+    float verified_water_z) {
     LiveTerrainMesh result{};
     if(!std::isfinite(agent_x)||!std::isfinite(agent_y)||
        !std::isfinite(agent_z)||selected.size()>64U)return result;
@@ -78,8 +78,10 @@ LiveTerrainMesh build_live_terrain_mesh(
                 continue;
             }
             const auto old=result.scene.vertices.size();
-            triangle(result.scene,a,b,c);
-            triangle(result.scene,a,c,d);
+            triangle(result.scene,a,b,c,
+                     agent_x,agent_y,agent_z,verified_water_z);
+            triangle(result.scene,a,c,d,
+                     agent_x,agent_y,agent_z,verified_water_z);
             if(result.scene.vertices.size()!=old+6U){
                 result.scene.vertices.resize(old);
                 ++result.skipped_quads;

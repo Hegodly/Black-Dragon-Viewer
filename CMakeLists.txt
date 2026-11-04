@@ -187,6 +187,11 @@ add_executable(kami_caps_tests tests/caps_tests.cpp)
 target_link_libraries(kami_caps_tests PRIVATE kami_core)
 add_test(NAME KamiSLSeedCapsAndEventQueueLLSDValidation COMMAND kami_caps_tests)
 
+add_executable(kami_r20_graphics_tests tests/r20_graphics_tests.cpp)
+target_link_libraries(kami_r20_graphics_tests PRIVATE kami_core)
+add_test(NAME KamiR20LiveTerrainPaletteRegionWaterAndDX12SkyShaders
+         COMMAND kami_r20_graphics_tests)
+
 add_executable(kami_object_spatial_tests tests/object_spatial_tests.cpp)
 target_link_libraries(kami_object_spatial_tests PRIVATE kami_core)
 add_test(NAME KamiRealSLRootObjectSpatialFramesSafeDX12

@@ -111,10 +111,14 @@ public:
         // The scene's terrain pass includes unskinned amber object bounds.
         // Exclude the proxy vertices from the land-only metric.
         return region_mesh_?
-            region_mesh_->terrain_count-uploaded_root_bounds_*432U:0U;
+            region_mesh_->terrain_count-uploaded_root_bounds_*432U-
+            uploaded_water_vertices_:0U;
     }
     [[nodiscard]] std::size_t uploaded_root_bounds() const noexcept {
         return region_mesh_?uploaded_root_bounds_:0U;
+    }
+    [[nodiscard]] bool live_water_surface_active() const noexcept {
+        return region_mesh_ && uploaded_water_vertices_==6U;
     }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
@@ -179,6 +183,7 @@ private:
     std::optional<SceneMesh> preview_mesh_;
     std::optional<SceneMesh> region_mesh_;
     std::size_t uploaded_root_bounds_=0;
+    std::size_t uploaded_water_vertices_=0;
     std::optional<SceneMesh> live_water_mesh_;
     LiveAvatarPreview live_avatar_preview_{};
     avatar::Controls live_preview_controls_{};
@@ -203,6 +208,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> shadow_pipeline_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commands_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

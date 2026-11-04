@@ -229,5 +229,46 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     color=pow(max(color,0.0),1.0/2.2);
     return float4(saturate(color),1.0);
 }
+
+struct SkyVertexOutput {
+    float4 clip : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+SkyVertexOutput sky_vertex_main(uint id : SV_VertexID) {
+    const float2 p=id==0U?float2(-1.0,-1.0):
+                   id==1U?float2(-1.0,3.0):float2(3.0,-1.0);
+    SkyVertexOutput output;
+    output.clip=float4(p,0.99999,1.0);
+    output.uv=float2(p.x*0.5+0.5,0.5-p.y*0.5);
+    return output;
+}
+// KAMI-generated atmosphere preview, not the simulator's EEP sky.
+float4 sky_pixel_main(SkyVertexOutput input) : SV_TARGET {
+    const float y=saturate(input.uv.y);
+    const float rise=smoothstep(0.0,0.91,y);
+    float3 color=lerp(float3(.075,.21,.43),
+                      float3(.43,.70,.85),rise);
+    const float band=(y-.61)*5.3;
+    const float horizon=exp(-band*band);
+    color=lerp(color,float3(.72,.79,.77),horizon*.23);
+    const float3 sunWorld=cameraWorldPosition.xyz-
+                          sunDirectionIntensity.xyz*80.0;
+    const float4 sunClip=mul(float4(sunWorld,1.0),viewProjection);
+    if(sunClip.w>0.001) {
+        const float2 sunUv=float2(
+            .5+.5*sunClip.x/sunClip.w,
+            .5-.5*sunClip.y/sunClip.w);
+        const float aspect=max(photoViewport.x,1.0)/
+                           max(photoViewport.y,1.0);
+        const float2 delta=(input.uv-sunUv)*float2(aspect,1.0);
+        const float dist=length(delta);
+        const float sunDisc=1.0-smoothstep(.012,.020,dist);
+        const float corona=exp(-dist*22.0);
+        color+=float3(1.0,.76,.42)*(.36*corona+
+               .55*sunDisc)*saturate(sunDirectionIntensity.w);
+    }
+    color=color/(1.0+color);
+    return float4(saturate(pow(color,1.0/2.2)),1.0);
+}
 )";
 }

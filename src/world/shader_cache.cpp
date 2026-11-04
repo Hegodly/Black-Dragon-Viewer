@@ -21,7 +21,7 @@ constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
 constexpr UINT kCompilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 constexpr std::size_t kMaxShaderBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxPipelineBytes = 32U * 1024U * 1024U;
-constexpr std::string_view kBuildVersion = "kami-dx12-pso-v5-textured-shadow-pbr-sm5";
+constexpr std::string_view kBuildVersion = "kami-dx12-pso-v6-atmosphere-water-biome-sm5";
 namespace fs = std::filesystem;
 
 std::uint64_t fnv(std::string_view data, std::uint64_t h = 14695981039346656037ULL) noexcept {
@@ -401,6 +401,74 @@ bool ShaderCache::prepare_shadow(
         else saved=false;
         report.written_to_disk=saved;
     }
+    return true;
+}
+
+bool ShaderCache::prepare_sky(
+    ID3D12Device* device,ID3D12RootSignature* signature,
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>& sky,
+    ShaderPreparation& report) {
+    report={};
+    if(!device||!signature){
+        report.error=L"Sky pipeline requires DX12 device/root signature";
+        return false;
+    }
+    const auto dir=cache_path(device,report);
+    const auto vs_path=dir.empty()?fs::path{}:dir/L"sky_vertex.cso";
+    const auto ps_path=dir.empty()?fs::path{}:dir/L"sky_pixel.cso";
+    std::vector<char> vs=dir.empty()?std::vector<char>{}:
+        read(vs_path,kMaxShaderBytes);
+    std::vector<char> ps=dir.empty()?std::vector<char>{}:
+        read(ps_path,kMaxShaderBytes);
+    const bool vs_cached=!vs.empty(),ps_cached=!ps.empty();
+    if(vs.empty()&&!compile("sky_vertex_main","vs_5_0",vs,report.error))
+        return false;
+    if(ps.empty()&&!compile("sky_pixel_main","ps_5_0",ps,report.error))
+        return false;
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
+    desc.pRootSignature=signature;
+    desc.VS={vs.data(),vs.size()};
+    desc.PS={ps.data(),ps.size()};
+    desc.InputLayout={nullptr,0};
+    desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
+    desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
+    desc.RasterizerState.DepthClipEnable=TRUE;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask=
+        D3D12_COLOR_WRITE_ENABLE_ALL;
+    desc.DepthStencilState.DepthEnable=FALSE;
+    desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO;
+    desc.SampleMask=UINT_MAX;
+    desc.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.NumRenderTargets=1;
+    desc.RTVFormats[0]=kColorFormat;
+    desc.DSVFormat=kDepthFormat;
+    desc.SampleDesc.Count=1;
+    if(FAILED(device->CreateGraphicsPipelineState(
+        &desc,IID_PPV_ARGS(sky.ReleaseAndGetAddressOf())))){
+        // Retry with clean bytecode if a disk shader cache was corrupt.
+        if((!vs_cached&&!ps_cached)||
+           !compile("sky_vertex_main","vs_5_0",vs,report.error)||
+           !compile("sky_pixel_main","ps_5_0",ps,report.error)){
+            report.error=L"Could not create KAMI DX12 sky pipeline";
+            return false;
+        }
+        desc.VS={vs.data(),vs.size()};
+        desc.PS={ps.data(),ps.size()};
+        if(FAILED(device->CreateGraphicsPipelineState(
+            &desc,IID_PPV_ARGS(sky.ReleaseAndGetAddressOf())))){
+            report.error=L"Could not create KAMI DX12 sky pipeline";
+            return false;
+        }
+        report.driver_cache_invalidated=true;
+    }
+    if(!dir.empty()){
+        if(!vs_cached||report.driver_cache_invalidated)
+            (void)write(vs_path,vs.data(),vs.size());
+        if(!ps_cached||report.driver_cache_invalidated)
+            (void)write(ps_path,ps.data(),ps.size());
+    }
+    report.shader_cache_hit=vs_cached&&ps_cached&&
+                            !report.driver_cache_invalidated;
     return true;
 }
 

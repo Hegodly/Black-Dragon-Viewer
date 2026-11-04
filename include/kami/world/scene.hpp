@@ -28,5 +28,9 @@ struct SceneMesh {
 // elevation relative to a session-verified avatar elevation. This is
 // NOT a terrain decoder, mesh asset, or water texture simulation.
 [[nodiscard]] SceneMesh build_live_water_preview(float relative_water_y);
+// R20: region-bounded flat surface at the verified simulator water height.
+// DX12-generated water styling; not a downloaded SL water material.
+[[nodiscard]] SceneMesh build_live_region_water_preview(
+    float relative_water_y,float agent_x,float agent_y);
 [[nodiscard]] float sample_test_terrain_height(float x, float z) noexcept;
 } // namespace kami::world

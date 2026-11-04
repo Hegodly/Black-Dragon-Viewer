@@ -195,3 +195,44 @@ over terrain and read LIVE AMBER OBJECT BOUNDS count. A count of zero
 means no supported root-volume compressed transform reached the
 renderer; it does not prove absence of in-world objects. Compare
 screenshots with Firestorm and report missing/corrupt bounds.
+
+## R20: first major native DX12 in-world graphics pass
+
+In WORLD, R20 keeps prior verified SL land heights, R19 compressed
+root-volume bounding outlines, and R17 walking/turning placeholder.
+It adds original KAMI-authored visual shading on those live coordinates.
+
+- New DX12 SKY pass: one fullscreen triangle, gradient blue/cyan
+  atmosphere, horizon haze, and a projected sun glow calculated from
+  the same viewProjection/sun vector as the live terrain. Sky depth is
+  disabled, so land/objects occlude it. It is not SL's true environment.
+- Grass/sand/stone/soil color blending based on **real SL region-local
+  absolute land elevation**, verified simulator water height, actual
+  decoded normals/slope, and stable spatial variation. These colors
+  are procedural and DO NOT fetch SL's land textures.
+- A region-sized six-vertex water plane is positioned at the actual
+  authenticated RegionHandshake water level and uses native DX12
+  roughness/metallicity. It is not Second Life's water material.
+- New shader-cache version prevents stale PSO/bytecode reuse from R19.
+  The sky pass and existing scene pass remain on DirectX 12; no OpenGL.
+- Terrain, region water, and amber object frames share one bounded
+  region geometry upload, with the visible blue local avatar in its
+  separate GPU-transformed section. GPU water geometry is only 6 verts.
+- WORLD footer now explicitly indicates a WATER SURFACE or WATER PENDING;
+  F9 remains the unified seven-system status page.
+- Windows native regression tests compile sky vertex/pixel shaders and
+  existing scene/shadow shaders with D3DCompiler and validate palette,
+  stable colors, water bounds, finite vertex payloads.
+
+IMPORTANT:
+  KAMI still has a locally estimated blue avatar and only root
+  spatial proxies for compressed objects, NOT real mesh/object/terrain
+  textures, animated skinned avatar assets, or a complete viewer.
+  The sky is authored by KAMI and not synced to a simulator EEP setting.
+  Scene lighting and shadows are supported but not final quality.
+
+Test plan: sign into Attalia, select WORLD, verify blue/cyan sky,
+colored grass/slope/shore terrain, water plane and any R19 amber bounds.
+Verify WASD and A/D, watch FPS and look for shader startup errors.
+If land colors appear but bounds count remains zero, R19 object
+packet coverage remains unfinished, not a R20 shading failure.

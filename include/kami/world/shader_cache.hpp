@@ -32,5 +32,10 @@ public:
         ID3D12Device* device,ID3D12RootSignature* signature,
         Microsoft::WRL::ComPtr<ID3D12PipelineState>& shadow,
         ShaderPreparation& report);
+    // R20 no-vertex-buffer, depth-free gradient sky pass.
+    [[nodiscard]] static bool prepare_sky(
+        ID3D12Device* device,ID3D12RootSignature* signature,
+        Microsoft::WRL::ComPtr<ID3D12PipelineState>& sky,
+        ShaderPreparation& report);
 };
 } // namespace kami::world

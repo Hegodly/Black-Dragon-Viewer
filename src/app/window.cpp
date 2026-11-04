@@ -743,7 +743,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
               title_font_.Get(),p.text);
         std::wstring heading_status=world_renderer_.region_geometry_active()?
-            L"Verified live SL land / untextured DX12 preview":
+            L"SL LIVE LAND / KAMI DX12 SKY + BIOMES + WATER":
             L"KAMI scene lab / awaiting live terrain";
         if(world_renderer_.live_avatar_placeholder_active()){
             heading_status+=L"  |  Local avatar facing "+
@@ -777,9 +777,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(world_renderer_.uploaded_live_land_vertices())+
                 L" | patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
-                L" | LIVE AMBER OBJECT BOUNDS "+
+                L" | AMBER BOUNDS "+
                 std::to_wstring(world_renderer_.uploaded_root_bounds())+
-                L" | avatar LOCAL ESTIMATE";
+                (world_renderer_.live_water_surface_active()?
+                    L" | WATER SURFACE":L" | WATER PENDING")+
+                L" | avatar LOCAL";
         }else if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
             world_status+=L"Connected to region | land patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+

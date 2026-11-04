@@ -288,8 +288,12 @@ bool Renderer::make_pipeline() {
     if(!ShaderCache::prepare(device_.native_device(),signature_,pipeline_,report))
         return false;
     ShaderPreparation shadow_report;
-    return ShaderCache::prepare_shadow(
-        device_.native_device(),signature_.Get(),shadow_pipeline_,shadow_report);
+    if(!ShaderCache::prepare_shadow(
+        device_.native_device(),signature_.Get(),shadow_pipeline_,shadow_report))
+        return false;
+    ShaderPreparation sky_report;
+    return ShaderCache::prepare_sky(
+        device_.native_device(),signature_.Get(),sky_pipeline_,sky_report);
 }
 
 bool Renderer::make_geometry() {
@@ -589,8 +593,16 @@ bool Renderer::set_verified_live_terrain(
     // R12 drew only 15x15 quads from each 16x16 sample patch, leaving
     // one-meter seams that appeared as black grid lines in the live view.
     auto built=build_live_terrain_mesh(patches,nearest,
-                                            agent.x,agent.y,agent.z);
+                            agent.x,agent.y,agent.z,region.water_height);
     SceneMesh scene=std::move(built.scene);
+    // The flat water surface sits at the authenticated region water
+    // height, with procedural blue styling (not an SL texture).
+    const auto water=build_live_region_water_preview(
+        region.water_height-agent.z,agent.x,agent.y);
+    const std::size_t new_water_count=water.vertices.size();
+    scene.vertices.insert(scene.vertices.end(),
+                          water.vertices.begin(),water.vertices.end());
+    scene.terrain_count+=new_water_count;
     // Draw only server-sourced spatial root *bounding frames* in amber.
     // They are not prim meshes: profiles, rotations, textures and
     // hierarchies have NOT been decoded. The same DX12 geometry buffer
@@ -622,6 +634,7 @@ bool Renderer::set_verified_live_terrain(
         return false;
     }
     uploaded_root_bounds_=new_proxy_count;
+    uploaded_water_vertices_=new_water_count;
     if(first_live_land&&!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;
@@ -705,6 +718,7 @@ void Renderer::clear_decoded_region_geometry() {
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
     uploaded_root_bounds_=0;
+    uploaded_water_vertices_=0;
     live_avatar_preview_.clear();
     live_preview_controls_={};
     camera_.set_subject({0.f,0.f,0.f});
@@ -918,6 +932,13 @@ void Renderer::draw() {
     };
     commands_->RSSetViewports(1,&viewport);
     commands_->RSSetScissorRects(1,&scissor);
+    // Draw atmosphere behind authenticated SL terrain, just one
+    // fullscreen triangle with no depth writes or scene vertices.
+    if(region_mesh_&&!preview_mesh_&&sky_pipeline_) {
+        commands_->SetPipelineState(sky_pipeline_.Get());
+        commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
+        commands_->DrawInstanced(3,1,0,0);
+    }
     commands_->SetPipelineState(pipeline_.Get());
     ID3D12DescriptorHeap* heaps[]={shadow_srv_heap_.Get()};
     commands_->SetDescriptorHeaps(1,heaps);
@@ -1046,6 +1067,7 @@ void Renderer::shutdown() noexcept {
     allocator_.Reset();
     pipeline_.Reset();
     shadow_pipeline_.Reset();
+    sky_pipeline_.Reset();
     signature_.Reset();
     fence_.Reset();
     rtv_heap_.Reset();
