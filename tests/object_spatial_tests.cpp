@@ -202,7 +202,8 @@ int main(){
     // Official compressed scratch-pad envelope includes two independent
     // little-endian lengths, followed by the payload. Previously KAMI
     // abandoned this entire path and could miss valid following meshes.
-    auto scratch=packed(801U,0x01U);
+    auto scratch=packed(801U);
+    scratch[64U]=0x01U; // SpecialCode ScratchPad flag, not PCode
     scratch.insert(scratch.end(),{3,0,0,0,3,0,0,0,1,2,3});
     scratch.push_back(1U);
     scratch.insert(scratch.end(),{0x30U,0U,17U,0U,0U,0U});
@@ -217,7 +218,7 @@ int main(){
        out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
        scratch_audit.extra_records!=1U||
        scratch_audit.sculpt_records!=1U)return 27;
-    scratch[8U+84U+4U]=99U; // malformed ScratchPad embedded size
+    scratch[84U+4U]=99U; // malformed ScratchPad embedded size
     if(!objectspatial::decode_compressed_transforms(
          compressed(scratch),out,&children,&scratch_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
