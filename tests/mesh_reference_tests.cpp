@@ -26,7 +26,9 @@ int main(){
     const auto inspected=mesh::inspect_extra_params(input);
     if(!inspected.valid||inspected.records!=1U||
        inspected.sculpt_records!=1U)return 9;
-    if(mesh::inspect_extra_params(malformed).valid)return 10;
+    auto truncated=input;
+    truncated.pop_back();
+    if(mesh::inspect_extra_params(truncated).valid)return 10;
     std::vector<std::uint8_t> light{1U,0x20U,0U,16U,0U,0U,0U};
     light.insert(light.end(),16U,0U);
     const auto light_stats=mesh::inspect_extra_params(light);
