@@ -330,7 +330,10 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
             out.event_count=static_cast<unsigned>(n);
         }
     }
-    return found_id&&found_events;
+    // A nonempty batch without an acknowledgement ID cannot be advanced
+    // safely; avoid blindly retrying it with an undefined cursor.
+    return found_id&&found_events&&
+           (out.event_count==0U||!out.id.token.empty());
 }
 std::string build_event_queue_post(const QueueCursor& previous) {
     std::string body="<llsd><map><key>ack</key>";
@@ -402,8 +405,9 @@ PollResponse probe_event_queue_once(
         SecureZeroMemory(queue_url.data(),queue_url.size()*sizeof(wchar_t));
     result.http_status=reply.status;
     const auto elapsed=std::chrono::steady_clock::now()-start;
-    // This is an initial one-shot probe. No events are acknowledged or
-    // dispatched until the complete event handler exists.
+    // Long-poll may return a timeout when there are no new messages.
+    // Treat long-held 502–504 as expected idle; short-lived 502–504
+    // and WinHTTP timeouts are transient with a bounded UI-side retry.
     if((reply.status==502||reply.status==503||reply.status==504||
         (reply.error==ERROR_WINHTTP_TIMEOUT))&&
        elapsed>=std::chrono::seconds(10)){
@@ -412,10 +416,16 @@ PollResponse probe_event_queue_once(
         return result;
     }
     if(reply.error){
+        result.transient=reply.error==ERROR_WINHTTP_TIMEOUT||
+            reply.error==ERROR_WINHTTP_CONNECTION_ERROR||
+            reply.error==ERROR_WINHTTP_CANNOT_CONNECT||
+            reply.error==ERROR_WINHTTP_RESEND_REQUEST;
         result.diagnostic=L"EventQueueGet HTTPS error "+
             std::to_wstring(reply.error);return result;
     }
     if(reply.status!=200){
+        result.transient=reply.status==429U||reply.status==500U||
+            reply.status==502U||reply.status==503U||reply.status==504U;
         result.diagnostic=L"EventQueueGet HTTP "+
             std::to_wstring(reply.status);return result;
     }
@@ -425,20 +435,22 @@ PollResponse probe_event_queue_once(
         return result;
     }
     result.event_count=frame.event_count;
+    result.unsupported_events=frame.event_count;
     result.event_types=std::move(frame.event_types);
     result.structurally_valid=true;
-    if(frame.event_count!=0){
-        // Never acknowledge or discard unhandled authoritative events.
-        // Keep the previous ack, freeze automatic polling and ask for
-        // proper handlers in a future build.
-        result.diagnostic=L"EventQueue: "+
-            std::to_wstring(frame.event_count)+L" event(s) pending; "+
-            L"not acknowledged";
-        return result;
-    }
+    // R9 EQ fix: after validating the bounded LLSD envelope, put only
+    // sanitized names and counts into a main-thread observable result.
+    // All events are explicitly marked unsupported, NOT treated as
+    // applied to the world. The UI can commit observation and advance
+    // the typed server cursor, rather than deadlocking on the first
+    // nonempty batch. Full body-dependent handlers remain future work.
     result.safe_to_ack=true;
     result.next_ack=std::move(frame.id);
-    result.diagnostic=L"EventQueueGet heartbeat; no events";
+    result.diagnostic=result.event_count?
+        L"EventQueueGet live: "+
+            std::to_wstring(result.event_count)+
+            L" event(s) observed; actions NOT applied":
+        L"EventQueueGet heartbeat; no events";
     return result;
 }
 } // namespace kami::protocol::caps
