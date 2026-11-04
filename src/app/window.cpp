@@ -1108,7 +1108,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
        sl_circuit_.movement_seen()){
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
-        label(L"R8 UDP packets: LayerData "+
+        label(L"R9 UDP: LayerData "+
               std::to_wstring(sl_circuit_.layer_packets())+
               L" | ObjectUpdates "+std::to_wstring(
                   sl_circuit_.object_update_packets())+
@@ -1526,6 +1526,8 @@ void Window::begin_sl_login() {
     caps_seed_url_.clear();
     caps_event_queue_url_.clear();
     caps_ack_={};
+    caps_event_state_={};
+    caps_events_handled_=0;
     caps_completed_polls_=0;
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
@@ -1616,14 +1618,17 @@ void Window::start_caps_poll() {
         return;
     auto url=caps_event_queue_url_; // keep trusted URL only for this session
     auto ack=caps_ack_;              // preserve server-provided LLSD type
-    caps_status_=L"EventQueueGet polling (R7, completed "+
+    auto agent_id=std::string(sl_circuit_.authenticated_agent_id());
+    caps_status_=L"EventQueueGet polling (R9, completed "+
         std::to_wstring(caps_completed_polls_)+L")";
     caps_poll_future_=std::async(std::launch::async,
-        [url=std::move(url),ack=std::move(ack)]() mutable {
+        [url=std::move(url),ack=std::move(ack),
+         agent_id=std::move(agent_id)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             protocol::caps::PollResponse response{};
             if(SUCCEEDED(init)){
-                response=protocol::caps::probe_event_queue_once(url,ack);
+                response=protocol::caps::probe_event_queue_once(
+                    url,ack,agent_id);
                 CoUninitialize();
             }else response.diagnostic=L"EventQueue COM init failed";
             if(!url.empty())
@@ -1716,31 +1721,42 @@ void Window::update_sl_connection() {
             auto result=caps_poll_future_.get();
             if(result.structurally_valid){
                 ++caps_completed_polls_;
-                if(result.event_count>0){
-                    // R8 displays only sanitized event *types*. Message
-                    // payloads are not yet handled, so never ACK them.
-                    caps_dispatch_blocked_=true;
-                    caps_status_=L"R8: "+std::to_wstring(result.event_count)+
-                        L" live events (no ACK): ";
-                    if(result.event_types.empty()){
-                        caps_status_+=L"UnknownEvent";
-                    }else{
-                        for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){
-                            if(i) caps_status_+=L", ";
-                            const auto& type=result.event_types[i];
-                            caps_status_+=std::wstring(type.begin(),type.end());
+                if(result.safe_to_ack){
+                    if(result.event_count>0){
+                        // EventCommit is an all-or-nothing *validated*
+                        // snapshot. Apply it on the UI thread BEFORE ACK.
+                        const auto& next=result.committed;
+                        if(next.navmesh_state_seen){
+                            caps_event_state_.navmesh_state_seen=true;
+                            caps_event_state_.can_modify_navmesh=
+                                next.can_modify_navmesh;
                         }
+                        if(next.groups_seen){
+                            caps_event_state_.groups_seen=true;
+                            caps_event_state_.groups=
+                                std::move(result.committed.groups);
+                        }
+                        caps_events_handled_+=result.event_count;
                     }
-                }else if(result.safe_to_ack){
                     if(!caps_ack_.token.empty())
                         SecureZeroMemory(caps_ack_.token.data(),
                                          caps_ack_.token.size());
                     caps_ack_=std::move(result.next_ack);
-                    caps_status_=L"Event queue live: "+
-                        std::to_wstring(caps_completed_polls_)+
-                        L" empty polls (no event dispatch yet)";
+                    caps_status_=L"R9: "+std::to_wstring(caps_events_handled_)+
+                        L" events handled; groups "+
+                        std::to_wstring(caps_event_state_.groups.size())+
+                        L"; AgentUpdate "+
+                        std::to_wstring(sl_circuit_.agent_updates_sent());
                     caps_next_poll_=std::chrono::steady_clock::now()+
                                     std::chrono::milliseconds(800);
+                }else if(result.event_count>0){
+                    caps_dispatch_blocked_=true;
+                    caps_status_=L"R9 unhandled (no ACK): ";
+                    for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){
+                        if(i)caps_status_+=L", ";
+                        const auto& name=result.event_types[i];
+                        caps_status_+=std::wstring(name.begin(),name.end());
+                    }
                 }
             } else if(result.idle){
                 caps_status_=L"Event queue alive; idle long-poll";
