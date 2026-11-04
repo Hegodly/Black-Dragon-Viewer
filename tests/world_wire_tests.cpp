@@ -15,7 +15,18 @@ int main(){
     auto layer=packet(11,{0x4c,4,0,1,2,3,4});
     auto l=worldwire::inspect(layer);
     if(l.kind!=worldwire::Kind::LayerData||!l.complete_frame||
+       l.layer_type!=worldwire::LayerType::Terrain||
        l.blocks!=1||l.payload_bytes!=4)return 1;
+    layer.body[1]=55;
+    if(worldwire::inspect(layer).layer_type!=worldwire::LayerType::Wind)
+        return 10;
+    layer.body[1]=56;
+    if(worldwire::inspect(layer).layer_type!=worldwire::LayerType::Cloud)
+        return 11;
+    layer.body[1]=250;
+    if(worldwire::inspect(layer).layer_type!=worldwire::LayerType::Unknown)
+        return 12;
+    layer.body[1]=76;
     layer.body[2]=0xff;
     if(worldwire::inspect(layer).kind!=worldwire::Kind::Invalid)return 2;
     auto cached=packet(14,{0,0,0,0,0,0,0,0,0,0,1,

@@ -10,8 +10,12 @@ enum class Kind : std::uint8_t {
     Unrelated, Invalid, LayerData, ObjectFull,
     ObjectCompressed, ObjectCached, ObjectTerse, ObjectKilled
 };
+// Wire layer codes: 76 terrain, 55 wind, 56 cloud. Framing alone is not
+// a decompressed height map or a complete scene.
+enum class LayerType : std::uint8_t { None, Terrain, Wind, Cloud, Unknown };
 struct Sample {
     Kind kind=Kind::Unrelated;
+    LayerType layer_type=LayerType::None;
     unsigned blocks=0;
     std::size_t payload_bytes=0;
     std::uint32_t first_local_id=0;

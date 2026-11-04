@@ -46,6 +46,27 @@ public:
     [[nodiscard]] std::uint32_t object_update_packets() const noexcept {
         return object_update_packets_;
     }
+    [[nodiscard]] std::uint32_t terrain_packets() const noexcept {return terrain_packets_;}
+    [[nodiscard]] std::uint32_t wind_packets() const noexcept {return wind_packets_;}
+    [[nodiscard]] std::uint32_t cloud_packets() const noexcept {return cloud_packets_;}
+    [[nodiscard]] std::uint32_t unknown_layer_packets() const noexcept {
+        return unknown_layer_packets_;
+    }
+    [[nodiscard]] std::uint32_t full_object_packets() const noexcept {
+        return object_full_packets_;
+    }
+    [[nodiscard]] std::uint32_t compressed_object_packets() const noexcept {
+        return object_compressed_packets_;
+    }
+    [[nodiscard]] std::uint32_t cached_object_packets() const noexcept {
+        return object_cached_packets_;
+    }
+    [[nodiscard]] std::uint32_t terse_object_packets() const noexcept {
+        return object_terse_packets_;
+    }
+    [[nodiscard]] std::uint32_t killed_object_packets() const noexcept {
+        return object_killed_packets_;
+    }
     [[nodiscard]] std::uint32_t dropped_invalid_world_packets() const noexcept {
         return invalid_world_packets_;
     }
@@ -67,7 +88,12 @@ private:
     std::uint32_t packets_received_=0;
     std::uint32_t agent_updates_sent_=0;
     std::uint32_t layer_packets_=0;
+    std::uint32_t terrain_packets_=0,wind_packets_=0;
+    std::uint32_t cloud_packets_=0,unknown_layer_packets_=0;
     std::uint32_t object_update_packets_=0;
+    std::uint32_t object_full_packets_=0,object_compressed_packets_=0;
+    std::uint32_t object_cached_packets_=0,object_terse_packets_=0;
+    std::uint32_t object_killed_packets_=0;
     std::uint32_t invalid_world_packets_=0;
     // Sequences 1/2 are reserved for startup packets.
     std::uint32_t sequence_=3;

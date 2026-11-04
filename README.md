@@ -340,3 +340,23 @@ world-message envelopes arrived. Terrain patch decompression, ObjectUpdate
 field decoding, texture/mesh fetching, avatar rendering, and live-world
 DX12 geometry remain incomplete. No synthetic geometry is presented as
 real Second Life content. Prefer test accounts for this pre-release build.
+
+## R11: bounded, typed world packet intake (diagnostic stage)
+
+R10 received real simulator LayerData and ObjectUpdate envelopes, but
+combined all LayerData messages (land, wind and clouds) and five object
+update variants into broad counters. These totals do **not** represent
+renderable terrain or meshes.
+
+R11 classifies authenticated LayerData by the publicly documented LayerID
+codes (76 = terrain, 55 = wind, 56 = cloud; unknown safely separated).
+It separately tracks complete object update envelopes, compressed updates,
+cache references, terse transforms and kill messages, resetting all
+statistics on disconnect or new login. The Home screen displays real land
+packet count and full/compressed/cache object counts so the next decoder
+can prioritize the formats actually sent by Attalia.
+
+This version **does not yet** decompress the DCT terrain patch stream,
+turn object updates into mesh geometry, or fetch SL textures/assets.
+Rendering remains explicitly marked NOT RENDERED. The purpose is accurate
+input classification before implementing a data-to-DX12 pipeline.

@@ -117,14 +117,29 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     const auto world=worldwire::inspect(incoming);
     if(world.kind==worldwire::Kind::LayerData){
         ++layer_packets_;
-    }else if(world.kind==worldwire::Kind::ObjectFull||
-             world.kind==worldwire::Kind::ObjectCompressed||
-             world.kind==worldwire::Kind::ObjectCached||
-             world.kind==worldwire::Kind::ObjectTerse||
-             world.kind==worldwire::Kind::ObjectKilled){
-        ++object_update_packets_;
+        switch(world.layer_type){
+        case worldwire::LayerType::Terrain:++terrain_packets_;break;
+        case worldwire::LayerType::Wind:++wind_packets_;break;
+        case worldwire::LayerType::Cloud:++cloud_packets_;break;
+        default:++unknown_layer_packets_;break;
+        }
     }else if(world.kind==worldwire::Kind::Invalid){
         ++invalid_world_packets_;
+    }else{
+        switch(world.kind){
+        case worldwire::Kind::ObjectFull:++object_full_packets_;break;
+        case worldwire::Kind::ObjectCompressed:++object_compressed_packets_;break;
+        case worldwire::Kind::ObjectCached:++object_cached_packets_;break;
+        case worldwire::Kind::ObjectTerse:++object_terse_packets_;break;
+        case worldwire::Kind::ObjectKilled:++object_killed_packets_;break;
+        default:break;
+        }
+        if(world.kind==worldwire::Kind::ObjectFull||
+           world.kind==worldwire::Kind::ObjectCompressed||
+           world.kind==worldwire::Kind::ObjectCached||
+           world.kind==worldwire::Kind::ObjectTerse||
+           world.kind==worldwire::Kind::ObjectKilled)
+            ++object_update_packets_;
     }
     if(state_==CircuitState::WaitingForSimulator)
         state_=CircuitState::SimulatorResponded;
@@ -220,6 +235,9 @@ void Circuit::stop() noexcept {
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
     packets_received_=agent_updates_sent_=0;
     layer_packets_=object_update_packets_=invalid_world_packets_=0;
+    terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;
+    object_full_packets_=object_compressed_packets_=0;
+    object_cached_packets_=object_terse_packets_=object_killed_packets_=0;
     sequence_=3;attempts_=0;last_retry_={};started_={};
     last_agent_update_={};
 }
