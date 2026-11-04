@@ -98,8 +98,27 @@ PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
     return PrimitiveKind::Unknown;
 }
+// High 12 uses individual message_template fields: ProfileCurve[1],
+// PathScaleX[6], PathScaleY[7]. High 13's packed format differs.
+PrimitiveKind full_simple_shape(std::span<const std::uint8_t> s) noexcept {
+    if(s.size()!=23U)return PrimitiveKind::Unknown;
+    for(unsigned i=2U;i<=5U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    if(s[6]!=100U||s[7]!=100U)return PrimitiveKind::Unknown;
+    for(unsigned i=8U;i<=16U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    for(unsigned i=17U;i<23U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    if((s[1]&0xF0U)!=0U)return PrimitiveKind::Unknown;
+    const auto profile=s[1]&0x0FU;
+    if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
+    if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
+    if(s[0]==0x10U&&profile==0x03U)return PrimitiveKind::Prism;
+    if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
+    return PrimitiveKind::Unknown;
 }
-// One canonical shape classifier shared by High 12 and High 13.
+}
+// Packed High 13 classifier; full High 12 uses full_simple_shape.
 PrimitiveKind classify_simple_shape(
     std::span<const std::uint8_t> s) noexcept {
     return simple_shape(s);
@@ -143,7 +162,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         // ProfileHollow), but NEVER manufacture unspecified topology.
         std::span<const std::uint8_t> shape{};
         if(!cur.take(23U,shape))return false;
-        t.primitive=classify_simple_shape(shape);
+        t.primitive=full_simple_shape(shape);
         t.volume_params_seen=true;
         // TextureEntry Var2; TextureAnim Var1; NameValue Var2;
         // Data Var2; Text Var1; TextColor Fixed4;
@@ -168,34 +187,53 @@ bool decode_full_transforms(const lludp::Packet& packet,
             continue;
         }
         ++frame.volume;
-        // Count full-update ExtraParams independently of compressed
-        // ExtraParams. Otherwise F9 wrongly suggests there are only
-        // two extra records among hundreds of fully updated objects.
+        // An observed ExtraParam does not prove it is sculpt/mesh.
+        // Count each wire type without exposing object IDs or asset UUIDs.
+        bool extras_valid=extras.empty();
         if(!extras.empty()){
             std::size_t at=1U;
             const auto count=extras[0];
-            if(count<=32U){
-                for(unsigned i=0;i<count;++i){
-                    if(at>extras.size()||extras.size()-at<6U)break;
-                    const auto type=std::uint16_t(extras[at])|
-                        (std::uint16_t(extras[at+1U])<<8U);
-                    const auto length=std::uint32_t(extras[at+2U])|
-                        (std::uint32_t(extras[at+3U])<<8U)|
-                        (std::uint32_t(extras[at+4U])<<16U)|
-                        (std::uint32_t(extras[at+5U])<<24U);
-                    at+=6U;
-                    if(length>4096U||length>extras.size()-at)break;
-                    ++frame.extra_records;
-                    if(type==0x30U&&length==17U){
-                        ++frame.sculpt_records;
-                        if((extras[at+16U]&0x3fU)==5U)
-                            ++frame.mesh_sculpt_records;
-                    }
-                    at+=length;
+            extras_valid=count<=32U;
+            FullDecodeAudit seen{};
+            for(unsigned i=0U;extras_valid&&i<count;++i){
+                if(at>extras.size()||extras.size()-at<6U){
+                    extras_valid=false;break;
                 }
+                const auto type=std::uint16_t(extras[at])|
+                    (std::uint16_t(extras[at+1U])<<8U);
+                const auto length=std::uint32_t(extras[at+2U])|
+                    (std::uint32_t(extras[at+3U])<<8U)|
+                    (std::uint32_t(extras[at+4U])<<16U)|
+                    (std::uint32_t(extras[at+5U])<<24U);
+                at+=6U;
+                if(length>4096U||length>extras.size()-at||
+                   (type==0x30U&&length!=17U)){
+                    extras_valid=false;break;
+                }
+                ++seen.extra_records;
+                if(type==0x10U)++seen.flexible_records;
+                else if(type==0x20U)++seen.light_records;
+                else if(type==0x40U)++seen.projector_records;
+                else if(type==0x30U){
+                    ++seen.sculpt_records;
+                    if((extras[at+16U]&0x3fU)==5U)
+                        ++seen.mesh_sculpt_records;
+                }else ++seen.other_extra_records;
+                at+=length;
             }
+            if(at!=extras.size())extras_valid=false;
+            if(extras_valid){
+                ++frame.extra_envelopes;
+                frame.extra_records+=seen.extra_records;
+                frame.sculpt_records+=seen.sculpt_records;
+                frame.mesh_sculpt_records+=seen.mesh_sculpt_records;
+                frame.flexible_records+=seen.flexible_records;
+                frame.light_records+=seen.light_records;
+                frame.projector_records+=seen.projector_records;
+                frame.other_extra_records+=seen.other_extra_records;
+            }else ++frame.malformed_extra_envelopes;
         }
-        t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+        if(extras_valid)t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
         if(!t.mesh_asset_id.empty()){
             t.primitive=PrimitiveKind::Unknown;
             ++frame.mesh_references;
