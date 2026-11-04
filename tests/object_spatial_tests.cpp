@@ -223,5 +223,31 @@ int main(){
          compressed(scratch),out,&children,&scratch_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
        scratch_audit.extra_records!=0U)return 28;
+    // Official LLPartSysData::unpackLegacy payload is exactly 86
+    // bytes (68 system + 18 particle). A mesh ExtraParam comes next.
+    // Previously this valid compressed update was dropped entirely.
+    auto legacy=packed(805U);
+    legacy[64U]=0x08U;
+    legacy.insert(legacy.end(),86U,0U);
+    legacy.push_back(1U);
+    legacy.insert(legacy.end(),{0x30U,0U,17U,0U,0U,0U});
+    for(unsigned i=0;i<16U;++i)
+        legacy.push_back(static_cast<std::uint8_t>(i+1U));
+    legacy.push_back(5U);
+    legacy.insert(legacy.end(),shape.begin(),shape.end());
+    objectspatial::CompressedDecodeAudit legacy_audit{};
+    if(!objectspatial::decode_compressed_transforms(
+            compressed(legacy),out,&children,&legacy_audit)||
+       out.size()!=1U||
+       out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       legacy_audit.legacy_particles_skipped!=1U||
+       legacy_audit.sculpt_records!=1U||
+       legacy_audit.mesh_references!=1U)return 29;
+    auto badlegacy=legacy;
+    badlegacy.resize(84U+70U);
+    if(!objectspatial::decode_compressed_transforms(
+            compressed(badlegacy),out,&children,&legacy_audit)||
+       out.size()!=1U||!out[0].mesh_asset_id.empty()||
+       legacy_audit.unsupported_optional!=1U)return 30;
     return 0;
-}
+
