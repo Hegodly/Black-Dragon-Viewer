@@ -63,7 +63,7 @@ int main() {
     bad[at+medium.size()-2U]=7U; // nonzero size with missing offset
     if(decode_mesh_lod(bad,good))return 8;
     bad=missing_medium;
-    bad.back()=0U; // still reject damaged compressed stream
+    bad[67U+medium.size()]=0xffU; // damaged deflate stream after new header
     if(decode_mesh_lod(bad,good))return 9;
     return 0;
 }
