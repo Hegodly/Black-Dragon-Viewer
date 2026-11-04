@@ -29,7 +29,11 @@ std::vector<std::uint8_t> packed(std::uint32_t id,
     b.push_back(pcode);b.push_back(0); // PCode, State
     u32(b,123U);b.push_back(0);b.push_back(0); // CRC/material/action
     f32(b,2.f);f32(b,3.f);f32(b,4.f); // SL scale
-    f32(b,128.f);f32(b,140.f);f32(b,35.f); // SL position
+    if(parent!=0U){
+        f32(b,1.f);f32(b,2.f);f32(b,3.f); // linked local position
+    }else{
+        f32(b,128.f);f32(b,140.f);f32(b,35.f); // region position
+    }
     f32(b,0.f);f32(b,0.f);f32(b,0.f); // rotation vector
     u32(b,parent!=0U?0x20U:0U); // special code
     b.insert(b.end(),16,0); // owner UUID
@@ -66,10 +70,15 @@ int main(){
         if(!std::isfinite(v.px)||!std::isfinite(v.py)||
            !std::isfinite(v.pz)||v.bone_weights!=0U)return 3;
     }
-    // Linked child is parent-relative: cannot be rendered at its
-    // apparent region coordinate until hierarchy transforms exist.
+    // Compressed children may anchor nested shapes, but must never
+    // masquerade as region-space roots or manufactured prim meshes.
+    std::vector<objectspatial::Transform> children;
     if(!objectspatial::decode_compressed_transforms(
-        compressed(packed(78U,9U,77U)),out)||!out.empty())
+        compressed(packed(78U,9U,77U)),out,&children)||
+       !out.empty()||children.size()!=1U||
+       children[0].parent_id!=77U||children[0].local_id!=78U||
+       children[0].x!=1.f||children[0].y!=2.f||children[0].z!=3.f||
+       children[0].primitive!=objectspatial::PrimitiveKind::Unknown)
         return 4;
     // Avatar PCode must never masquerade as object volume.
     if(!objectspatial::decode_compressed_transforms(
@@ -77,7 +86,8 @@ int main(){
         return 5;
     auto broken=valid;
     broken.body.pop_back();
-    if(objectspatial::decode_compressed_transforms(broken,out))return 6;
+    if(objectspatial::decode_compressed_transforms(
+           broken,out,&children)||children.size()!=1U)return 6;
     auto poisoned=packed(80U);
     const float nan=std::nanf("");
     std::uint32_t bits=0;
