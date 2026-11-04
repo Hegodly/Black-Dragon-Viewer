@@ -23,6 +23,7 @@ on:
       - release/kami-r14-seven-in-one-20261103
       - release/kami-r15-integrated-live-controls-20261103
       - release/kami-r16-live-avatar-placeholder-20261104
+      - fix/kami-r17-visible-avatar-turning-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -104,9 +105,9 @@ jobs:
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R16-Visible-Avatar-Preview.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R17-Avatar-Turning-Fix.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R16-Visible-Avatar-Preview
-          path: dist/KAMI-R16-Visible-Avatar-Preview.zip
+          name: KAMI-R17-Avatar-Turning-Fix
+          path: dist/KAMI-R17-Avatar-Turning-Fix.zip
           retention-days: 14

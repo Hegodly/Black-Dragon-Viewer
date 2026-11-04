@@ -693,10 +693,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
         label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
               title_font_.Get(),p.text);
-        label(world_renderer_.region_geometry_active()?
-              L"Authenticated Attalia land / untextured DirectX 12 preview":
-              L"KAMI scene lab / awaiting verified live terrain upload",
-              box(contentX+30,151,contentWidth-50,30),
+        std::wstring heading_status=world_renderer_.region_geometry_active()?
+            L"Verified live SL land / untextured DX12 preview":
+            L"KAMI scene lab / awaiting live terrain";
+        if(world_renderer_.live_avatar_placeholder_active()){
+            heading_status+=L"  |  Local avatar facing "+
+                std::to_wstring(world_renderer_.live_avatar_heading_degrees())+
+                L" deg";
+        }
+        label(heading_status,box(contentX+30,151,contentWidth-50,30),
               small_font_.Get(),p.accent);
         const std::wstring fps_label=L"FPS: "+std::to_wstring(fps_display_);
         label(fps_label,box(contentX+contentWidth-130,116,112,28),

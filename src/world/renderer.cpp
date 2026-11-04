@@ -752,6 +752,9 @@ void Renderer::draw() {
         camera_.set_subject({marker.x,marker.y-1.f,marker.z},
                             marker.heading);
     }
+    camera_.set_live_avatar_follow(
+        preview_visible,preview_visible&&
+        std::fabs(live_preview_controls_.turn)>.01f);
     avatar_spring_.step(std::sin(seconds*2.f),dt);
     // Live SL terrain must not collide against the procedural offline
     // scene's unrelated height sampler. A live collision sampler will be

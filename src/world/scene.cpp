@@ -154,8 +154,9 @@ SceneMesh build_test_scene(unsigned divisions) {
 }
 SceneMesh build_live_avatar_placeholder() {
     SceneMesh scene{};
-    // A six-cuboid, locally authored stand-in, not an SL asset or appearance.
-    // Six boxes * 36 vertices = 216; no skinning, network textures, or uploads.
+    // Original six-box mannequin with visible front/back markers.
+    // Asymmetric features make changes in GPU yaw visually observable.
+    // This remains a LOCAL PLACEHOLDER, not an actual SL avatar.
     box(scene.vertices,{0.f,1.25f,0.f},{.32f,.60f,.23f},
         {.10f,.48f,.95f},.12f,.65f);
     box(scene.vertices,{0.f,2.10f,0.f},{.27f,.28f,.26f},
@@ -168,6 +169,13 @@ SceneMesh build_live_avatar_placeholder() {
         {.12f,.20f,.45f},.07f,.8f);
     box(scene.vertices,{.19f,.42f,0.f},{.16f,.43f,.17f},
         {.12f,.20f,.45f},.07f,.8f);
+    // +Z points forward: gold chest/white visor, dark-violet back.
+    box(scene.vertices,{0.f,1.52f,.274f},{.22f,.15f,.046f},
+        {.98f,.68f,.12f},.08f,.55f);
+    box(scene.vertices,{0.f,2.12f,.290f},{.23f,.08f,.044f},
+        {.94f,.98f,.98f},.04f,.42f);
+    box(scene.vertices,{0.f,1.42f,-.300f},{.19f,.25f,.050f},
+        {.48f,.15f,.82f},.06f,.72f);
     scene.terrain_count=0;
     scene.avatar_count=scene.vertices.size();
     return scene;

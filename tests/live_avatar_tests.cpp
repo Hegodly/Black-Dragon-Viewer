@@ -31,8 +31,15 @@ int main(){
     preview.clear();
     if(preview.active())return 10;
     const auto mesh=world::build_live_avatar_placeholder();
-    if(mesh.terrain_count!=0U||mesh.avatar_count!=216U||
-       mesh.vertices.size()!=216U)return 11;
+    if(mesh.terrain_count!=0U||mesh.avatar_count!=324U||
+       mesh.vertices.size()!=324U)return 11;
+    bool front=false,back=false,visor=false;
+    for(const auto& v:mesh.vertices){
+        if(v.pz>.300f&&v.r>.9f&&v.g>.6f)front=true;
+        if(v.pz<-.340f&&v.b>.75f&&v.r>.4f)back=true;
+        if(v.pz>.330f&&v.r>.9f&&v.g>.9f)visor=true;
+    }
+    if(!front||!back||!visor)return 13;
     for(const auto& v:mesh.vertices){
         if(!std::isfinite(v.px)||!std::isfinite(v.py)||
            !std::isfinite(v.pz)||v.bone_weights!=0U)return 12;

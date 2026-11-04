@@ -90,3 +90,20 @@ the seven staged workstreams stay in this same ZIP.
   included in this SAME Windows portable test ZIP.
 
 Build branch: release/kami-r16-live-avatar-placeholder-20261104
+
+## R17: visible A/D turning in the live avatar placeholder
+
+R16's six-box marker appeared almost identical from front and back,
+making yaw hard to distinguish. R17 adds an asymmetric gold chest badge,
+white face visor and violet back plate. The live WORLD camera stays
+steady while A/D is held to reveal avatar rotation, then (if camera
+auto-recenter is enabled) eases BEHIND the marker after key release.
+
+WORLD shows the local heading in degrees so turning is observable
+independently of the avatar geometry. Camera and geometry tests verify
+the front/back appearance, 180-degree turning, and camera recenter.
+
+Existing R15 server-directed movement packet flags and verified R9–R16
+terrain/login flows are preserved. The visible marker is a LOCAL
+ESTIMATE, not yet the real SL skinned avatar nor authoritative server-
+replicated orientation.

@@ -75,5 +75,26 @@ int main() {
        !near(live.focus.y,.77f)||!(live.eye.y>live.focus.y)||
        !std::isfinite(live.eye.x)||!std::isfinite(live.eye.z))
         return 16;
+    // In live follow, camera belongs behind +Z-facing marker. While
+    // turning, it should hold still so the avatar's rotation is visible.
+    System follow;
+    follow.set_settings({50,0,400,true,true,false,false});
+    follow.set_subject({0.f,0.f,0.f},0.f);
+    follow.set_live_avatar_follow(true,false);
+    for(unsigned i=0;i<50;++i)
+        follow.update(.1f,3.f+i*.1f,nullptr,false);
+    const auto rear=follow.pose();
+    if(!(rear.eye.z<rear.focus.z-1.f))return 17;
+    follow.set_subject({0.f,0.f,0.f},3.14159265f);
+    follow.set_live_avatar_follow(true,true);
+    for(unsigned i=0;i<10;++i)
+        follow.update(.1f,9.f+i*.1f,nullptr,false);
+    const auto during=follow.pose();
+    if(!(during.eye.z<during.focus.z-1.f))return 18;
+    follow.set_live_avatar_follow(true,false);
+    for(unsigned i=0;i<55;++i)
+        follow.update(.1f,10.f+i*.1f,nullptr,false);
+    const auto complete=follow.pose();
+    if(!(complete.eye.z>complete.focus.z+1.f))return 19;
     return 0;
 }

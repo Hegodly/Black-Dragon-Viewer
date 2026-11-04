@@ -39,6 +39,11 @@ public:
     void orbit(float yaw_radians, float pitch_radians) noexcept;
     void zoom(float delta_meters) noexcept;
     void set_subject(Vec3 feet, float heading_radians = 0.f) noexcept;
+    // Hold camera while local marker turns; follow behind on key release.
+    void set_live_avatar_follow(bool enabled,bool turning) noexcept {
+        live_avatar_follow_=enabled;
+        live_avatar_turning_=turning;
+    }
     void set_dragging(bool dragging) noexcept { dragging_ = dragging; if (dragging) idle_seconds_ = 0.f; }
     void toggle_precision() noexcept { precision_ = !precision_; }
     void toggle_focus_lock() noexcept { focus_lock_ = !focus_lock_; }
@@ -75,6 +80,8 @@ private:
     bool precision_ = false;
     bool focus_lock_ = true;
     bool cinematic_orbit_ = false;
+    bool live_avatar_follow_ = false;
+    bool live_avatar_turning_ = false;
     bool clipped_ = false;
 };
 } // namespace kami::camera

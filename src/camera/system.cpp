@@ -96,8 +96,20 @@ void System::update(float delta_seconds, float elapsed_seconds,
     if (cinematic_orbit_) {
         desired_yaw_ += .20f * dt;
         idle_seconds_ = 0.f;
+    } else if (live_avatar_follow_) {
+        // +Z faces forward. Hold camera while A/D turns the marker;
+        // after release, smoothly recenter from the REAR on -Z.
+        if(settings_.auto_recenter&&!dragging_&&!live_avatar_turning_&&
+           idle_seconds_>=.25f){
+            const float target=subject_heading_+kPi+.15f;
+            const float correction=std::remainder(
+                target-desired_yaw_,2.f*kPi);
+            desired_yaw_+=correction*(1.f-std::exp(-dt*5.5f));
+            desired_pitch_=lerp(desired_pitch_,.18f,
+                                1.f-std::exp(-dt*2.2f));
+        }
     } else if (settings_.auto_recenter && !dragging_ && idle_seconds_ >= 2.f) {
-        // Recenter against the avatar heading, not an arbitrary world axis.
+        // Preserve offline studio camera behavior.
         const float behind = subject_heading_ + .65f;
         desired_yaw_ = lerp(desired_yaw_, behind, 1.f - std::exp(-dt * 1.5f));
         desired_pitch_ = lerp(desired_pitch_, .16f, 1.f - std::exp(-dt * 1.5f));

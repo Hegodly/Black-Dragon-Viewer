@@ -48,6 +48,12 @@ public:
     [[nodiscard]] bool live_avatar_placeholder_active() const noexcept {
         return region_mesh_.has_value() && live_avatar_preview_.active();
     }
+    [[nodiscard]] int live_avatar_heading_degrees() const noexcept {
+        constexpr float kToDegrees=57.2957795131f;
+        const int deg=static_cast<int>(
+            live_avatar_preview_.pose().heading*kToDegrees);
+        return (deg%360+360)%360;
+    }
     [[nodiscard]] const avatar::State& avatar_state() const noexcept {
         return avatar_.state();
     }
