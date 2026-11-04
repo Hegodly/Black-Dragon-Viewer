@@ -44,6 +44,7 @@ on:
       - release/kami-r40-caps-failure-classification-20261104
       - release/kami-r41-legacy-mesh-cdn-20261104
       - release/kami-r42-mesh-discovery-20261104
+      - release/kami-r43-full-object-shape-audit-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -135,10 +136,11 @@ jobs:
           Copy-Item R40_STATUS.md dist/KAMI
           Copy-Item R41_STATUS.md dist/KAMI
           Copy-Item R42_STATUS.md dist/KAMI
+          Copy-Item R43_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R42-Mesh-Discovery-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43-Full-Object-Shape-Audit-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R42-Mesh-Discovery-DX12
-          path: dist/KAMI-R42-Mesh-Discovery-DX12.zip
+          name: KAMI-R43-Full-Object-Shape-Audit-DX12
+          path: dist/KAMI-R43-Full-Object-Shape-Audit-DX12.zip
           retention-days: 14
