@@ -135,7 +135,7 @@ int main(){
          compressed(withmesh),out,&children)||children.size()!=1U||
        !children[0].mesh_asset_id.empty())return 14;
     withmesh.back()=5U;
-    withmesh[withmesh.size()-18U]=255U; // size field malformed
+    withmesh[withmesh.size()-21U]=255U; // size field malformed
     if(!objectspatial::decode_compressed_transforms(
          compressed(withmesh),out,&children)||children.size()!=1U||
        !children[0].mesh_asset_id.empty())return 15;
