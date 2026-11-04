@@ -116,7 +116,8 @@ public:
         // Exclude the proxy vertices from the land-only metric.
         return region_mesh_?
             region_mesh_->terrain_count-uploaded_root_bounds_*432U-
-            uploaded_primitive_vertices_-uploaded_water_vertices_:0U;
+            uploaded_primitive_vertices_-uploaded_mesh_vertices_-
+            uploaded_water_vertices_:0U;
     }
     [[nodiscard]] std::size_t uploaded_root_bounds() const noexcept {
         return region_mesh_?uploaded_root_bounds_:0U;
@@ -126,6 +127,12 @@ public:
     }
     [[nodiscard]] std::size_t uploaded_linked_primitive_shapes() const noexcept {
         return region_mesh_?uploaded_linked_primitive_shapes_:0U;
+    }
+    [[nodiscard]] std::size_t uploaded_live_meshes() const noexcept {
+        return region_mesh_?uploaded_mesh_shapes_:0U;
+    }
+    [[nodiscard]] std::size_t uploaded_mesh_triangles() const noexcept {
+        return region_mesh_?uploaded_mesh_triangles_:0U;
     }
     [[nodiscard]] std::size_t live_primitive_eligible() const noexcept {
         return region_mesh_?primitive_eligible_:0U;
@@ -225,6 +232,8 @@ private:
     std::size_t uploaded_root_primitive_shapes_=0;
     std::size_t uploaded_linked_primitive_shapes_=0;
     std::size_t uploaded_primitive_vertices_=0;
+    std::size_t uploaded_mesh_vertices_=0,uploaded_mesh_shapes_=0;
+    std::size_t uploaded_mesh_triangles_=0;
     std::size_t primitive_eligible_=0;
     std::size_t primitive_unresolved_=0;
     std::size_t primitive_missing_anchor_=0,primitive_avatar_parent_=0;

@@ -272,4 +272,92 @@ PrimitiveBatch build_live_primitive_geometry(
     result.scene.terrain_count=vertices.size();
     return result;
 }
+
+MeshBatch build_live_mesh_geometry(
+    const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
+    const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
+    const std::set<std::uint32_t>& avatar_roots,
+    const std::map<std::string,protocol::mesh::LOD>& loaded,
+    float agent_x,float agent_y,float agent_z,std::size_t max_triangles){
+    MeshBatch batch{};
+    const V origin{agent_x,agent_y,agent_z};
+    if(!finite(origin))return batch;
+    max_triangles=std::min<std::size_t>(max_triangles,24000U);
+    struct Item {
+        const Transform* transform;
+        const protocol::mesh::LOD* lod;
+        Pose pose;
+        bool child;
+        float distance;
+    };
+    std::vector<Item> chosen;
+    const auto try_add=[&](const Transform& t,Pose pose,bool child){
+        if(t.mesh_asset_id.empty())return;
+        const auto found=loaded.find(t.mesh_asset_id);
+        if(found==loaded.end()||found->second.triangles.empty())return;
+        if(!finite(pose.pos)||!valid_quat(pose.rot))return;
+        const V delta=sub(pose.pos,origin);
+        if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
+           std::abs(delta.z)>96.f)return;
+        chosen.push_back({&t,&found->second,pose,child,dot(delta,delta)});
+    };
+    for(const auto& [id,t]:roots){
+        (void)id;
+        if(t.parent_id==0U)try_add(t,{pos(t),quat(t)},false);
+    }
+    for(const auto& [id,t]:children){
+        (void)id;
+        if(t.mesh_asset_id.empty()||!loaded.contains(t.mesh_asset_id))
+            continue;
+        Pose pose{};std::uint32_t missing=0U;
+        if(resolve(t,roots,children,avatar_roots,pose,missing)==
+           RootResult::Found)try_add(t,pose,true);
+        else ++batch.waiting_for_parent;
+    }
+    std::sort(chosen.begin(),chosen.end(),
+       [](const Item& a,const Item& b){return a.distance<b.distance;});
+    auto& verts=batch.scene.vertices;
+    verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
+    for(const auto& item:chosen){
+        std::size_t object_triangles=0U;
+        for(const auto& triangle:item.lod->triangles){
+            if(batch.emitted_triangles>=max_triangles)break;
+            std::array<V,3> points{};
+            bool valid=true;
+            for(unsigned v=0U;v<3U;++v){
+                const auto i=3U*v;
+                const V local{triangle.pos[i]*item.transform->sx,
+                              triangle.pos[i+1U]*item.transform->sy,
+                              triangle.pos[i+2U]*item.transform->sz};
+                const V world=add(item.pose.pos,rotate(item.pose.rot,local));
+                points[v]={world.x-origin.x,world.z-origin.z,world.y-origin.y};
+                valid=valid&&finite(points[v]);
+            }
+            if(!valid)continue;
+            // SL coordinate conversion swaps Y/Z handedness. Reverse the
+            // winding exactly once; no convex-geometry guesses for meshes.
+            std::swap(points[1],points[2]);
+            const auto a=sub(points[1],points[0]);
+            const auto b=sub(points[2],points[0]);
+            V normal=cross(a,b);
+            const float length=std::sqrt(dot(normal,normal));
+            if(!std::isfinite(length)||length<1.e-8f)continue;
+            normal=scale(normal,1.f/length);
+            for(unsigned v=0U;v<3U;++v){
+                const auto& p=points[v];
+                verts.push_back({p.x,p.y,p.z,normal.x,normal.y,normal.z,
+                                 .80f,.87f,.96f,.04f,.82f,0.f,0.f});
+            }
+            ++object_triangles;
+            ++batch.emitted_triangles;
+        }
+        if(object_triangles){
+            if(item.child)++batch.linked_meshes;
+            else ++batch.root_meshes;
+        }
+        if(batch.emitted_triangles>=max_triangles)break;
+    }
+    batch.scene.terrain_count=verts.size();
+    return batch;
+}
 } // namespace kami::world

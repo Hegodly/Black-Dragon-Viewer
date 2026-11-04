@@ -635,6 +635,18 @@ bool Renderer::set_verified_live_terrain(
                           primitives.scene.vertices.begin(),
                           primitives.scene.vertices.end());
     scene.terrain_count+=new_primitive_vertices;
+    // Real mesh asset triangles, decoded off-thread and validated against
+    // the session's authenticated object roots/child hierarchy.
+    const auto mesh_objects=build_live_mesh_geometry(
+        circuit.decoded_spatial_objects(),
+        circuit.decoded_linked_objects(),
+        circuit.known_avatar_roots(),
+        circuit.decoded_mesh_assets(),
+        agent.x,agent.y,agent.z,18000U);
+    const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
+    scene.vertices.insert(scene.vertices.end(),
+        mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
+    scene.terrain_count+=new_mesh_vertices;
     // Actual SL land stays in the terrain section. Append only an
     // obvious generic local placeholder in the separate avatar section.
     if(live_avatar_preview_.active()){
@@ -659,6 +671,9 @@ bool Renderer::set_verified_live_terrain(
     uploaded_root_primitive_shapes_=primitives.root_shapes;
     uploaded_linked_primitive_shapes_=primitives.linked_shapes;
     uploaded_primitive_vertices_=new_primitive_vertices;
+    uploaded_mesh_vertices_=new_mesh_vertices;
+    uploaded_mesh_shapes_=mesh_objects.root_meshes+mesh_objects.linked_meshes;
+    uploaded_mesh_triangles_=mesh_objects.emitted_triangles;
     primitive_eligible_=primitives.eligible_shapes;
     primitive_unresolved_=primitives.unresolved_parent_shapes;
     primitive_missing_anchor_=primitives.missing_anchor_shapes;
