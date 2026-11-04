@@ -359,6 +359,29 @@ std::string build_event_queue_post(const QueueCursor& previous) {
     body+="<key>done</key><boolean>false</boolean></map></llsd>";
     return body;
 }
+PollResponse observe_event_queue_response(std::string_view xml) {
+    PollResponse result{};
+    EventQueueFrame frame{};
+    if(!parse_event_queue_frame(xml,frame)){
+        result.diagnostic=L"EventQueueGet invalid LLSD envelope";
+        return result;
+    }
+    result.event_count=frame.event_count;
+    result.unsupported_events=frame.event_count;
+    result.event_types=std::move(frame.event_types);
+    result.structurally_valid=true;
+    // Commit these observations on the UI thread before sending the next
+    // typed cursor ACK. For now no body-dependent SL event actions run:
+    // unsupported messages are intentionally ignored with a visible count.
+    result.safe_to_ack=true;
+    result.next_ack=std::move(frame.id);
+    result.diagnostic=result.event_count?
+        L"EventQueueGet live: "+
+            std::to_wstring(result.event_count)+
+            L" event(s) observed; actions NOT applied":
+        L"EventQueueGet heartbeat; no events";
+    return result;
+}
 SeedResponse request_seed(std::wstring seed_url) {
     SeedResponse result{};
     if(!trusted_caps_url(seed_url)){
@@ -429,28 +452,8 @@ PollResponse probe_event_queue_once(
         result.diagnostic=L"EventQueueGet HTTP "+
             std::to_wstring(reply.status);return result;
     }
-    EventQueueFrame frame{};
-    if(!parse_event_queue_frame(reply.body,frame)){
-        result.diagnostic=L"EventQueueGet invalid LLSD envelope";
-        return result;
-    }
-    result.event_count=frame.event_count;
-    result.unsupported_events=frame.event_count;
-    result.event_types=std::move(frame.event_types);
-    result.structurally_valid=true;
-    // R9 EQ fix: after validating the bounded LLSD envelope, put only
-    // sanitized names and counts into a main-thread observable result.
-    // All events are explicitly marked unsupported, NOT treated as
-    // applied to the world. The UI can commit observation and advance
-    // the typed server cursor, rather than deadlocking on the first
-    // nonempty batch. Full body-dependent handlers remain future work.
-    result.safe_to_ack=true;
-    result.next_ack=std::move(frame.id);
-    result.diagnostic=result.event_count?
-        L"EventQueueGet live: "+
-            std::to_wstring(result.event_count)+
-            L" event(s) observed; actions NOT applied":
-        L"EventQueueGet heartbeat; no events";
-    return result;
+    auto observed=observe_event_queue_response(reply.body);
+    observed.http_status=reply.status;
+    return observed;
 }
 } // namespace kami::protocol::caps
