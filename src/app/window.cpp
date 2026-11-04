@@ -23,8 +23,8 @@
 
 namespace kami::app {
 namespace {
-constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_Original_Window";
-constexpr wchar_t kViewportClassName[] = L"KAMI_Native_Camera_Viewport";
+constexpr wchar_t kClassName[] = L"KAMI_BeyondReality_R9_Verify_Window";
+constexpr wchar_t kViewportClassName[] = L"KAMI_R9_Verify_Camera_Viewport";
 constexpr int kMessengerEditId=4101;
 constexpr std::array<std::wstring_view, 8> kPages = {
     L"HOME", L"WORLD", L"AVATAR", L"INVENTORY", L"MESSAGES", L"SETTINGS",
@@ -109,7 +109,7 @@ bool Window::create(HINSTANCE instance, int show) {
         GetLastError()!=ERROR_CLASS_ALREADY_EXISTS) return false;
 
     hwnd_ = CreateWindowExW(
-        0, kClassName, L"KAMI Beyond Reality  |  Original Core (Development)",
+        0, kClassName, L"KAMI Beyond Reality  |  R9 VERIFY 2026-11-03 (DX12 Alpha)",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT, CW_USEDEFAULT, 1200, 770,
         nullptr, nullptr, instance, this);
@@ -472,11 +472,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(kPages[index],box(49,y+10,175,28),body_font_.Get(),
               page_==index?p.accent:p.muted);
     }
-    label(L"ORIGINAL CORE / v0.1",box(42,height-65,189,25),small_font_.Get(),p.muted);
+    label(L"R9 VERIFY / 2026-11-03",box(42,height-65,189,25),small_font_.Get(),p.accent);
 
     const float contentX = 279.f;
     const float contentWidth = width - 305.f;
-    label(L"KAMI  /  INDEPENDENT WINDOWS APPLICATION",box(contentX,28,620,24),
+    label(L"KAMI R9 VERIFY 2026-11-03 / UNIQUE TEST EXECUTABLE",box(contentX,28,620,24),
           small_font_.Get(),p.muted);
     round_rect(box(width-195,23,163,44),22.f,p.surface);
     label(light_?L"LIGHT MODE   [T]":L"DARK MODE   [T]",
