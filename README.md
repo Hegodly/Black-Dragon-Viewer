@@ -283,3 +283,36 @@ well above sea level, the plane may be below the camera view. The region
 remains unrendered except this partial visual. The app must not market
 this as a complete Second Life scene or use it to bypass asset
 permissions. Live server behavior still requires a user test.
+
+## R9 EventQueueGet no-ACK stall repair (diagnostic build)
+
+R8 and R9 stalled as soon as `EventQueueGet` returned a valid,
+nonempty event array: `caps_dispatch_blocked_=true` caused all later
+long-polls to stop, leaving the login connected but no further CAPS
+activity. The specific *polling deadlock* is repaired here:
+
+- Verify the LLSD envelope, event array size (maximum 512), event
+  container shapes, and typed ACK cursor. Refuse to advance on malformed
+  LLSD or nonempty batches without a valid cursor.
+- Commit bounded, sanitized event-type names and counters on the UI
+  thread; then send the server's typed event `id` as the next poll
+  `ack`. One async long-poll stays in flight; the UI does not block.
+- Nonempty batches are no longer a fatal error. Normal idle responses
+  continue, and transient HTTP 429/5xx and WinHTTP connection/timeout
+  errors use bounded retry delays instead of permanently stopping.
+- Show cumulative observed and unsupported event counts on Home. All
+  unsupported event bodies are intentionally **not applied** to KAMI's
+  region or avatar state. They are acknowledged after diagnostic
+  observation, which means these particular notifications may not be
+  replayed by the simulator; testing should be performed in disposable
+  sessions and must not be represented as full viewer support.
+- Verified state-changing event handlers are still required for
+  teleports, neighbor-region connections, parcel data, chat,
+  inventory and a fully interactive world. The R9 water-only DX12
+  experiment remains limited and independent of these events.
+
+The deterministic observer regression test checks that two valid live
+events now yield a next-cursor ACK, that unsupported events remain
+visible as counters, and that malformed/undefined cursor payloads
+cannot be acknowledged. Windows CI verifies the executable build and
+offline CTest; real simulator behavior still requires a separate test.
