@@ -52,24 +52,6 @@ bool sane_child(const Transform& p) noexcept {
 // Omega, ParentID, Tree/Scratch, HUD text, MediaURL and particle fields.
 // This conservative reader declines unknown variable-sized particle fields
 // rather than scanning for a UUID pattern (which could invent a mesh).
-PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
-    if(s.size()!=23U)return PrimitiveKind::Unknown;
-    const bool clean=s[2]==0U&&s[3]==0U&&s[4]==0U&&s[5]==0U&&
-        (s[6]==0U||s[6]==100U)&&
-        (s[7]==0U||s[7]==100U)&&
-        s[8]==0U&&s[9]==0U&&s[10]==0U&&s[11]==0U&&
-        s[12]==0U&&s[13]==0U&&s[14]==0U&&
-        (s[15]==0U||s[15]==100U)&&s[16]==0U&&
-        s[17]==0U&&s[18]==0U&&s[19]==0U&&
-        s[20]==0U&&s[21]==0U&&s[22]==0U;
-    if(!clean)return PrimitiveKind::Unknown;
-    const auto profile=s[1]&0x0fU;
-    if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
-    if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
-    if(s[0]==0x10U&&profile==0x03U)return PrimitiveKind::Prism;
-    if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
-    return PrimitiveKind::Unknown;
-}
 struct CompressedVolume {
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
@@ -122,7 +104,7 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     }
     if((special&0x100U)&&!str())return out;
     if(!has(23U))return out;
-    out.primitive=simple_shape(data.subspan(at,23U));
+    out.primitive=classify_simple_shape(data.subspan(at,23U));
     out.shape=true;
     if(!out.mesh.empty())out.primitive=PrimitiveKind::Unknown;
     return out;
@@ -131,7 +113,8 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
 
 bool decode_compressed_transforms(const lludp::Packet& packet,
                                   std::vector<Transform>& out,
-                                  std::vector<Transform>* child_transforms) noexcept {
+                                  std::vector<Transform>* child_transforms,
+                                  CompressedDecodeAudit* audit) noexcept {
     // High 13: ObjectUpdateCompressed. All blocks must have bounded
     // framing before any untrusted fields are read.
     if(worldwire::inspect(packet).kind!=worldwire::Kind::ObjectCompressed ||
@@ -141,6 +124,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     std::size_t at=12;
     std::vector<Transform> decoded;
     std::vector<Transform> linked;
+    CompressedDecodeAudit frame{};
     decoded.reserve(count);
     linked.reserve(count);
     for(unsigned i=0;i<count;++i){
@@ -178,6 +162,12 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         const auto shape=decode_volume_tail(data,cursor,special);
         t.mesh_asset_id=shape.mesh;
         t.primitive=shape.primitive;
+        t.volume_params_seen=shape.shape;
+        if(shape.extras)++frame.extras_seen;
+        if(shape.shape)++frame.shape_fields;
+        if(shape.primitive!=PrimitiveKind::Unknown)++frame.supported_shapes;
+        if(!shape.mesh.empty())++frame.mesh_references;
+        if(shape.unsupported)++frame.unsupported_optional;
         // Compressed ObjectUpdate stores 3 floats for LLQuaternion.
         t.rx=f32(data,52U);
         t.ry=f32(data,56U);
@@ -194,6 +184,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     if(at!=b.size())return false;
     out=std::move(decoded);
     if(child_transforms)*child_transforms=std::move(linked);
+    if(audit)*audit=frame;
     return true;
 }
 bool decode_cached_ids(const lludp::Packet& packet,
