@@ -386,6 +386,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.light_records+=frame.light_records;
                     full_decode_audit_.projector_records+=frame.projector_records;
                     full_decode_audit_.other_extra_records+=frame.other_extra_records;
+                    full_decode_audit_.extended_mesh_records+=frame.extended_mesh_records;
+                    full_decode_audit_.render_material_records+=frame.render_material_records;
+                    full_decode_audit_.reflection_probe_records+=frame.reflection_probe_records;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
                             if(avatar_root_ids_.insert(id).second)
