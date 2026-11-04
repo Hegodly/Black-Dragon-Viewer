@@ -167,6 +167,28 @@ bool decode_region_metadata(const lludp::Packet& packet,
     out.verified=true;
     return true;
 }
+bool decode_agent_movement_position(const lludp::Packet& packet,
+                                    const LoginResult& login,
+                                    AgentPosition& out) noexcept {
+    out={};
+    if(!movement_complete_identifies(packet,login))return false;
+    // AgentMovementComplete Low 250: AgentID + SessionID, followed
+    // by the three little-endian F32 Position components (offset 36).
+    constexpr std::size_t at=4U+16U+16U;
+    if(packet.body.size()<at+3U*sizeof(float))return false;
+    AgentPosition position{};
+    static_assert(sizeof(float)==4);
+    std::memcpy(&position.x,packet.body.data()+at,sizeof(float));
+    std::memcpy(&position.y,packet.body.data()+at+4U,sizeof(float));
+    std::memcpy(&position.z,packet.body.data()+at+8U,sizeof(float));
+    if(!std::isfinite(position.x)||!std::isfinite(position.y)||
+       !std::isfinite(position.z)||position.x<0.f||position.y<0.f||
+       position.x>=4096.f||position.y>=4096.f||
+       position.z< -4096.f||position.z>8192.f)return false;
+    position.verified=true;
+    out=position;
+    return true;
+}
 bool movement_complete_identifies(const lludp::Packet& packet,
                                   const LoginResult& login) noexcept {
     if(classify(packet)!=Inbound::AgentMovementComplete||

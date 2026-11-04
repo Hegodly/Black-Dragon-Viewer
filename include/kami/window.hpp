@@ -107,6 +107,8 @@ private:
     bool sl_login_pending_=false;
     std::future<protocol::LoginResult> sl_login_future_;
     protocol::sim::Circuit sl_circuit_;
+    bool live_water_attempted_=false;
+    std::wstring live_water_status_;
     // Bearer CAPS URLs are retained only for the authenticated region
     // connection. Never display signed URLs or event payloads.
     std::wstring caps_seed_url_;

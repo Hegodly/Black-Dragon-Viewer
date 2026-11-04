@@ -62,6 +62,19 @@ int main(){
     movement.body[5]^=1;
     if(sim::movement_complete_identifies(movement,login))return 10;
     if(sim::classify(movement)!=sim::Inbound::AgentMovementComplete)return 11;
+    // Restore the synthetic agent ID before positive position decoding.
+    movement.body[5]^=1;
+    const std::array<float,3> position={128.f,96.f,22.5f};
+    std::memcpy(movement.body.data()+36,position.data(),
+                sizeof(float)*position.size());
+    sim::AgentPosition agent_position{};
+    if(!sim::decode_agent_movement_position(movement,login,agent_position)||
+       !agent_position.verified||agent_position.x!=128.f||
+       agent_position.y!=96.f||agent_position.z!=22.5f)return 16;
+    const float impossible=std::numeric_limits<float>::infinity();
+    std::memcpy(movement.body.data()+44,&impossible,sizeof(float));
+    if(sim::decode_agent_movement_position(movement,login,agent_position)||
+       agent_position.verified)return 17;
     lludp::Packet region{};
     region.flags=lludp::kReliable;
     region.body.assign(215U,0U);

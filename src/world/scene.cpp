@@ -152,4 +152,26 @@ SceneMesh build_test_scene(unsigned divisions) {
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
+SceneMesh build_live_water_preview(float relative_water_y) {
+    SceneMesh result{};
+    if(!std::isfinite(relative_water_y)||
+       relative_water_y < -8192.f||relative_water_y>8192.f)return result;
+    // A compact local patch is a visualization of the simulator-reported
+    // planar water level, NOT the actual water/terrain surface texture.
+    // SL Z is up; the KAMI DX12 scene maps this to Y up.
+    constexpr float half=32.f;
+    const float y=relative_water_y;
+    constexpr float r=.08f,g=.32f,b=.53f;
+    auto vertex=[&](float x,float z)->Vertex {
+        return {x,y,z, 0.f,1.f,0.f,
+                r,g,b, .03f,.18f, x*.015f,z*.015f};
+    };
+    result.vertices={
+        vertex(-half,-half),vertex(-half,half),vertex(half,half),
+        vertex(-half,-half),vertex(half,half),vertex(half,-half)
+    };
+    result.terrain_count=result.vertices.size();
+    result.avatar_count=0;
+    return result;
+}
 } // namespace kami::world

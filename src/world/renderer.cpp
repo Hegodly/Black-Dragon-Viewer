@@ -1,4 +1,5 @@
 #include "kami/world/renderer.hpp"
+#include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
 #include "kami/world/scene.hpp"
@@ -291,13 +292,14 @@ bool Renderer::make_pipeline() {
 
 bool Renderer::make_geometry() {
     SceneMesh generated;
-    if(!preview_mesh_&&!region_mesh_)
+    if(!preview_mesh_&&!region_mesh_&&!live_water_mesh_)
         generated=build_test_scene(graphics_.terrain_divisions());
     // Local creator preview temporarily overrides a decoded region scene.
     // Both static and animated scenes go through the SAME DX12 buffers,
     // shader stages, PBR and depth/shadow passes.
     const SceneMesh& scene=preview_mesh_?*preview_mesh_:
-        region_mesh_?*region_mesh_:generated;
+        region_mesh_?*region_mesh_:
+        live_water_mesh_?*live_water_mesh_:generated;
     if(scene.vertices.empty() ||
        scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
         return false;
@@ -541,6 +543,44 @@ bool Renderer::set_creator_preview(SceneMesh mesh) {
     camera_.reset();
     error_.clear();
     return true;
+}
+bool Renderer::set_verified_live_water(
+    const protocol::sim::Circuit& circuit) {
+    const auto& region=circuit.region_metadata();
+    const auto& agent=circuit.movement_position();
+    if(circuit.state()!=protocol::sim::CircuitState::MovementConfirmed||
+       !circuit.region_seen()||!circuit.movement_seen()||
+       !region.verified||!agent.verified) {
+        error_=L"R9 water preview requires authenticated simulator position";
+        return false;
+    }
+    // Real simulator-reported elevations: SL Z-up maps to KAMI Y-up,
+    // local origin anchored to the authenticated agent position.
+    const float water_relative=region.water_height-agent.z;
+    SceneMesh surface=build_live_water_preview(water_relative);
+    if(surface.vertices.size()!=6U){
+        error_=L"Invalid R9 simulator water surface elevation";
+        return false;
+    }
+    if(ready_)wait_for_gpu();
+    auto old=std::move(live_water_mesh_);
+    live_water_mesh_=std::move(surface);
+    if(ready_&&!make_geometry()){
+        live_water_mesh_=std::move(old);
+        error_=L"DX12 could not upload verified SL water-height preview";
+        return false;
+    }
+    error_.clear();
+    return true;
+}
+void Renderer::clear_live_water_preview() {
+    if(!live_water_mesh_)return;
+    if(ready_)wait_for_gpu();
+    live_water_mesh_.reset();
+    if(ready_&&!make_geometry()){
+        ready_=false;
+        error_=L"DX12 could not restore scene after live water disconnect";
+    }
 }
 bool Renderer::set_decoded_region_geometry(
     const protocol::Bootstrap& authenticated_region,

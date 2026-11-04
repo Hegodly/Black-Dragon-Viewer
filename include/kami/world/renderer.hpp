@@ -21,6 +21,7 @@
 #include <string>
 #include <windows.h>
 
+namespace kami::protocol::sim { class Circuit; }
 namespace kami::world {
 
 // Independent DX12 viewport renderer. It draws an original offline scene.
@@ -77,6 +78,15 @@ public:
         const protocol::Bootstrap& authenticated_region,
         SceneMesh decoded_static_geometry,bool verified_region_data);
     void clear_decoded_region_geometry();
+    // Only an authenticated simulator circuit with verified water AND
+    // avatar elevations can enable this partial server-height preview.
+    // Does not claim to decode terrain, water textures or region objects.
+    [[nodiscard]] bool set_verified_live_water(
+        const protocol::sim::Circuit& circuit);
+    void clear_live_water_preview();
+    [[nodiscard]] bool live_water_preview_active() const noexcept {
+        return live_water_mesh_.has_value();
+    }
     [[nodiscard]] bool region_geometry_active() const noexcept {
         return region_mesh_.has_value();
     }
@@ -142,6 +152,7 @@ private:
     rig::Audit skin_audit_{};
     std::optional<SceneMesh> preview_mesh_;
     std::optional<SceneMesh> region_mesh_;
+    std::optional<SceneMesh> live_water_mesh_;
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;
     std::wstring capture_path_;
