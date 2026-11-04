@@ -364,8 +364,15 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                movement_position_.verified){
                 std::vector<objectspatial::Transform> objects;
                 std::vector<objectspatial::Transform> linked;
+                objectspatial::CompressedDecodeAudit frame{};
                 if(objectspatial::decode_compressed_transforms(
-                       incoming,objects,&linked)){
+                       incoming,objects,&linked,&frame)){
+                    compressed_decode_audit_.extras_seen+=frame.extras_seen;
+                    compressed_decode_audit_.shape_fields+=frame.shape_fields;
+                    compressed_decode_audit_.supported_shapes+=frame.supported_shapes;
+                    compressed_decode_audit_.mesh_references+=frame.mesh_references;
+                    compressed_decode_audit_.unsupported_optional+=
+                        frame.unsupported_optional;
                     ++spatial_object_frames_;
                     for(const auto& child:linked){
                         remember_missing_object(child.parent_id);
@@ -376,10 +383,15 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         auto updated=child;
                         const auto previous=linked_objects_.find(child.local_id);
                         if(previous!=linked_objects_.end()){
-                            updated.primitive=previous->second.primitive;
+                            if(!updated.volume_params_seen){
+                                updated.primitive=previous->second.primitive;
+                                if(updated.mesh_asset_id.empty())
+                                    updated.mesh_asset_id=previous->second.mesh_asset_id;
+                            }
                             updated.default_texture_present=
                                 previous->second.default_texture_present;
-                            updated.mesh_asset_id=previous->second.mesh_asset_id;
+                            if(!updated.mesh_asset_id.empty())
+                                updated.primitive=objectspatial::PrimitiveKind::Unknown;
                         }
                         linked_objects_.insert_or_assign(child.local_id,updated);
                         if(!updated.mesh_asset_id.empty())
@@ -394,10 +406,15 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         auto updated=obj;
                         const auto previous=spatial_objects_.find(obj.local_id);
                         if(previous!=spatial_objects_.end()){
-                            updated.primitive=previous->second.primitive;
+                            if(!updated.volume_params_seen){
+                                updated.primitive=previous->second.primitive;
+                                if(updated.mesh_asset_id.empty())
+                                    updated.mesh_asset_id=previous->second.mesh_asset_id;
+                            }
                             updated.default_texture_present=
                                 previous->second.default_texture_present;
-                            updated.mesh_asset_id=previous->second.mesh_asset_id;
+                            if(!updated.mesh_asset_id.empty())
+                                updated.primitive=objectspatial::PrimitiveKind::Unknown;
                         }
                         spatial_objects_.insert_or_assign(obj.local_id,updated);
                         if(!updated.mesh_asset_id.empty()){
@@ -576,6 +593,7 @@ void Circuit::stop() noexcept {
     spatial_object_frames_=rejected_spatial_frames_=0;
     decoded_full_spatial_frames_=0;
     full_decode_audit_={};
+    compressed_decode_audit_={};
     spatial_objects_.clear();
     linked_objects_.clear();
     avatar_root_ids_.clear();
