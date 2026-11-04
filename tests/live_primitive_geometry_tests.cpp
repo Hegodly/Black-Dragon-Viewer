@@ -136,9 +136,9 @@ int main(){
         roots,children,{},assets,128.f,140.f,35.f,10U);
     if(mesh_child.root_meshes!=0U||mesh_child.linked_meshes!=1U||
        mesh_child.emitted_triangles!=1U)return 16;
-    std::set<std::uint32_t> avatars={77U};
+    std::set<std::uint32_t> mesh_avatar_parents={77U};
     const auto attachment=world::build_live_mesh_geometry(
-        {},children,avatars,assets,128.f,140.f,35.f,10U);
+        {},children,mesh_avatar_parents,assets,128.f,140.f,35.f,10U);
     if(attachment.root_meshes||attachment.linked_meshes||
        attachment.emitted_triangles||attachment.waiting_for_parent==0U)
        return 17;

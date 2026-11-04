@@ -105,6 +105,16 @@ public:
     [[nodiscard]] bool set_mesh_capability(std::wstring capability) noexcept;
     [[nodiscard]] const std::map<std::string,mesh::LOD>&
     decoded_mesh_assets() const noexcept {return loaded_meshes_;}
+    [[nodiscard]] std::size_t mesh_object_count() const noexcept {
+        std::size_t count=0U;
+        for(const auto& [id,obj]:spatial_objects_){
+            (void)id;if(!obj.mesh_asset_id.empty())++count;
+        }
+        for(const auto& [id,obj]:linked_objects_){
+            (void)id;if(!obj.mesh_asset_id.empty())++count;
+        }
+        return count;
+    }
     [[nodiscard]] std::size_t mesh_download_count() const noexcept {
         return mesh_download_count_;
     }
