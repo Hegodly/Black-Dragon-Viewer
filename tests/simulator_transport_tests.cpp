@@ -112,6 +112,8 @@ int main() {
     }
     mock.join();
     const bool ok=started&&server_result==0&&circuit.region_seen()&&
+                  circuit.layer_packets()==0&&
+                  circuit.object_update_packets()==0&&
                   circuit.region_metadata().verified&&
                   circuit.region_metadata().name=="Test"&&
                   circuit.movement_seen()&&
