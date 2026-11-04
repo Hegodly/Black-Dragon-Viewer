@@ -81,11 +81,22 @@ int main(){
     children[88U].parent_id=999U;
     auto missing=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f);
-    if(!valid(missing)||missing.linked_shapes!=0U)return 8;
+    if(!valid(missing)||missing.linked_shapes!=0U||
+       missing.unresolved_parent_shapes!=2U)return 8;
     children[88U].parent_id=77U;
     auto limited=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f,1U);
-    if(!valid(limited)||limited.linked_shapes!=1U)return 9;
+    if(!valid(limited)||limited.linked_shapes!=1U||
+       limited.eligible_shapes!=2U||
+       limited.budget_deferred_shapes!=1U)return 9;
+    // A supported root outside the view gate is classified, not drawn.
+    children.clear();
+    roots[77U].primitive=Kind::Box;
+    roots[77U].x=240.f;
+    const auto far=world::build_live_primitive_geometry(
+        roots,children,0.f,140.f,35.f);
+    if(far.root_shapes!=0U||far.out_of_range_shapes!=1U||
+       far.eligible_shapes!=0U)return 11;
     if(world::build_live_primitive_geometry(roots,children,
            std::numeric_limits<float>::infinity(),0.f,0.f)
            .scene.terrain_count!=0U)return 10;
