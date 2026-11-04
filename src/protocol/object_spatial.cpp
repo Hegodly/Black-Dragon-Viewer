@@ -187,6 +187,25 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     if(audit)*audit=frame;
     return true;
 }
+Transform merge_compressed_transform(
+    const Transform& incoming,const Transform& previous){
+    Transform merged=incoming;
+    if(incoming.local_id==0U||incoming.local_id!=previous.local_id)
+        return merged;
+    if(!incoming.volume_params_seen){
+        merged.primitive=previous.primitive;
+        if(merged.mesh_asset_id.empty())
+            merged.mesh_asset_id=previous.mesh_asset_id;
+        merged.volume_params_seen=previous.volume_params_seen;
+    }
+    merged.default_texture_present=
+        merged.default_texture_present||previous.default_texture_present;
+    // A validated sculpt/mesh marker always takes priority over a
+    // previous simple-prim classification.
+    if(!merged.mesh_asset_id.empty())
+        merged.primitive=PrimitiveKind::Unknown;
+    return merged;
+}
 bool decode_cached_ids(const lludp::Packet& packet,
                        std::vector<std::uint32_t>& out) noexcept {
     const auto info=worldwire::inspect(packet);
