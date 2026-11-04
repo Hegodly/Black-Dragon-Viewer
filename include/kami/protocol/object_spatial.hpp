@@ -24,6 +24,7 @@ struct Transform {
 };
 // Apply a compressed update without incorrectly restoring stale mesh and
 // primitive metadata from an earlier full update. Offline unit-testable.
+[[nodiscard]] bool same_spatial_transform(const Transform&,const Transform&) noexcept;
 [[nodiscard]] Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous);
 // Aggregate only counts, never simulator IDs or user payloads.
