@@ -50,6 +50,9 @@ struct PollResponse {
 [[nodiscard]] bool parse_event_queue_frame(
     std::string_view xml,EventQueueFrame& out);
 [[nodiscard]] std::string build_event_queue_post(const QueueCursor& previous);
+// Deterministic, offline-testable version of the live HTTP envelope observer.
+// Observation can advance a typed cursor but never implies event actions ran.
+[[nodiscard]] PollResponse observe_event_queue_response(std::string_view xml);
 [[nodiscard]] SeedResponse request_seed(std::wstring seed_url);
 [[nodiscard]] PollResponse probe_event_queue_once(
     std::wstring queue_url,const QueueCursor& previous={});
