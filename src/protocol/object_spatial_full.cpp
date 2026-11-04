@@ -168,6 +168,33 @@ bool decode_full_transforms(const lludp::Packet& packet,
             continue;
         }
         ++frame.volume;
+        // Count full-update ExtraParams independently of compressed
+        // ExtraParams. Otherwise F9 wrongly suggests there are only
+        // two extra records among hundreds of fully updated objects.
+        if(!extras.empty()){
+            std::size_t at=1U;
+            const auto count=extras[0];
+            if(count<=32U){
+                for(unsigned i=0;i<count;++i){
+                    if(at>extras.size()||extras.size()-at<6U)break;
+                    const auto type=std::uint16_t(extras[at])|
+                        (std::uint16_t(extras[at+1U])<<8U);
+                    const auto length=std::uint32_t(extras[at+2U])|
+                        (std::uint32_t(extras[at+3U])<<8U)|
+                        (std::uint32_t(extras[at+4U])<<16U)|
+                        (std::uint32_t(extras[at+5U])<<24U);
+                    at+=6U;
+                    if(length>4096U||length>extras.size()-at)break;
+                    ++frame.extra_records;
+                    if(type==0x30U&&length==17U){
+                        ++frame.sculpt_records;
+                        if((extras[at+16U]&0x3fU)==5U)
+                            ++frame.mesh_sculpt_records;
+                    }
+                    at+=length;
+                }
+            }
+        }
         t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
         if(!t.mesh_asset_id.empty()){
             t.primitive=PrimitiveKind::Unknown;

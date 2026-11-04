@@ -377,6 +377,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.unsupported_shapes+=frame.unsupported_shapes;
                     full_decode_audit_.texture_references+=frame.texture_references;
                     full_decode_audit_.mesh_references+=frame.mesh_references;
+                    full_decode_audit_.extra_records+=frame.extra_records;
+                    full_decode_audit_.sculpt_records+=frame.sculpt_records;
+                    full_decode_audit_.mesh_sculpt_records+=frame.mesh_sculpt_records;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
                             if(avatar_root_ids_.insert(id).second)
@@ -428,6 +431,8 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     compressed_decode_audit_.mesh_references+=frame.mesh_references;
                     compressed_decode_audit_.unsupported_optional+=
                         frame.unsupported_optional;
+                    compressed_decode_audit_.legacy_particle_blocks+=
+                        frame.legacy_particle_blocks;
                     ++spatial_object_frames_;
                     for(const auto& child:linked){
                         remember_missing_object(child.parent_id);

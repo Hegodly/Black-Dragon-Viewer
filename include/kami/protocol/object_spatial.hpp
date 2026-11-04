@@ -34,11 +34,13 @@ struct FullDecodeAudit {
     std::uint32_t accepted_roots=0;
     std::uint32_t accepted_children=0, unsupported_shapes=0;
     std::uint32_t texture_references=0,mesh_references=0;
+    std::uint32_t extra_records=0,sculpt_records=0,mesh_sculpt_records=0;
 };
 struct CompressedDecodeAudit {
     std::uint32_t extras_seen=0,extra_records=0,sculpt_records=0;
     std::uint32_t shape_fields=0,supported_shapes=0;
     std::uint32_t mesh_references=0,unsupported_optional=0;
+    std::uint32_t legacy_particle_blocks=0;
 };
 [[nodiscard]] PrimitiveKind classify_simple_shape(
     std::span<const std::uint8_t> shape) noexcept;

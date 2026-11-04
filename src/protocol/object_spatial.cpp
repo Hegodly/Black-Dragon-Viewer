@@ -57,6 +57,7 @@ struct CompressedVolume {
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
     std::uint32_t extra_records=0,sculpt_records=0;
+    bool legacy_particles=false;
 };
 CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
                                     std::size_t at,std::uint32_t special){
@@ -90,7 +91,17 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
         at+=4U;
     }
     if((special&0x200U)&&!str())return out;
-    if(special&0x08U){out.unsupported=true;return out;}
+    if(special&0x08U){
+        // Official LLPartSysData::unpackLegacy consumes exactly
+        // PS_SYS_DATA_BLOCK_SIZE (68) + PS_LEGACY_PART_DATA_BLOCK_SIZE
+        // (18) bytes, then LLViewerObject reads the ExtraParams count.
+        // Skip only this known fixed-length legacy format. Particles
+        // themselves are NOT rendered by this path.
+        constexpr std::size_t legacy_particles=68U+18U;
+        if(!has(legacy_particles)){out.unsupported=true;return out;}
+        at+=legacy_particles;
+        out.legacy_particles=true;
+    }
     if(!has(1U))return out;
     const auto first=at;
     const auto count=data[at++];
@@ -181,6 +192,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         if(shape.primitive!=PrimitiveKind::Unknown)++frame.supported_shapes;
         if(!shape.mesh.empty())++frame.mesh_references;
         if(shape.unsupported)++frame.unsupported_optional;
+        if(shape.legacy_particles)++frame.legacy_particle_blocks;
         // Compressed ObjectUpdate stores 3 floats for LLQuaternion.
         t.rx=f32(data,52U);
         t.ry=f32(data,56U);

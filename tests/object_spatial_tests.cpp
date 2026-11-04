@@ -223,5 +223,24 @@ int main(){
          compressed(scratch),out,&children,&scratch_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
        scratch_audit.extra_records!=0U)return 28;
+    // Legacy particle payload is precisely 86 bytes and precedes
+    // ExtraParams in genuine compressed SL object updates.
+    auto legacy=packed(901U);
+    legacy[64U]=0x08U;
+    legacy.insert(legacy.end(),86U,0U);
+    legacy.insert(legacy.end(),meshblock.begin()+84U,meshblock.end());
+    objectspatial::CompressedDecodeAudit legacy_audit{};
+    if(!objectspatial::decode_compressed_transforms(
+           compressed(legacy),out,&children,&legacy_audit)||
+       out.size()!=1U||out[0].mesh_asset_id!=
+           "01020304-0506-0708-090a-0b0c0d0e0f10"||
+       legacy_audit.legacy_particle_blocks!=1U||
+       legacy_audit.mesh_references!=1U)return 29;
+    // Truncated particle stream must never yield a fabricated UUID.
+    legacy.resize(84U+60U);
+    if(!objectspatial::decode_compressed_transforms(
+           compressed(legacy),out,&children,&legacy_audit)||
+       out.size()!=1U||!out[0].mesh_asset_id.empty()||
+       legacy_audit.mesh_references!=0U)return 30;
     return 0;
 }
