@@ -52,46 +52,80 @@ bool sane_child(const Transform& p) noexcept {
 // Omega, ParentID, Tree/Scratch, HUD text, MediaURL and particle fields.
 // This conservative reader declines unknown variable-sized particle fields
 // rather than scanning for a UUID pattern (which could invent a mesh).
-std::string compressed_mesh_id(std::span<const std::uint8_t> data,
-                               std::size_t at,std::uint32_t special) noexcept {
-    const auto available=[&](std::size_t n){
-        return at<=data.size()&&n<=data.size()-at;
+PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
+    if(s.size()!=23U)return PrimitiveKind::Unknown;
+    const bool clean=s[2]==0U&&s[3]==0U&&s[4]==0U&&s[5]==0U&&
+        (s[6]==0U||s[6]==100U)&&
+        (s[7]==0U||s[7]==100U)&&
+        s[8]==0U&&s[9]==0U&&s[10]==0U&&s[11]==0U&&
+        s[12]==0U&&s[13]==0U&&s[14]==0U&&
+        (s[15]==0U||s[15]==100U)&&s[16]==0U&&
+        s[17]==0U&&s[18]==0U&&s[19]==0U&&
+        s[20]==0U&&s[21]==0U&&s[22]==0U;
+    if(!clean)return PrimitiveKind::Unknown;
+    const auto profile=s[1]&0x0fU;
+    if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
+    if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
+    if(s[0]==0x10U&&profile==0x03U)return PrimitiveKind::Prism;
+    if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
+    return PrimitiveKind::Unknown;
+}
+struct CompressedVolume {
+    std::string mesh;
+    PrimitiveKind primitive=PrimitiveKind::Unknown;
+    bool extras=false,shape=false,unsupported=false;
+};
+CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
+                                    std::size_t at,std::uint32_t special){
+    CompressedVolume out{};
+    const auto has=[&](std::size_t count){
+        return at<=data.size()&&count<=data.size()-at;
     };
     if(special&0x02U){
-        if(!available(1U))return {};
-        ++at; // TreeData U8
+        if(!has(1U))return out;
+        ++at;
     }else if(special&0x01U){
-        if(!available(4U))return {};
-        const std::size_t length=u32(data,at);
-        at+=4U;
-        if(length>4096U||!available(length))return {};
-        at+=length;
+        // Scratch pad includes a second length-prefixed binary payload.
+        // Keep it unsupported rather than guess the mesh offset.
+        out.unsupported=true;return out;
     }
-    const auto cstring=[&]() -> bool {
-        std::size_t n=0;
-        while(available(1U)&&n++<2048U){
+    const auto str=[&]() -> bool {
+        for(std::size_t i=0;i<2048U&&has(1U);++i){
             if(data[at++]==0U)return true;
         }
         return false;
     };
     if(special&0x04U){
-        if(!cstring()||!available(4U))return {};
-        at+=4U; // text color
+        if(!str()||!has(4U))return out;
+        at+=4U;
     }
-    if((special&0x200U)&&!cstring())return {};
-    if(special&0x08U)return {}; // particle payload not decoded yet
-    if(!available(1U))return {};
-    const std::size_t first=at;
-    const unsigned count=data[at++];
-    if(count>32U)return {};
-    for(unsigned n=0;n<count;++n){
-        if(!available(6U))return {};
+    if((special&0x200U)&&!str())return out;
+    if(special&0x08U){out.unsupported=true;return out;}
+    if(!has(1U))return out;
+    const auto first=at;
+    const auto count=data[at++];
+    if(count>32U)return out;
+    for(unsigned i=0;i<count;++i){
+        if(!has(6U))return out;
         const std::size_t length=u32(data,at+2U);
         at+=6U;
-        if(length>4096U||!available(length))return {};
+        if(length>4096U||!has(length))return out;
         at+=length;
     }
-    return mesh::mesh_asset_from_extras(data.subspan(first,at-first));
+    out.extras=true;
+    out.mesh=mesh::mesh_asset_from_extras(data.subspan(first,at-first));
+    // LLViewerObject processes sound and NV fields BEFORE
+    // LLVOVolume::unpackVolumeParams() consumes 23 shape bytes.
+    if(special&0x10U){
+        if(!has(25U))return out;
+        at+=25U;
+    }
+    if((special&0x100U)&&!str())return out;
+    if(!has(23U))return out;
+    out.primitive=simple_shape(data.subspan(at,23U));
+    out.shape=true;
+    if(!out.mesh.empty())out.primitive=PrimitiveKind::Unknown;
+    return out;
 }
 } // namespace
 
@@ -141,9 +175,9 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
             f32(data,48U),f32(data,28U),f32(data,32U),f32(data,36U)
         };
         t.parent_id=parent;
-        t.mesh_asset_id=compressed_mesh_id(data,cursor,special);
-        // The compressed path does not classify unknown path/profile
-        // topology; a mesh ID alone is not a renderable triangle list.
+        const auto shape=decode_volume_tail(data,cursor,special);
+        t.mesh_asset_id=shape.mesh;
+        t.primitive=shape.primitive;
         // Compressed ObjectUpdate stores 3 floats for LLQuaternion.
         t.rx=f32(data,52U);
         t.ry=f32(data,56U);

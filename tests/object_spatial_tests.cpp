@@ -139,5 +139,28 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(
          compressed(withmesh),out,&children)||children.size()!=1U||
        !children[0].mesh_asset_id.empty())return 15;
+
+    // A genuine High 13 volume carries ExtraParams followed by the
+    // 23-byte profile/path block. R34 discarded all of these shapes.
+    auto cbox=packed(110U);
+    cbox.push_back(0U); // ExtraParam count = 0
+    std::vector<std::uint8_t> shape(23U,0U);
+    shape[0]=0x10U;shape[1]=0x01U;
+    shape[6]=100U;shape[7]=100U;
+    cbox.insert(cbox.end(),shape.begin(),shape.end());
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(cbox),out)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Box)return 16;
+    auto cut=cbox;
+    cut[cut.size()-23U+12U]=50U; // nonzero taper/radius: not simple
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(cut),out)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown)return 17;
+    auto linkedbox=packed(111U,9U,110U);
+    linkedbox.push_back(0U);
+    linkedbox.insert(linkedbox.end(),shape.begin(),shape.end());
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(linkedbox),out,&children)||children.size()!=1U||
+       children[0].primitive!=objectspatial::PrimitiveKind::Box)return 18;
     return 0;
 }
