@@ -604,7 +604,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R43: corrected full object shape fields + ExtraParams audit | mesh, textures, avatar pending",
+        label(L"R43.1: full shape fix + missing medium-LOD fallback | textures, avatar pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
