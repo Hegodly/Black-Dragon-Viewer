@@ -250,4 +250,4 @@ int main(){
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
        legacy_audit.unsupported_optional!=1U)return 30;
     return 0;
-
+}
