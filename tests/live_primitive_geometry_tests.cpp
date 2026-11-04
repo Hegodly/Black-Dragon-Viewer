@@ -130,8 +130,11 @@ int main(){
        mesh_root.emitted_triangles!=1U||
        mesh_root.scene.vertices.size()!=3U)return 15;
     roots[77U].mesh_asset_id.clear();
-    children[88U].mesh_asset_id=asset_id;
-    children[88U].parent_id=77U;
+    Transform mesh_child_t{88U,1.f,0.f,0.f,1.f,1.f,1.f};
+    mesh_child_t.parent_id=77U;
+    mesh_child_t.mesh_asset_id=asset_id;
+    children.clear();
+    children.emplace(mesh_child_t.local_id,mesh_child_t);
     const auto mesh_child=world::build_live_mesh_geometry(
         roots,children,{},assets,128.f,140.f,35.f,10U);
     if(mesh_child.root_meshes!=0U||mesh_child.linked_meshes!=1U||
