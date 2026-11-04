@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/official_extra_params.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -187,51 +188,28 @@ bool decode_full_transforms(const lludp::Packet& packet,
             continue;
         }
         ++frame.volume;
-        // An observed ExtraParam does not prove it is sculpt/mesh.
-        // Count each wire type without exposing object IDs or asset UUIDs.
-        bool extras_valid=extras.empty();
-        if(!extras.empty()){
-            std::size_t at=1U;
-            const auto count=extras[0];
-            extras_valid=count<=32U;
-            FullDecodeAudit seen{};
-            for(unsigned i=0U;extras_valid&&i<count;++i){
-                if(at>extras.size()||extras.size()-at<6U){
-                    extras_valid=false;break;
-                }
-                const auto type=std::uint16_t(extras[at])|
-                    (std::uint16_t(extras[at+1U])<<8U);
-                const auto length=std::uint32_t(extras[at+2U])|
-                    (std::uint32_t(extras[at+3U])<<8U)|
-                    (std::uint32_t(extras[at+4U])<<16U)|
-                    (std::uint32_t(extras[at+5U])<<24U);
-                at+=6U;
-                if(length>4096U||length>extras.size()-at||
-                   (type==0x30U&&length!=17U)){
-                    extras_valid=false;break;
-                }
-                ++seen.extra_records;
-                if(type==0x10U)++seen.flexible_records;
-                else if(type==0x20U)++seen.light_records;
-                else if(type==0x40U)++seen.projector_records;
-                else if(type==0x30U){
-                    ++seen.sculpt_records;
-                    if((extras[at+16U]&0x3fU)==5U)
-                        ++seen.mesh_sculpt_records;
-                }else ++seen.other_extra_records;
-                at+=length;
-            }
-            if(at!=extras.size())extras_valid=false;
-            if(extras_valid){
-                ++frame.extra_envelopes;
-                frame.extra_records+=seen.extra_records;
-                frame.sculpt_records+=seen.sculpt_records;
-                frame.mesh_sculpt_records+=seen.mesh_sculpt_records;
-                frame.flexible_records+=seen.flexible_records;
-                frame.light_records+=seen.light_records;
-                frame.projector_records+=seen.projector_records;
-                frame.other_extra_records+=seen.other_extra_records;
-            }else ++frame.malformed_extra_envelopes;
+        // The separately replaceable LGPL parser uses the official
+        // Linden Lab LLNetworkData parameter type/length table.
+        // Modern 0x70, 0x80 and 0x90 types are NOT mesh asset UUIDs.
+        KamiSlExtraParamsV1 typed{};
+        typed.struct_size=sizeof(typed);
+        const bool extras_valid=kami_sl_decode_extra_params_v1(
+            extras.empty()?nullptr:extras.data(),
+            static_cast<std::uint32_t>(extras.size()),&typed)!=0;
+        if(extras_valid&&!extras.empty()){
+            ++frame.extra_envelopes;
+            frame.extra_records+=typed.records;
+            frame.sculpt_records+=typed.sculpt;
+            frame.mesh_sculpt_records+=typed.mesh_sculpt;
+            frame.flexible_records+=typed.flexible;
+            frame.light_records+=typed.light;
+            frame.projector_records+=typed.light_image;
+            frame.extended_mesh_records+=typed.extended_mesh;
+            frame.render_material_records+=typed.render_material;
+            frame.reflection_probe_records+=typed.reflection_probe;
+            frame.other_extra_records+=typed.unknown;
+        }else if(!extras_valid){
+            ++frame.malformed_extra_envelopes;
         }
         // A corrupt sculpt envelope may conceal mesh topology. Never
         // render a guessed primitive for such an object.
