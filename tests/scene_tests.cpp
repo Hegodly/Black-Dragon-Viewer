@@ -28,15 +28,15 @@ int main() {
         return 14;
     const auto first=mesh.vertices.front();
     if(first.px<-15.f||first.px>15.f||first.pz<-15.f||first.pz>15.f) return 9;
-    const auto live=build_live_water_preview(-3.5f);
+    const auto live=kami::world::build_live_water_preview(-3.5f);
     if(live.vertices.size()!=6||live.terrain_count!=6||
        live.avatar_count!=0)return 41;
     for(const auto& v:live.vertices){
         if(v.py!=-3.5f||v.ny!=1.f||v.bone_indices!=0||
            v.bone_weights!=0)return 42;
     }
-    if(!build_live_water_preview(std::numeric_limits<float>::infinity())
+    if(!kami::world::build_live_water_preview(std::numeric_limits<float>::infinity())
         .vertices.empty())return 43;
-    if(!build_live_water_preview(999999.f).vertices.empty())return 44;
+    if(!kami::world::build_live_water_preview(999999.f).vertices.empty())return 44;
     return 0;
 }
