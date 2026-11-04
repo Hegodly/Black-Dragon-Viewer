@@ -24,10 +24,19 @@ target_compile_definitions(kami_sl_lludp_codec PRIVATE
     KAMI_SL_LLUDP_CODEC_BUILD UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 set_target_properties(kami_sl_lludp_codec PROPERTIES
     OUTPUT_NAME "KAMI_SL_LLUdpCodec")
+
+# Official LGPL primitive metadata length/type contract, kept replaceable.
+add_library(kami_sl_extra_params SHARED
+    src/sl_reference/official_extra_params.cpp)
+target_include_directories(kami_sl_extra_params PUBLIC include)
+target_compile_definitions(kami_sl_extra_params PRIVATE
+    KAMI_SL_EXTRAPARAMS_BUILD UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+set_target_properties(kami_sl_extra_params PROPERTIES
+    OUTPUT_NAME "KAMI_SL_ExtraParams")
 add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/world_wire.cpp src/protocol/object_spatial.cpp src/protocol/object_spatial_full.cpp src/protocol/mesh_reference.cpp src/protocol/mesh_lod.cpp src/protocol/avatar_appearance.cpp src/protocol/live_chat.cpp src/protocol/terrain.cpp src/protocol/login.cpp src/protocol/caps.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/live_terrain.cpp src/world/live_water.cpp src/world/object_proxies.cpp src/world/live_primitive_geometry.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
 target_include_directories(kami_core PUBLIC include third_party/stb)
 target_compile_definitions(kami_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(kami_core PUBLIC kami_sl_login_identity kami_sl_lludp_codec d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
+target_link_libraries(kami_core PUBLIC kami_sl_login_identity kami_sl_lludp_codec kami_sl_extra_params d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
 add_executable(KAMIViewer WIN32 src/app/main.cpp src/app/window.cpp)
 target_include_directories(KAMIViewer PRIVATE include)
 target_link_libraries(KAMIViewer PRIVATE kami_core ole32)
@@ -50,6 +59,12 @@ add_executable(kami_sl_official_zerocode_tests
 target_link_libraries(kami_sl_official_zerocode_tests PRIVATE kami_sl_lludp_codec)
 add_test(NAME KamiActualLindenLLUDPZeroCodeCompatibility
     COMMAND kami_sl_official_zerocode_tests)
+
+add_executable(kami_sl_extra_params_tests
+    tests/official_extra_params_tests.cpp)
+target_link_libraries(kami_sl_extra_params_tests PRIVATE kami_sl_extra_params kami_core)
+add_test(NAME KamiOfficialExtraParamsMeshAndModernMaterialTypes
+    COMMAND kami_sl_extra_params_tests)
 add_executable(kami_official_login_identity_tests tests/official_login_identity_tests.cpp)
 target_link_libraries(kami_official_login_identity_tests PRIVATE kami_sl_login_identity)
 add_test(NAME KamiOfficialWindowsLoginIdentityCompatibility
