@@ -84,12 +84,17 @@ int main(){
     auto box=block(90U);
     box[109]=0x10U;box[110]=0x01U;
     box[115]=100U;box[116]=100U;
-    auto cyl=block(91U,90U);
+    auto cyl=block(91U,90U,9U,1.f);
     cyl[109]=0x10U;cyl[110]=0x00U;
     cyl[115]=100U;cyl[116]=100U;
-    auto round=block(92U,90U);
+    auto round=block(92U,90U,9U,2.f);
     round[109]=0x20U;round[110]=0x05U;
     round[115]=100U;round[116]=100U;
+    // Linked-child ObjectData positions are local to the parent,
+    // not region-scale. Use small finite relative XY coordinates.
+    const float local_y=3.f;
+    std::memcpy(cyl.data()+45U,&local_y,sizeof(local_y));
+    std::memcpy(round.data()+45U,&local_y,sizeof(local_y));
     std::vector<objectspatial::Transform> linked;
     if(!objectspatial::decode_full_transforms(
            packet({box,cyl,round}),out,&audit,&parents,&linked)||
