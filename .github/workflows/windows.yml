@@ -119,5 +119,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KAMI-R27-Root-Recovery
-          path: dist/KAMI-R26-Linked-Primitives.zip
+          path: dist/KAMI-R27-Root-Recovery.zip
           retention-days: 14
