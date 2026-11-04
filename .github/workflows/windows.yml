@@ -13,6 +13,7 @@ on:
       - feature/kami-r7-live-region-metadata-event-poll-20261103
       - feature/kami-r8-live-event-types-world-wire-20261103
       - feature/kami-r9-agent-update-verified-events-20261103
+      - fix/kami-r9-unique-executable-version-banner-20261103
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -87,7 +88,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
-          Copy-Item build/Release/KAMIViewer.exe dist/KAMI
+          Copy-Item build/Release/KAMI-R9-VERIFY.exe dist/KAMI
           Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
           Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
