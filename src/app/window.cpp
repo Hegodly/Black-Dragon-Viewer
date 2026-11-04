@@ -553,6 +553,14 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Requested "+std::to_wstring(
                     sl_circuit_.requested_object_ids());
             }
+            if(i==3U && sl_circuit_.state()==
+               protocol::sim::CircuitState::MovementConfirmed){
+                detail=L"AgentUpdate packets "+
+                    std::to_wstring(sl_circuit_.agent_updates_sent())+
+                    L" | control packets "+
+                    std::to_wstring(sl_circuit_.movement_control_packets_sent())+
+                    L" | full teleport/live pose sync pending";
+            }
             if(i==4U && sl_circuit_.state()==
                protocol::sim::CircuitState::MovementConfirmed){
                 detail=L"Nearby chat live UDP | TX packets "+
@@ -573,28 +581,26 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 const auto& audit=sl_circuit_.full_decode_audit();
                 // Surface why solid geometry is missing, not just totals.
                 const std::wstring reasons=
-                    L"Mesh refs "+std::to_wstring(sl_circuit_.mesh_object_count())+
-                    L" | Q "+std::to_wstring(
+                    L"MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
+                    L" | Queue "+std::to_wstring(
                         sl_circuit_.mesh_asset_stats().queued)+
-                    L" | Fetched "+std::to_wstring(
+                    L" | Fetch "+std::to_wstring(
                         sl_circuit_.mesh_download_count())+
-                    L" | Decoded "+std::to_wstring(
+                    L" | LOD "+std::to_wstring(
                         sl_circuit_.decoded_mesh_assets().size())+
+                    L" | Prim updates "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().supported_shapes)+
                     L" | Eligible "+std::to_wstring(
                         world_renderer_.live_primitive_eligible())+
-                    L" | Missing root "+std::to_wstring(
+                    L" | Orphan "+std::to_wstring(
                         world_renderer_.live_missing_anchor_shapes())+
-                    L"/IDs "+std::to_wstring(
-                        world_renderer_.live_unique_missing_parent_ids())+
-                    L" | Avatar parent "+std::to_wstring(
-                        world_renderer_.live_avatar_attachment_shapes())+
-                    L" | Cyclic "+std::to_wstring(
-                        world_renderer_.live_cycle_shapes());
+                    L" | Attached "+std::to_wstring(
+                        world_renderer_.live_avatar_attachment_shapes());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R34: untextured static meshes when decoded | avatar/IM/inventory pending",
+        label(L"R36: audited volume decoding | mesh textures, full avatar, IM/inventory pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
