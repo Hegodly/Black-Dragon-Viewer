@@ -38,6 +38,7 @@ on:
       - release/kami-r33-hierarchy-mesh-intake-20261104
       - release/kami-r34-mesh-download-foundation-20261104
       - release/kami-r36-consolidated-audit-20261104
+      - release/kami-r37-caps-seed-recovery-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -123,10 +124,11 @@ jobs:
           Copy-Item R33_STATUS.md dist/KAMI
           Copy-Item R34_STATUS.md dist/KAMI
           Copy-Item R36_STATUS.md dist/KAMI
+          Copy-Item R37_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R36-Consolidated-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R37-CAPS-Recovery-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R36-Consolidated-DX12
-          path: dist/KAMI-R36-Consolidated-DX12.zip
+          name: KAMI-R37-CAPS-Recovery-DX12
+          path: dist/KAMI-R37-CAPS-Recovery-DX12.zip
           retention-days: 14
