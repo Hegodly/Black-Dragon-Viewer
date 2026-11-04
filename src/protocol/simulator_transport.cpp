@@ -104,9 +104,65 @@ bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
     if(!caps::trusted_caps_url(capability)||!mesh_capability_url_.empty()||
        state_!=CircuitState::MovementConfirmed)return false;
     mesh_capability_url_=std::move(capability);
+    mesh_scan_revision_=~std::uint64_t{0};
     return true;
 }
+void Circuit::schedule_visible_meshes() noexcept {
+    if(mesh_capability_url_.empty()||
+       mesh_scan_revision_==spatial_object_revision_||
+       !movement_position_.verified)return;
+    mesh_scan_revision_=spatial_object_revision_;
+    const auto close_to_agent=[&](float x,float y,float z){
+        return std::isfinite(x)&&std::isfinite(y)&&std::isfinite(z)&&
+            std::abs(x-movement_position_.x)<=144.f&&
+            std::abs(y-movement_position_.y)<=144.f&&
+            std::abs(z-movement_position_.z)<=96.f;
+    };
+    for(const auto& [id,t]:spatial_objects_){
+        (void)id;
+        if(t.mesh_asset_id.empty()||!close_to_agent(t.x,t.y,t.z))
+            continue;
+        const float d=std::hypot(
+            std::hypot(t.x-movement_position_.x,
+                       t.y-movement_position_.y),
+            t.z-movement_position_.z);
+        (void)mesh_scheduler_.request(t.mesh_asset_id,
+                                     load::Kind::VisibleMesh,d,true,0U);
+    }
+    // Only download linked mesh shapes with a verified world root.
+    // Avatar attachments are intentionally deferred until the rig is ready.
+    for(const auto& [id,t]:linked_objects_){
+        (void)id;
+        if(t.mesh_asset_id.empty())continue;
+        auto parent=t.parent_id;
+        std::array<std::uint32_t,16> seen{};
+        std::size_t depth=0;
+        const objectspatial::Transform* root=nullptr;
+        while(parent!=0U&&depth<seen.size()){
+            if(avatar_root_ids_.contains(parent))break;
+            if(std::find(seen.begin(),seen.begin()+depth,parent)!=
+               seen.begin()+depth)break;
+            seen[depth++]=parent;
+            const auto r=spatial_objects_.find(parent);
+            if(r!=spatial_objects_.end()){
+                if(r->second.parent_id==0U)root=&r->second;
+                break;
+            }
+            const auto c=linked_objects_.find(parent);
+            if(c==linked_objects_.end())break;
+            parent=c->second.parent_id;
+        }
+        if(!root||!close_to_agent(root->x,root->y,root->z))continue;
+        const float d=std::hypot(
+            std::hypot(root->x-movement_position_.x,
+                       root->y-movement_position_.y),
+            root->z-movement_position_.z);
+        (void)mesh_scheduler_.request(t.mesh_asset_id,
+                                     load::Kind::VisibleMesh,d,true,0U);
+    }
+}
 void Circuit::maybe_fetch_mesh() noexcept {
+    schedule_visible_meshes();
     if(state_!=CircuitState::MovementConfirmed)return;
     if(mesh_worker_.valid()){
         if(mesh_worker_.wait_for(std::chrono::seconds(0))!=
@@ -549,6 +605,7 @@ void Circuit::stop() noexcept {
     loaded_meshes_.clear();
     mesh_download_count_=mesh_failure_count_=0U;
     mesh_last_start_={};
+    mesh_scan_revision_=~std::uint64_t{0};
     if(socket_!=INVALID_SOCKET){closesocket(socket_);socket_=INVALID_SOCKET;}
     if(winsock_ready_){WSACleanup();winsock_ready_=false;}
     clear_login(login_);
