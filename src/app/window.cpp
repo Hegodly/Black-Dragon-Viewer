@@ -590,14 +590,18 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         sl_circuit_.mesh_download_count())+
                     L" | LOD "+std::to_wstring(
                         sl_circuit_.decoded_mesh_assets().size())+
-                    L" | Shapes "+std::to_wstring(
-                        sl_circuit_.compressed_decode_audit().supported_shapes)+
-                    L" | Extra "+std::to_wstring(
+                    L" | FExtra "+std::to_wstring(audit.extra_records)+
+                    L" | FSculpt "+std::to_wstring(audit.sculpt_records)+
+                    L" | CExtra "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().extra_records)+
-                    L" | Sculpt "+std::to_wstring(
+                    L" | CSculpt "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().sculpt_records)+
+                    L" | Particle "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().legacy_particles_skipped)+
                     L" | Skip "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().unsupported_optional)+
+                    L" | Shapes "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().supported_shapes)+
                     L" | Eligible "+std::to_wstring(
                         world_renderer_.live_primitive_eligible())+
                     L" | Orphan "+std::to_wstring(
@@ -608,7 +612,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R40: mesh URL rejection classification | avatar, textures, IM pending",
+        label(L"R42: mesh extra-params / particle compatibility | avatar, textures, IM pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
