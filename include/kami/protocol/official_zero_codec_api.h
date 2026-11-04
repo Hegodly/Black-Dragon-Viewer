@@ -14,6 +14,10 @@ __declspec(dllimport) int __cdecl kami_sl_official_zero_encode_v1(
 __declspec(dllimport) int __cdecl kami_sl_official_zero_decode_v1(
     const uint8_t* source, uint32_t size, uint32_t header_size,
     uint8_t* destination, uint32_t capacity, uint32_t* written);
+// Official LLViewerObject::unpackParameterEntry treats PARAMS_MESH (0x60)
+// as PARAMS_SCULPT (0x30), using the same 17-byte sculpt payload.
+__declspec(dllimport) int __cdecl
+kami_sl_official_extra_sculpt_alias_v1(uint16_t type);
 #ifdef __cplusplus
 }
 #endif
