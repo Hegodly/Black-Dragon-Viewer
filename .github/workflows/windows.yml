@@ -46,6 +46,7 @@ on:
       - release/kami-r42-mesh-discovery-20261104
       - release/kami-r43-full-object-shape-audit-20261104
       - feature/kami-official-sl-bridge-20261104
+      - feature/kami-official-wire-integration-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -126,6 +127,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
           Copy-Item build/Release/KAMIViewer.exe dist/KAMI
           Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_Official_Wire.dll dist/KAMI
+          # Redistribute exact LGPL upstream transport source and adapter.
+          New-Item -ItemType Directory -Force -Path dist/KAMI/LGPL-source | Out-Null
+          Copy-Item third_party/secondlife-lgpl/upstream/llzerocode.h dist/KAMI/LGPL-source
+          Copy-Item third_party/secondlife-lgpl/compat/stdtypes.h dist/KAMI/LGPL-source
+          Copy-Item src/sl_reference/official_zero_codec.cpp dist/KAMI/LGPL-source
+          Copy-Item include/kami/protocol/official_zero_codec_api.h dist/KAMI/LGPL-source
           Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
@@ -143,10 +151,11 @@ jobs:
           Copy-Item R42_STATUS.md dist/KAMI
           Copy-Item R43_STATUS.md dist/KAMI
           Copy-Item R43_1_STATUS.md dist/KAMI
+          Copy-Item OFFICIAL_SL_WIRE_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Official-Wire-Stage1-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R43.1-Pretest-Mesh-Fallback-DX12
-          path: dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          name: KAMI-Official-Wire-Stage1-DX12
+          path: dist/KAMI-Official-Wire-Stage1-DX12.zip
           retention-days: 14
