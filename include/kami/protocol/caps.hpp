@@ -45,7 +45,9 @@ struct PollResponse {
 // Strict Linden-owned URL check for EventQueue and seed.
 [[nodiscard]] bool trusted_caps_url(std::wstring_view url) noexcept;
 // Mesh only: authenticated seed grants may use a public HTTPS CDN host.
-// Reject private/reserved/literal hosts, redirects and insecure URLs.
+// Legacy HTTP is accepted solely for the public root of Linden-owned
+// asset-cdn.*.lindenlab.com on port 80, with no credential query/path.
+// No redirects, IP literals, private/reserved hosts or arbitrary HTTP.
 [[nodiscard]] bool trusted_mesh_caps_url(std::wstring_view url) noexcept;
 // Do not expose bearer URLs in diagnostics. A server may grant one CAPS
 // service without the other. Reject malformed/unsafe URLs individually.

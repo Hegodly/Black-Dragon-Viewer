@@ -53,6 +53,44 @@ int exercise(){
        cdn_event!=L"https://simhost-123.agni.secondlife.io/cap/events"||
        cdn_asset!=L"https://d111111abcdef8.cloudfront.net")
         return 34;
+    // SL capability spec permits http: or https:. The historical
+    // GetMesh/ViewerAsset CDN was http://asset-cdn.aditi.lindenlab.com/.
+    // Allow only an authenticated Linden-owned public CDN root, never
+    // arbitrary HTTP hosts, port changes, paths, or query bearer tokens.
+    if(!trusted_mesh_caps_url(
+            L"http://asset-cdn.aditi.lindenlab.com/")||
+       !trusted_mesh_caps_url(
+            L"http://asset-cdn.glb.agni.lindenlab.com")||
+       !trusted_mesh_caps_url(
+            L"http://asset-cdn.aditi.lindenlab.com:80/")||
+       trusted_caps_url(L"http://asset-cdn.aditi.lindenlab.com/"))
+        return 38;
+    for(const auto* forbidden:{
+        L"http://cdn.public-assets.org/",
+        L"http://asset-cdn.aditi.lindenlab.com:8080/",
+        L"http://asset-cdn.aditi.lindenlab.com/secret",
+        L"http://asset-cdn.aditi.lindenlab.com/?token=topsecret",
+        L"http://asset-cdn.aditi.lindenlab.com/?mesh_id=123",
+        L"http://asset-cdn.evil-lindenlab.com/",
+        L"http://asset-cdn.agni.lindenlab.com.evil.org/",
+        L"http://localhost/",
+        L"http://127.0.0.1/",
+        L"http://asset-cdn.aditi.lindenlab.com/#fragment",
+        L"http://user@asset-cdn.aditi.lindenlab.com/",
+        L"http://asset-cdn.aditi.lindenlab.com\n"})
+        if(trusted_mesh_caps_url(forbidden))return 39;
+    const std::string legacy_seed=
+        "<llsd><map><key>EventQueueGet</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/events</string>"
+        "<key>ViewerAsset</key>"
+        "<uri>http://asset-cdn.aditi.lindenlab.com/</uri></map></llsd>";
+    std::wstring legacy_event,legacy_mesh;
+    SeedParseReport legacy_report{};
+    if(!parse_seed_llsd(legacy_seed,legacy_event,&legacy_mesh,
+                        &legacy_report)||
+       legacy_event!=L"https://simhost-123.agni.secondlife.io/cap/events"||
+       legacy_mesh!=L"http://asset-cdn.aditi.lindenlab.com/"||
+       legacy_report.mesh_rejected)return 41;
     const std::string seed=
         "<?xml version=\"1.0\"?><llsd><map>"
         "<key>EventQueueGet</key>"
