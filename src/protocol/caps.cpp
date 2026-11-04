@@ -385,7 +385,8 @@ SeedResponse request_seed(std::wstring seed_url) {
     return result;
 }
 PollResponse probe_event_queue_once(
-    std::wstring queue_url,const QueueCursor& previous) {
+    std::wstring queue_url,const QueueCursor& previous,
+    std::string_view authenticated_agent_id) {
     PollResponse result{};
     if(!trusted_caps_url(queue_url)){
         result.diagnostic=L"EventQueue URL rejected locally";return result;
@@ -428,12 +429,23 @@ PollResponse probe_event_queue_once(
     result.event_types=std::move(frame.event_types);
     result.structurally_valid=true;
     if(frame.event_count!=0){
-        // Never acknowledge or discard unhandled authoritative events.
-        // Keep the previous ack, freeze automatic polling and ask for
-        // proper handlers in a future build.
-        result.diagnostic=L"EventQueue: "+
-            std::to_wstring(frame.event_count)+L" event(s) pending; "+
-            L"not acknowledged";
+        // R9 only ACKs if ALL events are recognized, validated, and
+        // staged for local atomic commit. Unknown/malformed events
+        // preserve R8's no-ACK stop behavior.
+        EventCommit committed{};
+        if(!validate_session_events(reply.body,authenticated_agent_id,committed)||
+           !committed.accepted||
+           committed.recognized_events!=frame.event_count){
+            result.diagnostic=L"EventQueue: "+
+                std::to_wstring(frame.event_count)+
+                L" event(s) unhandled; not acknowledged";
+            return result;
+        }
+        result.committed=std::move(committed);
+        result.safe_to_ack=true;
+        result.next_ack=std::move(frame.id);
+        result.diagnostic=L"R9: validated "+std::to_wstring(frame.event_count)+
+            L" event(s); ready for local commit";
         return result;
     }
     result.safe_to_ack=true;
