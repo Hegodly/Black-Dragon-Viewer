@@ -27,7 +27,8 @@ int main(){
     if(!checked.valid||checked.records!=1U||
        checked.sculpt_records!=1U||checked.mesh_records!=1U||
        checked.mesh_id!=uuid)return 9;
-    auto empty=mesh::inspect_extra_params({0U});
+    const std::vector<std::uint8_t> empty_extras{0U};
+    auto empty=mesh::inspect_extra_params(empty_extras);
     if(!empty.valid||empty.records!=0U||!empty.mesh_id.empty())
         return 10;
     auto twice=input;
