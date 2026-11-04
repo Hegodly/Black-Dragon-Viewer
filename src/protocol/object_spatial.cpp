@@ -1,5 +1,6 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
+#include "kami/protocol/mesh_reference.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -44,6 +45,53 @@ bool sane_child(const Transform& p) noexcept {
         std::isfinite(p.sx)&&std::isfinite(p.sy)&&std::isfinite(p.sz)&&
         p.sx>=.01f&&p.sy>=.01f&&p.sz>=.01f&&
         p.sx<=64.f&&p.sy<=64.f&&p.sz<=64.f;
+}
+
+// All offset operations remain within the size-delimited compressed block.
+// The official compressed object template puts ExtraParams after optional
+// Omega, ParentID, Tree/Scratch, HUD text, MediaURL and particle fields.
+// This conservative reader declines unknown variable-sized particle fields
+// rather than scanning for a UUID pattern (which could invent a mesh).
+std::string compressed_mesh_id(std::span<const std::uint8_t> data,
+                               std::size_t at,std::uint32_t special) noexcept {
+    const auto available=[&](std::size_t n){
+        return at<=data.size()&&n<=data.size()-at;
+    };
+    if(special&0x02U){
+        if(!available(1U))return {};
+        ++at; // TreeData U8
+    }else if(special&0x01U){
+        if(!available(4U))return {};
+        const std::size_t length=u32(data,at);
+        at+=4U;
+        if(length>4096U||!available(length))return {};
+        at+=length;
+    }
+    const auto cstring=[&]() -> bool {
+        std::size_t n=0;
+        while(available(1U)&&n++<2048U){
+            if(data[at++]==0U)return true;
+        }
+        return false;
+    };
+    if(special&0x04U){
+        if(!cstring()||!available(4U))return {};
+        at+=4U; // text color
+    }
+    if((special&0x200U)&&!cstring())return {};
+    if(special&0x08U)return {}; // particle payload not decoded yet
+    if(!available(1U))return {};
+    const std::size_t first=at;
+    const unsigned count=data[at++];
+    if(count>32U)return {};
+    for(unsigned n=0;n<count;++n){
+        if(!available(6U))return {};
+        const std::size_t length=u32(data,at+2U);
+        at+=6U;
+        if(length>4096U||!available(length))return {};
+        at+=length;
+    }
+    return mesh::mesh_asset_from_extras(data.subspan(first,at-first));
 }
 } // namespace
 
@@ -93,6 +141,9 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
             f32(data,48U),f32(data,28U),f32(data,32U),f32(data,36U)
         };
         t.parent_id=parent;
+        t.mesh_asset_id=compressed_mesh_id(data,cursor,special);
+        // The compressed path does not classify unknown path/profile
+        // topology; a mesh ID alone is not a renderable triangle list.
         // Compressed ObjectUpdate stores 3 floats for LLQuaternion.
         t.rx=f32(data,52U);
         t.ry=f32(data,56U);

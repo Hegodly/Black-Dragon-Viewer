@@ -116,5 +116,28 @@ int main(){
        ids.size()!=2U||ids[0]!=77U||ids[1]!=78U)return 11;
     cached.body.pop_back();
     if(objectspatial::decode_cached_ids(cached,ids))return 12;
+
+    // Compressed mesh ExtraParams (0x30, SculptType=5) follow parent data.
+    // Never mistake a random UUID elsewhere in the compressed packet
+    // for a mesh asset reference.
+    auto withmesh=packed(93U,9U,77U);
+    withmesh.push_back(1U); // one ExtraParam
+    withmesh.insert(withmesh.end(),{0x30U,0U,17U,0U,0U,0U});
+    for(unsigned i=0;i<16U;++i)
+        withmesh.push_back(static_cast<std::uint8_t>(i+1U));
+    withmesh.push_back(5U);
+    if(!objectspatial::decode_compressed_transforms(
+         compressed(withmesh),out,&children)||children.size()!=1U||
+       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10")
+       return 13;
+    withmesh.back()=3U; // sculpt, not mesh
+    if(!objectspatial::decode_compressed_transforms(
+         compressed(withmesh),out,&children)||children.size()!=1U||
+       !children[0].mesh_asset_id.empty())return 14;
+    withmesh.back()=5U;
+    withmesh[withmesh.size()-18U]=255U; // size field malformed
+    if(!objectspatial::decode_compressed_transforms(
+         compressed(withmesh),out,&children)||children.size()!=1U||
+       !children[0].mesh_asset_id.empty())return 15;
     return 0;
 }
