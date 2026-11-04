@@ -224,6 +224,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.accepted_roots+=frame.accepted_roots;
                     full_decode_audit_.accepted_children+=frame.accepted_children;
                     full_decode_audit_.unsupported_shapes+=frame.unsupported_shapes;
+                    full_decode_audit_.texture_references+=frame.texture_references;
                     for(auto id:parent_ids)remember_missing_object(id);
                     for(const auto& child:linked){
                         if(linked_objects_.size()>=1024U&&
@@ -260,8 +261,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         // preserve an earlier verified full-update shape.
                         auto updated=child;
                         const auto previous=linked_objects_.find(child.local_id);
-                        if(previous!=linked_objects_.end())
+                        if(previous!=linked_objects_.end()){
                             updated.primitive=previous->second.primitive;
+                            updated.default_texture_present=
+                                previous->second.default_texture_present;
+                        }
                         linked_objects_.insert_or_assign(child.local_id,updated);
                         missing_objects_.erase(child.local_id);
                         ++spatial_object_revision_;
@@ -269,7 +273,14 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
-                        spatial_objects_.insert_or_assign(obj.local_id,obj);
+                        auto updated=obj;
+                        const auto previous=spatial_objects_.find(obj.local_id);
+                        if(previous!=spatial_objects_.end()){
+                            updated.primitive=previous->second.primitive;
+                            updated.default_texture_present=
+                                previous->second.default_texture_present;
+                        }
+                        spatial_objects_.insert_or_assign(obj.local_id,updated);
                         missing_objects_.erase(obj.local_id);
                         ++spatial_object_revision_;
                     }

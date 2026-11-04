@@ -90,6 +90,7 @@ PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
     const auto profile=s[1]&0x0fU;
     if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
     if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
+    if(s[0]==0x10U&&profile==0x03U)return PrimitiveKind::Prism;
     if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
     return PrimitiveKind::Unknown;
 }
@@ -135,7 +136,8 @@ bool decode_full_transforms(const lludp::Packet& packet,
         // TextureEntry Var2; TextureAnim Var1; NameValue Var2;
         // Data Var2; Text Var1; TextColor Fixed4;
         // MediaURL Var1; PSBlock Var1; ExtraParams Var1.
-        if(!cur.skip_variable(2U)||!cur.skip_variable(1U)||
+        std::span<const std::uint8_t> texture_entry{};
+        if(!cur.variable(2U,texture_entry)||!cur.skip_variable(1U)||
            !cur.skip_variable(2U)||!cur.skip_variable(2U)||
            !cur.skip_variable(1U)||!cur.skip(4U)||
            !cur.skip_variable(1U)||!cur.skip_variable(1U)||
@@ -147,6 +149,12 @@ bool decode_full_transforms(const lludp::Packet& packet,
             return false;
         if(pcode!=9U){++frame.non_volume;continue;}
         ++frame.volume;
+        if(texture_entry.size()>=16U &&
+           std::any_of(texture_entry.begin(),texture_entry.begin()+16U,
+                       [](std::uint8_t ch){return ch!=0U;})){
+            t.default_texture_present=true;
+            ++frame.texture_references;
+        }
         t.parent_id=parent;
         if(parent!=0U){
             ++frame.linked;

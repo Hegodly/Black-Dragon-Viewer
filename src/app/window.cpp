@@ -557,6 +557,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 const std::wstring reasons=
                     L"Volume "+std::to_wstring(audit.volume)+
                     L" | Unsupported "+std::to_wstring(audit.unsupported_shapes)+
+                    L" | Texture refs "+std::to_wstring(audit.texture_references)+
                     L" | Eligible "+std::to_wstring(
                         world_renderer_.live_primitive_eligible())+
                     L" | No parent "+std::to_wstring(

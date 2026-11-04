@@ -87,6 +87,12 @@ int main(){
     auto cyl=block(91U,90U,9U,1.f);
     cyl[109]=0x10U;cyl[110]=0x00U;
     cyl[115]=100U;cyl[116]=100U;
+    auto triangle=block(93U);
+    triangle[109]=0x10U;triangle[110]=0x03U;
+    triangle[115]=100U;triangle[116]=100U;
+    if(!objectspatial::decode_full_transforms(
+           packet({triangle}),out,&audit)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Prism)return 11;
     auto round=block(92U,90U,9U,2.f);
     round[109]=0x20U;round[110]=0x05U;
     round[115]=100U;round[116]=100U;

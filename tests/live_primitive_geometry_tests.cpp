@@ -41,6 +41,11 @@ int main(){
        sphere.scene.vertices.size()<1000U)return 3;
     // An unknown or mesh root has NO fabricated solid object geometry,
     // but its verified region-space pose can anchor linked children.
+    roots[77U].primitive=Kind::Prism;
+    auto prism=world::build_live_primitive_geometry(
+        roots,children,128.f,140.f,35.f);
+    if(!valid(prism)||prism.root_shapes!=1U||
+       prism.scene.vertices.size()!=24U)return 12;
     roots[77U].primitive=Kind::Unknown;
     Transform child{88U,1.f,0.f,0.f,1.f,1.f,1.f};
     child.parent_id=77U;child.primitive=Kind::Box;

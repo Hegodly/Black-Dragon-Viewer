@@ -140,6 +140,14 @@ void build_cylinder(Emitter& e){
         e.tri({0,0,-.5f},lon,lo);
     }
 }
+void build_prism(Emitter& e){
+    // Strictly classified straight, uncut, unhollowed triangular prism.
+    constexpr float y=-0.2886751346f;
+    const V a{-.5f,y,-.5f}, b{.5f,y,-.5f},c{0.f,-2.f*y,-.5f};
+    const V d{a.x,a.y,.5f},f{b.x,b.y,.5f},g{c.x,c.y,.5f};
+    e.tri(a,c,b);e.tri(d,f,g);
+    e.quad(a,b,f,d);e.quad(b,c,g,f);e.quad(c,a,d,g);
+}
 void build_sphere(Emitter& e){
     constexpr unsigned lat=10U,lon=20U;
     constexpr float pi=3.14159265358979323846f;
@@ -166,6 +174,7 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin){
         case Kind::Box:build_box(e);break;
         case Kind::Cylinder:build_cylinder(e);break;
         case Kind::Sphere:build_sphere(e);break;
+        case Kind::Prism:build_prism(e);break;
         default:break;
     }
     return out.size()>start;
