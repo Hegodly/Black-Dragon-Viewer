@@ -1104,9 +1104,22 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   small_font_.Get(),p.muted);
         }
     }
-    label(L"ALPHA 0.1 / Experimental SL login + UDP; region content not connected.",
-          box(contentX,height-35,contentWidth,23),
-          small_font_.Get(),p.muted);
+    if(sl_login_status_==protocol::LoginStatus::Accepted&&
+       sl_circuit_.movement_seen()){
+        // Live counts originate from validated LLUDP packets, NOT the
+        // DX12 offline renderer. Framing != decoded world geometry.
+        label(L"R8 UDP packets: LayerData "+
+              std::to_wstring(sl_circuit_.layer_packets())+
+              L" | ObjectUpdates "+std::to_wstring(
+                  sl_circuit_.object_update_packets())+
+              L" (not yet rendered)",
+              box(contentX,height-35,contentWidth,23),
+              small_font_.Get(),p.muted);
+    }else{
+        label(L"ALPHA 0.1 / Experimental SL login + UDP; region content not connected.",
+              box(contentX,height-35,contentWidth,23),
+              small_font_.Get(),p.muted);
+    }
 }
 
 void Window::paint() {
@@ -1704,10 +1717,20 @@ void Window::update_sl_connection() {
             if(result.structurally_valid){
                 ++caps_completed_polls_;
                 if(result.event_count>0){
-                    // No event-body handlers yet; NEVER send an ACK that
-                    // would lose live region/inventory/chat events.
+                    // R8 displays only sanitized event *types*. Message
+                    // payloads are not yet handled, so never ACK them.
                     caps_dispatch_blocked_=true;
-                    caps_status_=result.diagnostic;
+                    caps_status_=L"R8: "+std::to_wstring(result.event_count)+
+                        L" live events (no ACK): ";
+                    if(result.event_types.empty()){
+                        caps_status_+=L"UnknownEvent";
+                    }else{
+                        for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){
+                            if(i) caps_status_+=L", ";
+                            const auto& type=result.event_types[i];
+                            caps_status_+=std::wstring(type.begin(),type.end());
+                        }
+                    }
                 }else if(result.safe_to_ack){
                     if(!caps_ack_.token.empty())
                         SecureZeroMemory(caps_ack_.token.data(),
