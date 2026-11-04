@@ -187,6 +187,15 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     if(audit)*audit=frame;
     return true;
 }
+bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
+    return a.local_id==b.local_id&&a.parent_id==b.parent_id&&
+        a.x==b.x&&a.y==b.y&&a.z==b.z&&
+        a.sx==b.sx&&a.sy==b.sy&&a.sz==b.sz&&
+        a.rx==b.rx&&a.ry==b.ry&&a.rz==b.rz&&a.rw==b.rw&&
+        a.primitive==b.primitive&&a.mesh_asset_id==b.mesh_asset_id&&
+        a.volume_params_seen==b.volume_params_seen&&
+        a.default_texture_present==b.default_texture_present;
+}
 Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous){
     Transform merged=incoming;
