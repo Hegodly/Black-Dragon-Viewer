@@ -140,10 +140,11 @@ jobs:
           Copy-Item R41_STATUS.md dist/KAMI
           Copy-Item R42_STATUS.md dist/KAMI
           Copy-Item R43_STATUS.md dist/KAMI
+          Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43-Full-Object-Shape-Audit-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R43-Full-Object-Shape-Audit-DX12
-          path: dist/KAMI-R43-Full-Object-Shape-Audit-DX12.zip
+          name: KAMI-R43.1-Pretest-Mesh-Fallback-DX12
+          path: dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
           retention-days: 14
