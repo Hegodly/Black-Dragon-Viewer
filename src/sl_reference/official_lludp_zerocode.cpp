@@ -6,10 +6,11 @@
 #include "kami/protocol/official_lludp_zerocode.h"
 #include "llzerocode.h"
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <vector>
+
 
 namespace {
 constexpr U32 kWireHeaderSize=6U;
@@ -30,14 +31,14 @@ kami_sl_official_zerocode_encode(const uint8_t* message,
     try {
         // LLZeroCode takes a six-byte LLUDP header and compresses the
         // remainder. KAMI passes the post-extra-header message section.
-        std::vector<U8> packet(kWireHeaderSize+message_length,0U);
+        std::array<U8,kWireHeaderSize+kMaxMessage> packet{};
         std::copy_n(message,message_length,
                     packet.begin()+kWireHeaderSize);
         // The official writer needs up to 2x input capacity even when
         // compression is not worthwhile.
-        std::vector<U8> output(2U*packet.size(),0U);
+        std::array<U8,2U*(kWireHeaderSize+kMaxMessage)> output{};
         const S32 n=LLZeroCode::encode(
-            packet.data(),static_cast<U32>(packet.size()),
+            packet.data(),kWireHeaderSize+message_length,
             output.data(),static_cast<U32>(output.size()),
             kWireHeaderSize);
         if(n<0)return 0; // Keep original uncompressed datagram.
@@ -73,16 +74,15 @@ kami_sl_official_zerocode_decode(const uint8_t* compressed,
     }
     if(!expanded)return -1;
     try {
-        std::vector<U8> input(kWireHeaderSize+compressed_length,0U);
+        std::array<U8,kWireHeaderSize+kMaxCompressedMessage> input{};
         input[0]=LLZeroCode::FLAG;
         std::copy_n(compressed,compressed_length,
                     input.begin()+kWireHeaderSize);
         // Padding keeps legacy upstream LLZeroCode pointer checks defined.
-        std::vector<U8> output(kWireHeaderSize+
-                                std::max<U32>(expanded,512U)+256U,0U);
+        std::array<U8,kWireHeaderSize+kMaxMessage+256U> output{};
         bool overflow=false;
         const U32 actual=LLZeroCode::decode(
-            input.data(),static_cast<U32>(input.size()),
+            input.data(),kWireHeaderSize+compressed_length,
             output.data(),static_cast<U32>(output.size()),
             kWireHeaderSize,overflow);
         if(overflow||actual!=kWireHeaderSize+expanded)return -1;
