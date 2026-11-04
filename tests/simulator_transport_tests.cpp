@@ -157,7 +157,13 @@ int main() {
     const bool ok=started&&server_result==0&&circuit.region_seen()&&
                   circuit.agent_updates_sent()>=1U&&
                   circuit.layer_packets()==1U&&
+                  circuit.terrain_packets()==1U&&
+                  circuit.wind_packets()==0U&&
+                  circuit.cloud_packets()==0U&&
                   circuit.object_update_packets()==1U&&
+                  circuit.killed_object_packets()==1U&&
+                  circuit.full_object_packets()==0U&&
+                  circuit.cached_object_packets()==0U&&
                   circuit.region_metadata().verified&&
                   circuit.region_metadata().name=="Test"&&
                   circuit.movement_position().verified&&
