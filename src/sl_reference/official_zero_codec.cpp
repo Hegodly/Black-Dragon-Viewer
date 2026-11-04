@@ -109,3 +109,12 @@ kami_sl_official_zero_decode_v1(
     *written=n;
     return 1;
 }
+
+// Official LLViewerObject::unpackParameterEntry from
+// indra/newview/llviewerobject.cpp normalizes PARAMS_MESH to PARAMS_SCULPT.
+// The renderer must obtain the UUID from the 17-byte sculpt payload only;
+// the type alias alone does not prove an object has mesh geometry.
+extern "C" __declspec(dllexport) int __cdecl
+kami_sl_official_extra_sculpt_alias_v1(std::uint16_t type) noexcept {
+    return type==0x30U||type==0x60U;
+}
