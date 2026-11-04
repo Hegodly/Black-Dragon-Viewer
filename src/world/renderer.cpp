@@ -583,7 +583,7 @@ bool Renderer::set_verified_live_terrain(
     // Stitch patch edges to the NEXT patch's first height sample.
     // R12 drew only 15x15 quads from each 16x16 sample patch, leaving
     // one-meter seams that appeared as black grid lines in the live view.
-    const auto built=build_live_terrain_mesh(patches,nearest,
+    auto built=build_live_terrain_mesh(patches,nearest,
                                             agent.x,agent.y,agent.z);
     SceneMesh scene=std::move(built.scene);
     if(scene.vertices.empty()||scene.vertices.size()>750000U){
