@@ -40,6 +40,7 @@ on:
       - release/kami-r36-consolidated-audit-20261104
       - release/kami-r37-caps-seed-recovery-20261104
       - release/kami-r38-mesh-telemetry-20261104
+      - release/kami-r39-cdn-caps-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -127,10 +128,11 @@ jobs:
           Copy-Item R36_STATUS.md dist/KAMI
           Copy-Item R37_STATUS.md dist/KAMI
           Copy-Item R38_STATUS.md dist/KAMI
+          Copy-Item R39_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R38-Mesh-Diagnostics-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R39-Secure-Mesh-CDN-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R38-Mesh-Diagnostics-DX12
-          path: dist/KAMI-R38-Mesh-Diagnostics-DX12.zip
+          name: KAMI-R39-Secure-Mesh-CDN-DX12
+          path: dist/KAMI-R39-Secure-Mesh-CDN-DX12.zip
           retention-days: 14
