@@ -6,6 +6,7 @@
 #include "kami/protocol/avatar_appearance.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
+#include <cmath>
 #include <climits>
 #include <utility>
 #include <windows.h>
@@ -141,7 +142,8 @@ void Circuit::maybe_send_agent_update() noexcept {
     }
 }
 void Circuit::remember_missing_object(std::uint32_t id) noexcept {
-    if(id==0U||spatial_objects_.contains(id)||linked_objects_.contains(id)||
+    if(id==0U||avatar_root_ids_.contains(id)||
+       spatial_objects_.contains(id)||linked_objects_.contains(id)||
        missing_objects_.contains(id)||missing_objects_.size()>=256U)return;
     missing_objects_.try_emplace(id);
 }
@@ -248,9 +250,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 std::vector<objectspatial::Transform> objects;
                 std::vector<objectspatial::Transform> linked;
                 std::vector<std::uint32_t> parent_ids;
+                std::vector<std::uint32_t> avatar_ids;
                 objectspatial::FullDecodeAudit frame{};
                 if(objectspatial::decode_full_transforms(
-                       incoming,objects,&frame,&parent_ids,&linked)){
+                       incoming,objects,&frame,&parent_ids,&linked,
+                       &avatar_ids)){
                     ++spatial_object_frames_;
                     ++decoded_full_spatial_frames_;
                     full_decode_audit_.volume+=frame.volume;
@@ -262,11 +266,22 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.accepted_children+=frame.accepted_children;
                     full_decode_audit_.unsupported_shapes+=frame.unsupported_shapes;
                     full_decode_audit_.texture_references+=frame.texture_references;
+                    full_decode_audit_.mesh_references+=frame.mesh_references;
+                    for(const auto id:avatar_ids){
+                        if(avatar_root_ids_.size()<2048U){
+                            if(avatar_root_ids_.insert(id).second)
+                                ++spatial_object_revision_;
+                            missing_objects_.erase(id);
+                        }
+                    }
                     for(auto id:parent_ids)remember_missing_object(id);
                     for(const auto& child:linked){
                         if(linked_objects_.size()>=1024U&&
                            !linked_objects_.contains(child.local_id))continue;
                         linked_objects_.insert_or_assign(child.local_id,child);
+                        if(!child.mesh_asset_id.empty())
+                            (void)mesh_scheduler_.request(child.mesh_asset_id,
+                                load::Kind::NearbyMesh,1000.f,false,0U);
                         missing_objects_.erase(child.local_id);
                         ++spatial_object_revision_;
                     }
@@ -274,6 +289,14 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
                         spatial_objects_.insert_or_assign(obj.local_id,obj);
+                        if(!obj.mesh_asset_id.empty()){
+                            const float distance=std::hypot(
+                                std::hypot(obj.x-movement_position_.x,
+                                           obj.y-movement_position_.y),
+                                obj.z-movement_position_.z);
+                            (void)mesh_scheduler_.request(obj.mesh_asset_id,
+                                load::Kind::VisibleMesh,distance,true,0U);
+                        }
                         missing_objects_.erase(obj.local_id);
                         ++spatial_object_revision_;
                     }
@@ -302,6 +325,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                             updated.primitive=previous->second.primitive;
                             updated.default_texture_present=
                                 previous->second.default_texture_present;
+                            updated.mesh_asset_id=previous->second.mesh_asset_id;
                         }
                         linked_objects_.insert_or_assign(child.local_id,updated);
                         missing_objects_.erase(child.local_id);
@@ -345,6 +369,8 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 if(objectspatial::decode_killed_ids(incoming,ids))
                     for(const auto id:ids){
                         missing_objects_.erase(id);
+                        if(avatar_root_ids_.erase(id)>0U)
+                            ++spatial_object_revision_;
                         if(spatial_objects_.erase(id)>0U)
                             ++spatial_object_revision_;
                         if(linked_objects_.erase(id)>0U)
@@ -407,8 +433,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         if(decode_agent_movement_position(incoming,login_,parsed))
             movement_position_=parsed;
     }
-    if(region_seen_&&movement_seen_)
+    if(region_seen_&&movement_seen_){
         state_=CircuitState::MovementConfirmed;
+        mesh_scheduler_.set_online(true);
+    }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
 }
 void Circuit::maybe_retry() noexcept {
@@ -472,6 +500,8 @@ void Circuit::stop() noexcept {
     full_decode_audit_={};
     spatial_objects_.clear();
     linked_objects_.clear();
+    avatar_root_ids_.clear();
+    mesh_scheduler_.set_online(false);
     missing_objects_.clear();
     requested_object_ids_=cached_object_ids_=0U;
     last_object_request_={};

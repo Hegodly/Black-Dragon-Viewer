@@ -1,5 +1,6 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
+#include "kami/protocol/mesh_reference.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -103,7 +104,8 @@ bool decode_full_transforms(const lludp::Packet& packet,
                             std::vector<Transform>& out,
                             FullDecodeAudit* audit,
                             std::vector<std::uint32_t>* parent_references,
-                            std::vector<Transform>* child_transforms) noexcept {
+                            std::vector<Transform>* child_transforms,
+                            std::vector<std::uint32_t>* avatar_root_ids) noexcept {
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -116,6 +118,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     children.reserve(info.blocks);
     FullDecodeAudit frame{};
     std::vector<std::uint32_t> parents;
+    std::vector<std::uint32_t> avatars;
     for(unsigned n=0U;n<info.blocks;++n){
         Transform t{};
         std::uint8_t pcode=0U;
@@ -137,18 +140,30 @@ bool decode_full_transforms(const lludp::Packet& packet,
         // Data Var2; Text Var1; TextColor Fixed4;
         // MediaURL Var1; PSBlock Var1; ExtraParams Var1.
         std::span<const std::uint8_t> texture_entry{};
+        std::span<const std::uint8_t> extras{};
         if(!cur.variable(2U,texture_entry)||!cur.skip_variable(1U)||
            !cur.skip_variable(2U)||!cur.skip_variable(2U)||
            !cur.skip_variable(1U)||!cur.skip(4U)||
            !cur.skip_variable(1U)||!cur.skip_variable(1U)||
-           !cur.skip_variable(1U))return false;
+           !cur.variable(1U,extras))return false;
         // Sound UUID, OwnerID UUID, Gain F32, Flags U8,
         // Radius F32, JointType U8, JointPivot LLVector3,
         // JointAxisOrAnchor LLVector3.
         if(!cur.skip(16U+16U+4U+1U+4U+1U+12U+12U))
             return false;
-        if(pcode!=9U){++frame.non_volume;continue;}
+        if(pcode!=9U){
+            ++frame.non_volume;
+            // PCode 47 is an avatar root, NOT a volume to place in-world.
+            if(pcode==47U&&parent==0U&&t.local_id!=0U)
+                avatars.push_back(t.local_id);
+            continue;
+        }
         ++frame.volume;
+        t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+        if(!t.mesh_asset_id.empty()){
+            t.primitive=PrimitiveKind::Unknown;
+            ++frame.mesh_references;
+        }
         if(texture_entry.size()>=16U &&
            std::any_of(texture_entry.begin(),texture_entry.begin()+16U,
                        [](std::uint8_t ch){return ch!=0U;})){
@@ -211,6 +226,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     out=std::move(decoded);
     if(audit)*audit=frame; // publish only after full frame validation
     if(parent_references)*parent_references=std::move(parents);
+    if(avatar_root_ids)*avatar_root_ids=std::move(avatars);
     if(child_transforms)*child_transforms=std::move(children);
     return true;
 }

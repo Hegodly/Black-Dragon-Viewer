@@ -6,11 +6,13 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/live_chat.hpp"
 #include "kami/protocol/avatar_appearance.hpp"
+#include "kami/protocol/load_scheduler.hpp"
 #include <winsock2.h>
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
 #include <string_view>
 
@@ -94,6 +96,12 @@ public:
     decoded_spatial_objects() const noexcept {return spatial_objects_;}
     [[nodiscard]] const std::map<std::uint32_t,objectspatial::Transform>&
     decoded_linked_objects() const noexcept {return linked_objects_;}
+    [[nodiscard]] const std::set<std::uint32_t>& known_avatar_roots() const noexcept {
+        return avatar_root_ids_;
+    }
+    [[nodiscard]] load::Stats mesh_asset_stats() const noexcept {
+        return mesh_scheduler_.statistics();
+    }
     [[nodiscard]] std::size_t retained_linked_objects() const noexcept {
         return linked_objects_.size();
     }
@@ -182,6 +190,8 @@ private:
     // Safe local-space transforms kept until their parent region pose
     // is confirmed. Avatar attachments stay unresolved and invisible.
     std::map<std::uint32_t,objectspatial::Transform> linked_objects_;
+    std::set<std::uint32_t> avatar_root_ids_; // known, never rendered
+    load::Scheduler mesh_scheduler_{}; // queued assets, downloader pending
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};

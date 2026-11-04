@@ -1,6 +1,7 @@
 #pragma once
 #include "kami/protocol/lludp.hpp"
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace kami::protocol::objectspatial {
@@ -16,6 +17,7 @@ struct Transform {
     // LLQuaternion x,y,z + recovered positive w (unit length).
     float rx=0.f,ry=0.f,rz=0.f,rw=1.f;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
+    std::string mesh_asset_id; // authenticated ExtraParams id, NOT downloaded
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
 };
 // Aggregate only counts, never simulator IDs or user payloads.
@@ -24,7 +26,7 @@ struct FullDecodeAudit {
     std::uint32_t unsupported_motion=0,invalid_transform=0;
     std::uint32_t accepted_roots=0;
     std::uint32_t accepted_children=0, unsupported_shapes=0;
-    std::uint32_t texture_references=0;
+    std::uint32_t texture_references=0,mesh_references=0;
 };
 // The full (High 12) message uses individual message-template fields,
 // unlike the packed compressed (High 13) message.
@@ -32,7 +34,8 @@ struct FullDecodeAudit {
     const lludp::Packet& packet,std::vector<Transform>& out,
     FullDecodeAudit* audit=nullptr,
     std::vector<std::uint32_t>* parent_references=nullptr,
-    std::vector<Transform>* child_transforms=nullptr) noexcept;
+    std::vector<Transform>* child_transforms=nullptr,
+    std::vector<std::uint32_t>* avatar_root_ids=nullptr) noexcept;
 [[nodiscard]] bool decode_compressed_transforms(
     const lludp::Packet& packet,std::vector<Transform>& out,
     std::vector<Transform>* child_transforms=nullptr) noexcept;
