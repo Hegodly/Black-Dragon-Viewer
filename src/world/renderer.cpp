@@ -629,7 +629,7 @@ bool Renderer::set_verified_live_terrain(
     const auto primitives=build_live_primitive_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z);
+        agent.x,agent.y,agent.z,128U,circuit.known_avatar_roots());
     const auto new_primitive_vertices=primitives.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
                           primitives.scene.vertices.begin(),
@@ -661,6 +661,10 @@ bool Renderer::set_verified_live_terrain(
     uploaded_primitive_vertices_=new_primitive_vertices;
     primitive_eligible_=primitives.eligible_shapes;
     primitive_unresolved_=primitives.unresolved_parent_shapes;
+    primitive_missing_anchor_=primitives.missing_anchor_shapes;
+    primitive_avatar_parent_=primitives.avatar_attachment_shapes;
+    primitive_cycle_=primitives.cycle_shapes;
+    primitive_unique_missing_=primitives.unique_missing_ids;
     primitive_distant_=primitives.out_of_range_shapes;
     primitive_deferred_=primitives.budget_deferred_shapes;
     uploaded_water_vertices_=new_water_count;

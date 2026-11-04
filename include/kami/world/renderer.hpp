@@ -133,6 +133,18 @@ public:
     [[nodiscard]] std::size_t live_primitive_unresolved() const noexcept {
         return region_mesh_?primitive_unresolved_:0U;
     }
+    [[nodiscard]] std::size_t live_missing_anchor_shapes() const noexcept {
+        return region_mesh_?primitive_missing_anchor_:0U;
+    }
+    [[nodiscard]] std::size_t live_avatar_attachment_shapes() const noexcept {
+        return region_mesh_?primitive_avatar_parent_:0U;
+    }
+    [[nodiscard]] std::size_t live_cycle_shapes() const noexcept {
+        return region_mesh_?primitive_cycle_:0U;
+    }
+    [[nodiscard]] std::size_t live_unique_missing_parent_ids() const noexcept {
+        return region_mesh_?primitive_unique_missing_:0U;
+    }
     [[nodiscard]] std::size_t live_primitive_distant() const noexcept {
         return region_mesh_?primitive_distant_:0U;
     }
@@ -215,6 +227,8 @@ private:
     std::size_t uploaded_primitive_vertices_=0;
     std::size_t primitive_eligible_=0;
     std::size_t primitive_unresolved_=0;
+    std::size_t primitive_missing_anchor_=0,primitive_avatar_parent_=0;
+    std::size_t primitive_cycle_=0,primitive_unique_missing_=0;
     std::size_t primitive_distant_=0;
     std::size_t primitive_deferred_=0;
     std::size_t uploaded_water_vertices_=0;

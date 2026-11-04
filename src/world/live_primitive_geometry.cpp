@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <set>
 
 namespace kami::world {
 namespace {
@@ -38,21 +39,27 @@ bool valid_quat(Q q) noexcept {
     const float sq=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
     return std::isfinite(sq)&&sq>.99f&&sq<1.01f;
 }
-bool resolve(const Transform& t,
+enum class RootResult : std::uint8_t {
+    Found, Missing, Avatar, Cycle, Invalid, TooDeep
+};
+RootResult resolve(const Transform& t,
     const std::map<std::uint32_t,Transform>& roots,
     const std::map<std::uint32_t,Transform>& children,
-    Pose& out) noexcept {
+    const std::set<std::uint32_t>& avatar_roots,
+    Pose& out,std::uint32_t& missing_id) noexcept {
+    missing_id=0U;
     if(t.parent_id==0U||t.local_id==0U||!valid_quat(quat(t)))
-        return false;
+        return RootResult::Invalid;
     Pose next{pos(t),quat(t)};
-    std::array<std::uint32_t,8> seen{};
+    std::array<std::uint32_t,16> seen{};
     std::size_t count=0U;
     seen[count++]=t.local_id;
     std::uint32_t parent=t.parent_id;
     while(parent!=0U&&count<seen.size()){
         if(std::find(seen.begin(),seen.begin()+count,parent)!=
-           seen.begin()+count)return false; // cyclic linkset
+           seen.begin()+count)return RootResult::Cycle;
         seen[count++]=parent;
+        if(avatar_roots.contains(parent))return RootResult::Avatar;
         const Transform* candidate=nullptr;
         const auto r=roots.find(parent);
         if(r!=roots.end())candidate=&r->second;
@@ -60,18 +67,24 @@ bool resolve(const Transform& t,
             const auto c=children.find(parent);
             if(c!=children.end())candidate=&c->second;
         }
-        if(!candidate||!valid_quat(quat(*candidate)))return false;
+        if(!candidate){
+            missing_id=parent;
+            return RootResult::Missing;
+        }
+        if(!valid_quat(quat(*candidate)))return RootResult::Invalid;
         next.pos=add(pos(*candidate),rotate(quat(*candidate),next.pos));
         next.rot=multiply(quat(*candidate),next.rot);
+        if(!finite(next.pos)||!valid_quat(next.rot))
+            return RootResult::Invalid;
         if(candidate->parent_id==0U){
-            if(r==roots.end())return false; // never anchor to an orphan
-            if(!finite(next.pos)||!valid_quat(next.rot))return false;
+            // Only verified region-space volume roots may anchor solids.
+            if(r==roots.end())return RootResult::Invalid;
             out=next;
-            return true;
+            return RootResult::Found;
         }
         parent=candidate->parent_id;
     }
-    return false;
+    return RootResult::TooDeep;
 }
 struct Emitter {
     std::vector<Vertex>& out;
@@ -183,7 +196,8 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin){
 PrimitiveBatch build_live_primitive_geometry(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
-    float agent_x,float agent_y,float agent_z,std::size_t limit){
+    float agent_x,float agent_y,float agent_z,std::size_t limit,
+    const std::set<std::uint32_t>& avatar_roots){
     PrimitiveBatch result{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return result;
@@ -214,12 +228,33 @@ PrimitiveBatch build_live_primitive_geometry(
         (void)id;
         if(t.parent_id==0U)collect(t,{pos(t),quat(t)},false);
     }
+    std::set<std::uint32_t> missing_ids;
     for(const auto& [id,t]:children){
         (void)id;
         Pose p{};
-        if(resolve(t,roots,children,p))collect(t,p,true);
-        else if(t.primitive!=Kind::Unknown)++result.unresolved_parent_shapes;
+        if(t.primitive==Kind::Unknown)continue;
+        std::uint32_t missing_id=0U;
+        switch(resolve(t,roots,children,avatar_roots,p,missing_id)){
+        case RootResult::Found:collect(t,p,true);break;
+        case RootResult::Missing:
+            ++result.missing_anchor_shapes;
+            missing_ids.insert(missing_id);
+            ++result.unresolved_parent_shapes;break;
+        case RootResult::Avatar:
+            ++result.avatar_attachment_shapes;
+            ++result.unresolved_parent_shapes;break;
+        case RootResult::Cycle:
+            ++result.cycle_shapes;
+            ++result.unresolved_parent_shapes;break;
+        case RootResult::Invalid:
+            ++result.invalid_parent_shapes;
+            ++result.unresolved_parent_shapes;break;
+        case RootResult::TooDeep:
+            ++result.deep_parent_shapes;
+            ++result.unresolved_parent_shapes;break;
+        }
     }
+    result.unique_missing_ids=missing_ids.size();
     std::sort(chosen.begin(),chosen.end(),
         [](const Draw& a,const Draw& b){return a.distance<b.distance;});
     if(chosen.size()>limit){

@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <limits>
 using namespace kami;
 namespace {
@@ -88,6 +89,14 @@ int main(){
         roots,children,128.f,140.f,35.f);
     if(!valid(missing)||missing.linked_shapes!=0U||
        missing.unresolved_parent_shapes!=2U)return 8;
+    // A known avatar parent represents an attachment, not a missing root.
+    std::set<std::uint32_t> avatars={999U};
+    auto avatar_bound=world::build_live_primitive_geometry(
+        roots,children,128.f,140.f,35.f,128U,avatars);
+    if(avatar_bound.avatar_attachment_shapes!=2U||
+       avatar_bound.missing_anchor_shapes!=0U)return 13;
+    if(missing.unique_missing_ids!=1U||
+       missing.missing_anchor_shapes!=2U)return 14;
     children[88U].parent_id=77U;
     auto limited=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f,1U);
