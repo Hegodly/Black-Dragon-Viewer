@@ -133,6 +133,10 @@ public:
     [[nodiscard]] std::uint32_t rejected_spatial_frames() const noexcept {
         return rejected_spatial_frames_;
     }
+    [[nodiscard]] const objectspatial::CompressedDecodeAudit&
+    compressed_decode_audit() const noexcept {
+        return compressed_decode_audit_;
+    }
     [[nodiscard]] std::uint32_t decoded_full_spatial_frames() const noexcept {
         return decoded_full_spatial_frames_;
     }
@@ -237,6 +241,7 @@ private:
     std::uint32_t spatial_object_frames_=0,rejected_spatial_frames_=0;
     std::uint32_t decoded_full_spatial_frames_=0;
     objectspatial::FullDecodeAudit full_decode_audit_{};
+    objectspatial::CompressedDecodeAudit compressed_decode_audit_{};
     std::uint32_t cloud_packets_=0,unknown_layer_packets_=0;
     std::uint32_t object_update_packets_=0;
     std::uint32_t object_full_packets_=0,object_compressed_packets_=0;
