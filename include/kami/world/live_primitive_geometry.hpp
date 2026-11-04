@@ -9,6 +9,10 @@ namespace kami::world {
 struct PrimitiveBatch {
     SceneMesh scene{};
     std::size_t root_shapes=0,linked_shapes=0;
+    // Eligibility diagnostics for live data; no UUIDs or simulator IDs.
+    std::size_t eligible_shapes=0,unresolved_parent_shapes=0;
+    std::size_t out_of_range_shapes=0,invalid_pose_shapes=0;
+    std::size_t budget_deferred_shapes=0;
 };
 // Finite, server-originated *untextured* simple primitive previews.
 // Root transforms must be region-space; linked transforms are composed
