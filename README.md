@@ -289,3 +289,22 @@ Official reference: `secondlife/viewer` current
 `indra/newview/llviewermessage.cpp`,
 `indra/newview/llpathfindingmanager.cpp`, `indra/newview/llagent.cpp`,
 and `secondlife/master-message-template/message_template.msg`.
+
+## R9 Verify — uniquely identified Windows test executable
+
+**Launch `KAMI-R9-VERIFY.exe`, not `KAMIViewer.exe`.**
+The test package intentionally contains only the distinct R9 executable
+name, alongside `KAMI_SL_Login_Identity.dll` and the required license
+files. If Windows shows the old R8 live-event line, that is a **different
+process/file**, not the executable packaged in this ZIP.
+
+The title bar, top-of-screen header and bottom-left sidebar must say
+**R9 VERIFY 2026-11-03**. If they do not, close the older instance and
+launch the file named above directly from the new extracted folder.
+If they do, report whether the HOME page shows handled events and
+AgentUpdate transmissions or still shows unhandled events; the latter
+indicates a genuine protocol issue to diagnose next.
+
+R9 networking is still experimental. The offline DX12 preview is NOT a
+connected Second Life world. Share privately with trusted technical
+testers only and avoid production accounts if possible.
