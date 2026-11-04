@@ -52,5 +52,29 @@ int main(){
     if(!encode(p,bytes)||!decode(bytes,read)||
        read.appended_acks.size()!=1U||read.appended_acks.front()!=5U)
        return 16;
+    // Upstream official codec clears the zero-coded flag when compression
+    // would not save any bytes. Confirm KAMI doesn't claim otherwise.
+    p.flags=kZerocoded;p.appended_acks.clear();
+    p.body={0xfeU,1U,2U,3U,4U,5U,6U,7U,8U};
+    if(!encode(p,bytes)||bytes[0]&kZerocoded||
+       !decode(bytes,read)||read.body!=p.body||
+       read.flags&kZerocoded)return 17;
+    // A long zero run must roundtrip using Linden's 254-byte chunks.
+    p.body={0xfeU};
+    p.body.insert(p.body.end(),650U,0U);
+    p.body.push_back(0x20U);
+    if(!encode(p,bytes)||!(bytes[0]&kZerocoded)||
+       !decode(bytes,read)||read.body!=p.body)return 18;
+    // Malformed encoded runs must never be handed unsafely to the
+    // historical upstream pointer-based decoder.
+    bad={kZerocoded,0U,0U,0U,1U,0U,0xfeU,0U};
+    if(decode(bad,read))return 19; // missing length
+    bad={kZerocoded,0U,0U,0U,1U,0U,0xfeU,0U,0U};
+    if(decode(bad,read))return 20; // missing length after extension
+    // Cap decompressed output; never allocate beyond safe limits.
+    bad={kZerocoded,0U,0U,0U,1U,0U,0xfeU};
+    for(unsigned i=0;i<70U;++i)bad.push_back(0U);
+    bad.push_back(1U);
+    if(decode(bad,read))return 21;
     return 0;
 }
