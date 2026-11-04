@@ -28,6 +28,9 @@ public:
     [[nodiscard]] CircuitState state() const noexcept {return state_;}
     [[nodiscard]] bool region_seen() const noexcept {return region_seen_;}
     [[nodiscard]] bool movement_seen() const noexcept {return movement_seen_;}
+    [[nodiscard]] std::string_view authenticated_agent_id() const noexcept {
+        return login_.handoff.agent_id;
+    }
     [[nodiscard]] unsigned agent_updates_sent() const noexcept {
         return agent_updates_sent_;
     }
