@@ -23,5 +23,20 @@ int main(){
     malformed=input;
     for(unsigned i=7U;i<23U;++i)malformed[i]=0U;
     if(!mesh::mesh_asset_from_extras(malformed).empty())return 8;
+    auto checked=mesh::inspect_extra_params(input);
+    if(!checked.valid||checked.records!=1U||
+       checked.sculpt_records!=1U||checked.mesh_records!=1U||
+       checked.mesh_id!=uuid)return 9;
+    auto empty=mesh::inspect_extra_params({0U});
+    if(!empty.valid||empty.records!=0U||!empty.mesh_id.empty())
+        return 10;
+    auto twice=input;
+    twice[0]=2U;
+    twice.insert(twice.end(),{0x10U,0U,0U,0U,0U,0U});
+    checked=mesh::inspect_extra_params(twice);
+    if(!checked.valid||checked.records!=2U||
+       checked.mesh_records!=1U)return 11;
+    twice.push_back(9U); // trailing bytes invalidate entire object blob
+    if(mesh::inspect_extra_params(twice).valid)return 12;
     return 0;
-}
+
