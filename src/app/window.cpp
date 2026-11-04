@@ -575,6 +575,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         world_renderer_.live_primitive_eligible())+
                     L" | Missing root "+std::to_wstring(
                         world_renderer_.live_missing_anchor_shapes())+
+                    L"/IDs "+std::to_wstring(
+                        world_renderer_.live_unique_missing_parent_ids())+
                     L" | Avatar parent "+std::to_wstring(
                         world_renderer_.live_avatar_attachment_shapes())+
                     L" | Cyclic "+std::to_wstring(

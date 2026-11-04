@@ -340,6 +340,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                             updated.primitive=previous->second.primitive;
                             updated.default_texture_present=
                                 previous->second.default_texture_present;
+                            updated.mesh_asset_id=previous->second.mesh_asset_id;
                         }
                         spatial_objects_.insert_or_assign(obj.local_id,updated);
                         missing_objects_.erase(obj.local_id);

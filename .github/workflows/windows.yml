@@ -123,5 +123,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KAMI-R33-Hierarchy-Mesh-Intake
-          path: dist/KAMI-R27-R32-Unified.zip
+          path: dist/KAMI-R33-Hierarchy-Mesh-Intake.zip
           retention-days: 14
