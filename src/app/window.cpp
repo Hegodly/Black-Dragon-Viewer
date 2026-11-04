@@ -1108,11 +1108,16 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
        sl_circuit_.movement_seen()){
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
-        label(L"R8 UDP packets: LayerData "+
-              std::to_wstring(sl_circuit_.layer_packets())+
-              L" | ObjectUpdates "+std::to_wstring(
-                  sl_circuit_.object_update_packets())+
-              L" (not yet rendered)",
+        label(world_renderer_.live_water_preview_active()?
+              (L"R9 LIVE WATER-HEIGHT DX12 ONLY | LayerData "+
+               std::to_wstring(sl_circuit_.layer_packets())+
+               L" | Objects "+std::to_wstring(
+                   sl_circuit_.object_update_packets())+
+               L" NOT RENDERED"):
+              (L"R9: Awaiting verified avatar/water elevation | LayerData "+
+               std::to_wstring(sl_circuit_.layer_packets())+
+               L" | Objects "+std::to_wstring(
+                   sl_circuit_.object_update_packets())),
               box(contentX,height-35,contentWidth,23),
               small_font_.Get(),p.muted);
     }else{
@@ -1584,6 +1589,9 @@ void Window::begin_sl_login() {
     SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
     SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
     sl_circuit_.stop();
+    world_renderer_.clear_live_water_preview();
+    live_water_attempted_=false;
+    live_water_status_.clear();
     sl_login_status_=protocol::LoginStatus::NotAttempted;
     sl_login_http_status_=0;
     sl_login_response_kind_.clear();
@@ -1669,6 +1677,26 @@ void Window::update_sl_connection() {
     if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed &&
        sl_circuit_.state()!=protocol::sim::CircuitState::Failed)
         sl_circuit_.poll();
+    // R9 first server-sourced DX12 pixels: only a partial planar
+    // water-height preview, never fabricated terrain or avatar meshes.
+    if(!live_water_attempted_&&
+       sl_login_status_==protocol::LoginStatus::Accepted&&
+       sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
+       sl_circuit_.region_metadata().verified&&
+       sl_circuit_.movement_position().verified){
+        live_water_attempted_=true;
+        if(world_renderer_.set_verified_live_water(sl_circuit_))
+            live_water_status_=L"R9 verified water-only surface active";
+        else
+            live_water_status_=L"R9 water DX12 upload unavailable";
+    }
+    if((sl_circuit_.state()==protocol::sim::CircuitState::Closed||
+        sl_circuit_.state()==protocol::sim::CircuitState::Failed)&&
+       world_renderer_.live_water_preview_active()){
+        world_renderer_.clear_live_water_preview();
+        live_water_attempted_=false;
+        live_water_status_.clear();
+    }
     if(sl_login_status_==protocol::LoginStatus::Accepted&&
        sl_circuit_.movement_seen()&&
        !caps_seed_started_&&!caps_seed_url_.empty()){
