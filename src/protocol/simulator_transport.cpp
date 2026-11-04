@@ -248,8 +248,24 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             if(region_seen_&&movement_seen_&&region_metadata_.verified&&
                movement_position_.verified){
                 std::vector<objectspatial::Transform> objects;
-                if(objectspatial::decode_compressed_transforms(incoming,objects)){
+                std::vector<objectspatial::Transform> linked;
+                if(objectspatial::decode_compressed_transforms(
+                       incoming,objects,&linked)){
                     ++spatial_object_frames_;
+                    for(const auto& child:linked){
+                        remember_missing_object(child.parent_id);
+                        if(linked_objects_.size()>=1024U&&
+                           !linked_objects_.contains(child.local_id))continue;
+                        // Compressed child topology is not decoded yet;
+                        // preserve an earlier verified full-update shape.
+                        auto updated=child;
+                        const auto previous=linked_objects_.find(child.local_id);
+                        if(previous!=linked_objects_.end())
+                            updated.primitive=previous->second.primitive;
+                        linked_objects_.insert_or_assign(child.local_id,updated);
+                        missing_objects_.erase(child.local_id);
+                        ++spatial_object_revision_;
+                    }
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
