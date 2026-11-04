@@ -551,6 +551,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(detail,
                   box(contentX+36,y+25,contentWidth-76,20),
                   small_font_.Get(),p.muted);
+            if(i==2U){
+                detail+=L" | AvatarAppearance packets "+
+                    std::to_wstring(sl_circuit_.avatar_appearance_packets())+
+                    L" | Own visual params "+
+                    std::to_wstring(sl_circuit_.own_avatar_visual_params())+
+                    L" | actual body NOT loaded";
+            }
             if(i==0U && rowHeight>=62.f){
                 const auto& audit=sl_circuit_.full_decode_audit();
                 // Surface why solid geometry is missing, not just totals.
@@ -863,7 +870,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(L"M E S S E N G E R",box(railX+15,154,190,22),
               messenger_centered_small_.Get(),p.accent);
         const wchar_t* tabs[]={L"DESIGN PREVIEW",L"NEARBY CHAT",L"GROUPS"};
-        const wchar_t* subtitles[]={L"Local demo",L"Not connected",L"Not connected"};
+        const bool chat_online=sl_circuit_.state()==
+            protocol::sim::CircuitState::MovementConfirmed;
+        const wchar_t* subtitles[]={
+            L"Local demo",chat_online?L"Simulator-connected":L"Not connected",
+            L"Not connected"};
         for(unsigned i=0;i<3;++i) {
             const float top=211.f+76.f*static_cast<float>(i);
             const bool selected=static_cast<unsigned>(messenger_.active())==i;
@@ -880,9 +891,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(L"ADD DEMO REPLY",box(railX+23,replyTop+4,174,29),
                   messenger_centered_small_.Get(),p.accent);
         }
-        label(L"CONNECTION: OFFLINE",box(railX+20,height-153,181,25),
+        label(chat_online?L"CONNECTION: LIVE UDP":L"CONNECTION: OFFLINE",
+              box(railX+20,height-153,181,25),
               messenger_centered_small_.Get(),p.muted);
-        label(L"No resident data",box(railX+20,height-131,181,21),
+        label(chat_online?
+              (std::to_wstring(sl_circuit_.nearby_chat().size())+
+               L" nearby messages"):L"No resident data",
+              box(railX+20,height-131,181,21),
               messenger_centered_small_.Get(),p.muted);
 
         label(messenger::channel_title(messenger_.active()),
@@ -891,7 +906,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(messenger::channel_subtitle(messenger_.active()),
               box(panelX+15,150,panelW-30,22),
               messenger_centered_small_.Get(),p.muted);
-        label(L"NOT CONNECTED TO SECOND LIFE",
+        label(chat_online?L"NEARBY CHAT / SIMULATOR UDP":
+              L"NOT CONNECTED TO SECOND LIFE",
               box(panelX+15,176,panelW-30,24),
               messenger_centered_small_.Get(),p.accent);
 
@@ -937,6 +953,33 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(L"PREVIEW",box(panelX+panelW-109.f,height-152.f,91.f,34.f),
                   messenger_centered_small_.Get(),hasText?p.accent:p.muted);
             label(L"Text stays local  /  No deliveries or read receipts",
+                  box(panelX+16,height-96.f,panelW-31.f,25.f),
+                  messenger_centered_small_.Get(),p.muted);
+        } else if(messenger_.active()==messenger::Channel::Nearby &&
+                  chat_online) {
+            const auto& lines=sl_circuit_.nearby_chat();
+            if(lines.empty())
+                label(L"No nearby chat received yet",
+                      box(panelX+28,285,panelW-56,36),
+                      messenger_centered_font_.Get(),p.text);
+            const auto shown=std::min<std::size_t>(lines.size(),6U);
+            for(std::size_t i=0;i<shown;++i){
+                const auto& msg=lines[lines.size()-shown+i];
+                const float y=230.f+static_cast<float>(i)*72.f;
+                if(y>height-205.f)break;
+                round_rect(box(panelX+22,y,panelW-44,65),14.f,p.surface);
+                std::wstring display=msg.sender+L": "+msg.message;
+                if(display.size()>160U)display.resize(160U);
+                label(display,box(panelX+33,y+8,panelW-66,49.f),
+                      messenger_centered_small_.Get(),p.text);
+            }
+            round_rect(box(panelX+11,height-164.f,panelW-23.f,58.f),
+                       19.f,p.surface);
+            round_rect(box(panelX+panelW-115.f,height-158.f,103.f,46.f),
+                       15.f,p.accent_soft);
+            label(L"SEND",box(panelX+panelW-109.f,height-152.f,91.f,34.f),
+                  messenger_centered_small_.Get(),p.accent);
+            label(L"Packet sent != delivered/read. Only channel 0 supported.",
                   box(panelX+16,height-96.f,panelW-31.f,25.f),
                   messenger_centered_small_.Get(),p.muted);
         } else {
@@ -1604,7 +1647,9 @@ void Window::save_photo_png() {
 
 void Window::update_messenger_composer() {
     if(!messenger_edit_||!hwnd_)return;
-    if(page_!=4||!messenger_.can_send()) {
+    const bool chat_online=messenger_.active()==messenger::Channel::Nearby&&
+        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed;
+    if(page_!=4||(!messenger_.can_send()&&!chat_online)) {
         ShowWindow(messenger_edit_,SW_HIDE);
         return;
     }
@@ -1627,7 +1672,10 @@ void Window::messenger_select(messenger::Channel channel) {
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
 void Window::messenger_send() {
-    if(!messenger_.can_send()||!messenger_edit_)return;
+    if(!messenger_edit_)return;
+    const bool live_nearby=messenger_.active()==messenger::Channel::Nearby&&
+       sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed;
+    if(!messenger_.can_send()&&!live_nearby)return;
     const int len=GetWindowTextLengthW(messenger_edit_);
     if(len<0||len>512)return;
     std::wstring text(static_cast<std::size_t>(len)+1,L'\0');
@@ -1636,6 +1684,17 @@ void Window::messenger_send() {
     if(!messenger_.set_draft(std::move(text)))return;
     SYSTEMTIME now{};GetLocalTime(&now);
     const unsigned minutes=static_cast<unsigned>(now.wHour)*60U+now.wMinute;
+    if(live_nearby){
+        if(sl_circuit_.send_nearby_chat(messenger_.draft())){
+            (void)messenger_.set_draft(L"");
+            messenger_edit_sync_=true;
+            SetWindowTextW(messenger_edit_,L"");
+            messenger_edit_sync_=false;
+        }
+        SetFocus(messenger_edit_);
+        InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
     if(messenger_.send_local(minutes)) {
         messenger_edit_sync_=true;
         SetWindowTextW(messenger_edit_,L"");
@@ -2071,7 +2130,9 @@ void Window::click(float x, float y) {
                 messenger_demo_reply();return;
             }
         }
-        if(messenger_.can_send() &&
+        if((messenger_.can_send()||
+            (messenger_.active()==messenger::Channel::Nearby &&
+             sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed)) &&
            x>=panelX+panelW-115.f && x<panelX+panelW-12.f &&
            y>=static_cast<float>(client.bottom)-158.f &&
            y<static_cast<float>(client.bottom)-112.f) {
