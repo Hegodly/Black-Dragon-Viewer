@@ -8,6 +8,7 @@
 #include <string_view>
 #include <chrono>
 #include <future>
+#include <cstdint>
 #include <string>
 #include "kami/graphics/settings.hpp"
 #include "kami/graphics/adaptive.hpp"
@@ -116,6 +117,9 @@ private:
     protocol::caps::QueueCursor caps_ack_{};
     std::wstring caps_status_;
     unsigned caps_completed_polls_=0;
+    std::uint64_t caps_events_observed_=0;
+    std::uint64_t caps_events_unsupported_=0;
+    unsigned caps_consecutive_failures_=0;
     bool caps_dispatch_blocked_=false;
     std::chrono::steady_clock::time_point caps_next_poll_{};
     bool caps_seed_started_=false;
