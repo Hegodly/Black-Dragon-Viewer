@@ -14,8 +14,8 @@ target_compile_definitions(kami_sl_login_identity PRIVATE
 target_link_libraries(kami_sl_login_identity PRIVATE bcrypt ole32 oleaut32 wbemuuid)
 set_target_properties(kami_sl_login_identity PROPERTIES
     OUTPUT_NAME "KAMI_SL_Login_Identity")
-add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/world_wire.cpp src/protocol/object_spatial.cpp src/protocol/object_spatial_full.cpp src/protocol/mesh_reference.cpp src/protocol/avatar_appearance.cpp src/protocol/live_chat.cpp src/protocol/terrain.cpp src/protocol/login.cpp src/protocol/caps.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/live_terrain.cpp src/world/live_water.cpp src/world/object_proxies.cpp src/world/live_primitive_geometry.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
-target_include_directories(kami_core PUBLIC include)
+add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/world_wire.cpp src/protocol/object_spatial.cpp src/protocol/object_spatial_full.cpp src/protocol/mesh_reference.cpp src/protocol/mesh_lod.cpp src/protocol/avatar_appearance.cpp src/protocol/live_chat.cpp src/protocol/terrain.cpp src/protocol/login.cpp src/protocol/caps.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/live_terrain.cpp src/world/live_water.cpp src/world/object_proxies.cpp src/world/live_primitive_geometry.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
+target_include_directories(kami_core PUBLIC include third_party/stb)
 target_compile_definitions(kami_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(kami_core PUBLIC kami_sl_login_identity d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
 add_executable(KAMIViewer WIN32 src/app/main.cpp src/app/window.cpp)
@@ -192,6 +192,11 @@ add_executable(kami_unified_nearby_chat_tests tests/live_chat_tests.cpp)
 target_link_libraries(kami_unified_nearby_chat_tests PRIVATE kami_core)
 add_test(NAME KamiR31SLNearbyChatCodecAndSafety
          COMMAND kami_unified_nearby_chat_tests)
+
+add_executable(kami_r34_mesh_lod_tests tests/mesh_lod_tests.cpp)
+target_link_libraries(kami_r34_mesh_lod_tests PRIVATE kami_core)
+add_test(NAME KamiR34VerifiedBinaryLLSDMeshLoDTriangles
+         COMMAND kami_r34_mesh_lod_tests)
 
 add_executable(kami_mesh_ref_tests tests/mesh_reference_tests.cpp)
 target_link_libraries(kami_mesh_ref_tests PRIVATE kami_core)

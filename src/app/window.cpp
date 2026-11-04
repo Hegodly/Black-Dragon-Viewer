@@ -1739,6 +1739,9 @@ void Window::begin_sl_login() {
     }
     if(caps_seed_future_.valid()){
         auto previous=caps_seed_future_.get();
+        if(!previous.mesh_capability_url.empty())
+            SecureZeroMemory(previous.mesh_capability_url.data(),
+                 previous.mesh_capability_url.size()*sizeof(wchar_t));
         if(!previous.event_queue_url.empty())
             SecureZeroMemory(previous.event_queue_url.data(),
                  previous.event_queue_url.size()*sizeof(wchar_t));
@@ -1991,9 +1994,15 @@ void Window::update_sl_connection() {
             // Retain the signed capability only for this simulator session;
             // R6 lost it after a single poll and could not resume.
             caps_event_queue_url_=std::move(result.event_queue_url);
+            if(!result.mesh_capability_url.empty())
+                (void)sl_circuit_.set_mesh_capability(
+                    std::move(result.mesh_capability_url));
             caps_status_=L"CAPS seed OK; EventQueueGet starting...";
             start_caps_poll();
         }
+        if(!result.mesh_capability_url.empty())
+            SecureZeroMemory(result.mesh_capability_url.data(),
+                 result.mesh_capability_url.size()*sizeof(wchar_t));
         if(!result.event_queue_url.empty())
             SecureZeroMemory(result.event_queue_url.data(),
                 result.event_queue_url.size()*sizeof(wchar_t));
