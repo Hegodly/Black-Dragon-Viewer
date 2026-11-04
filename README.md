@@ -360,3 +360,18 @@ This version **does not yet** decompress the DCT terrain patch stream,
 turn object updates into mesh geometry, or fetch SL textures/assets.
 Rendering remains explicitly marked NOT RENDERED. The purpose is accurate
 input classification before implementing a data-to-DX12 pipeline.
+
+## R12 experimental SL land patch codec
+
+The project now has an **independent, bounded land-layer decoder** using
+the documented Second Life DCT patch bitstream. The decoder takes only
+authenticated simulator-originated LayerData type 76 (land), validates
+16x16 and 32x32 patch groups, their bit-packed headers and coefficient
+codes, and produces finite, normalized world elevations in a local grid.
+Malformed/truncated packets are rejected transactionally.
+
+Synthetic deterministically bit-packed test fixtures cover a constant
+16x16/32x32 elevation patch, wrong layer, truncated packets, and
+failure to publish partially decoded output. A future stage uploads
+verified height-field triangles to DX12. This codec does NOT implement
+texture/mesh assets or viewer chat events.
