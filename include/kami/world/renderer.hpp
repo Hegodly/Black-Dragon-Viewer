@@ -127,6 +127,18 @@ public:
     [[nodiscard]] std::size_t uploaded_linked_primitive_shapes() const noexcept {
         return region_mesh_?uploaded_linked_primitive_shapes_:0U;
     }
+    [[nodiscard]] std::size_t live_primitive_eligible() const noexcept {
+        return region_mesh_?primitive_eligible_:0U;
+    }
+    [[nodiscard]] std::size_t live_primitive_unresolved() const noexcept {
+        return region_mesh_?primitive_unresolved_:0U;
+    }
+    [[nodiscard]] std::size_t live_primitive_distant() const noexcept {
+        return region_mesh_?primitive_distant_:0U;
+    }
+    [[nodiscard]] std::size_t live_primitive_deferred() const noexcept {
+        return region_mesh_?primitive_deferred_:0U;
+    }
     [[nodiscard]] bool live_water_surface_active() const noexcept {
         return region_mesh_ && uploaded_water_vertices_>0U;
     }
@@ -201,6 +213,10 @@ private:
     std::size_t uploaded_root_primitive_shapes_=0;
     std::size_t uploaded_linked_primitive_shapes_=0;
     std::size_t uploaded_primitive_vertices_=0;
+    std::size_t primitive_eligible_=0;
+    std::size_t primitive_unresolved_=0;
+    std::size_t primitive_distant_=0;
+    std::size_t primitive_deferred_=0;
     std::size_t uploaded_water_vertices_=0;
     std::size_t skipped_terrain_discontinuities_=0;
     std::optional<SceneMesh> live_water_mesh_;
