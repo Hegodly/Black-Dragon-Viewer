@@ -553,15 +553,18 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   small_font_.Get(),p.muted);
             if(i==0U && rowHeight>=62.f){
                 const auto& audit=sl_circuit_.full_decode_audit();
+                // Surface why solid geometry is missing, not just totals.
                 const std::wstring reasons=
                     L"Volume "+std::to_wstring(audit.volume)+
-                    L" | Other "+std::to_wstring(audit.non_volume)+
-                    L" | Linked "+std::to_wstring(audit.linked)+
-                    L" | Motion skip "+std::to_wstring(audit.unsupported_motion)+
-                    L" | Invalid "+std::to_wstring(audit.invalid_transform)+
-                    L" | Roots "+std::to_wstring(audit.accepted_roots)+
-                    L" | Children "+std::to_wstring(audit.accepted_children)+
-                    L" | Shape unsupported "+std::to_wstring(audit.unsupported_shapes);
+                    L" | Unsupported "+std::to_wstring(audit.unsupported_shapes)+
+                    L" | Eligible "+std::to_wstring(
+                        world_renderer_.live_primitive_eligible())+
+                    L" | No parent "+std::to_wstring(
+                        world_renderer_.live_primitive_unresolved())+
+                    L" | Far "+std::to_wstring(
+                        world_renderer_.live_primitive_distant())+
+                    L" | Budget "+std::to_wstring(
+                        world_renderer_.live_primitive_deferred());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
