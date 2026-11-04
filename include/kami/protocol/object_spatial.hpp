@@ -22,6 +22,10 @@ struct Transform {
     bool volume_params_seen=false; // full 23-byte SL path/profile available
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
 };
+// Apply a compressed update without incorrectly restoring stale mesh and
+// primitive metadata from an earlier full update. Offline unit-testable.
+[[nodiscard]] Transform merge_compressed_transform(
+    const Transform& incoming,const Transform& previous);
 // Aggregate only counts, never simulator IDs or user payloads.
 struct FullDecodeAudit {
     std::uint32_t volume=0,non_volume=0,linked=0;
