@@ -31,13 +31,27 @@ public:
         }
         return true;
     }
-    // Linden's ten-bit patch index is serialized as a low byte,
-    // then the two low bits of the next byte (bit-packed).
-    [[nodiscard]] bool patch_id(std::uint32_t& out) noexcept {
-        std::uint32_t low=0,high=0;
-        if(!read(8,low)||!read(2,high))return false;
-        out=low|(high<<8U);
+    // LLBitPack::bitUnpack writes each 8-bit chunk into SUCCESSIVE
+    // little-endian bytes of the destination U32, even when the stream
+    // itself carries MSB-first bits within each individual chunk.
+    // read(bits) is NOT equivalent when bits > 8; treating 11-bit
+    // coefficients as one big-endian number created false high-frequency
+    // elevations (the R21 jagged wall / spike symptom).
+    [[nodiscard]] bool unpack_ll_uint(unsigned bit_count,
+                                      std::uint32_t& out) noexcept {
+        if(bit_count==0U||bit_count>32U)return false;
+        out=0U;
+        for(unsigned shift=0U;shift<bit_count;shift+=8U){
+            const unsigned chunk=std::min(8U,bit_count-shift);
+            std::uint32_t value=0U;
+            if(!read(chunk,value))return false;
+            out|=value<<shift;
+        }
         return true;
+    }
+    // The 10-bit patch ID has the SAME chunked encoding as DCT data.
+    [[nodiscard]] bool patch_id(std::uint32_t& out) noexcept {
+        return unpack_ll_uint(10U,out);
     }
 private:
     std::span<const std::uint8_t> bytes_;
@@ -158,7 +172,7 @@ bool decode_land_layer(const lludp::Packet& packet,
             if(value==0U)break; // rest of the patch is zero (EOB)
             std::uint32_t sign=0,magnitude=0;
             if(!reader.read(1,sign)||
-               !reader.read(wordbits,magnitude))return false;
+               !reader.unpack_ll_uint(wordbits,magnitude))return false;
             scan[n]=sign? -static_cast<std::int32_t>(magnitude):
                           static_cast<std::int32_t>(magnitude);
         }

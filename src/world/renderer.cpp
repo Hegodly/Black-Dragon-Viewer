@@ -637,6 +637,7 @@ bool Renderer::set_verified_live_terrain(
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_water_vertices_=new_water_count;
+    skipped_terrain_discontinuities_=built.skipped_discontinuity_quads;
     if(!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;
@@ -727,6 +728,7 @@ void Renderer::clear_decoded_region_geometry() {
     region_mesh_.reset();
     uploaded_root_bounds_=0;
     uploaded_water_vertices_=0;
+    skipped_terrain_discontinuities_=0;
     landscape_view_=false;
     landscape_anchor_valid_=false;
     camera_.set_scenic_overlook(false);

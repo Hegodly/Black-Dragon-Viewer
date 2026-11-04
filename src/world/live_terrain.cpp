@@ -1,5 +1,6 @@
 #include "kami/world/live_terrain.hpp"
 #include "kami/world/terrain_palette.hpp"
+#include "kami/world/terrain_quality.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -75,6 +76,15 @@ LiveTerrainMesh build_live_terrain_mesh(
                !read_corner(decoded,size,gx+1U,gz+1U,agent_x,agent_y,agent_z,c)||
                !read_corner(decoded,size,gx+1U,gz,agent_x,agent_y,agent_z,d)){
                 ++result.skipped_quads;
+                continue;
+            }
+            // A bad decoder coefficient can create a 100m+ slope in
+            // one 1m cell. Never smooth or invent elevations; skip the
+            // dangerous faces and report how many were omitted.
+            if(!terrainquality::renderable_cell(
+                a.y,b.y,c.y,d.y)){
+                ++result.skipped_quads;
+                ++result.skipped_discontinuity_quads;
                 continue;
             }
             const auto old=result.scene.vertices.size();

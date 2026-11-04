@@ -124,6 +124,11 @@ public:
     [[nodiscard]] bool live_water_surface_active() const noexcept {
         return region_mesh_ && uploaded_water_vertices_>0U;
     }
+    // Real decoded terrain cells omitted solely for extreme height
+    // discontinuities; never counted as rendered geometry.
+    [[nodiscard]] std::size_t skipped_terrain_discontinuities() const noexcept {
+        return region_mesh_?skipped_terrain_discontinuities_:0U;
+    }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
     [[nodiscard]] bool creator_preview_active() const noexcept {return preview_mesh_.has_value();}
@@ -188,6 +193,7 @@ private:
     std::optional<SceneMesh> region_mesh_;
     std::size_t uploaded_root_bounds_=0;
     std::size_t uploaded_water_vertices_=0;
+    std::size_t skipped_terrain_discontinuities_=0;
     std::optional<SceneMesh> live_water_mesh_;
     LiveAvatarPreview live_avatar_preview_{};
     bool landscape_view_=false;

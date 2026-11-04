@@ -1,4 +1,5 @@
 #include "kami/world/live_water.hpp"
+#include "kami/world/terrain_quality.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -93,6 +94,12 @@ LiveMaskedWater build_live_masked_water(
                          agent_x,agent_y,agent_z,c)||
                    !read(decoded,patch->size,gx+1,gz,
                          agent_x,agent_y,agent_z,d))continue;
+                // Match the terrain triangle safety rule, so rejected
+                // spike cells cannot leave giant floating water wedges.
+                if(!terrainquality::renderable_cell(a.y,b.y,c.y,d.y)){
+                    ++result.skipped_discontinuity_quads;
+                    continue;
+                }
                 clip_triangle(result,a,b,c,level,max_vertices);
                 clip_triangle(result,a,c,d,level,max_vertices);
             }

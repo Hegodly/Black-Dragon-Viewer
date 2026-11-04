@@ -276,3 +276,50 @@ LIVE TEST: Log into Attalia and open WORLD. Press V to show LANDSCAPE
 CAMERA. The cyan sky should give way to visible green/stone shoreline
 and hills where decoded terrain exists. Press V again for the avatar
 camera and verify A/D turning, W/S movement and FPS remain intact.
+
+## R22: fix real Second Life terrain DCT coefficient byte order
+
+The R21 field screenshot showed giant near-vertical land spikes despite
+256 decoded patches, ~97k land vertices and ~200 indicated FPS.
+
+ROOT CAUSE FOUND IN CODE: a single integer read of `wordbits` DCT
+coefficient magnitude incorrectly interpreted 9-17 serial bits as a
+big-endian integer. Official `LLBitPack::bitUnpack(U8*, U32)` splits
+the bitstream into up-to-8-bit chunks; those chunks are written into
+little-endian successive bytes of the U32 destination, with the bits
+inside each byte still MSB-first. Multi-byte coefficients were decoded
+with the wrong numerical magnitude. This corrupts elevations, especially
+when higher-frequency coefficients produce jagged geometry.
+
+- `Bits::unpack_ll_uint` implements the exact per-byte chunk order for
+  arbitrary supported coefficient wordbits; patch IDs share it.
+- Explicit 11-, 12- and 17-bit DCT **nonzero** DC regression packets,
+  each at 16x16 and 32x32, verify computed actual constant elevations.
+  R21's all-zero test patches could never catch this bug.
+- A last-resort DX12 VISUAL safeguard omits 1-meter cells spanning over
+  48 meters vertically rather than creating hundreds of meters of
+  triangles. It does not alter or invent authentic SL elevation data and
+  may hide some genuine extraordinary cliffs.
+- The live water mask skips the SAME discontinuous 1-meter cells, so
+  rejected spikes cannot leave suspended water wedges.
+- WORLD displays SKIPPED SPIKES [count]. A nonzero value means the
+  geometry safeguard omitted some 1m cells; it does not establish they
+  were invalid according to SL's server.
+- New synthetic spike regression tests verify four affected cells are
+  omitted for both land and masked water, smooth surrounding geometry
+  remains untouched, and successful full DX12 upload still preserves
+  R17 movement and R21 landscape camera.
+- All R9-R21 auth, sky, procedural region-coloring, water, object bounds,
+  avatar local prediction, DX12-only shading, and user-confirmed movement
+  controls are retained in ONE portable Windows ZIP.
+
+IMPORTANT: This repairs a decoder defect demonstrably capable of false
+terrain spikes, but no claim of an accurate Attalia image until tested
+live by the user. Real SL terrain material asset downloads, mesh
+buildings, and skinned avatar appearance are still not integrated;
+200 FPS was observed before full scene content and is not a guarantee.
+
+R22 TEST: Log into Attalia; WORLD -> press V for landscape overview;
+compare high vertical gray walls with the earlier photo; read SKIPPED
+SPIKES and AMBER BOUNDS; verify W/S + A/D turning and camera switch
+survive. Screenshot after applying R22 is the decisive confirmation.

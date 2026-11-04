@@ -69,5 +69,24 @@ int main(){
     const auto invalid=world::build_live_terrain_mesh(patches,selected,
         std::numeric_limits<float>::infinity(),0.f,0.f);
     if(!invalid.scene.vertices.empty())return 6;
+    // R22 regression: one corrupted height must not produce four
+    // enormous triangles/walls. Skip the four affected *meter cells*
+    // without changing or fabricating any elevation samples.
+    patches.clear();
+    patches.emplace(0U,patch(0U,0U));
+    patches.at(0U).elevation[8U*16U+8U]+=180.f;
+    selected={&patches.at(0U)};
+    const auto guarded=world::build_live_terrain_mesh(
+        patches,selected,0.f,0.f,0.f);
+    if(guarded.skipped_discontinuity_quads!=4U||
+       guarded.skipped_quads!=4U||
+       guarded.quads!=221U||
+       guarded.scene.vertices.size()!=221U*6U)return 8;
+    // Ordinary gradients (including linked patch seams) remain intact.
+    patches.at(0U).elevation[8U*16U+8U]-=180.f;
+    const auto recovered=world::build_live_terrain_mesh(
+        patches,selected,0.f,0.f,0.f);
+    if(recovered.quads!=225U||
+       recovered.skipped_discontinuity_quads!=0U)return 9;
     return 0;
 }

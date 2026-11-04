@@ -788,6 +788,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(world_renderer_.uploaded_live_land_vertices())+
                 L" | patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+                L" | SKIPPED SPIKES "+
+                std::to_wstring(world_renderer_.skipped_terrain_discontinuities())+
                 L" | AMBER BOUNDS "+
                 std::to_wstring(world_renderer_.uploaded_root_bounds())+
                 (world_renderer_.live_water_surface_active()?

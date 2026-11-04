@@ -22,6 +22,13 @@ public:
         for(unsigned i=0;i<bytes;++i)
             bits((number>>(8U*i))&255U,8);
     }
+    // Mirror Linden LLBitPack, not a normal single-endian bitfield.
+    void ll_unsigned(std::uint32_t value,unsigned total_bits) {
+        for(unsigned shift=0;shift<total_bits;shift+=8U){
+            const unsigned chunk=std::min(8U,total_bits-shift);
+            bits((value>>shift)&((1U<<chunk)-1U),chunk);
+        }
+    }
     [[nodiscard]] std::vector<std::uint8_t> take() {return data_;}
 private:
     std::vector<std::uint8_t> data_{};
@@ -46,6 +53,33 @@ kami::protocol::lludp::Packet test_packet(unsigned size=16U) {
     auto data=e.take();
     kami::protocol::lludp::Packet p;
     p.body={11,76,static_cast<std::uint8_t>(data.size()),
+            static_cast<std::uint8_t>(data.size()>>8U)};
+    p.body.insert(p.body.end(),data.begin(),data.end());
+    return p;
+}
+kami::protocol::lludp::Packet dc_packet(
+    unsigned size,unsigned wordbits,std::uint32_t dc) {
+    Encoder e{};
+    e.little(size,2);
+    e.bits(size,8);
+    e.bits(76,8);
+    e.bits(0x40U|(wordbits-2U),8);
+    float offset=20.f;
+    std::uint32_t ieee=0;
+    std::memcpy(&ieee,&offset,sizeof(ieee));
+    e.little(ieee,4);
+    e.little(16U,2);
+    e.ll_unsigned((3U<<5U)|4U,10);
+    e.bits(1U,1); // nonzero coefficient
+    e.bits(1U,1); // value rather than end of patch
+    e.bits(0U,1); // positive
+    e.ll_unsigned(dc,wordbits);
+    e.bits(1U,1); // end of remaining coefficients
+    e.bits(0U,1);
+    e.bits(97U,8); // END_OF_PATCHES
+    const auto data=e.take();
+    kami::protocol::lludp::Packet p{};
+    p.body={11U,76U,static_cast<std::uint8_t>(data.size()),
             static_cast<std::uint8_t>(data.size()>>8U)};
     p.body.insert(p.body.end(),data.begin(),data.end());
     return p;
@@ -92,5 +126,29 @@ int main() {
     std::vector<terrain::Patch> output;
     if(!terrain::decode_land_layer(roundTrip,output)||
        output.size()!=1U)return 9;
+    // R22 regression: real SL LLBitPack places the first 8 magnitude
+    // bits in the LOWEST byte of a U32, unlike a big-endian bitfield.
+    // The old terrain decoder misread 11/12/17-bit DCT coefficients,
+    // producing fake near-vertical cliffs when live patches contained
+    // high-frequency values. A pure DC coefficient yields flat land.
+    for(const auto [wordbits,dc]:std::array<std::pair<unsigned,unsigned>,3>{
+        {{11U,535U},{12U,2613U},{17U,65539U}}}){
+        for(unsigned size:{16U,32U}){
+            const auto packet=dc_packet(size,wordbits,dc);
+            std::vector<terrain::Patch> decoded;
+            if(!terrain::decode_land_layer(packet,decoded)||
+               decoded.size()!=1U)return 10;
+            // 0.5 * (2/N) * dc * (range/2^prequant)
+            const double expected=28.+static_cast<double>(dc)/
+                static_cast<double>(size)*.25;
+            for(unsigned i=0;i<size*size;++i)
+                if(!std::isfinite(decoded[0].elevation[i])||
+                   std::fabs(decoded[0].elevation[i]-expected)>.001)
+                    return 11;
+            auto malformed=packet;
+            malformed.body.pop_back();
+            if(terrain::decode_land_layer(malformed,decoded))return 12;
+        }
+    }
     return 0;
 }

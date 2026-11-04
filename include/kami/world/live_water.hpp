@@ -11,6 +11,7 @@ struct LiveMaskedWater {
     SceneMesh scene{};
     std::size_t submerged_triangles=0;
     std::size_t shoreline_triangles=0;
+    std::size_t skipped_discontinuity_quads=0;
 };
 // Samples only authenticated decoded SL land. A water plane covers
 // submerged ground, NOT every patch and not the entire region.

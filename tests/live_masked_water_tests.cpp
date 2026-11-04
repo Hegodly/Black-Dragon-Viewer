@@ -51,5 +51,12 @@ int main(){
         land,selected,5.f,5.f,25.f,
         std::numeric_limits<float>::quiet_NaN()).scene.vertices.empty())
         return 7;
+    // The water triangulator must reject exactly the same corrupted
+    // cells as the land renderer, never leaving a giant blue wall.
+    land.at(0U).elevation[8U*16U+8U]=500.f;
+    const auto guarded=world::build_live_masked_water(
+        land,selected,5.f,5.f,25.f,600.f);
+    if(guarded.skipped_discontinuity_quads!=4U||
+       guarded.scene.vertices.size()!=221U*6U)return 8;
     return 0;
 }
