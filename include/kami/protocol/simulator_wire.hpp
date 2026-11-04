@@ -17,9 +17,16 @@ enum class Inbound : std::uint8_t {
 // Sanitized to printable ASCII for the diagnostic UI; no raw packet logging.
 struct RegionMetadata {
     std::string name;
-    float water_height=0.f;
+    float water_height=0.f; // SL region absolute Z in meters
     bool verified=false;
 };
+struct AgentPosition {
+    float x=0.f,y=0.f,z=0.f; // SL axes, Z is elevation
+    bool verified=false;
+};
+[[nodiscard]] bool decode_agent_movement_position(
+    const lludp::Packet& packet,const LoginResult& authorized_login,
+    AgentPosition& out) noexcept;
 [[nodiscard]] bool decode_region_metadata(
     const lludp::Packet& packet,RegionMetadata& out) noexcept;
 // UUIDs on the LLUDP wire are RFC/network-order bytes, not little-endian
