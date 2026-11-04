@@ -43,6 +43,13 @@ add_executable(kami_official_sl_bridge_abi_tests
 target_include_directories(kami_official_sl_bridge_abi_tests PRIVATE include)
 add_test(NAME KamiOfficialSLBackendABIContractOnly
     COMMAND kami_official_sl_bridge_abi_tests)
+# Run against the *actual* LGPL Linden LLZeroCode implementation loaded
+# from KAMI_SL_LLUdpCodec.dll; no simulator/credentials are required.
+add_executable(kami_sl_official_zerocode_tests
+    tests/official_zerocode_tests.cpp)
+target_link_libraries(kami_sl_official_zerocode_tests PRIVATE kami_sl_lludp_codec)
+add_test(NAME KamiActualLindenLLUDPZeroCodeCompatibility
+    COMMAND kami_sl_official_zerocode_tests)
 add_executable(kami_official_login_identity_tests tests/official_login_identity_tests.cpp)
 target_link_libraries(kami_official_login_identity_tests PRIVATE kami_sl_login_identity)
 add_test(NAME KamiOfficialWindowsLoginIdentityCompatibility
