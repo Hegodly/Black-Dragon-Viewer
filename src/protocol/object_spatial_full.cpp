@@ -98,6 +98,25 @@ PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
     return PrimitiveKind::Unknown;
 }
+// Full High 12's message_template field order differs from compressed
+// High 13's LLDataPacker layout: ProfileCurve is byte 1, NOT byte 16.
+PrimitiveKind full_simple_shape(std::span<const std::uint8_t> s) noexcept {
+    if(s.size()!=23U)return PrimitiveKind::Unknown;
+    for(unsigned i=2U;i<=5U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    if(s[6]!=100U||s[7]!=100U)return PrimitiveKind::Unknown;
+    for(unsigned i=8U;i<=16U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    for(unsigned i=17U;i<23U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    if((s[1]&0xF0U)!=0U)return PrimitiveKind::Unknown;
+    const auto profile=s[1]&0x0FU;
+    if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
+    if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
+    if(s[0]==0x10U&&profile==0x03U)return PrimitiveKind::Prism;
+    if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
+    return PrimitiveKind::Unknown;
+}
 }
 // One canonical shape classifier shared by High 12 and High 13.
 PrimitiveKind classify_simple_shape(
@@ -143,7 +162,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         // ProfileHollow), but NEVER manufacture unspecified topology.
         std::span<const std::uint8_t> shape{};
         if(!cur.take(23U,shape))return false;
-        t.primitive=classify_simple_shape(shape);
+        t.primitive=full_simple_shape(shape);
         t.volume_params_seen=true;
         // TextureEntry Var2; TextureAnim Var1; NameValue Var2;
         // Data Var2; Text Var1; TextColor Fixed4;
@@ -168,7 +187,15 @@ bool decode_full_transforms(const lludp::Packet& packet,
             continue;
         }
         ++frame.volume;
-        t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+        if(!extras.empty()){
+            const auto inspected=mesh::inspect_extra_params(extras);
+            if(inspected.valid){
+                ++frame.extra_envelopes;
+                frame.extra_records+=inspected.records;
+                frame.sculpt_records+=inspected.sculpt_records;
+                t.mesh_asset_id=inspected.mesh_id;
+            }else ++frame.malformed_extra_envelopes;
+        }
         if(!t.mesh_asset_id.empty()){
             t.primitive=PrimitiveKind::Unknown;
             ++frame.mesh_references;
@@ -188,6 +215,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         }
         if(t.primitive==PrimitiveKind::Unknown)
             ++frame.unsupported_shapes;
+        else ++frame.decoded_simple_shapes;
         // Per the official viewer, full-precision ObjectData has
         // 60-byte position/velocity/acceleration/rotation/omega,
         // optionally prefixed by 16-byte avatar collision plane.
