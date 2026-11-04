@@ -1,4 +1,5 @@
 #include "kami/protocol/lludp.hpp"
+#include "kami/protocol/official_zero_codec_api.h"
 #include <algorithm>
 #include <limits>
 
@@ -17,39 +18,6 @@ void write_be32(std::vector<std::uint8_t>& to,std::uint32_t n){
     to.push_back(static_cast<std::uint8_t>(n>>16));
     to.push_back(static_cast<std::uint8_t>(n>>8));
     to.push_back(static_cast<std::uint8_t>(n));
-}
-bool uncompress(std::span<const std::uint8_t> bytes,
-                std::vector<std::uint8_t>& out) {
-    out.clear();
-    for(std::size_t i=0;i<bytes.size();++i) {
-        const auto b=bytes[i];
-        if(b!=0U){
-            if(out.size()>=kMaxBody)return false;
-            out.push_back(b);
-        } else {
-            if(++i>=bytes.size()||bytes[i]==0U||
-               out.size()+bytes[i]>kMaxBody)return false;
-            out.insert(out.end(),bytes[i],0U);
-        }
-    }
-    return !out.empty();
-}
-bool compress(std::span<const std::uint8_t> body,
-              std::vector<std::uint8_t>& out){
-    out.clear();
-    for(std::size_t i=0;i<body.size();) {
-        if(body[i]!=0U) {
-            out.push_back(body[i++]);
-        } else {
-            std::size_t count=0;
-            while(i<body.size()&&body[i]==0U&&count<255U) {
-                ++i;++count;
-            }
-            out.push_back(0U);
-            out.push_back(static_cast<std::uint8_t>(count));
-        }
-    }
-    return !out.empty();
 }
 } // namespace
 bool message_number(std::span<const std::uint8_t> body,
@@ -90,7 +58,18 @@ bool decode(std::span<const std::uint8_t> datagram,Packet& output) {
     std::vector<std::uint8_t> body;
     const auto encoded=datagram.subspan(start,data_end-start);
     if(flags&kZerocoded) {
-        if(!uncompress(encoded,body))return false;
+        // Actual Linden Lab LLZeroCode::decode through the separate LGPL
+        // KAMI_SL_Official_Wire.dll, with bounds checks at the ABI.
+        const std::vector<std::uint8_t> framed(
+            datagram.begin(),datagram.begin()+data_end);
+        std::vector<std::uint8_t> decoded(start+kMaxBody);
+        std::uint32_t written=0U;
+        if(!kami_sl_official_zero_decode_v1(
+               framed.data(),static_cast<std::uint32_t>(framed.size()),
+               static_cast<std::uint32_t>(start),decoded.data(),
+               static_cast<std::uint32_t>(decoded.size()),&written)||
+           written<=start)return false;
+        body.assign(decoded.begin()+start,decoded.begin()+written);
     } else {
         if(encoded.size()>kMaxBody)return false;
         body.assign(encoded.begin(),encoded.end());
@@ -120,13 +99,25 @@ bool encode(const Packet& packet,std::vector<std::uint8_t>& output) {
     write_be32(wire,packet.sequence);
     wire.push_back(static_cast<std::uint8_t>(packet.extra_header.size()));
     wire.insert(wire.end(),packet.extra_header.begin(),packet.extra_header.end());
-    std::vector<std::uint8_t> data;
     if(packet.flags&kZerocoded){
-        if(!compress(packet.body,data))return false;
+        // Request official packet zero coding. If it doesn't shrink the
+        // packet, Linden's codec deliberately leaves the flag cleared.
+        std::vector<std::uint8_t> uncompressed=wire;
+        uncompressed.insert(uncompressed.end(),
+                            packet.body.begin(),packet.body.end());
+        if(uncompressed.size()>kMaxWire)return false;
+        std::vector<std::uint8_t> encoded(uncompressed.size()*2U);
+        std::uint32_t written=0U;
+        if(!kami_sl_official_zero_encode_v1(
+               uncompressed.data(),
+               static_cast<std::uint32_t>(uncompressed.size()),
+               static_cast<std::uint32_t>(wire.size()),
+               encoded.data(),static_cast<std::uint32_t>(encoded.size()),
+               &written)||written<wire.size())return false;
+        wire.assign(encoded.begin(),encoded.begin()+written);
     } else {
-        data=packet.body;
+        wire.insert(wire.end(),packet.body.begin(),packet.body.end());
     }
-    wire.insert(wire.end(),data.begin(),data.end());
     if(packet.flags&kAppendedAcks){
         for(const auto ack:packet.appended_acks)write_be32(wire,ack);
         wire.push_back(static_cast<std::uint8_t>(packet.appended_acks.size()));
