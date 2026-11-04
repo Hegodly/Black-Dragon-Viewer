@@ -21,6 +21,7 @@ on:
       - fix/kami-r13-terrain-seam-stitch-20261103
       - release/kami-r13-unified-20261103
       - release/kami-r14-seven-in-one-20261103
+      - release/kami-r15-integrated-live-controls-20261103
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -102,9 +103,9 @@ jobs:
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R14-Seven-Workstreams-One-Build.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R15-Unified-Live-Controls.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R14-Seven-Workstreams-One-Build
-          path: dist/KAMI-R14-Seven-Workstreams-One-Build.zip
+          name: KAMI-R15-Unified-Live-Controls
+          path: dist/KAMI-R15-Unified-Live-Controls.zip
           retention-days: 14

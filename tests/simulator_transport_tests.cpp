@@ -144,8 +144,28 @@ int main() {
         };
         if(!send_test(server,viewer,viewer_len,layer)||
            !send_test(server,viewer,viewer_len,killed)||
-           !send_test(server,viewer,viewer_len,good_land))
-            server_result=18;
+           !send_test(server,viewer,viewer_len,good_land)){
+            server_result=18;return;
+        }
+        // Once movement is requested, verify actual server-directed
+        // control flag bytes, then verify the focused UI can release them.
+        constexpr auto expected=sim::kAtPos|sim::kFastAt|sim::kTurnRight;
+        bool got_movement=false,got_release=false;
+        for(unsigned attempt=0;attempt<30U;++attempt){
+            const int n=recvfrom(server,reinterpret_cast<char*>(bytes.data()),
+                static_cast<int>(bytes.size()),0,
+                reinterpret_cast<sockaddr*>(&viewer),&viewer_len);
+            if(n<=0){server_result=19;return;}
+            lludp::Packet p{};
+            if(!lludp::decode(std::span<const std::uint8_t>(
+                bytes.data(),static_cast<std::size_t>(n)),p))continue;
+            if(p.body.size()!=115U||p.body[0]!=4U)continue;
+            std::uint32_t sent=0;
+            std::memcpy(&sent,p.body.data()+110U,sizeof(sent));
+            if(sent==expected)got_movement=true;
+            if(got_movement&&sent==0U){got_release=true;break;}
+        }
+        if(!got_movement||!got_release)server_result=20;
     });
     sim::Circuit circuit;
     const bool started=circuit.start(login);
@@ -158,6 +178,26 @@ int main() {
                 circuit.layer_packets()>=2U&&
                 circuit.object_update_packets()>0U&&
                 circuit.decoded_land_packets()>0U)){
+            circuit.poll();
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+    }
+    // The UI requests real movement only after the session is confirmed.
+    // The simulator receives it as an authenticated AgentUpdate. Release
+    // inputs and verify an explicit all-zero update follows.
+    if(started&&circuit.movement_seen()){
+        constexpr auto motion=sim::kAtPos|sim::kFastAt|sim::kTurnRight;
+        const auto until=std::chrono::steady_clock::now()+
+            std::chrono::milliseconds(650);
+        while(std::chrono::steady_clock::now()<until){
+            circuit.set_requested_controls(motion);
+            circuit.poll();
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        const auto release_until=std::chrono::steady_clock::now()+
+            std::chrono::milliseconds(650);
+        while(std::chrono::steady_clock::now()<release_until){
+            circuit.set_requested_controls(0U);
             circuit.poll();
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }

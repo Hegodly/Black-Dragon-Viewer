@@ -42,8 +42,27 @@ struct AgentPosition {
 [[nodiscard]] bool region_handshake_reply(const LoginResult& authorized_login,
                                           std::uint32_t sequence,
                                           lludp::Packet& output) noexcept;
-// Authenticated, neutral AgentUpdate High 4 to request the simulator's
-// object interest list. No avatar movement/click flags are sent.
+// Public SL control flag subset: no click, edit, teleport or fly bits.
+inline constexpr std::uint32_t kAtPos=0x00000001U;
+inline constexpr std::uint32_t kAtNeg=0x00000002U;
+inline constexpr std::uint32_t kLeftPos=0x00000004U;
+inline constexpr std::uint32_t kLeftNeg=0x00000008U;
+inline constexpr std::uint32_t kUpPos=0x00000010U;
+inline constexpr std::uint32_t kTurnLeft=0x02000000U;
+inline constexpr std::uint32_t kTurnRight=0x04000000U;
+inline constexpr std::uint32_t kFastAt=0x00000400U;
+inline constexpr std::uint32_t kAllowedMovement=
+    kAtPos|kAtNeg|kLeftPos|kLeftNeg|kUpPos|kTurnLeft|kTurnRight|kFastAt;
+[[nodiscard]] std::uint32_t movement_flags(
+    bool forward,bool backward,bool right,bool left,bool turn_right,
+    bool turn_left,bool run,bool jump) noexcept;
+[[nodiscard]] bool controlled_agent_update(const LoginResult& authorized_login,
+                                           const AgentPosition& position,
+                                           std::uint32_t sequence,
+                                           lludp::Packet& output,
+                                           std::uint32_t control_flags,
+                                           float draw_distance=96.f) noexcept;
+// Authenticated neutral AgentUpdate High 4 to request simulator interest.
 [[nodiscard]] bool neutral_agent_update(const LoginResult& authorized_login,
                                         const AgentPosition& position,
                                         std::uint32_t sequence,

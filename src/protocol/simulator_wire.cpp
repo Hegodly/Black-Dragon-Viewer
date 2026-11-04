@@ -97,10 +97,23 @@ bool region_handshake_reply(const LoginResult& login,std::uint32_t seq,
     output=std::move(value);
     return true;
 }
-bool neutral_agent_update(const LoginResult& login,
-                          const AgentPosition& position,
-                          std::uint32_t seq,lludp::Packet& output,
-                          float draw_distance) noexcept {
+std::uint32_t movement_flags(bool forward,bool backward,bool right,bool left,
+                             bool turn_right,bool turn_left,bool run,
+                             bool jump) noexcept {
+    std::uint32_t flags=0U;
+    if(forward!=backward)flags|=forward?kAtPos:kAtNeg;
+    if(right!=left)flags|=right?kLeftNeg:kLeftPos;
+    if(turn_right!=turn_left)flags|=turn_right?kTurnRight:kTurnLeft;
+    if(jump)flags|=kUpPos;
+    if(run&&(flags&(kAtPos|kAtNeg)))flags|=kFastAt;
+    return flags;
+}
+bool controlled_agent_update(const LoginResult& login,
+                             const AgentPosition& position,
+                             std::uint32_t seq,lludp::Packet& output,
+                             std::uint32_t controls,
+                             float draw_distance) noexcept {
+    if((controls&~kAllowedMovement)!=0U)return false;
     if(!accepted(login)||!position.verified||seq<3U||
        !std::isfinite(position.x)||!std::isfinite(position.y)||
        !std::isfinite(position.z)||position.x<0.f||
@@ -127,11 +140,17 @@ bool neutral_agent_update(const LoginResult& login,
     vector3(value.body,0.f,1.f,0.f); // CameraLeftAxis
     vector3(value.body,0.f,0.f,1.f); // CameraUpAxis
     le_float(value.body,draw_distance);
-    le32(value.body,0U);            // No movement control flags
+    le32(value.body,controls);       // Validated movement or neutral
     value.body.push_back(0);        // Flags: no change
     if(value.body.size()!=115U)return false;
     output=std::move(value);
     return true;
+}
+bool neutral_agent_update(const LoginResult& login,
+                          const AgentPosition& position,
+                          std::uint32_t seq,lludp::Packet& output,
+                          float draw_distance) noexcept {
+    return controlled_agent_update(login,position,seq,output,0U,draw_distance);
 }
 bool packet_ack(std::span<const std::uint32_t> acks,std::uint32_t seq,
                 lludp::Packet& output) noexcept {

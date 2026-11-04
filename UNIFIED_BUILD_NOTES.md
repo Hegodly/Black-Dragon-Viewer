@@ -51,3 +51,19 @@ state, while WORLD shows the verified untextured terrain preview.
 
 Build branch: release/kami-r14-seven-in-one-20261103
 Repository: Hegodly/Black-Dragon-Viewer
+
+## R15: experimental simulator-authoritative control packets
+
+The WORLD / AVATAR W/S, A/D, Z/C, Shift and Space keys are now mapped to
+documented, restricted Second Life AgentUpdate control bits, rather
+than only animating the original offline mannequin. Inputs are sent
+only after authenticated region movement confirmation and while
+the window is active. A 300ms watchdog returns to neutral if the
+UI stops refreshing control state. Untrusted click, fly, edit and teleport
+bits are rejected. The local DX12 camera and mannequin are not yet
+synchronized with real server-authoritative avatar position.
+
+Local loopback tests check control wire bytes and the release back to
+zero. No claim is made that all simulator-side movement has been proven
+against the live grid. R9-R14 terrain, login, original KAMI UI and
+the seven staged workstreams stay in this same ZIP.

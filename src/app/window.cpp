@@ -714,14 +714,18 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   L"/"+std::to_wstring(last_performance_.gpu_vram_budget_mb)+L"MB";
         label(perf,box(contentX+28,height-136,contentWidth-48,24),small_font_.Get(),p.accent);
         std::wstring world_status;
+        if(sl_circuit_.movement_seen()&&
+           sl_circuit_.last_controls_sent()!=0U){
+            world_status=L"SL controls TX (experimental) | ";
+        }
         if(world_renderer_.region_geometry_active()){
-            world_status=L"LIVE land GPU vertices "+
+            world_status+=L"LIVE land GPU vertices "+
                 std::to_wstring(world_renderer_.uploaded_live_land_vertices())+
                 L" | decoded patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
                 L" | SL objects NOT rendered";
         }else if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
-            world_status=L"Connected to Attalia | land patches "+
+            world_status+=L"Connected to region | land patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
                 L" | "+(world_renderer_.error().empty()?
                          L"DX12 terrain upload pending":world_renderer_.error());
@@ -1234,6 +1238,15 @@ void Window::tick() {
         controls.jump=down(VK_SPACE);
     }
     world_renderer_.set_avatar_controls(controls);
+    if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
+        const auto wanted=protocol::sim::movement_flags(
+            controls.forward>0.f,controls.forward<0.f,
+            controls.strafe>0.f,controls.strafe<0.f,
+            controls.turn>0.f,controls.turn<0.f,
+            controls.run,controls.jump);
+        sl_circuit_.set_requested_controls(
+            (page_==1||page_==2)&&focused?wanted:0U);
+    }
     world_renderer_.draw();
     if(page_==7 && world_renderer_.capture_status()!=prior_capture_) {
         prior_capture_=world_renderer_.capture_status();

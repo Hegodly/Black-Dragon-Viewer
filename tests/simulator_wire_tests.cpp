@@ -131,5 +131,21 @@ int main(){
     unverified.z=std::numeric_limits<float>::infinity();
     if(sim::neutral_agent_update(login,unverified,9U,packet))
         return 22;
+    const auto controls=sim::movement_flags(true,false,true,false,
+        true,false,true,true);
+    if(controls!=(sim::kAtPos|sim::kLeftNeg|sim::kTurnRight|
+                  sim::kFastAt|sim::kUpPos))return 23;
+    if(sim::movement_flags(true,true,true,true,true,true,false,false)!=0U)
+        return 24;
+    if(!sim::controlled_agent_update(login,verified,10U,packet,
+                                    controls)||
+       packet.body.size()!=115U)return 25;
+    std::uint32_t sent=0U;
+    std::memcpy(&sent,packet.body.data()+110U,sizeof(sent));
+    if(sent!=controls)return 26;
+    if(sim::controlled_agent_update(login,verified,11U,packet,0x10000000U)||
+       sim::controlled_agent_update(rejected,verified,11U,packet,controls)||
+       sim::controlled_agent_update(login,unverified,11U,packet,controls))
+        return 27;
     return 0;
 }

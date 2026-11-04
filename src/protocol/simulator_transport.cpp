@@ -95,18 +95,27 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
     }
     return true;
 }
+void Circuit::set_requested_controls(std::uint32_t flags) noexcept {
+    requested_controls_=(flags&kAllowedMovement);
+    last_controls_at_=std::chrono::steady_clock::now();
+}
 void Circuit::maybe_send_agent_update() noexcept {
     if(state_!=CircuitState::MovementConfirmed||
        !movement_position_.verified||socket_==INVALID_SOCKET)return;
     const auto now=std::chrono::steady_clock::now();
     if(last_agent_update_!=std::chrono::steady_clock::time_point{}&&
        now-last_agent_update_<std::chrono::milliseconds(200))return;
+    std::uint32_t controls=0U;
+    if(last_controls_at_!=std::chrono::steady_clock::time_point{}&&
+       now-last_controls_at_<std::chrono::milliseconds(300))
+        controls=requested_controls_;
     lludp::Packet update{};
-    if(!neutral_agent_update(login_,movement_position_,sequence_,update))
-        return;
+    if(!controlled_agent_update(login_,movement_position_,sequence_,update,
+                                controls))return;
     if(send_packet(std::move(update))){
         ++sequence_;
         ++agent_updates_sent_;
+        last_controls_sent_=controls;
         last_agent_update_=now;
     }
 }
@@ -252,6 +261,8 @@ void Circuit::stop() noexcept {
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
     packets_received_=agent_updates_sent_=0;
+    requested_controls_=last_controls_sent_=0;
+    last_controls_at_={};
     layer_packets_=object_update_packets_=invalid_world_packets_=0;
     terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;
     decoded_land_packets_=rejected_land_packets_=0;

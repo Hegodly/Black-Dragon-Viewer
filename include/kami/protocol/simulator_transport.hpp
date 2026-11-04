@@ -25,6 +25,11 @@ public:
     ~Circuit(){stop();}
     [[nodiscard]] bool start(const LoginResult& accepted_login) noexcept;
     void poll(unsigned packet_budget=12U) noexcept;
+    // UI must refresh controls; after 300ms they automatically release.
+    void set_requested_controls(std::uint32_t flags) noexcept;
+    [[nodiscard]] std::uint32_t last_controls_sent() const noexcept {
+        return last_controls_sent_;
+    }
     void stop() noexcept;
     [[nodiscard]] CircuitState state() const noexcept {return state_;}
     [[nodiscard]] bool region_seen() const noexcept {return region_seen_;}
@@ -100,6 +105,8 @@ private:
     bool use_acked_=false,move_acked_=false,handshake_replied_=false;
     std::uint32_t packets_received_=0;
     std::uint32_t agent_updates_sent_=0;
+    std::uint32_t requested_controls_=0,last_controls_sent_=0;
+    std::chrono::steady_clock::time_point last_controls_at_{};
     std::uint32_t layer_packets_=0;
     std::uint32_t terrain_packets_=0,wind_packets_=0;
     std::uint32_t decoded_land_packets_=0,rejected_land_packets_=0;
