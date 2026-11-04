@@ -584,6 +584,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L"MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
                     L" | Queue "+std::to_wstring(
                         sl_circuit_.mesh_asset_stats().queued)+
+                    L" | CAP "+std::wstring(
+                        sl_circuit_.mesh_capability_ready()?L"YES":L"NO")+
                     L" | Fetch "+std::to_wstring(
                         sl_circuit_.mesh_download_count())+
                     L" | LOD "+std::to_wstring(
