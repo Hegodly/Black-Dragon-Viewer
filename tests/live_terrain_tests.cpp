@@ -78,8 +78,10 @@ int main(){
     selected={&patches.at(0U)};
     const auto guarded=world::build_live_terrain_mesh(
         patches,selected,0.f,0.f,0.f);
+    // 31 edge cells lack a decoded adjacent patch; those are not spikes.
+    // Four more local cells are omitted for the deliberately bad height.
     if(guarded.skipped_discontinuity_quads!=4U||
-       guarded.skipped_quads!=4U||
+       guarded.skipped_quads!=35U||
        guarded.quads!=221U||
        guarded.scene.vertices.size()!=221U*6U)return 8;
     // Ordinary gradients (including linked patch seams) remain intact.
