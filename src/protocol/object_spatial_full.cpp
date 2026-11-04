@@ -78,23 +78,31 @@ bool valid(const Transform& p) noexcept {
 // Only simple, uncut, unhollowed primitive path/profile combinations
 // have a matching renderer; complex SL volumes must stay unsupported.
 PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
+    // Official 23-byte SL path/profile layout:
+    // PathCurve[0], PathBegin[1..2], PathEnd[3..4],
+    // ScaleX[5], ScaleY[6], other path settings[7..15],
+    // ProfileCurve[16], ProfileBegin/End/Hollow[17..22].
     if(s.size()!=23U)return PrimitiveKind::Unknown;
-    const bool clean=s[2]==0U&&s[3]==0U&&s[4]==0U&&s[5]==0U&&
-        (s[6]==0U||s[6]==100U)&&
-        (s[7]==0U||s[7]==100U)&&
-        s[8]==0U&&s[9]==0U&&s[10]==0U&&s[11]==0U&&
-        s[12]==0U&&s[13]==0U&&s[14]==0U&&
-        (s[15]==0U||s[15]==100U)&&s[16]==0U&&
-        s[17]==0U&&s[18]==0U&&s[19]==0U&&
-        s[20]==0U&&s[21]==0U&&s[22]==0U;
-    if(!clean)return PrimitiveKind::Unknown;
-    const auto profile=s[1]&0x0fU;
+    for(unsigned i=1U;i<=4U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    if(s[5]!=100U||s[6]!=100U)return PrimitiveKind::Unknown;
+    for(unsigned i=7U;i<=15U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    for(unsigned i=17U;i<23U;++i)
+        if(s[i]!=0U)return PrimitiveKind::Unknown;
+    if((s[16]&0xF0U)!=0U)return PrimitiveKind::Unknown;
+    const auto profile=s[16]&0x0FU;
     if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
     if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
     if(s[0]==0x10U&&profile==0x03U)return PrimitiveKind::Prism;
     if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
     return PrimitiveKind::Unknown;
 }
+}
+// One canonical shape classifier shared by High 12 and High 13.
+PrimitiveKind classify_simple_shape(
+    std::span<const std::uint8_t> s) noexcept {
+    return simple_shape(s);
 }
 // High 12 ObjectUpdate, per scripts/messages/message_template.msg and
 // LLViewerObject::processUpdateMessage(OUT_FULL). Unlike High 13,
@@ -135,7 +143,8 @@ bool decode_full_transforms(const lludp::Packet& packet,
         // ProfileHollow), but NEVER manufacture unspecified topology.
         std::span<const std::uint8_t> shape{};
         if(!cur.take(23U,shape))return false;
-        t.primitive=simple_shape(shape);
+        t.primitive=classify_simple_shape(shape);
+        t.volume_params_seen=true;
         // TextureEntry Var2; TextureAnim Var1; NameValue Var2;
         // Data Var2; Text Var1; TextColor Fixed4;
         // MediaURL Var1; PSBlock Var1; ExtraParams Var1.
