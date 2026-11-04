@@ -265,9 +265,18 @@ bool decode_mesh_lod(std::span<const std::uint8_t> asset,LOD& out) noexcept {
         std::size_t header_bytes=0U;
         if(!read_llsd(asset,header,header_bytes)||
            header.kind!=Value::Kind::Map)return false;
-        // Prefer medium LOD for FPS; fall back to high if no medium exists.
+        // Prefer medium LOD to conserve GPU time. SL permits missing
+        // medium LODs, often encoded as a present map with size == 0.
+        // Fall back to the required high LOD ONLY for an absent/empty
+        // medium block; do not silently accept malformed nonempty data.
         const Value* block=header.get("medium_lod");
         if(!block)block=header.get("high_lod");
+        else {
+            if(block->kind!=Value::Kind::Map)return false;
+            double medium_size=0.;
+            if(!number(block->get("size"),medium_size))return false;
+            if(medium_size==0.)block=header.get("high_lod");
+        }
         if(!block||block->kind!=Value::Kind::Map)return false;
         double offset=0.,length=0.;
         if(!number(block->get("offset"),offset)||
