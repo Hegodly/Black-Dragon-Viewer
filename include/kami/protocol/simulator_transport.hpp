@@ -103,6 +103,9 @@ public:
         return avatar_root_ids_;
     }
     [[nodiscard]] bool set_mesh_capability(std::wstring capability) noexcept;
+    [[nodiscard]] bool mesh_capability_ready() const noexcept {
+        return !mesh_capability_url_.empty();
+    }
     [[nodiscard]] const std::map<std::string,mesh::LOD>&
     decoded_mesh_assets() const noexcept {return loaded_meshes_;}
     [[nodiscard]] std::size_t mesh_object_count() const noexcept {
@@ -186,6 +189,7 @@ private:
     void maybe_send_agent_update() noexcept;
     void maybe_send_missing_object_requests() noexcept;
     void maybe_fetch_mesh() noexcept;
+    void schedule_visible_meshes() noexcept;
     void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
@@ -230,6 +234,7 @@ private:
     std::map<std::string,mesh::LOD> loaded_meshes_;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
+    std::uint64_t mesh_scan_revision_=~std::uint64_t{0};
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};
