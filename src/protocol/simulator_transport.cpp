@@ -377,6 +377,13 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.unsupported_shapes+=frame.unsupported_shapes;
                     full_decode_audit_.texture_references+=frame.texture_references;
                     full_decode_audit_.mesh_references+=frame.mesh_references;
+                    full_decode_audit_.extra_envelopes+=frame.extra_envelopes;
+                    full_decode_audit_.extra_records+=frame.extra_records;
+                    full_decode_audit_.sculpt_records+=frame.sculpt_records;
+                    full_decode_audit_.malformed_extra_envelopes+=
+                        frame.malformed_extra_envelopes;
+                    full_decode_audit_.decoded_simple_shapes+=
+                        frame.decoded_simple_shapes;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
                             if(avatar_root_ids_.insert(id).second)
