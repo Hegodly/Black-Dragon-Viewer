@@ -530,23 +530,34 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   small_font_.Get(),p.accent);
             std::wstring detail=checks[i].details;
             if(i==0U){
-                // Separate actual simulator packet reception from objects
-                // displayed. Zero amber frames can mean no object packets,
-                // unsupported cached updates, invalid data or distance.
+                // Decoded frames can contain ZERO eligible root objects.
+                // Never imply Frame OK equals visible object count.
                 detail=L"Full RX "+std::to_wstring(
                     sl_circuit_.full_object_packets())+
-                    L" | Compressed RX "+std::to_wstring(
-                    sl_circuit_.compressed_object_packets())+
+                    L" | Frame OK "+std::to_wstring(
+                    sl_circuit_.decoded_full_spatial_frames())+
                     L" | Cached RX "+std::to_wstring(
                     sl_circuit_.cached_object_packets())+
-                    L" | Full decoded "+std::to_wstring(
-                    sl_circuit_.decoded_full_spatial_frames())+
-                    L" | Rejected "+std::to_wstring(
-                    sl_circuit_.rejected_spatial_frames());
+                    L" | Roots "+std::to_wstring(
+                    sl_circuit_.decoded_root_count())+
+                    L" | Amber "+std::to_wstring(
+                    world_renderer_.uploaded_root_bounds());
             }
             label(detail,
                   box(contentX+36,y+25,contentWidth-76,20),
                   small_font_.Get(),p.muted);
+            if(i==0U && rowHeight>=62.f){
+                const auto& audit=sl_circuit_.full_decode_audit();
+                const std::wstring reasons=
+                    L"Volume "+std::to_wstring(audit.volume)+
+                    L" | Other "+std::to_wstring(audit.non_volume)+
+                    L" | Linked "+std::to_wstring(audit.linked)+
+                    L" | Motion skip "+std::to_wstring(audit.unsupported_motion)+
+                    L" | Invalid "+std::to_wstring(audit.invalid_transform)+
+                    L" | Accepted "+std::to_wstring(audit.accepted_roots);
+                label(reasons,box(contentX+36,y+43,
+                      contentWidth-76,19),small_font_.Get(),p.accent);
+            }
         }
         label(L"Partial / Local Only is NOT a complete live Second Life feature",
               box(contentX+25,height-89,contentWidth-54,24),

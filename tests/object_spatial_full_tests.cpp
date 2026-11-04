@@ -64,10 +64,13 @@ int main(){
     using namespace kami::protocol;
     std::vector<objectspatial::Transform> out;
     auto live=packet({block(77U),block(78U,77U)});
-    if(!objectspatial::decode_full_transforms(live,out)||
+    objectspatial::FullDecodeAudit audit{};
+    if(!objectspatial::decode_full_transforms(live,out,&audit)||
        out.size()!=1U||out[0].local_id!=77U||
        out[0].x!=128.f||out[0].y!=140.f||out[0].z!=35.f||
-       out[0].sx!=2.f||out[0].sy!=3.f||out[0].sz!=4.f)return 1;
+       out[0].sx!=2.f||out[0].sy!=3.f||out[0].sz!=4.f||
+       audit.volume!=2U||audit.accepted_roots!=1U||
+       audit.linked!=1U||audit.non_volume!=0U)return 1;
     // Full updates can have more than one variable-length field. Guard
     // against accidentally using an offset into the preceding block.
     auto second=packet({block(77U),block(80U,0,9U,222.f)});
@@ -75,11 +78,22 @@ int main(){
        out.size()!=2U||out[1].local_id!=80U||
        out[1].x!=222.f)return 2;
     auto bot=packet({block(81U,0,47U)});
-    if(!objectspatial::decode_full_transforms(bot,out)||
-       !out.empty())return 3;
+    if(!objectspatial::decode_full_transforms(bot,out,&audit)||
+       !out.empty()||audit.non_volume!=1U||
+       audit.accepted_roots!=0U)return 3;
     auto badpos=packet({block(82U,0,9U,800.f)});
-    if(!objectspatial::decode_full_transforms(badpos,out)||
-       !out.empty())return 4;
+    if(!objectspatial::decode_full_transforms(badpos,out,&audit)||
+       !out.empty()||audit.invalid_transform!=1U||
+       audit.volume!=1U)return 4;
+    auto quantized=block(84U);
+    // 32-byte motion variant: currently unsupported, but must be
+    // reported honestly rather than silently counted as a real object.
+    quantized[40]=32U;
+    quantized.erase(quantized.begin()+73,quantized.begin()+101);
+    if(!objectspatial::decode_full_transforms(
+           packet({quantized}),out,&audit)||
+       !out.empty()||audit.unsupported_motion!=1U||
+       audit.accepted_roots!=0U)return 8;
     auto invalid=live;
     invalid.body.pop_back();
     if(objectspatial::decode_full_transforms(invalid,out))return 5;

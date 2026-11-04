@@ -166,9 +166,16 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             if(region_seen_&&movement_seen_&&region_metadata_.verified&&
                movement_position_.verified){
                 std::vector<objectspatial::Transform> objects;
-                if(objectspatial::decode_full_transforms(incoming,objects)){
+                objectspatial::FullDecodeAudit frame{};
+                if(objectspatial::decode_full_transforms(incoming,objects,&frame)){
                     ++spatial_object_frames_;
                     ++decoded_full_spatial_frames_;
+                    full_decode_audit_.volume+=frame.volume;
+                    full_decode_audit_.non_volume+=frame.non_volume;
+                    full_decode_audit_.linked+=frame.linked;
+                    full_decode_audit_.unsupported_motion+=frame.unsupported_motion;
+                    full_decode_audit_.invalid_transform+=frame.invalid_transform;
+                    full_decode_audit_.accepted_roots+=frame.accepted_roots;
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
@@ -322,6 +329,7 @@ void Circuit::stop() noexcept {
     spatial_object_revision_=0;
     spatial_object_frames_=rejected_spatial_frames_=0;
     decoded_full_spatial_frames_=0;
+    full_decode_audit_={};
     spatial_objects_.clear();
     object_full_packets_=object_compressed_packets_=0;
     object_cached_packets_=object_terse_packets_=object_killed_packets_=0;

@@ -362,3 +362,34 @@ LIVE TEST: Log into Attalia; in WORLD note amber count and terrain
 appearance, press F9 and capture the Objects row's FULL/COMPRESSED/
 CACHED received and decoded/rejected counts; press V and use WASD
 to check preserved camera and movement.
+
+## R24: diagnose why 165 full object frames produce 0 object bounds
+
+R23 live F9 screenshot from Attalia:
+Full RX 165; Compressed RX 0; Cached RX 1;
+Full decoded 165; Rejected 0; WORLD Amber Bounds 0.
+
+A successful full *frame* parse is NOT a decoded root object.
+R24 adds per-block counters that explain precisely where accepted full
+frames stop producing visible world geometry. F9 object row now shows:
+- Full RX / Frame OK / Cached RX / retained Roots / rendered Amber.
+- Volume (PCode=9), Other (non-volume), Linked (ParentID!=0),
+  Motion skip (unsupported position encoding), Invalid (bad numeric data)
+  and Accepted (root transforms extracted).
+
+All counters aggregate from fully validated packets only; no account,
+object UUID or raw packet payload is displayed/stored.
+Tests prove that a valid frame containing ONLY linked, non-volume,
+invalid or unsupported objects is no longer confused with actual
+rendered geometry. The original live DX12 rendering, R22 terrain
+decoder, R21 V landscape camera and movement remain unchanged.
+
+If Accepted>0 but Roots=0, examine cache churn, bounds or kill handling.
+If Roots>0 but Amber=0, inspect radius (96 m X/Y, 60 m Z from initial
+spawn), upload revision and DX12 geometry.
+If Volume>0 but Accepted=0, inspect Linked/Motion skip/Invalid.
+If Volume=0, all decoded blocks are non-volume (often avatars/trees)
+and no root-volume position can yet be drawn.
+
+R24 remains a diagnostic and safety patch, NOT full mesh or texture
+rendering. Do not treat the F9 stage statuses as viewer completeness.

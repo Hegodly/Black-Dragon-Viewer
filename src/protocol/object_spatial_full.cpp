@@ -72,7 +72,8 @@ bool valid(const Transform& p) noexcept {
 // every block has dozens of fixed and length-prefixed fields. Consume
 // every field so the next block begins at the *correct* boundary.
 bool decode_full_transforms(const lludp::Packet& packet,
-                            std::vector<Transform>& out) noexcept {
+                            std::vector<Transform>& out,
+                            FullDecodeAudit* audit) noexcept {
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -81,6 +82,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     Cursor cur(b.subspan(12U));
     std::vector<Transform> decoded;
     decoded.reserve(info.blocks);
+    FullDecodeAudit frame{};
     for(unsigned n=0U;n<info.blocks;++n){
         Transform t{};
         std::uint8_t pcode=0U;
@@ -109,7 +111,9 @@ bool decode_full_transforms(const lludp::Packet& packet,
         // JointAxisOrAnchor LLVector3.
         if(!cur.skip(16U+16U+4U+1U+4U+1U+12U+12U))
             return false;
-        if(pcode!=9U||parent!=0U)continue;
+        if(pcode!=9U){++frame.non_volume;continue;}
+        ++frame.volume;
+        if(parent!=0U){++frame.linked;continue;}
         // Per the official viewer, full-precision ObjectData has
         // 60-byte position/velocity/acceleration/rotation/omega,
         // optionally prefixed by 16-byte avatar collision plane.
@@ -118,8 +122,10 @@ bool decode_full_transforms(const lludp::Packet& packet,
         std::size_t pos_offset=0U;
         if(movement.size()==76U||movement.size()==140U)
             pos_offset=16U;
-        else if(movement.size()!=60U&&movement.size()!=124U)
+        else if(movement.size()!=60U&&movement.size()!=124U){
+            ++frame.unsupported_motion;
             continue;
+        }
         const auto read_float=[&](std::size_t offset,float& value) {
             if(offset+4U>movement.size())return false;
             std::uint32_t bits=static_cast<std::uint32_t>(movement[offset])|
@@ -132,10 +138,14 @@ bool decode_full_transforms(const lludp::Packet& packet,
         if(!read_float(pos_offset,t.x)||
            !read_float(pos_offset+4U,t.y)||
            !read_float(pos_offset+8U,t.z))return false;
-        if(valid(t))decoded.push_back(t);
+        if(valid(t)){
+            decoded.push_back(t);
+            ++frame.accepted_roots;
+        }else ++frame.invalid_transform;
     }
     if(!cur.done())return false;
     out=std::move(decoded);
+    if(audit)*audit=frame; // publish only after full frame validation
     return true;
 }
 } // namespace kami::protocol::objectspatial
