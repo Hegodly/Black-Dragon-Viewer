@@ -34,6 +34,9 @@ struct FullDecodeAudit {
     std::uint32_t accepted_roots=0;
     std::uint32_t accepted_children=0, unsupported_shapes=0;
     std::uint32_t texture_references=0,mesh_references=0;
+    // Full High 12 extras are NOT included in compressed High 13 counts.
+    std::uint32_t extra_envelopes=0,extra_records=0,sculpt_records=0;
+    std::uint32_t malformed_extra_envelopes=0,decoded_simple_shapes=0;
 };
 struct CompressedDecodeAudit {
     std::uint32_t extras_seen=0,extra_records=0,sculpt_records=0;
