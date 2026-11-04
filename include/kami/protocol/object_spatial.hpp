@@ -39,6 +39,9 @@ struct FullDecodeAudit {
     std::uint32_t extra_envelopes=0,malformed_extra_envelopes=0;
     std::uint32_t flexible_records=0,light_records=0;
     std::uint32_t projector_records=0,other_extra_records=0;
+    // Modern official LLNetworkData parameter types, not mesh UUIDs.
+    std::uint32_t extended_mesh_records=0,render_material_records=0;
+    std::uint32_t reflection_probe_records=0;
 };
 struct CompressedDecodeAudit {
     std::uint32_t extras_seen=0,extra_records=0,sculpt_records=0;
