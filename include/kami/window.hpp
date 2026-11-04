@@ -116,6 +116,7 @@ private:
     std::wstring caps_event_queue_url_; // secret signed bearer URL, never shown
     protocol::caps::QueueCursor caps_ack_{};
     std::wstring caps_status_;
+    std::wstring caps_recent_types_; // sanitized names only, no LLSD bodies
     unsigned caps_completed_polls_=0;
     std::uint64_t caps_events_observed_=0;
     std::uint64_t caps_events_unsupported_=0;
