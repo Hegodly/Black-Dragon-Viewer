@@ -1532,9 +1532,12 @@ void Window::begin_sl_login() {
     caps_event_queue_url_.clear();
     caps_ack_={};
     caps_completed_polls_=0;
+    caps_events_observed_=caps_events_unsupported_=0;
+    caps_consecutive_failures_=0;
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
     caps_status_.clear();
+    caps_recent_types_.clear();
     caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
     // Explicit acceptance and Windows native credential input only.
@@ -1624,8 +1627,12 @@ void Window::start_caps_poll() {
         return;
     auto url=caps_event_queue_url_; // keep trusted URL only for this session
     auto ack=caps_ack_;              // preserve server-provided LLSD type
-    caps_status_=L"EventQueueGet polling (R7, completed "+
-        std::to_wstring(caps_completed_polls_)+L")";
+    caps_status_=L"R9 CAPS polling: "+
+        std::to_wstring(caps_events_observed_)+
+        L" observed / "+std::to_wstring(caps_events_unsupported_)+
+        L" NOT applied";
+    if(!caps_recent_types_.empty())
+        caps_status_+=L" ("+caps_recent_types_+L")";
     caps_poll_future_=std::async(std::launch::async,
         [url=std::move(url),ack=std::move(ack)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
@@ -1742,39 +1749,63 @@ void Window::update_sl_connection() {
           std::future_status::ready){
         try{
             auto result=caps_poll_future_.get();
-            if(result.structurally_valid){
+            if(result.structurally_valid&&result.safe_to_ack){
+                // Commit bounded event diagnostics on the main thread,
+                // and only THEN advance the server's typed ACK cursor.
+                // R9 fixes the R8/R9 infinite "no ACK" standstill.
                 ++caps_completed_polls_;
+                caps_consecutive_failures_=0;
+                caps_events_observed_+=result.event_count;
+                caps_events_unsupported_+=result.unsupported_events;
+                if(!caps_ack_.token.empty())
+                    SecureZeroMemory(caps_ack_.token.data(),
+                                     caps_ack_.token.size());
+                caps_ack_=std::move(result.next_ack);
                 if(result.event_count>0){
-                    // R8 displays only sanitized event *types*. Message
-                    // payloads are not yet handled, so never ACK them.
-                    caps_dispatch_blocked_=true;
-                    caps_status_=L"R8: "+std::to_wstring(result.event_count)+
-                        L" live events (no ACK): ";
-                    if(result.event_types.empty()){
-                        caps_status_+=L"UnknownEvent";
-                    }else{
+                    caps_status_=L"R9 CAPS LIVE: "+
+                        std::to_wstring(caps_events_observed_)+
+                        L" observed; "+
+                        std::to_wstring(caps_events_unsupported_)+
+                        L" actions NOT applied";
+                    caps_recent_types_.clear();
+                    if(!result.event_types.empty()){
                         for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){
-                            if(i) caps_status_+=L", ";
+                            if(i)caps_recent_types_+=L", ";
                             const auto& type=result.event_types[i];
-                            caps_status_+=std::wstring(type.begin(),type.end());
+                            caps_recent_types_+=
+                                std::wstring(type.begin(),type.end());
                         }
+                        caps_status_+=L" ("+caps_recent_types_+L")";
                     }
-                }else if(result.safe_to_ack){
-                    if(!caps_ack_.token.empty())
-                        SecureZeroMemory(caps_ack_.token.data(),
-                                         caps_ack_.token.size());
-                    caps_ack_=std::move(result.next_ack);
-                    caps_status_=L"Event queue live: "+
+                }else{
+                    caps_status_=L"R9 CAPS LIVE: "+
                         std::to_wstring(caps_completed_polls_)+
-                        L" empty polls (no event dispatch yet)";
-                    caps_next_poll_=std::chrono::steady_clock::now()+
-                                    std::chrono::milliseconds(800);
+                        L" polls; "+
+                        std::to_wstring(caps_events_observed_)+
+                        L" events observed (not applied)";
                 }
-            } else if(result.idle){
-                caps_status_=L"Event queue alive; idle long-poll";
                 caps_next_poll_=std::chrono::steady_clock::now()+
-                                std::chrono::milliseconds(800);
+                                std::chrono::milliseconds(500);
+            }else if(result.idle){
+                caps_consecutive_failures_=0;
+                // Preserve the warning for an unparseable idle response.
+                caps_status_=result.diagnostic;
+                caps_next_poll_=std::chrono::steady_clock::now()+
+                                std::chrono::milliseconds(500);
+            }else if(result.transient){
+                // Retry recoverable endpoint/long-poll failures without
+                // spinning on every UI tick or stalling permanently.
+                caps_consecutive_failures_=
+                    std::min(caps_consecutive_failures_+1U,6U);
+                const unsigned backoff=std::min(
+                    1U<<caps_consecutive_failures_,30U);
+                caps_next_poll_=std::chrono::steady_clock::now()+
+                    std::chrono::seconds(backoff);
+                caps_status_=result.diagnostic+L"; retrying in "+
+                    std::to_wstring(backoff)+L"s";
             }else{
+                // Invalid LLSD, expired CAPS or non-recoverable failures
+                // must be visible rather than blindly advancing an ACK.
                 caps_dispatch_blocked_=true;
                 caps_status_=result.diagnostic;
             }
