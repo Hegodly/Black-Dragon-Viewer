@@ -1,4 +1,5 @@
 #include "kami/world/renderer.hpp"
+#include "kami/world/live_terrain.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
@@ -579,51 +580,14 @@ bool Renderer::set_verified_live_terrain(
     // Without this, a user can receive dozens of valid height patches
     // and still see only sky because the camera is looking over them.
     const bool first_live_land=!region_mesh_;
-    SceneMesh scene{};
-    scene.vertices.reserve(nearest.size()*31U*31U*6U);
-    const auto make_vertex=[&](const protocol::terrain::Patch& patch,
-                               unsigned x,unsigned z)->Vertex {
-        const unsigned size=patch.size;
-        const float px=static_cast<float>(patch.x)*size+x-agent.x;
-        const float pz=static_cast<float>(patch.y)*size+z-agent.y;
-        const float py=patch.elevation[z*size+x]-agent.z;
-        // No SL material/texture is decoded yet: neutral diagnostic tint.
-        return {px,py,pz,0.f,1.f,0.f,
-                .20f,.38f,.27f,0.f,.9f,px*.025f,pz*.025f};
-    };
-    const auto add_triangle=[&](Vertex a,Vertex b,Vertex c){
-        const float ux=b.px-a.px,uy=b.py-a.py,uz=b.pz-a.pz;
-        const float vx=c.px-a.px,vy=c.py-a.py,vz=c.pz-a.pz;
-        const float nx=uy*vz-uz*vy;
-        const float ny=uz*vx-ux*vz;
-        const float nz=ux*vy-uy*vx;
-        const float length=std::sqrt(nx*nx+ny*ny+nz*nz);
-        if(!std::isfinite(length)||length<1.e-6f)return;
-        const float inv=1.f/length;
-        for(auto& v:{&a,&b,&c}){
-            v->nx=nx*inv;v->ny=ny*inv;v->nz=nz*inv;
-        }
-        scene.vertices.push_back(a);
-        scene.vertices.push_back(b);
-        scene.vertices.push_back(c);
-    };
-    for(const auto* patch:nearest){
-        const unsigned size=patch->size;
-        for(unsigned z=0;z+1U<size;++z){
-            for(unsigned x=0;x+1U<size;++x){
-                const auto a=make_vertex(*patch,x,z);
-                const auto b=make_vertex(*patch,x,z+1U);
-                const auto cc=make_vertex(*patch,x+1U,z+1U);
-                const auto d=make_vertex(*patch,x+1U,z);
-                add_triangle(a,b,cc);
-                add_triangle(a,cc,d);
-            }
-        }
-    }
-    scene.terrain_count=scene.vertices.size();
-    scene.avatar_count=0;
+    // Stitch patch edges to the NEXT patch's first height sample.
+    // R12 drew only 15x15 quads from each 16x16 sample patch, leaving
+    // one-meter seams that appeared as black grid lines in the live view.
+    const auto built=build_live_terrain_mesh(patches,nearest,
+                                            agent.x,agent.y,agent.z);
+    SceneMesh scene=std::move(built.scene);
     if(scene.vertices.empty()||scene.vertices.size()>750000U){
-        error_=L"R12 verified land triangles exceeded safety budget";
+        error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
     if(ready_)wait_for_gpu();

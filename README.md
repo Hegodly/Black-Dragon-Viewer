@@ -413,3 +413,23 @@ The fix does not fetch textures, decode object meshes, or implement
 live avatar animations. Reported GPU vertices indicate accepted buffers
 and do not independently verify pixel visibility; check the WORLD
 viewport on the target device.
+
+## R13: fix visible gaps between decoded simulator terrain patches
+
+R12 achieved the first **actual Attalia land rendering on DX12** (verified
+by a live screenshot of 86,400 uploaded vertices / 256 decoded patches at
+200 FPS). That mesh represented only 64 selected 16x16 land patches,
+with each patch drawing just 15x15 cells, which left an obvious **one-meter
+hole at every inter-patch boundary**.
+
+R13 adds a reusable, independently authored CPU mesh builder that joins
+a patch's final sample row/column to the first sample of its already-decoded
+neighbor. It uses **only genuine simulator height samples** and skips
+missing neighbors rather than inventing filler terrain. A targeted unit
+test verifies horizontal and vertical adjacency, exact seam positions,
+finite coordinates, no synthetic edges, and the existing 64-patch GPU
+budget. The original bounded DX12 upload path remains unchanged.
+
+This remains **untextured land only**. Prim and mesh objects, avatar
+rendering, terrain materials, and continuous region streaming still need
+implementation; the geometry seam fix is not a finished Second Life viewer.
