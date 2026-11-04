@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/official_zero_codec_api.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -207,15 +208,16 @@ bool decode_full_transforms(const lludp::Packet& packet,
                     (std::uint32_t(extras[at+5U])<<24U);
                 at+=6U;
                 if(length>4096U||length>extras.size()-at||
-                   (type==0x30U&&length!=17U)){
+                   (kami_sl_official_extra_sculpt_alias_v1(type)&&length!=17U)){
                     extras_valid=false;break;
                 }
                 ++seen.extra_records;
                 if(type==0x10U)++seen.flexible_records;
                 else if(type==0x20U)++seen.light_records;
                 else if(type==0x40U)++seen.projector_records;
-                else if(type==0x30U){
+                else if(kami_sl_official_extra_sculpt_alias_v1(type)){
                     ++seen.sculpt_records;
+                    if(type==0x60U)++seen.legacy_mesh_alias_records;
                     if((extras[at+16U]&0x3fU)==5U)
                         ++seen.mesh_sculpt_records;
                 }else ++seen.other_extra_records;
@@ -227,6 +229,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
                 frame.extra_records+=seen.extra_records;
                 frame.sculpt_records+=seen.sculpt_records;
                 frame.mesh_sculpt_records+=seen.mesh_sculpt_records;
+                frame.legacy_mesh_alias_records+=seen.legacy_mesh_alias_records;
                 frame.flexible_records+=seen.flexible_records;
                 frame.light_records+=seen.light_records;
                 frame.projector_records+=seen.projector_records;
