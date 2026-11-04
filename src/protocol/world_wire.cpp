@@ -26,15 +26,15 @@ Sample inspect(const lludp::Packet& packet) noexcept {
     switch(id){
     case 11: {
         value.kind=Kind::LayerData;
-        // Official LayerID.Type: 76 land, 55 wind, 56 cloud.
+        // LayerID.Type U8, LayerData.Data Variable 2.
+        // Reject truncation *before* touching the type byte.
+        if(b.size()<4U)return {Kind::Invalid};
         switch(b[1]){
         case 76U:value.layer_type=LayerType::Terrain;break;
         case 55U:value.layer_type=LayerType::Wind;break;
         case 56U:value.layer_type=LayerType::Cloud;break;
         default:value.layer_type=LayerType::Unknown;break;
         }
-        // LayerID.Type U8, LayerData.Data Variable 2.
-        if(b.size()<4U)return {Kind::Invalid};
         const std::size_t len=le16(b,2);
         if(len==0U||len>4096U||b.size()!=4U+len)
             return {Kind::Invalid};
