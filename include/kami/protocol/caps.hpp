@@ -13,6 +13,7 @@ struct SeedResponse {
     bool granted=false;
     unsigned http_status=0;
     std::wstring event_queue_url; // secret bearer capability; do not log
+    std::wstring mesh_capability_url; // ViewerAsset or GetMesh, never logged
     std::wstring diagnostic;      // contains no URLs or response content
 };
 struct QueueCursor {
@@ -42,7 +43,8 @@ struct PollResponse {
 [[nodiscard]] bool trusted_caps_url(std::wstring_view url) noexcept;
 // These parse only the bounded LLSD XML envelope, never execute events.
 [[nodiscard]] bool parse_seed_llsd(std::string_view xml,
-                                   std::wstring& event_queue_url);
+                                   std::wstring& event_queue_url,
+    std::wstring* mesh_capability_url=nullptr);
 [[nodiscard]] bool parse_event_queue_llsd(std::string_view xml,
                                           unsigned& event_count);
 // Full bounded event-queue envelope; bodies are not applied. Successful
@@ -58,6 +60,15 @@ struct PollResponse {
 [[nodiscard]] bool retryable_event_queue_http_error(unsigned code) noexcept;
 [[nodiscard]] bool possible_idle_event_queue_http_error(unsigned code,
                                                        bool held_long) noexcept;
+struct MeshReply {
+    unsigned status=0;
+    bool fetched=false; // only HTTP 200 with bounded, nonempty bytes
+    std::vector<std::uint8_t> bytes;
+};
+// Authenticated simulator CAPS GET; no redirect, no off-grid fallback.
+// Runs on a separate std::async worker, never inside the DX12 frame loop.
+[[nodiscard]] MeshReply fetch_mesh_asset(std::wstring capability_url,
+                                         std::string mesh_id);
 [[nodiscard]] SeedResponse request_seed(std::wstring seed_url);
 [[nodiscard]] PollResponse probe_event_queue_once(
     std::wstring queue_url,const QueueCursor& previous={});

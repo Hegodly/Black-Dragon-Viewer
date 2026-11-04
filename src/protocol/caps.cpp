@@ -1,5 +1,6 @@
 #include "kami/protocol/caps.hpp"
 #include "kami/protocol/transport.hpp"
+#include "kami/protocol/bootstrap.hpp"
 #include <windows.h>
 #include <winhttp.h>
 #include <msxml6.h>
@@ -205,27 +206,39 @@ bool trusted_caps_url(std::wstring_view url) noexcept {
     Parts dummy;
     return parse_url(url,dummy);
 }
-bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url) {
+bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
+                     std::wstring* mesh_capability_url) {
     event_queue_url.clear();
+    if(mesh_capability_url)mesh_capability_url->clear();
     ComPtr<IXMLDOMDocument2> dom;
     if(!parse_dom(xml,dom))return false;
     ComPtr<IXMLDOMNodeList> nodes;
     if(!child_elements(dom.Get(),nodes))return false;
     long count=0;
     if(FAILED(nodes->get_length(&count))||count<2||count>500)return false;
+    std::wstring viewer_asset,legacy_mesh;
     for(long i=0;i<count-1;++i){
         ComPtr<IXMLDOMNode> key,value;
         if(FAILED(nodes->get_item(i,key.GetAddressOf()))||!key||
-           node_name(key.Get())!=L"key"||
-           node_text(key.Get())!=L"EventQueueGet")continue;
-        if(FAILED(nodes->get_item(i+1,value.GetAddressOf()))||!value||
-           node_name(value.Get())!=L"string")return false;
-        const auto cap=node_text(value.Get());
-        if(!trusted_caps_url(cap))return false;
-        event_queue_url=cap;
-        return true;
+           node_name(key.Get())!=L"key")continue;
+        const auto name=node_text(key.Get());
+        if(name!=L"EventQueueGet"&&name!=L"ViewerAsset"&&
+           name!=L"GetMesh2"&&name!=L"GetMesh")continue;
+        if(FAILED(nodes->get_item(i+1,value.GetAddressOf()))||!value)
+            return false;
+        // Never accept untrusted bearer URLs for any of these services.
+        const auto type=node_name(value.Get());
+        if(type!=L"string"&&type!=L"uri")return false;
+        const auto url=node_text(value.Get());
+        if(!trusted_caps_url(url))return false;
+        if(name==L"EventQueueGet")event_queue_url=url;
+        else if(name==L"ViewerAsset")viewer_asset=url;
+        else if(legacy_mesh.empty())legacy_mesh=url;
     }
-    return false;
+    if(mesh_capability_url)
+        *mesh_capability_url=viewer_asset.empty()?
+             std::move(legacy_mesh):std::move(viewer_asset);
+    return !event_queue_url.empty();
 }
 bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     event_count=0;
@@ -404,13 +417,73 @@ PollResponse observe_event_queue_response(std::string_view xml) {
         L"EventQueueGet heartbeat; no events";
     return result;
 }
+
+MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
+    MeshReply response{};
+    // The asset ID is transmitted only to a validated SL capability host.
+    if(!valid_uuid(mesh_id)||mesh_id.size()!=36U||
+       !trusted_caps_url(capability_url))return response;
+    std::wstring suffix;
+    suffix.reserve(mesh_id.size());
+    for(char ch:mesh_id)suffix.push_back(static_cast<wchar_t>(ch));
+    // ViewerAsset accepts ?mesh_id=uuid; GetMesh also supports mesh_id.
+    const bool query=capability_url.find(L'?')!=std::wstring::npos;
+    capability_url+=(query?L"&mesh_id=":L"?mesh_id=");
+    capability_url+=suffix;
+    Parts target{};
+    if(!parse_url(capability_url,target))return response;
+    HttpHandle session(WinHttpOpen(L"KAMI mesh asset/0.1",
+        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+        WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
+    if(!session.value)return response;
+    WinHttpSetTimeouts(session.value,5000,5000,7000,7000);
+    HttpHandle connection(WinHttpConnect(session.value,target.host.c_str(),
+                                        target.port,0));
+    if(!connection.value)return response;
+    HttpHandle req(WinHttpOpenRequest(connection.value,L"GET",
+        target.path.c_str(),nullptr,WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE));
+    if(!req.value)return response;
+    DWORD redirects=WINHTTP_DISABLE_REDIRECTS;
+    if(!WinHttpSetOption(req.value,WINHTTP_OPTION_DISABLE_FEATURE,
+                         &redirects,sizeof(redirects)))return response;
+    if(!WinHttpSendRequest(req.value,WINHTTP_NO_ADDITIONAL_HEADERS,0,
+            WINHTTP_NO_REQUEST_DATA,0,0,0)||
+       !WinHttpReceiveResponse(req.value,nullptr))return response;
+    DWORD status=0,length=sizeof(status);
+    if(!WinHttpQueryHeaders(req.value,
+        WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX,&status,&length,
+        WINHTTP_NO_HEADER_INDEX))return response;
+    response.status=status;
+    if(status!=200U)return response;
+    constexpr std::size_t max_bytes=8U*1024U*1024U;
+    std::array<std::uint8_t,8192> buffer{};
+    for(;;){
+        DWORD count=0U;
+        if(!WinHttpReadData(req.value,buffer.data(),
+              static_cast<DWORD>(buffer.size()),&count)){
+            response.bytes.clear();return response;
+        }
+        if(!count)break;
+        if(response.bytes.size()+count>max_bytes){
+            response.bytes.clear();return response;
+        }
+        response.bytes.insert(response.bytes.end(),
+                              buffer.begin(),buffer.begin()+count);
+    }
+    response.fetched=!response.bytes.empty();
+    return response;
+}
 SeedResponse request_seed(std::wstring seed_url) {
     SeedResponse result{};
     if(!trusted_caps_url(seed_url)){
         result.diagnostic=L"CAPS seed URL rejected locally";return result;
     }
     static constexpr char body[]=
-        "<llsd><array><string>EventQueueGet</string></array></llsd>";
+        "<llsd><array><string>EventQueueGet</string>"
+        "<string>ViewerAsset</string><string>GetMesh2</string>"
+        "<string>GetMesh</string></array></llsd>";
     auto reply=send_signed_post(seed_url,body,20000,1024U*1024U);
     // Clear credential-like bearer URL; do not log.
     if(!seed_url.empty())
@@ -424,7 +497,8 @@ SeedResponse request_seed(std::wstring seed_url) {
         result.diagnostic=L"CAPS seed HTTP "+
             std::to_wstring(reply.status);return result;
     }
-    if(!parse_seed_llsd(reply.body,result.event_queue_url)){
+    if(!parse_seed_llsd(reply.body,result.event_queue_url,
+                         &result.mesh_capability_url)){
         result.diagnostic=L"CAPS seed missing valid EventQueueGet";
         return result;
     }

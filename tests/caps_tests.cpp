@@ -26,7 +26,9 @@ int exercise(){
         "<key>ViewerAsset</key><string>https://simhost-123.agni.secondlife.io/cap/z</string>"
         "</map></llsd>";
     std::wstring cap;
-    if(!parse_seed_llsd(seed,cap)||cap!=trusted)return 4;
+    std::wstring mesh_cap;
+    if(!parse_seed_llsd(seed,cap,&mesh_cap)||cap!=trusted||
+       mesh_cap!=L"https://simhost-123.agni.secondlife.io/cap/z")return 4;
     if(parse_seed_llsd("<llsd><map><key>EventQueueGet</key>"
         "<string>http://localhost/cap/no</string></map></llsd>",cap))
         return 5;
