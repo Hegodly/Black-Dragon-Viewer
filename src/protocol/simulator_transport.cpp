@@ -157,7 +157,28 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         ++invalid_world_packets_;
     }else{
         switch(world.kind){
-        case worldwire::Kind::ObjectFull:++object_full_packets_;break;
+        case worldwire::Kind::ObjectFull:{
+            ++object_full_packets_;
+            // R23: real SL High 12 full-update blocks have a completely
+            // different message-template layout from packed High 13.
+            // Only finite root volume position/size is accepted, never
+            // invented mesh, texture, or skinned avatar geometry.
+            if(region_seen_&&movement_seen_&&region_metadata_.verified&&
+               movement_position_.verified){
+                std::vector<objectspatial::Transform> objects;
+                if(objectspatial::decode_full_transforms(incoming,objects)){
+                    ++spatial_object_frames_;
+                    ++decoded_full_spatial_frames_;
+                    for(const auto& obj:objects){
+                        if(spatial_objects_.size()>=512U &&
+                           !spatial_objects_.contains(obj.local_id))continue;
+                        spatial_objects_.insert_or_assign(obj.local_id,obj);
+                        ++spatial_object_revision_;
+                    }
+                }else ++rejected_spatial_frames_;
+            }
+            break;
+        }
         case worldwire::Kind::ObjectCompressed:{
             ++object_compressed_packets_;
             if(region_seen_&&movement_seen_&&region_metadata_.verified&&
@@ -300,6 +321,7 @@ void Circuit::stop() noexcept {
     land_revision_=0;land_patches_.clear();
     spatial_object_revision_=0;
     spatial_object_frames_=rejected_spatial_frames_=0;
+    decoded_full_spatial_frames_=0;
     spatial_objects_.clear();
     object_full_packets_=object_compressed_packets_=0;
     object_cached_packets_=object_terse_packets_=object_killed_packets_=0;

@@ -528,7 +528,23 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(diagnostics::stage_label(checks[i].stage),
                   box(contentX+contentWidth-153,y+3,128,22),
                   small_font_.Get(),p.accent);
-            label(checks[i].details,
+            std::wstring detail=checks[i].details;
+            if(i==0U){
+                // Separate actual simulator packet reception from objects
+                // displayed. Zero amber frames can mean no object packets,
+                // unsupported cached updates, invalid data or distance.
+                detail=L"Full RX "+std::to_wstring(
+                    sl_circuit_.full_object_packets())+
+                    L" | Compressed RX "+std::to_wstring(
+                    sl_circuit_.compressed_object_packets())+
+                    L" | Cached RX "+std::to_wstring(
+                    sl_circuit_.cached_object_packets())+
+                    L" | Full decoded "+std::to_wstring(
+                    sl_circuit_.decoded_full_spatial_frames())+
+                    L" | Rejected "+std::to_wstring(
+                    sl_circuit_.rejected_spatial_frames());
+            }
+            label(detail,
                   box(contentX+36,y+25,contentWidth-76,20),
                   small_font_.Get(),p.muted);
         }

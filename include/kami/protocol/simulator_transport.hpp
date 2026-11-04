@@ -80,6 +80,9 @@ public:
     [[nodiscard]] std::uint32_t rejected_spatial_frames() const noexcept {
         return rejected_spatial_frames_;
     }
+    [[nodiscard]] std::uint32_t decoded_full_spatial_frames() const noexcept {
+        return decoded_full_spatial_frames_;
+    }
     [[nodiscard]] const std::map<std::uint16_t,terrain::Patch>&
     decoded_land_patches() const noexcept {return land_patches_;}
     [[nodiscard]] std::uint32_t wind_packets() const noexcept {return wind_packets_;}
@@ -135,6 +138,7 @@ private:
     std::map<std::uint32_t,objectspatial::Transform> spatial_objects_;
     std::uint64_t spatial_object_revision_=0;
     std::uint32_t spatial_object_frames_=0,rejected_spatial_frames_=0;
+    std::uint32_t decoded_full_spatial_frames_=0;
     std::uint32_t cloud_packets_=0,unknown_layer_packets_=0;
     std::uint32_t object_update_packets_=0;
     std::uint32_t object_full_packets_=0,object_compressed_packets_=0;

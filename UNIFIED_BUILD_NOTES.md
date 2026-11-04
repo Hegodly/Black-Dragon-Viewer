@@ -323,3 +323,42 @@ R22 TEST: Log into Attalia; WORLD -> press V for landscape overview;
 compare high vertical gray walls with the earlier photo; read SKIPPED
 SPIKES and AMBER BOUNDS; verify W/S + A/D turning and camera switch
 survive. Screenshot after applying R22 is the decisive confirmation.
+
+## R23: decode full Second Life ObjectUpdate to enrich live WORLD
+
+The user confirmed R22's height decoder fix: 256 live SL land patches,
+97,344 vertices, no giant gray spike walls and SKIPPED SPIKES=0, while
+WORLD still reported AMBER BOUNDS=0. That means KAMI has not yet
+drawn a supported SL root object.
+
+R23 adds defensive decoding for the *full*, high-frequency 12
+ObjectUpdate message. R19 previously handled only High 13 compressed
+objects. This parses all fixed and length-prefixed fields in the
+official Second Life message template, then extracts finite root
+volume (PCode=9, ParentID=0) world position and XYZ scale from 60,
+76, 124 and 140 byte full-precision ObjectData.
+
+- Malformed, truncated, out-of-range, parent-relative and non-volume
+  blocks cannot enter the same capped live root transform cache.
+- Existing DX12 geometry builder draws the nearest 64 supported
+  server-derived roots as narrow AMBER bounding frames.
+- F9's object diagnostic row shows received Full, Compressed and
+  Cached wire counts, decoded full frame counts, and rejected
+  spatial frames, distinguishing missing network data from parsing.
+- New C++ tests cover multi-block framing, byte offsets, parented,
+  non-volume, malformed, out-of-range and wrong-message cases.
+- Retains R22's corrected genuine SL terrain height decoder,
+  weather-independent KAMI DX12 sky, painted terrain, masked water,
+  landscape camera and user-confirmed avatar walking/turning.
+
+This still DOES NOT load SL object meshes, sculpt shapes, textures,
+PBR or avatar wearables. Cached object updates still require requesting
+missing object data, and compressed objects remain subset-only.
+If AMBER BOUNDS remains zero, the F9 counters tell us which
+protocol/asset stage must be addressed next. An executable passing
+unit tests is NOT proof of full Second Life scene rendering.
+
+LIVE TEST: Log into Attalia; in WORLD note amber count and terrain
+appearance, press F9 and capture the Objects row's FULL/COMPRESSED/
+CACHED received and decoded/rejected counts; press V and use WASD
+to check preserved camera and movement.
