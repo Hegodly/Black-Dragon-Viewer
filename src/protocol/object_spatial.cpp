@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/official_zero_codec_api.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -56,7 +57,7 @@ struct CompressedVolume {
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
-    std::uint32_t extra_records=0,sculpt_records=0;
+    std::uint32_t extra_records=0,sculpt_records=0,legacy_mesh_alias_records=0;
     bool legacy_particles=false;
 };
 CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
@@ -113,7 +114,10 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
         at+=6U;
         if(length>4096U||!has(length))return out;
         ++out.extra_records;
-        if(type==0x30U && length==17U)++out.sculpt_records;
+        if(kami_sl_official_extra_sculpt_alias_v1(type)&&length==17U){
+            ++out.sculpt_records;
+            if(type==0x60U)++out.legacy_mesh_alias_records;
+        }
         at+=length;
     }
     out.extras=true;
@@ -188,6 +192,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         if(shape.extras)++frame.extras_seen;
         frame.extra_records+=shape.extra_records;
         frame.sculpt_records+=shape.sculpt_records;
+        frame.legacy_mesh_alias_records+=shape.legacy_mesh_alias_records;
         if(shape.shape)++frame.shape_fields;
         if(shape.primitive!=PrimitiveKind::Unknown)++frame.supported_shapes;
         if(!shape.mesh.empty())++frame.mesh_references;
