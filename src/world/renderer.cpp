@@ -659,6 +659,10 @@ bool Renderer::set_verified_live_terrain(
     uploaded_root_primitive_shapes_=primitives.root_shapes;
     uploaded_linked_primitive_shapes_=primitives.linked_shapes;
     uploaded_primitive_vertices_=new_primitive_vertices;
+    primitive_eligible_=primitives.eligible_shapes;
+    primitive_unresolved_=primitives.unresolved_parent_shapes;
+    primitive_distant_=primitives.out_of_range_shapes;
+    primitive_deferred_=primitives.budget_deferred_shapes;
     uploaded_water_vertices_=new_water_count;
     skipped_terrain_discontinuities_=built.skipped_discontinuity_quads;
     if(!nearest.empty()){
@@ -753,6 +757,10 @@ void Renderer::clear_decoded_region_geometry() {
     uploaded_root_primitive_shapes_=0;
     uploaded_linked_primitive_shapes_=0;
     uploaded_primitive_vertices_=0;
+    primitive_eligible_=0;
+    primitive_unresolved_=0;
+    primitive_distant_=0;
+    primitive_deferred_=0;
     uploaded_water_vertices_=0;
     skipped_terrain_discontinuities_=0;
     landscape_view_=false;
