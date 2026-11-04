@@ -34,6 +34,15 @@ public:
     [[nodiscard]] std::uint32_t packets_received() const noexcept {
         return packets_received_;
     }
+    [[nodiscard]] std::uint32_t layer_packets() const noexcept {
+        return layer_packets_;
+    }
+    [[nodiscard]] std::uint32_t object_update_packets() const noexcept {
+        return object_update_packets_;
+    }
+    [[nodiscard]] std::uint32_t dropped_invalid_world_packets() const noexcept {
+        return invalid_world_packets_;
+    }
     [[nodiscard]] std::wstring diagnostic() const;
 private:
     [[nodiscard]] bool send_packet(lludp::Packet packet) noexcept;
@@ -48,6 +57,9 @@ private:
     bool region_seen_=false,movement_seen_=false;
     bool use_acked_=false,move_acked_=false,handshake_replied_=false;
     std::uint32_t packets_received_=0;
+    std::uint32_t layer_packets_=0;
+    std::uint32_t object_update_packets_=0;
+    std::uint32_t invalid_world_packets_=0;
     std::uint32_t sequence_=1;
     unsigned attempts_=0;
     std::chrono::steady_clock::time_point last_retry_{};

@@ -2,6 +2,7 @@
 #include <string>
 #include <string_view>
 #include <cstdint>
+#include <vector>
 
 namespace kami::protocol::caps {
 // This is the *first* CAPS transport milestone. Event payloads are never
@@ -19,6 +20,7 @@ struct QueueCursor {
 struct EventQueueFrame {
     QueueCursor id;
     unsigned event_count=0;
+    std::vector<std::string> event_types; // sanitized names, at most 8
     // Never retain untrusted event bodies until a verified dispatcher exists.
 };
 struct PollResponse {
@@ -27,6 +29,7 @@ struct PollResponse {
     bool safe_to_ack=false;
     unsigned http_status=0;
     unsigned event_count=0;
+    std::vector<std::string> event_types; // no sensitive LLSD bodies
     QueueCursor next_ack; // only valid when safe_to_ack=true
     std::wstring diagnostic; // no event bodies, credentials or bearer URLs
 };

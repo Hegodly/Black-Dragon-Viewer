@@ -60,7 +60,8 @@ int exercise(){
          "<key>ack</key><undef />")==std::string::npos)
         return 13;
     if(!parse_event_queue_frame(events,frame)||
-       frame.event_count!=1)return 14;
+       frame.event_count!=1||frame.event_types.size()!=1||
+       frame.event_types[0]!="EnableSimulator")return 14;
     const std::string typed=
         "<llsd><map><key>id</key><string>abc-1</string>"
         "<key>events</key><array/></map></llsd>";
@@ -75,6 +76,14 @@ int exercise(){
         "<llsd><map><key>id</key><integer>4</integer>"
         "<key>events</key><array><string>untrusted</string></array>"
         "</map></llsd>",frame))return 17;
+    const std::string unsafe=
+       "<llsd><map><key>id</key><integer>5</integer>"
+       "<key>events</key><array><map><key>message</key>"
+       "<string>https://signed-cap.example/x</string></map></array>"
+       "</map></llsd>";
+    if(!parse_event_queue_frame(unsafe,frame)||
+       frame.event_types.size()!=1||
+       frame.event_types[0]!="UnknownEvent")return 18;
     return 0;
 }
 }

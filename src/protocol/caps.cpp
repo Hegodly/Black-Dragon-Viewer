@@ -290,12 +290,42 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
                 return false;
             long n=0;
             if(FAILED(events->get_length(&n))||n<0||n>512)return false;
-            // Require LLSD map event containers. We don't interpret the
-            // untrusted event bodies until verified message decoders exist.
+            // Capture only bounded message *names*, not opaque event bodies.
+            // This helps identify which SL event decoders are needed next,
+            // without logging bearer URLs or avatar message contents.
             for(long index=0;index<n;++index){
                 ComPtr<IXMLDOMNode> entry;
                 if(FAILED(events->get_item(index,entry.GetAddressOf()))||
                    !entry||node_name(entry.Get())!=L"map")return false;
+                if(out.event_types.size()>=8U)continue;
+                ComPtr<IXMLDOMNodeList> members;
+                if(FAILED(entry->get_childNodes(members.GetAddressOf()))||
+                   !members)return false;
+                long mcount=0;
+                if(FAILED(members->get_length(&mcount))||mcount>80)return false;
+                std::string safe;
+                for(long m=0;m+1<mcount;++m){
+                    ComPtr<IXMLDOMNode> key,data;
+                    if(FAILED(members->get_item(m,key.GetAddressOf()))||
+                       !key||node_name(key.Get())!=L"key"||
+                       node_text(key.Get())!=L"message")continue;
+                    if(FAILED(members->get_item(m+1,data.GetAddressOf()))||
+                       !data||node_name(data.Get())!=L"string")break;
+                    const auto raw=node_text(data.Get());
+                    if(raw.empty()||raw.size()>48U)break;
+                    for(const wchar_t ch:raw){
+                        if(!((ch>=L'A'&&ch<=L'Z')||
+                             (ch>=L'a'&&ch<=L'z')||
+                             (ch>=L'0'&&ch<=L'9')||
+                             ch==L'_'||ch==L'-')){
+                            safe.clear();break;
+                        }
+                        safe.push_back(static_cast<char>(ch));
+                    }
+                    break;
+                }
+                out.event_types.push_back(safe.empty()?
+                    std::string("UnknownEvent"):std::move(safe));
             }
             out.event_count=static_cast<unsigned>(n);
         }
@@ -395,14 +425,15 @@ PollResponse probe_event_queue_once(
         return result;
     }
     result.event_count=frame.event_count;
+    result.event_types=std::move(frame.event_types);
     result.structurally_valid=true;
     if(frame.event_count!=0){
         // Never acknowledge or discard unhandled authoritative events.
         // Keep the previous ack, freeze automatic polling and ask for
         // proper handlers in a future build.
-        result.diagnostic=L"EventQueueGet received "+
-            std::to_wstring(frame.event_count)+
-            L" live events; dispatch pending (not acknowledged)";
+        result.diagnostic=L"EventQueue: "+
+            std::to_wstring(frame.event_count)+L" event(s) pending; "+
+            L"not acknowledged";
         return result;
     }
     result.safe_to_ack=true;
