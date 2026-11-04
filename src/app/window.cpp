@@ -723,7 +723,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(world_renderer_.uploaded_live_land_vertices())+
                 L" | decoded patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
-                L" | SL objects NOT rendered";
+                (world_renderer_.live_avatar_placeholder_active()?
+                 L" | AVATAR LOCAL ESTIMATE (not SL-synced)":
+                 L" | Avatar placeholder pending");
         }else if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
             world_status+=L"Connected to region | land patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+

@@ -67,3 +67,26 @@ Local loopback tests check control wire bytes and the release back to
 zero. No claim is made that all simulator-side movement has been proven
 against the live grid. R9-R14 terrain, login, original KAMI UI and
 the seven staged workstreams stay in this same ZIP.
+
+## R16: visible avatar placeholder + native camera tracking (experimental)
+
+- R16 appends a generic blue, six-box *local visual placeholder* to the
+  already working authenticated SL land mesh in the DX12 vertex buffer.
+- The marker is anchored to the verified initial AgentMovementComplete
+  simulator position (in SL x/y/z mapped to DX12 x/z/y).
+- The same keyboard controls used by R15's real simulator AgentUpdate are
+  used to predict movement locally. The DX12 camera follows that estimate,
+  and releasing the keys stops its estimated movement. Motion is bounded
+  to the current 256m region, never teleporting a user or altering assets.
+- The WORLD footer explicitly says "AVATAR LOCAL ESTIMATE (not SL-synced)".
+- Important: NO continuous server-authoritative avatar position decoder
+  exists yet; this local placeholder may drift relative to what is seen
+  in Firestorm or another viewer. The 216-vertex cuboid is NOT your real
+  SL avatar, outfit, or animations. Real SL mesh and texture decoding
+  and own-avatar ObjectUpdate movement correction remain future work.
+- Regression coverage validates authenticated spawn, invalid spawn,
+  predicted movement, key release, region bounding and marker geometry.
+- R9-R15 login, CAPS, terrain, stitching and live movement are all
+  included in this SAME Windows portable test ZIP.
+
+Build branch: release/kami-r16-live-avatar-placeholder-20261104

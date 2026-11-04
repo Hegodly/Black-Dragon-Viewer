@@ -11,6 +11,7 @@
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include "kami/world/region_geometry.hpp"
+#include "kami/world/live_avatar.hpp"
 #include <optional>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -42,6 +43,10 @@ public:
     void draw();
     void set_avatar_controls(avatar::Controls controls) noexcept {
         avatar_.set_controls(controls);
+        live_preview_controls_=controls;
+    }
+    [[nodiscard]] bool live_avatar_placeholder_active() const noexcept {
+        return region_mesh_.has_value() && live_avatar_preview_.active();
     }
     [[nodiscard]] const avatar::State& avatar_state() const noexcept {
         return avatar_.state();
@@ -162,6 +167,8 @@ private:
     std::optional<SceneMesh> preview_mesh_;
     std::optional<SceneMesh> region_mesh_;
     std::optional<SceneMesh> live_water_mesh_;
+    LiveAvatarPreview live_avatar_preview_{};
+    avatar::Controls live_preview_controls_{};
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;
     std::wstring capture_path_;

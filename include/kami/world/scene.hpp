@@ -22,6 +22,8 @@ struct SceneMesh {
 
 // Original procedural test assets, not Second Life content.
 [[nodiscard]] SceneMesh build_test_scene(unsigned divisions = 32);
+// Untextured, unrigged visual stand-in, not the user's Second Life appearance.
+[[nodiscard]] SceneMesh build_live_avatar_placeholder();
 // R9: a flat, original DX12 mesh positioned from verified SL water
 // elevation relative to a session-verified avatar elevation. This is
 // NOT a terrain decoder, mesh asset, or water texture simulation.

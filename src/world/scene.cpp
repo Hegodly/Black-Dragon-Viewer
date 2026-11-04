@@ -152,6 +152,26 @@ SceneMesh build_test_scene(unsigned divisions) {
     scene.avatar_count=scene.vertices.size()-scene.terrain_count;
     return scene;
 }
+SceneMesh build_live_avatar_placeholder() {
+    SceneMesh scene{};
+    // A six-cuboid, locally authored stand-in, not an SL asset or appearance.
+    // Six boxes * 36 vertices = 216; no skinning, network textures, or uploads.
+    box(scene.vertices,{0.f,1.25f,0.f},{.32f,.60f,.23f},
+        {.10f,.48f,.95f},.12f,.65f);
+    box(scene.vertices,{0.f,2.10f,0.f},{.27f,.28f,.26f},
+        {.72f,.78f,.92f},.0f,.78f);
+    box(scene.vertices,{-.48f,1.30f,0.f},{.15f,.52f,.15f},
+        {.17f,.53f,.81f},.08f,.75f);
+    box(scene.vertices,{.48f,1.30f,0.f},{.15f,.52f,.15f},
+        {.17f,.53f,.81f},.08f,.75f);
+    box(scene.vertices,{-.19f,.42f,0.f},{.16f,.43f,.17f},
+        {.12f,.20f,.45f},.07f,.8f);
+    box(scene.vertices,{.19f,.42f,0.f},{.16f,.43f,.17f},
+        {.12f,.20f,.45f},.07f,.8f);
+    scene.terrain_count=0;
+    scene.avatar_count=scene.vertices.size();
+    return scene;
+}
 SceneMesh build_live_water_preview(float relative_water_y) {
     SceneMesh result{};
     if(!std::isfinite(relative_water_y)||

@@ -576,6 +576,10 @@ bool Renderer::set_verified_live_terrain(
             return d(a)<d(b);
         });
     if(nearest.size()>64U)nearest.resize(64U);
+    if(!live_avatar_preview_.active()&&!live_avatar_preview_.reset(agent)){
+        error_=L"R16 avatar marker needs verified simulator spawn";
+        return false;
+    }
     // The first land upload also needs to reframe the offline camera.
     // Without this, a user can receive dozens of valid height patches
     // and still see only sky because the camera is looking over them.
@@ -586,6 +590,14 @@ bool Renderer::set_verified_live_terrain(
     auto built=build_live_terrain_mesh(patches,nearest,
                                             agent.x,agent.y,agent.z);
     SceneMesh scene=std::move(built.scene);
+    // Actual SL land stays in the terrain section. Append only an
+    // obvious generic local placeholder in the separate avatar section.
+    if(live_avatar_preview_.active()){
+        const auto marker=build_live_avatar_placeholder();
+        scene.avatar_count=marker.avatar_count;
+        scene.vertices.insert(scene.vertices.end(),
+                              marker.vertices.begin(),marker.vertices.end());
+    }
     if(scene.vertices.empty()||scene.vertices.size()>750000U){
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
@@ -680,6 +692,8 @@ void Renderer::clear_decoded_region_geometry() {
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
+    live_avatar_preview_.clear();
+    live_preview_controls_={};
     camera_.set_subject({0.f,0.f,0.f});
     camera_.reset();
     if(ready_&&!make_geometry()) {
@@ -727,6 +741,16 @@ void Renderer::draw() {
         }
         const auto& state=avatar_.state();
         camera_.set_subject({state.x,state.y,state.z},state.heading);
+    }
+    const bool preview_visible=region_mesh_&&!preview_mesh_&&
+        live_avatar_preview_.active();
+    if(preview_visible){
+        live_avatar_preview_.step(dt,live_preview_controls_);
+        const auto& marker=live_avatar_preview_.pose();
+        // Marker follows LOCAL key prediction based on the verified initial
+        // spawn. We still require real own-avatar ObjectUpdate replication.
+        camera_.set_subject({marker.x,marker.y-1.f,marker.z},
+                            marker.heading);
     }
     avatar_spring_.step(std::sin(seconds*2.f),dt);
     // Live SL terrain must not collide against the procedural offline
@@ -787,6 +811,18 @@ void Renderer::draw() {
     constants[56]=0.f;constants[57]=0.f;
     constants[58]=0.f;constants[59]=0.f;
     constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
+    const auto apply_avatar_marker=[&](){
+        if(!preview_visible)return;
+        const auto& p=live_avatar_preview_.pose();
+        constants[25]=0.f;
+        constants[47]=seconds*4.f;
+        constants[55]=p.moving&&graphics_.animate_avatar?.65f:0.f;
+        constants[56]=p.x;
+        constants[57]=p.y;
+        constants[58]=p.z;
+        constants[59]=p.heading;
+        constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
+    };
 
     commands_->SetGraphicsRootSignature(signature_.Get());
     ID3D12DescriptorHeap* resources[]={shadow_srv_heap_.Get()};
@@ -834,6 +870,7 @@ void Renderer::draw() {
             // applying the deformation twice.
             constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
         }
+        apply_avatar_marker();
         commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
         commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                                 static_cast<UINT>(terrain_count_),0);
@@ -885,6 +922,7 @@ void Renderer::draw() {
             // applying the deformation twice.
             constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
     }
+    apply_avatar_marker();
     commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
