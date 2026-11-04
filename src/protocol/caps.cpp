@@ -481,10 +481,10 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
                 if(FAILED(members->get_length(&mcount))||mcount>80)return false;
                 std::string safe;
                 for(long m=0;m+1<mcount;++m){
-                    ComPtr<IXMLDOMNode> key,data;
-                    if(FAILED(members->get_item(m,key.GetAddressOf()))||
-                       !key||node_name(key.Get())!=L"key"||
-                       node_text(key.Get())!=L"message")continue;
+                    ComPtr<IXMLDOMNode> member_key,data;
+                    if(FAILED(members->get_item(m,member_key.GetAddressOf()))||
+                       !member_key||node_name(member_key.Get())!=L"key"||
+                       node_text(member_key.Get())!=L"message")continue;
                     if(FAILED(members->get_item(m+1,data.GetAddressOf()))||
                        !data||node_name(data.Get())!=L"string")break;
                     const auto raw=node_text(data.Get());
