@@ -19,6 +19,9 @@ high LOD for missing medium LOD.
 - Regression test synthesizes a binary LLSD asset with medium_lod size 0,
   high_lod zlib bytes intact, then also tests malformed nonempty medium
   and damaged compressed data.
+- Malformed full-update ExtraParams now suppress speculative simple-prim
+  rendering; otherwise an unrecognized mesh could appear as a fake box.
+- Regression ensures malformed ExtraParams never manufacture box geometry.
 - F9 footer says R43.1 to make old/extracted builds distinguishable.
 
 ## Before live testing
