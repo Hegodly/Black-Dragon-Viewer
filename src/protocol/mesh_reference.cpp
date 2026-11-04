@@ -1,4 +1,5 @@
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/official_zero_codec_api.h"
 #include <algorithm>
 #include <array>
 
@@ -39,9 +40,10 @@ std::string mesh_asset_from_extras(std::span<const std::uint8_t> extras)
         at+=6U;
         if(length>extras.size()-at||length>4096U)return {};
         auto value=extras.subspan(at,length);
-        // 0x30 is LLNetworkData::PARAMS_SCULPT. Byte 17 is the
-        // sculpt type; its lower six bits = 5 for real mesh.
-        if(kind==0x30U){
+        // Linden's official LLViewerObject maps PARAMS_MESH=0x60 to
+        // PARAMS_SCULPT=0x30. Both use a validated 17-byte sculpt payload.
+        // The exported alias check is implemented in our LGPL DLL.
+        if(kami_sl_official_extra_sculpt_alias_v1(kind)){
             if(length!=17U)return {};
             if((value[16]&0x3fU)==5U&&
                std::any_of(value.begin(),value.begin()+16U,

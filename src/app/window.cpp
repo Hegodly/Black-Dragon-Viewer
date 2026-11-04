@@ -592,7 +592,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         sl_circuit_.decoded_mesh_assets().size())+
                     L" | CSc "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().sculpt_records)+
+                    L" | CAlias "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().legacy_mesh_alias_records)+
                     L" | FSc "+std::to_wstring(audit.sculpt_records)+
+                    L" | FAlias "+std::to_wstring(audit.legacy_mesh_alias_records)+
                     L" | FMesh "+std::to_wstring(audit.mesh_sculpt_records)+
                     L" | FLight "+std::to_wstring(audit.light_records)+
                     L" | FFlex "+std::to_wstring(audit.flexible_records)+
@@ -604,7 +607,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R43.1: full shape fix + missing medium-LOD fallback | textures, avatar pending",
+        label(L"Official SL wire stage 1 + 0x60 mesh alias | full SL backend pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;

@@ -219,5 +219,22 @@ int main(){
            packet({malformed_box}),out,&audit)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
        audit.malformed_extra_envelopes!=1U)return 21;
+    // Official legacy PARAMS_MESH (0x60) is a sculpt param alias.
+    // Regression covers the exact live full-update mesh discovery path.
+    auto alias=sculpt;
+    alias[1]=0x60U;
+    if(!objectspatial::decode_full_transforms(
+           packet({block(111U,0U,9U,128.f,alias)}),out,&audit)||
+       out.size()!=1U||
+       out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       audit.legacy_mesh_alias_records!=1U||
+       audit.mesh_sculpt_records!=1U||
+       audit.other_extra_records!=0U)return 22;
+    alias.back()=3U;
+    if(!objectspatial::decode_full_transforms(
+           packet({block(112U,0U,9U,128.f,alias)}),out,&audit)||
+       out.size()!=1U||!out[0].mesh_asset_id.empty()||
+       audit.legacy_mesh_alias_records!=1U||
+       audit.mesh_sculpt_records!=0U)return 23;
     return 0;
 }

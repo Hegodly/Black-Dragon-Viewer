@@ -380,6 +380,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.extra_records+=frame.extra_records;
                     full_decode_audit_.sculpt_records+=frame.sculpt_records;
                     full_decode_audit_.mesh_sculpt_records+=frame.mesh_sculpt_records;
+                    full_decode_audit_.legacy_mesh_alias_records+=frame.legacy_mesh_alias_records;
                     full_decode_audit_.extra_envelopes+=frame.extra_envelopes;
                     full_decode_audit_.malformed_extra_envelopes+=frame.malformed_extra_envelopes;
                     full_decode_audit_.flexible_records+=frame.flexible_records;
@@ -432,6 +433,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     compressed_decode_audit_.extras_seen+=frame.extras_seen;
                     compressed_decode_audit_.extra_records+=frame.extra_records;
                     compressed_decode_audit_.sculpt_records+=frame.sculpt_records;
+                    compressed_decode_audit_.legacy_mesh_alias_records+=frame.legacy_mesh_alias_records;
                     compressed_decode_audit_.shape_fields+=frame.shape_fields;
                     compressed_decode_audit_.supported_shapes+=frame.supported_shapes;
                     compressed_decode_audit_.mesh_references+=frame.mesh_references;

@@ -179,6 +179,15 @@ int main(){
        !children[0].volume_params_seen||
        children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
        audit.mesh_references!=1U||audit.shape_fields!=1U)return 19;
+    // Official viewer aliases 0x60 PARAMS_MESH to 0x30 PARAMS_SCULPT.
+    auto alias_meshblock=meshblock;
+    alias_meshblock[alias_meshblock.size()-23U-17U-6U]=0x60U;
+    if(!objectspatial::decode_compressed_transforms(
+         compressed(alias_meshblock),out,&children,&audit)||
+       children.size()!=1U||
+       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       audit.legacy_mesh_alias_records!=1U||
+       audit.mesh_references!=1U)return 27;
     // Without a sculpt/mesh marker a genuine cylinder can use the
     // same path bytes; no speculative mesh identity is introduced.
     auto cylinder=packed(113U);
