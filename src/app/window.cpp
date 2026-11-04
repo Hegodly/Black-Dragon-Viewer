@@ -1537,6 +1537,7 @@ void Window::begin_sl_login() {
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
     caps_status_.clear();
+    caps_recent_types_.clear();
     caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
     // Explicit acceptance and Windows native credential input only.
@@ -1626,8 +1627,12 @@ void Window::start_caps_poll() {
         return;
     auto url=caps_event_queue_url_; // keep trusted URL only for this session
     auto ack=caps_ack_;              // preserve server-provided LLSD type
-    caps_status_=L"EventQueue R9 FIX: polling (batches "+
-        std::to_wstring(caps_completed_polls_)+L")";
+    caps_status_=L"R9 CAPS polling: "+
+        std::to_wstring(caps_events_observed_)+
+        L" observed / "+std::to_wstring(caps_events_unsupported_)+
+        L" NOT applied";
+    if(!caps_recent_types_.empty())
+        caps_status_+=L" ("+caps_recent_types_+L")";
     caps_poll_future_=std::async(std::launch::async,
         [url=std::move(url),ack=std::move(ack)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
@@ -1762,14 +1767,15 @@ void Window::update_sl_connection() {
                         L" observed; "+
                         std::to_wstring(caps_events_unsupported_)+
                         L" actions NOT applied";
+                    caps_recent_types_.clear();
                     if(!result.event_types.empty()){
-                        caps_status_+=L" (";
                         for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){
-                            if(i)caps_status_+=L", ";
+                            if(i)caps_recent_types_+=L", ";
                             const auto& type=result.event_types[i];
-                            caps_status_+=std::wstring(type.begin(),type.end());
+                            caps_recent_types_+=
+                                std::wstring(type.begin(),type.end());
                         }
-                        caps_status_+=L")";
+                        caps_status_+=L" ("+caps_recent_types_+L")";
                     }
                 }else{
                     caps_status_=L"R9 CAPS LIVE: "+
