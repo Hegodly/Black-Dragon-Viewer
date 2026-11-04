@@ -59,5 +59,10 @@ int main(){
        f.blocks!=1)return 8;
     if(worldwire::inspect(packet(8,{1})).kind!=
        worldwire::Kind::Unrelated)return 9;
+    // A one-byte LayerData type must not be accessed before length checks.
+    if(worldwire::inspect(packet(11,{})).kind!=worldwire::Kind::Invalid||
+       worldwire::inspect(packet(11,{76})).kind!=worldwire::Kind::Invalid||
+       worldwire::inspect(packet(11,{76,4})).kind!=worldwire::Kind::Invalid)
+        return 13;
     return 0;
 }
