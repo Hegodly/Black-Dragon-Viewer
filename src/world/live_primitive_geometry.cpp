@@ -187,7 +187,9 @@ PrimitiveBatch build_live_primitive_geometry(
     PrimitiveBatch result{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return result;
-    limit=std::min<std::size_t>(limit,64U);
+    // R32: larger closest-first batch with an upper bound on the DX12
+    // vertex workload. Mesh asset geometry remains a separate pipeline.
+    limit=std::min<std::size_t>(limit,128U);
     struct Draw {const Transform* item;Pose pose;bool child;float distance;};
     std::vector<Draw> chosen;
     chosen.reserve(roots.size()+children.size());
@@ -199,7 +201,7 @@ PrimitiveBatch build_live_primitive_geometry(
         }
         const V d=sub(p.pos,origin);
         // Allow structures beyond the old 96m horizontal / 60m vertical
-        // gate. The 64-shape closest-first budget still caps GPU uploads.
+        // gate. The 128-shape closest-first budget caps GPU uploads.
         if(std::abs(d.x)>144.f||std::abs(d.y)>144.f||
            std::abs(d.z)>96.f){
             ++result.out_of_range_shapes;

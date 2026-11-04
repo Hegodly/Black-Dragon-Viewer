@@ -34,6 +34,7 @@ on:
       - release/kami-r25-request-missing-roots-20261104
       - release/kami-r26-linked-primitives-20261104
       - release/kami-r27-root-recovery-diagnostics-20261104
+      - release/kami-r27-r32-unified-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -115,9 +116,10 @@ jobs:
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R27-Root-Recovery.zip
+          Copy-Item R27_R32_UNIFIED_STATUS.md dist/KAMI
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R27-R32-Unified.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R27-Root-Recovery
+          name: KAMI-R27-R32-Unified
           path: dist/KAMI-R27-Root-Recovery.zip
           retention-days: 14

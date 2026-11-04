@@ -482,3 +482,38 @@ attachment avatars, texture assets or production SL parity.
 User test: login to Attalia, press V for scenery, check AMBER BOUNDS,
 SOLID ROOTS, SOLID LINKED, world FPS, and F9 Linked vs SOLID.
 Verify W/S and A/D movement, camera, 256 land patches.
+
+
+## R27–R32 unified integration (November 4, 2026)
+One Windows portable build keeps the R27 root recovery (up to five bounded
+retries with cooldown) and earlier R17-R26 DX12 terrain, water, camera,
+agent movement, and 7-system diagnostics.
+
+R28: Adds strictly classified straight triangular-prism geometry to the
+box/cylinder/sphere DX12 primitive path. Adds support-aware diagnostics
+for geometry skipped due to missing parents, view range, or render budget.
+
+R29: Parses the default TextureEntry UUID presence from validated
+ObjectUpdate frames and exposes counts without logging resident UUIDs.
+This only proves a texture reference was seen; it does NOT implement
+JPEG2000/J2C texture downloading, decoding, PBR, or GPU texture binding.
+
+R30: Parses bounded official AvatarAppearance metadata (Low 158), verifies
+whether it belongs to the connected agent, and reports visual parameter
+count and packet count. The rendered blue body remains a LOCAL PLACEHOLDER;
+Bento, rigged meshes, attachments and actual avatar textures are not loaded.
+
+R31: Adds UTF-8-safe ChatFromSimulator (Low 139) intake and normal channel 0
+ChatFromViewer (Low 80) sends through the authenticated simulator UDP socket.
+Messenger's NEARBY tab can display incoming chat and send user-initiated
+public messages. Packet sending is not proof of receipt/delivery/read;
+group conversations, inventory, IMs and read receipts are not connected.
+
+R32: Expands the nearest-first primitive DX12 budget from 64 to 128 shapes
+while retaining existing 800ms upload coalescing, finite-geometry guards,
+and the 750k-vertex scene cap. Real viewer performance cannot be determined
+from build/test passes alone.
+
+This is an integrated experimental test build. Do not distribute as a full
+Second Life viewer until complete asset streaming, avatar wearables,
+inventory/services, privacy/security review and live in-world validation.

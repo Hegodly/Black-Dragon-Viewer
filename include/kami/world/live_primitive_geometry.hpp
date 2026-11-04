@@ -22,5 +22,5 @@ struct PrimitiveBatch {
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     float agent_x,float agent_y,float agent_z,
-    std::size_t limit=64U);
+    std::size_t limit=128U);
 } // namespace kami::world
