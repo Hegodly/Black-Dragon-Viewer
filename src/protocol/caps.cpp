@@ -39,8 +39,52 @@ struct Parts {
 bool suffix(std::wstring_view s,std::wstring_view end) noexcept {
     return s.size()>end.size()&&s.ends_with(end);
 }
-bool parse_url(std::wstring_view input,Parts& result) noexcept {
-    if(!valid_capability_url(input))return false;
+// Second Life CAPS can legitimately point to separately hosted HTTPS
+// CDNs. The official protocol says capability URLs do not imply a fixed
+// host, port or "/cap/" path. Accept those mesh endpoints ONLY when
+// granted by authenticated seed LLSD, never from arbitrary chat/UI input.
+// Continue to enforce the narrower Linden-owned rule for EventQueue.
+bool public_mesh_host(std::wstring_view host) noexcept {
+    if(host.size()<4U||host.size()>253U||host.front()==L'.'||
+       host.back()==L'.')return false;
+    for(const auto forbidden:{
+        L".localhost",L".local",L".internal",L".lan",L".home",
+        L".test",L".invalid",L".example",L".onion",
+        L".example.com",L".example.net",L".example.org"}){
+        if(host.ends_with(forbidden))return false;
+    }
+    for(const auto exact:{L"example.com",L"example.net",L"example.org"})
+        if(host==exact)return false;
+    unsigned dots=0;
+    bool any_letter=false;
+    std::size_t begin=0U;
+    for(std::size_t i=0;i<=host.size();++i){
+        if(i!=host.size()&&host[i]!=L'.'){
+            const auto ch=host[i];
+            if(ch>=L'a'&&ch<=L'z')any_letter=true;
+            else if(!(ch>=L'0'&&ch<=L'9')&&ch!=L'-')return false;
+        }
+        if(i==host.size()||host[i]==L'.'){
+            const auto length=i-begin;
+            if(length==0U||length>63U||host[begin]==L'-'||
+               host[i-1U]==L'-')return false;
+            if(i!=host.size())++dots;
+            begin=i+1U;
+        }
+    }
+    // Reject IP literals and single-label/private machine names.
+    return dots>=1U&&any_letter;
+}
+bool parse_url(std::wstring_view input,Parts& result,
+               bool authenticated_mesh=false) noexcept {
+    if(authenticated_mesh){
+        if(input.size()<12U||input.size()>2048U||
+           !input.starts_with(L"https://")||
+           input.find_first_of(L"\r\n\t")!=std::wstring_view::npos||
+           input.find(wchar_t{0})!=std::wstring_view::npos||
+           input.find_first_of(L"#@\\")!=std::wstring_view::npos)
+            return false;
+    }else if(!valid_capability_url(input))return false;
     URL_COMPONENTS u{};
     u.dwStructSize=sizeof(u);
     u.dwSchemeLength=DWORD(-1);
@@ -48,21 +92,26 @@ bool parse_url(std::wstring_view input,Parts& result) noexcept {
     u.dwUrlPathLength=DWORD(-1);
     u.dwExtraInfoLength=DWORD(-1);
     if(!WinHttpCrackUrl(input.data(),static_cast<DWORD>(input.size()),0,&u)||
-       u.nScheme!=INTERNET_SCHEME_HTTPS||!u.lpszHostName||
-       !u.lpszUrlPath||u.dwUrlPathLength==0)return false;
+       u.nScheme!=INTERNET_SCHEME_HTTPS||
+       !u.lpszHostName||u.dwHostNameLength==0U)return false;
     std::wstring host(u.lpszHostName,u.dwHostNameLength);
     std::transform(host.begin(),host.end(),host.begin(),[](wchar_t c){
         return c>=L'A'&&c<=L'Z'?static_cast<wchar_t>(c+32):c;
     });
-    // A signed capability URL from authenticated SL login is still a bearer
-    // URL. Never allow it to direct a request at private or unrelated hosts.
-    if(!(suffix(host,L".lindenlab.com")||
-         suffix(host,L".secondlife.io")||
-         suffix(host,L".secondlife.com")))return false;
-    std::wstring path(u.lpszUrlPath,u.dwUrlPathLength);
+    if(authenticated_mesh){
+        if(!public_mesh_host(host))return false;
+    }else if(!(suffix(host,L".lindenlab.com")||
+               suffix(host,L".secondlife.io")||
+               suffix(host,L".secondlife.com")))return false;
+    std::wstring path;
+    if(u.lpszUrlPath&&u.dwUrlPathLength)
+        path.assign(u.lpszUrlPath,u.dwUrlPathLength);
+    if(path.empty())path=L"/"; // mesh CDN grants may have no path
     if(u.lpszExtraInfo&&u.dwExtraInfoLength)
         path.append(u.lpszExtraInfo,u.dwExtraInfoLength);
-    if(path.size()>2048||path.empty()||path[0]!=L'/')return false;
+    if(path.size()>2048U||path[0]!=L'/')return false;
+    for(const auto ch:path)
+        if(ch<32||ch==127)return false;
     result.host=std::move(host);
     result.path=std::move(path);
     result.port=u.nPort?u.nPort:INTERNET_DEFAULT_HTTPS_PORT;
@@ -206,6 +255,10 @@ bool trusted_caps_url(std::wstring_view url) noexcept {
     Parts dummy;
     return parse_url(url,dummy);
 }
+bool trusted_mesh_caps_url(std::wstring_view url) noexcept {
+    Parts dummy;
+    return parse_url(url,dummy,true);
+}
 bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                      std::wstring* mesh_capability_url,
                      SeedParseReport* report) {
@@ -243,7 +296,8 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
         const auto type=node_name(value.Get());
         const auto url=node_text(value.Get());
         const bool valid=(type==L"string"||type==L"uri")&&
-                         trusted_caps_url(url);
+                         (event?trusted_caps_url(url):
+                                trusted_mesh_caps_url(url));
         if(event){
             if(event_seen){ // reject ambiguous duplicate EventQueueGet
                 event_queue_url.clear();
@@ -447,9 +501,11 @@ PollResponse observe_event_queue_response(std::string_view xml) {
 
 MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
     MeshReply response{};
-    // The asset ID is transmitted only to a validated SL capability host.
+    // The signed mesh URL must originate from authenticated seed LLSD.
+    // A CDN hostname is permissible, but the request stays HTTPS-only
+    // with TLS validation and all redirects blocked.
     if(!valid_uuid(mesh_id)||mesh_id.size()!=36U||
-       !trusted_caps_url(capability_url))return response;
+       !trusted_mesh_caps_url(capability_url))return response;
     std::wstring suffix;
     suffix.reserve(mesh_id.size());
     for(char ch:mesh_id)suffix.push_back(static_cast<wchar_t>(ch));
@@ -464,7 +520,7 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
     }
     capability_url+=suffix;
     Parts target{};
-    if(!parse_url(capability_url,target))return response;
+    if(!parse_url(capability_url,target,true))return response;
     HttpHandle session(WinHttpOpen(L"KAMI mesh asset/0.1",
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));

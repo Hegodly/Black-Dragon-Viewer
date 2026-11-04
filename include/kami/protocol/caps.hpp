@@ -42,9 +42,11 @@ struct PollResponse {
     QueueCursor next_ack; // only valid when safe_to_ack=true
     std::wstring diagnostic; // no event bodies, credentials or bearer URLs
 };
-// Pure URL checks, useful for offline tests. Only Linden-owned HTTPS
-// capability hosts are accepted; redirects are prohibited.
+// Strict Linden-owned URL check for EventQueue and seed.
 [[nodiscard]] bool trusted_caps_url(std::wstring_view url) noexcept;
+// Mesh only: authenticated seed grants may use a public HTTPS CDN host.
+// Reject private/reserved/literal hosts, redirects and insecure URLs.
+[[nodiscard]] bool trusted_mesh_caps_url(std::wstring_view url) noexcept;
 // Do not expose bearer URLs in diagnostics. A server may grant one CAPS
 // service without the other. Reject malformed/unsafe URLs individually.
 struct SeedParseReport {

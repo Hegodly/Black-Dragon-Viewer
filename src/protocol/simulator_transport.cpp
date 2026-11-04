@@ -101,7 +101,7 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
     return true;
 }
 bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
-    if(!caps::trusted_caps_url(capability)||!mesh_capability_url_.empty()||
+    if(!caps::trusted_mesh_caps_url(capability)||!mesh_capability_url_.empty()||
        state_!=CircuitState::MovementConfirmed)return false;
     mesh_capability_url_=std::move(capability);
     mesh_scan_revision_=~std::uint64_t{0};

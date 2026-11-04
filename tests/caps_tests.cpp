@@ -19,6 +19,40 @@ int exercise(){
         L"https://simhost-123.agni.secondlife.io:12043/cap/x#frag",
         L"https://user@simhost-123.agni.secondlife.io/cap/x"
     })if(trusted_caps_url(url))return 3;
+    // Separate rules: EventQueue stays on Linden infrastructure;
+    // authenticated ViewerAsset can use a public HTTPS CDN endpoint.
+    if(trusted_caps_url(L"https://d111111abcdef8.cloudfront.net/")||
+       !trusted_mesh_caps_url(
+            L"https://d111111abcdef8.cloudfront.net/")||
+       !trusted_mesh_caps_url(
+            L"https://asset-cdn.glb.agni.lindenlab.com")||
+       !trusted_mesh_caps_url(
+            L"https://cdn.assets.example-real-vendor.com/mesh/endpoint"))
+        return 32;
+    for(const auto* unsafe:{
+         L"http://d111111abcdef8.cloudfront.net/",
+         L"https://127.0.0.1/asset",
+         L"https://localhost/asset",
+         L"https://metadata.google.internal/asset",
+         L"https://cdn.example.org/asset",
+         L"https://cdn.example.com/asset",
+         L"https://asset.test/mesh",
+         L"https://user@cdn.cloudfront.net/asset",
+         L"https://a..b.net/asset",
+         L"https://-bad.cloudfront.net/asset",
+         L"https://cdn.cloudfront.net/#fragment"})
+        if(trusted_mesh_caps_url(unsafe))return 33;
+    const std::string cdn_seed=
+        "<llsd><map><key>EventQueueGet</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/events</string>"
+        "<key>ViewerAsset</key>"
+        "<uri>https://d111111abcdef8.cloudfront.net</uri>"
+        "</map></llsd>";
+    std::wstring cdn_event,cdn_asset;
+    if(!parse_seed_llsd(cdn_seed,cdn_event,&cdn_asset)||
+       cdn_event!=L"https://simhost-123.agni.secondlife.io/cap/events"||
+       cdn_asset!=L"https://d111111abcdef8.cloudfront.net")
+        return 34;
     const std::string seed=
         "<?xml version=\"1.0\"?><llsd><map>"
         "<key>EventQueueGet</key>"
