@@ -31,8 +31,8 @@ constexpr std::array<std::wstring_view, 8> kPages = {
     L"CREATOR STUDIO", L"PHOTO STUDIO"
 };
 constexpr std::array<std::wstring_view, 8> kDescriptions = {
-    L"Original Windows foundation. No imported viewer code.",
-    L"SL login and simulator UDP experimental; live world content not yet connected.",
+    L"Single integrated KAMI development build, seven workstreams tracked.",
+    L"Experimental SL connection renders live land; objects and avatars pending.",
     L"Native avatar locomotion, gait and terrain contact. Live avatar assets pending.",
     L"Inventory is not connected. No inventory items can be changed.",
     L"Messages and delivery receipts are not implemented yet.",
@@ -42,7 +42,7 @@ constexpr std::array<std::wstring_view, 8> kDescriptions = {
 };
 constexpr std::array<std::wstring_view, 8> kExplanations = {
     L"Written for KAMI  /  Native Direct2D + DirectWrite",
-    L"Login test is on HOME; region capabilities and live objects still pending.",
+    L"Live untextured land DX12 preview; real object and asset pipeline pending.",
     L"Avatar identity will be shown only after real server login.",
     L"Future inventory operations will honor server permissions.",
     L"Nothing on this screen sends a message to another resident.",

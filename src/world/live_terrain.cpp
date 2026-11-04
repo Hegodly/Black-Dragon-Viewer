@@ -1,4 +1,5 @@
 #include "kami/world/live_terrain.hpp"
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -34,9 +35,18 @@ void triangle(SceneMesh& out,Position a,Position b,Position c) {
     if(!std::isfinite(length)||length<1.e-6f)return;
     const float inv=1.f/length;
     auto emit=[&](Position p){
-        // Diagnostic green: real SL texture assets are not decoded yet.
+        // Untextured diagnostic color only. Sampled geometry is live SL
+        // terrain; this is NOT an SL land material or a fetched texture.
+        // Highlight steep slopes to make terrain elevations easier to read
+        // before the real terrain texture/asset pipeline is implemented.
+        const float steep=std::clamp(1.f-std::fabs(ny*inv),0.f,1.f);
+        const float altitude=std::clamp((p.y+6.f)/45.f,0.f,1.f);
+        const float rock=steep*.65f+altitude*.15f;
+        const float r=.16f+rock*.29f;
+        const float g=.33f-rock*.06f+altitude*.07f;
+        const float b=.19f+rock*.19f;
         out.vertices.push_back({p.x,p.y,p.z,
-           nx*inv,ny*inv,nz*inv,.20f,.38f,.27f,0.f,.9f,
+           nx*inv,ny*inv,nz*inv,r,g,b,0.f,.92f,
            p.x*.025f,p.z*.025f});
     };
     emit(a);emit(b);emit(c);

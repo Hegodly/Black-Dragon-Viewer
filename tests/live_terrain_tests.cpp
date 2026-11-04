@@ -44,6 +44,14 @@ int main(){
         }
     }
     if(!saw_bridge)return 3;
+    // Diagnostic shading must remain finite/bounded without requiring
+    // texture downloads. These colors do not impersonate SL textures.
+    for(const auto& v:two.scene.vertices){
+        if(!std::isfinite(v.r)||!std::isfinite(v.g)||
+           !std::isfinite(v.b)||v.r<0.f||v.r>1.f||
+           v.g<0.f||v.g>1.f||v.b<0.f||v.b>1.f)
+            return 7;
+    }
     patches.emplace(32U,patch(0,1));
     patches.emplace(33U,patch(1,1));
     selected={&patches.find(0U)->second,&patches.find(1U)->second,
