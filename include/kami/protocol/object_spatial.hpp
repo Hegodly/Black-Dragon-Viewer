@@ -32,7 +32,8 @@ struct FullDecodeAudit {
     std::vector<std::uint32_t>* parent_references=nullptr,
     std::vector<Transform>* child_transforms=nullptr) noexcept;
 [[nodiscard]] bool decode_compressed_transforms(
-    const lludp::Packet& packet,std::vector<Transform>& out) noexcept;
+    const lludp::Packet& packet,std::vector<Transform>& out,
+    std::vector<Transform>* child_transforms=nullptr) noexcept;
 // ObjectUpdateCached is an inventory of local IDs, NOT full object data.
 [[nodiscard]] bool decode_cached_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
