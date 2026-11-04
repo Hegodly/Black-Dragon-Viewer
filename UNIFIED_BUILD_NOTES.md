@@ -530,3 +530,16 @@ Real Sculpt ExtraParams 0x30 type 5 mesh asset IDs are extracted from
 validated simulator updates, deduped and queued for future CAP requests.
 **The queue does not download, decode or render meshes yet.**
 Texture JPEG2000 and avatar skin/attachments also remain pending.
+
+
+## R34: experimental mesh asset HTTP, LOD decoding and DX12 triangles
+
+R34 decodes authenticated compressed ObjectUpdate Sculpt ExtraParams and
+requests ViewerAsset/GetMesh capabilities in the simulator CAPS seed. Mesh
+assets are fetched with HTTPS GET, a strict 8 MiB limit, no redirects, and
+validated hostnames. Binary LLSD mesh LoDs are decoded with a bounded zlib/
+gzip implementation on a background worker; validated triangles from static
+meshes can enter KAMI's existing DX12 mesh buffer with a strict scene cap.
+This supports only a limited static-mesh subset and not all real objects.
+Rigged avatar attachments, appearance, PBR, texture fetching, inventory,
+IM/group messaging and region crossing remain unfinished.

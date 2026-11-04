@@ -36,6 +36,7 @@ on:
       - release/kami-r27-root-recovery-diagnostics-20261104
       - release/kami-r27-r32-unified-20261104
       - release/kami-r33-hierarchy-mesh-intake-20261104
+      - release/kami-r34-mesh-download-foundation-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -119,9 +120,10 @@ jobs:
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
           Copy-Item R27_R32_UNIFIED_STATUS.md dist/KAMI
           Copy-Item R33_STATUS.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R33-Hierarchy-Mesh-Intake.zip
+          Copy-Item R34_STATUS.md dist/KAMI
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R34-Real-Mesh-Alpha.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R33-Hierarchy-Mesh-Intake
+          name: KAMI-R34-Real-Mesh-Alpha
           path: dist/KAMI-R33-Hierarchy-Mesh-Intake.zip
           retention-days: 14

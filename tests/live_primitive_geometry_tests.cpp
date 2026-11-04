@@ -114,5 +114,33 @@ int main(){
     if(world::build_live_primitive_geometry(roots,children,
            std::numeric_limits<float>::infinity(),0.f,0.f)
            .scene.terrain_count!=0U)return 10;
+    // Authenticated static mesh LODs are rendered only with valid root
+    // transforms. Avatar-parented or unknown assets never fake a world pose.
+    protocol::mesh::LOD lod{};
+    protocol::mesh::Triangle triangle{};
+    triangle.pos={-.5f,-.5f,0.f,.5f,-.5f,0.f,0.f,.5f,0.f};
+    lod.triangles.push_back(triangle);
+    const std::string asset_id="12345678-90ab-4cde-8fab-000000000077";
+    std::map<std::string,protocol::mesh::LOD> assets={{asset_id,lod}};
+    roots[77U].x=128.f;roots[77U].primitive=Kind::Unknown;
+    roots[77U].mesh_asset_id=asset_id;
+    const auto mesh_root=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U);
+    if(mesh_root.root_meshes!=1U||mesh_root.linked_meshes!=0U||
+       mesh_root.emitted_triangles!=1U||
+       mesh_root.scene.vertices.size()!=3U)return 15;
+    roots[77U].mesh_asset_id.clear();
+    children[88U].mesh_asset_id=asset_id;
+    children[88U].parent_id=77U;
+    const auto mesh_child=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U);
+    if(mesh_child.root_meshes!=0U||mesh_child.linked_meshes!=1U||
+       mesh_child.emitted_triangles!=1U)return 16;
+    std::set<std::uint32_t> avatars={77U};
+    const auto attachment=world::build_live_mesh_geometry(
+        {},children,avatars,assets,128.f,140.f,35.f,10U);
+    if(attachment.root_meshes||attachment.linked_meshes||
+       attachment.emitted_triangles||attachment.waiting_for_parent==0U)
+       return 17;
     return 0;
 }
