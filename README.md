@@ -218,3 +218,35 @@ acknowledgement IDs and a hard stop before acknowledging any
 unimplemented event. KAMI's DX12 preview remains an *offline demo*
 until terrain/object/asset decoders produce authenticated geometry.
 Do not interpret a valid EventQueueGet response as a live-world render.
+
+## R8: live simulator event types and bounded world-wire intake
+
+R7 established successful Second Life simulator movement and a valid
+EventQueueGet response. A separate-viewer observation also showed the
+logged-in agent present in-world. **That verifies server presence, not
+KAMI's ability to render its appearance or the region.**
+
+R8 extends the authenticated simulator connection with:
+
+- Sanitized `EventQueueGet` message type names (maximum eight names of
+  48 printable identifier characters). The raw LLSD event bodies are
+  never displayed or logged. Unknown/unhandled events are deliberately
+  **not acknowledged**, as R8 has no safe state-mutating dispatcher.
+- Bounded message-template framing for `LayerData`,
+  `ObjectUpdate` (header only), `ObjectUpdateCompressed`,
+  `ObjectUpdateCached`, `ImprovedTerseObjectUpdate` and
+  `KillObject`, using the official public Linden Lab message template.
+- Actual UDP packet counts for LayerData and object-related messages
+  displayed on KAMI's Home screen. Counters reset on disconnect and
+  never count the offline scene.
+- Tests for valid/truncated or oversized payloads, typed LLSD event
+  names, and the simulator handshake regression.
+
+**Important:** a valid packet frame is not a decoded terrain patch,
+world object, material, mesh or avatar. ObjectUpdate High 12 is only
+header-recognized. The GPU scene remains the original offline DX12
+preview; these protocol counters must not be represented as rendered
+Second Life content.
+
+Source for the message IDs: Linden Lab's published
+`master-message-template/message_template.msg` (High 11-16).
