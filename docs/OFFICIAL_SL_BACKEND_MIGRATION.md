@@ -1,8 +1,10 @@
 # KAMI official Second Life backend migration
 
-Status: **architecture and ABI foundation only**. The official network stack
-is NOT integrated or active in KAMI until a separately built LGPL bridge
-exists and verified live tests succeed. Do not report this branch as a
+Status: **wire component integrated, full network/session backend pending**.
+KAMI uses the official LGPL LLZeroCode encoder/decoder and official
+0x60->0x30 legacy mesh type mapping through an independently replaceable
+DLL. The full LLMessageSystem, login/session, objects and assets are not
+migrated or proven live. Do not report this branch as a
 completed login, asset, inventory or simulator connectivity migration.
 
 ## Objective
@@ -31,26 +33,29 @@ camera/UI and performance settings. No Unreal Engine, no OpenGL fallback.
   cache and graphics. It must be separated behind a renderer-neutral API.
 
 ## Required implementation (in dependency order)
-1. Pin and build the official LGPL `llcommon`, `llmath`, `llfilesystem`,
+1. Stage 1 completed: integrate official LLZeroCode and PARAMS_MESH remapping
+   in a separately replaceable DLL, with in-stream runtime integration and
+   tests. See `OFFICIAL_SL_WIRE_STATUS.md`.
+2. Pin and build the official LGPL `llcommon`, `llmath`, `llfilesystem`,
    `llcorehttp` and `llmessage` modules as a separately replaceable Windows
    DLL with an audited source/third-party dependency inventory. Keep their
    copyright headers and original licenses; provide compliant source to users.
-2. Implement the versioned native C ABI in
+3. Implement the versioned native C ABI in
    `include/kami/protocol/official_sl_bridge_api.h`. This header is only a
    contract today. A bridge MUST use official message/HTTP code internally;
    do not forward undecoded LLUDP frames and call the backend "official".
-3. Route official login and simulator circuit lifecycle through the DLL,
+4. Route official login and simulator circuit lifecycle through the DLL,
    including authenticated login, reliable retransmits/ACKs, region
    handshake, EventQueue/CAPS and typed event dispatch. Avoid double
    connections from the legacy KAMI implementation. No secret strings in
    logs or diagnostics.
-4. Publish immutable, validated **renderer-neutral** snapshots (region,
+5. Publish immutable, validated **renderer-neutral** snapshots (region,
    object hierarchy, per-face material/texture references, mesh assets,
    terrain, avatar appearance) to KAMI; feed DX12 geometry and texture
    upload via a bounded, visible-first streaming queue.
-5. Adopt official inventory, IM and group/agent update flows behind the
+6. Adopt official inventory, IM and group/agent update flows behind the
    same adapter after world objects render correctly.
-6. Use unit fixtures from official wire formats and full in-world tests for
+7. Use unit fixtures from official wire formats and full in-world tests for
    login, teleport, object rez, assets, outfits and messaging. Measure FPS,
    network stalls, RAM and VRAM before disabling the legacy transport.
 
