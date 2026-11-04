@@ -13,6 +13,13 @@ on zero-coded messages. It replaces hand-written zero run compression in
 - Existing Login, transport, CAPS and mesh paths as a fallback baseline
 - Authenticated circuit address, packet numbering, appended ACKs and
   raw high/medium/low frequency message body semantics
+- Official `LLViewerObject::unpackParameterEntry()` compatibility:
+  `PARAMS_MESH=0x60` is treated as `PARAMS_SCULPT=0x30`. Both must
+  carry a bounded 17-byte sculpt record with type 5 and nonzero UUID to
+  schedule a real mesh; it is never guessed solely from its type.
+  The mapping comes from official viewer `indra/newview/llviewerobject.cpp`
+  and is exposed by the same replaceable LGPL DLL. Both full and compressed
+  object decoders and F9 audit counters use it.
 - Official behavior: avoid zero coding when encoded payload is not smaller
 - Bounds checks around the upstream pointer-based codec; reject malformed
   runs and oversized decompression
@@ -27,8 +34,10 @@ integration**, not just a planned ABI.
   not compiled into KAMI yet.
 - Official reliable circuit, message dispatch, object/asset/cache,
   inventory, avatar and EventQueue handlers are not yet connected.
-- 598 other ExtraParams records from R43.1 remain unidentified until
-  official primitives/object message-processing work is integrated.
+- R43.1 showed 598 "other" ExtraParams records. This change can now
+  identify 0x60 legacy aliases separately as FAlias/CAlias, but
+  does **not** prove the observed 598 records use that type.
+  Other modern 0x70/0x80/0x90 params still need full official decoding.
 - This build does not guarantee that your platform furniture,
   buildings, textures or outfits will load; in-world tests of the
   official wire DLL are still needed.
