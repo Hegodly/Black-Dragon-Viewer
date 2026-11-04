@@ -426,9 +426,15 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
     std::wstring suffix;
     suffix.reserve(mesh_id.size());
     for(char ch:mesh_id)suffix.push_back(static_cast<wchar_t>(ch));
-    // ViewerAsset accepts ?mesh_id=uuid; GetMesh also supports mesh_id.
+    // Match the official Second Life mesh repository URL convention.
+    // The capability URL is authenticated and never logged.
     const bool query=capability_url.find(L'?')!=std::wstring::npos;
-    capability_url+=(query?L"&mesh_id=":L"?mesh_id=");
+    if(query)capability_url+=L"&mesh_id=";
+    else {
+        if(!capability_url.empty()&&capability_url.back()!=L'/')
+            capability_url.push_back(L'/');
+        capability_url+=L"?mesh_id=";
+    }
     capability_url+=suffix;
     Parts target{};
     if(!parse_url(capability_url,target))return response;
