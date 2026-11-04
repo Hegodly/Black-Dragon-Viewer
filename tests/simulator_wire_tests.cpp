@@ -62,6 +62,8 @@ int main(){
     movement.body[5]^=1;
     if(sim::movement_complete_identifies(movement,login))return 10;
     if(sim::classify(movement)!=sim::Inbound::AgentMovementComplete)return 11;
+    // Restore the synthetic agent ID before positive position decoding.
+    movement.body[5]^=1;
     const std::array<float,3> position={128.f,96.f,22.5f};
     std::memcpy(movement.body.data()+36,position.data(),
                 sizeof(float)*position.size());
