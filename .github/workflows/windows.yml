@@ -65,6 +65,7 @@ on:
     branches:
       - release/kami-r42-mesh-discovery-20261104
       - release/kami-r43-full-object-shape-audit-20261104
+      - feature/kami-official-sl-bridge-20261104
   workflow_dispatch:
 
 jobs:
