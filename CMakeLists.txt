@@ -26,6 +26,13 @@ if(MSVC)
   target_compile_options(KAMIViewer PRIVATE /W4 /permissive- /EHsc /utf-8)
 endif()
 enable_testing()
+# ABI-only test for a *future* separately compiled official LGPL backend.
+# This intentionally does not claim or enable SL connectivity.
+add_executable(kami_official_sl_bridge_abi_tests
+    tests/official_sl_bridge_api_tests.cpp)
+target_include_directories(kami_official_sl_bridge_abi_tests PRIVATE include)
+add_test(NAME KamiOfficialSLBackendABIContractOnly
+    COMMAND kami_official_sl_bridge_abi_tests)
 add_executable(kami_official_login_identity_tests tests/official_login_identity_tests.cpp)
 target_link_libraries(kami_official_login_identity_tests PRIVATE kami_sl_login_identity)
 add_test(NAME KamiOfficialWindowsLoginIdentityCompatibility
