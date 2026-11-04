@@ -228,7 +228,7 @@ int main(){
     auto legacy=packed(901U);
     legacy[64U]=0x08U;
     legacy.insert(legacy.end(),86U,0U);
-    legacy.insert(legacy.end(),meshblock.begin()+84U,meshblock.end());
+    legacy.insert(legacy.end(),meshblock.begin()+88U,meshblock.end());
     objectspatial::CompressedDecodeAudit legacy_audit{};
     if(!objectspatial::decode_compressed_transforms(
            compressed(legacy),out,&children,&legacy_audit)||

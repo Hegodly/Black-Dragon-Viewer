@@ -143,7 +143,8 @@ int main(){
          packet({mesh_block}),out,&audit)||out.size()!=1U||
        out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
-       audit.mesh_references!=1U)return 12;
+       audit.mesh_references!=1U||audit.extra_records!=1U||
+       audit.sculpt_records!=1U||audit.mesh_sculpt_records!=1U)return 12;
     auto bot=packet({block(81U,0,47U)});
     std::vector<std::uint32_t> avatar_roots;
     if(!objectspatial::decode_full_transforms(
