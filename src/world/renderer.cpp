@@ -2,6 +2,7 @@
 #include "kami/world/live_terrain.hpp"
 #include "kami/world/live_water.hpp"
 #include "kami/world/object_proxies.hpp"
+#include "kami/world/live_primitive_geometry.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
@@ -609,12 +610,31 @@ bool Renderer::set_verified_live_terrain(
     // They are not prim meshes: profiles, rotations, textures and
     // hierarchies have NOT been decoded. The same DX12 geometry buffer
     // holds land + spatial proxy frames + local avatar.
+    // Keep the old amber outlines for unknown/more complex roots;
+    // supported simple primitives get actual finite solid geometry.
+    std::map<std::uint32_t,protocol::objectspatial::Transform> bounds;
+    for(const auto& [id,root]:circuit.decoded_spatial_objects()){
+        if(root.primitive==protocol::objectspatial::PrimitiveKind::Unknown)
+            bounds.emplace(id,root);
+    }
     const auto proxies=build_live_object_spatial_proxies(
-        circuit.decoded_spatial_objects(),agent.x,agent.y,agent.z);
+        bounds,agent.x,agent.y,agent.z);
     const auto new_proxy_count=proxies.vertices.size()/432U;
     scene.vertices.insert(scene.vertices.end(),
                           proxies.vertices.begin(),proxies.vertices.end());
     scene.terrain_count+=proxies.vertices.size();
+    // R26 renders only verified root-space or correctly composed
+    // linked shapes. Unknown mesh/sculpt/cut/hollow content remains
+    // unrendered, not replaced with incorrect speculative geometry.
+    const auto primitives=build_live_primitive_geometry(
+        circuit.decoded_spatial_objects(),
+        circuit.decoded_linked_objects(),
+        agent.x,agent.y,agent.z);
+    const auto new_primitive_vertices=primitives.scene.vertices.size();
+    scene.vertices.insert(scene.vertices.end(),
+                          primitives.scene.vertices.begin(),
+                          primitives.scene.vertices.end());
+    scene.terrain_count+=new_primitive_vertices;
     // Actual SL land stays in the terrain section. Append only an
     // obvious generic local placeholder in the separate avatar section.
     if(live_avatar_preview_.active()){
@@ -636,6 +656,9 @@ bool Renderer::set_verified_live_terrain(
         return false;
     }
     uploaded_root_bounds_=new_proxy_count;
+    uploaded_root_primitive_shapes_=primitives.root_shapes;
+    uploaded_linked_primitive_shapes_=primitives.linked_shapes;
+    uploaded_primitive_vertices_=new_primitive_vertices;
     uploaded_water_vertices_=new_water_count;
     skipped_terrain_discontinuities_=built.skipped_discontinuity_quads;
     if(!nearest.empty()){
@@ -727,6 +750,9 @@ void Renderer::clear_decoded_region_geometry() {
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
     uploaded_root_bounds_=0;
+    uploaded_root_primitive_shapes_=0;
+    uploaded_linked_primitive_shapes_=0;
+    uploaded_primitive_vertices_=0;
     uploaded_water_vertices_=0;
     skipped_terrain_discontinuities_=0;
     landscape_view_=false;

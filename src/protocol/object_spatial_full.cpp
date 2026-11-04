@@ -59,13 +59,39 @@ private:
     std::size_t at_=0U;
 };
 bool valid(const Transform& p) noexcept {
-    return p.local_id!=0U&&
+    const bool is_child=p.parent_id!=0U;
+    // Children have local-frame positions; roots have region coordinates.
+    return p.local_id!=0U&&p.parent_id!=p.local_id&&
         std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z)&&
         std::isfinite(p.sx)&&std::isfinite(p.sy)&&std::isfinite(p.sz)&&
-        p.x>=0.f&&p.x<256.f&&p.y>=0.f&&p.y<256.f&&
-        p.z>=-4096.f&&p.z<8192.f&&
+        std::isfinite(p.rx)&&std::isfinite(p.ry)&&
+        std::isfinite(p.rz)&&std::isfinite(p.rw)&&
+        (is_child?(std::abs(p.x)<=128.f&&std::abs(p.y)<=128.f&&
+                    std::abs(p.z)<=128.f):
+                  (p.x>=0.f&&p.x<256.f&&p.y>=0.f&&p.y<256.f&&
+                   p.z>=-4096.f&&p.z<8192.f))&&
         p.sx>=.01f&&p.sy>=.01f&&p.sz>=.01f&&
         p.sx<=64.f&&p.sy<=64.f&&p.sz<=64.f;
+}
+// Raw fields from official message_template.msg ObjectUpdate ObjectData.
+// Only simple, uncut, unhollowed primitive path/profile combinations
+// have a matching renderer; complex SL volumes must stay unsupported.
+PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
+    if(s.size()!=23U)return PrimitiveKind::Unknown;
+    const bool clean=s[2]==0U&&s[3]==0U&&s[4]==0U&&s[5]==0U&&
+        (s[6]==0U||s[6]==100U)&&
+        (s[7]==0U||s[7]==100U)&&
+        s[8]==0U&&s[9]==0U&&s[10]==0U&&s[11]==0U&&
+        s[12]==0U&&s[13]==0U&&s[14]==0U&&
+        (s[15]==0U||s[15]==100U)&&s[16]==0U&&
+        s[17]==0U&&s[18]==0U&&s[19]==0U&&
+        s[20]==0U&&s[21]==0U&&s[22]==0U;
+    if(!clean)return PrimitiveKind::Unknown;
+    const auto profile=s[1]&0x0fU;
+    if(s[0]==0x10U&&profile==0x01U)return PrimitiveKind::Box;
+    if(s[0]==0x10U&&profile==0x00U)return PrimitiveKind::Cylinder;
+    if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
+    return PrimitiveKind::Unknown;
 }
 }
 // High 12 ObjectUpdate, per scripts/messages/message_template.msg and
@@ -75,7 +101,8 @@ bool valid(const Transform& p) noexcept {
 bool decode_full_transforms(const lludp::Packet& packet,
                             std::vector<Transform>& out,
                             FullDecodeAudit* audit,
-                            std::vector<std::uint32_t>* parent_references) noexcept {
+                            std::vector<std::uint32_t>* parent_references,
+                            std::vector<Transform>* child_transforms) noexcept {
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -83,7 +110,9 @@ bool decode_full_transforms(const lludp::Packet& packet,
     if(b.size()<12U)return false;
     Cursor cur(b.subspan(12U));
     std::vector<Transform> decoded;
+    std::vector<Transform> children;
     decoded.reserve(info.blocks);
+    children.reserve(info.blocks);
     FullDecodeAudit frame{};
     std::vector<std::uint32_t> parents;
     for(unsigned n=0U;n<info.blocks;++n){
@@ -98,9 +127,11 @@ bool decode_full_transforms(const lludp::Packet& packet,
            !cur.f32(t.sx)||!cur.f32(t.sy)||!cur.f32(t.sz)||
            !cur.variable(1U,movement)||
            !cur.u32(parent)||!cur.skip(4U))return false;
-        // Parametric primitive shape fields: 23 fixed bytes,
-        // i.e. PathCurve through ProfileHollow inclusive.
-        if(!cur.skip(23U))return false;
+        // Preserve exactly 23 shape bytes (PathCurve through
+        // ProfileHollow), but NEVER manufacture unspecified topology.
+        std::span<const std::uint8_t> shape{};
+        if(!cur.take(23U,shape))return false;
+        t.primitive=simple_shape(shape);
         // TextureEntry Var2; TextureAnim Var1; NameValue Var2;
         // Data Var2; Text Var1; TextColor Fixed4;
         // MediaURL Var1; PSBlock Var1; ExtraParams Var1.
@@ -116,13 +147,15 @@ bool decode_full_transforms(const lludp::Packet& packet,
             return false;
         if(pcode!=9U){++frame.non_volume;continue;}
         ++frame.volume;
+        t.parent_id=parent;
         if(parent!=0U){
             ++frame.linked;
             if(parent!=t.local_id &&
                std::find(parents.begin(),parents.end(),parent)==parents.end())
                 parents.push_back(parent);
-            continue;
         }
+        if(t.primitive==PrimitiveKind::Unknown)
+            ++frame.unsupported_shapes;
         // Per the official viewer, full-precision ObjectData has
         // 60-byte position/velocity/acceleration/rotation/omega,
         // optionally prefixed by 16-byte avatar collision plane.
@@ -146,16 +179,31 @@ bool decode_full_transforms(const lludp::Packet& packet,
         };
         if(!read_float(pos_offset,t.x)||
            !read_float(pos_offset+4U,t.y)||
-           !read_float(pos_offset+8U,t.z))return false;
+           !read_float(pos_offset+8U,t.z)||
+           !read_float(pos_offset+36U,t.rx)||
+           !read_float(pos_offset+40U,t.ry)||
+           !read_float(pos_offset+44U,t.rz))return false;
+        const float norm=t.rx*t.rx+t.ry*t.ry+t.rz*t.rz;
+        if(!std::isfinite(norm)||norm>1.0001f){
+            ++frame.invalid_transform;
+            continue;
+        }
+        t.rw=std::sqrt(std::max(0.f,1.f-norm));
         if(valid(t)){
-            decoded.push_back(t);
-            ++frame.accepted_roots;
+            if(parent==0U){
+                decoded.push_back(t);
+                ++frame.accepted_roots;
+            }else{
+                children.push_back(t);
+                ++frame.accepted_children;
+            }
         }else ++frame.invalid_transform;
     }
     if(!cur.done())return false;
     out=std::move(decoded);
     if(audit)*audit=frame; // publish only after full frame validation
     if(parent_references)*parent_references=std::move(parents);
+    if(child_transforms)*child_transforms=std::move(children);
     return true;
 }
 } // namespace kami::protocol::objectspatial

@@ -509,7 +509,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               small_font_.Get(),p.accent);
         const diagnostics::Evidence ev{
             static_cast<std::uint32_t>(
-                world_renderer_.uploaded_root_bounds()),
+                world_renderer_.uploaded_root_bounds()+
+                world_renderer_.uploaded_root_primitive_shapes()+
+                world_renderer_.uploaded_linked_primitive_shapes()),
             world_renderer_.region_geometry_active(),
             world_renderer_.live_avatar_placeholder_active(),
             sl_circuit_.movement_control_packets_sent(),
@@ -532,18 +534,19 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             if(i==0U){
                 // Decoded frames can contain ZERO eligible root objects.
                 // Never imply Frame OK equals visible object count.
-                detail=L"Full RX "+std::to_wstring(
-                    sl_circuit_.full_object_packets())+
-                    L" | Roots "+std::to_wstring(
+                detail=L"Root "+std::to_wstring(
                     sl_circuit_.decoded_root_count())+
-                    L" | Amber "+std::to_wstring(
+                    L" | Linked "+std::to_wstring(
+                    sl_circuit_.retained_linked_objects())+
+                    L" | AMBER "+std::to_wstring(
                     world_renderer_.uploaded_root_bounds())+
-                    L" | Pending "+std::to_wstring(
+                    L" | SOLID "+std::to_wstring(
+                    world_renderer_.uploaded_root_primitive_shapes()+
+                    world_renderer_.uploaded_linked_primitive_shapes())+
+                    L" | Missing "+std::to_wstring(
                     sl_circuit_.pending_object_requests())+
                     L" | Requested "+std::to_wstring(
-                    sl_circuit_.requested_object_ids())+
-                    L" | Cached IDs "+std::to_wstring(
-                    sl_circuit_.cached_object_ids());
+                    sl_circuit_.requested_object_ids());
             }
             label(detail,
                   box(contentX+36,y+25,contentWidth-76,20),
@@ -556,7 +559,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Linked "+std::to_wstring(audit.linked)+
                     L" | Motion skip "+std::to_wstring(audit.unsupported_motion)+
                     L" | Invalid "+std::to_wstring(audit.invalid_transform)+
-                    L" | Accepted "+std::to_wstring(audit.accepted_roots);
+                    L" | Roots "+std::to_wstring(audit.accepted_roots)+
+                    L" | Children "+std::to_wstring(audit.accepted_children)+
+                    L" | Shape unsupported "+std::to_wstring(audit.unsupported_shapes);
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
@@ -821,6 +826,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(world_renderer_.skipped_terrain_discontinuities())+
                 L" | AMBER BOUNDS "+
                 std::to_wstring(world_renderer_.uploaded_root_bounds())+
+                L" | SOLID ROOTS "+
+                std::to_wstring(world_renderer_.uploaded_root_primitive_shapes())+
+                L" | SOLID LINKED "+
+                std::to_wstring(world_renderer_.uploaded_linked_primitive_shapes())+
                 (world_renderer_.live_water_surface_active()?
                     L" | WATER BELOW TERRAIN":L" | NO WET LAND IN VIEW")+
                 L" | avatar LOCAL";

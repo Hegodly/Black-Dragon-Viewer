@@ -116,10 +116,16 @@ public:
         // Exclude the proxy vertices from the land-only metric.
         return region_mesh_?
             region_mesh_->terrain_count-uploaded_root_bounds_*432U-
-            uploaded_water_vertices_:0U;
+            uploaded_primitive_vertices_-uploaded_water_vertices_:0U;
     }
     [[nodiscard]] std::size_t uploaded_root_bounds() const noexcept {
         return region_mesh_?uploaded_root_bounds_:0U;
+    }
+    [[nodiscard]] std::size_t uploaded_root_primitive_shapes() const noexcept {
+        return region_mesh_?uploaded_root_primitive_shapes_:0U;
+    }
+    [[nodiscard]] std::size_t uploaded_linked_primitive_shapes() const noexcept {
+        return region_mesh_?uploaded_linked_primitive_shapes_:0U;
     }
     [[nodiscard]] bool live_water_surface_active() const noexcept {
         return region_mesh_ && uploaded_water_vertices_>0U;
@@ -192,6 +198,9 @@ private:
     std::optional<SceneMesh> preview_mesh_;
     std::optional<SceneMesh> region_mesh_;
     std::size_t uploaded_root_bounds_=0;
+    std::size_t uploaded_root_primitive_shapes_=0;
+    std::size_t uploaded_linked_primitive_shapes_=0;
+    std::size_t uploaded_primitive_vertices_=0;
     std::size_t uploaded_water_vertices_=0;
     std::size_t skipped_terrain_discontinuities_=0;
     std::optional<SceneMesh> live_water_mesh_;

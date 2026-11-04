@@ -76,10 +76,17 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         // Parent-relative link children cannot be placed in region space
         // until their root transform has been decoded and composed.
         if(parent!=0U)continue;
-        const Transform t{
+        Transform t{
             u32(data,16U),f32(data,40U),f32(data,44U),
             f32(data,48U),f32(data,28U),f32(data,32U),f32(data,36U)
         };
+        // Compressed ObjectUpdate stores 3 floats for LLQuaternion.
+        t.rx=f32(data,52U);
+        t.ry=f32(data,56U);
+        t.rz=f32(data,60U);
+        const float q=t.rx*t.rx+t.ry*t.ry+t.rz*t.rz;
+        if(!std::isfinite(q)||q>1.0001f)continue;
+        t.rw=std::sqrt(std::max(0.f,1.f-q));
         if(sane(t))decoded.push_back(t);
     }
     if(at!=b.size())return false;

@@ -79,6 +79,34 @@ int main(){
     if(!objectspatial::decode_full_transforms(second,out)||
        out.size()!=2U||out[1].local_id!=80U||
        out[1].x!=222.f)return 2;
+    // Official ObjectUpdate 23-byte profile/path layout starts after
+    // fixed 40-byte record prefix, 61-byte movement and 8-byte flags.
+    auto box=block(90U);
+    box[109]=0x10U;box[110]=0x01U;
+    box[115]=100U;box[116]=100U;
+    auto cyl=block(91U,90U);
+    cyl[109]=0x10U;cyl[110]=0x00U;
+    cyl[115]=100U;cyl[116]=100U;
+    auto round=block(92U,90U);
+    round[109]=0x20U;round[110]=0x05U;
+    round[115]=100U;round[116]=100U;
+    std::vector<objectspatial::Transform> linked;
+    if(!objectspatial::decode_full_transforms(
+           packet({box,cyl,round}),out,&audit,&parents,&linked)||
+       out.size()!=1U||linked.size()!=2U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Box||
+       linked[0].primitive!=objectspatial::PrimitiveKind::Cylinder||
+       linked[1].primitive!=objectspatial::PrimitiveKind::Sphere||
+       linked[0].parent_id!=90U||
+       audit.accepted_roots!=1U||audit.accepted_children!=2U||
+       audit.linked!=2U||audit.unsupported_shapes!=0U||
+       parents.size()!=1U||parents[0]!=90U)return 9;
+    box[121]=20U; // PathRadiusOffset: complex modified shape
+    if(!objectspatial::decode_full_transforms(
+           packet({box}),out,&audit,&parents,&linked)||
+       out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       audit.unsupported_shapes!=1U)return 10;
     auto bot=packet({block(81U,0,47U)});
     if(!objectspatial::decode_full_transforms(bot,out,&audit,&parents)||
        !out.empty()||!parents.empty()||audit.non_volume!=1U||

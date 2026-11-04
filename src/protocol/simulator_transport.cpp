@@ -123,7 +123,7 @@ void Circuit::maybe_send_agent_update() noexcept {
     }
 }
 void Circuit::remember_missing_object(std::uint32_t id) noexcept {
-    if(id==0U||spatial_objects_.contains(id)||
+    if(id==0U||spatial_objects_.contains(id)||linked_objects_.contains(id)||
        missing_objects_.contains(id)||missing_objects_.size()>=256U)return;
     missing_objects_.try_emplace(id);
 }
@@ -204,10 +204,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             if(region_seen_&&movement_seen_&&region_metadata_.verified&&
                movement_position_.verified){
                 std::vector<objectspatial::Transform> objects;
+                std::vector<objectspatial::Transform> linked;
                 std::vector<std::uint32_t> parent_ids;
                 objectspatial::FullDecodeAudit frame{};
                 if(objectspatial::decode_full_transforms(
-                       incoming,objects,&frame,&parent_ids)){
+                       incoming,objects,&frame,&parent_ids,&linked)){
                     ++spatial_object_frames_;
                     ++decoded_full_spatial_frames_;
                     full_decode_audit_.volume+=frame.volume;
@@ -216,7 +217,16 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.unsupported_motion+=frame.unsupported_motion;
                     full_decode_audit_.invalid_transform+=frame.invalid_transform;
                     full_decode_audit_.accepted_roots+=frame.accepted_roots;
+                    full_decode_audit_.accepted_children+=frame.accepted_children;
+                    full_decode_audit_.unsupported_shapes+=frame.unsupported_shapes;
                     for(auto id:parent_ids)remember_missing_object(id);
+                    for(const auto& child:linked){
+                        if(linked_objects_.size()>=1024U&&
+                           !linked_objects_.contains(child.local_id))continue;
+                        linked_objects_.insert_or_assign(child.local_id,child);
+                        missing_objects_.erase(child.local_id);
+                        ++spatial_object_revision_;
+                    }
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
@@ -267,6 +277,8 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     for(const auto id:ids){
                         missing_objects_.erase(id);
                         if(spatial_objects_.erase(id)>0U)
+                            ++spatial_object_revision_;
+                        if(linked_objects_.erase(id)>0U)
                             ++spatial_object_revision_;
                     }
             }
@@ -387,6 +399,7 @@ void Circuit::stop() noexcept {
     decoded_full_spatial_frames_=0;
     full_decode_audit_={};
     spatial_objects_.clear();
+    linked_objects_.clear();
     missing_objects_.clear();
     requested_object_ids_=cached_object_ids_=0U;
     last_object_request_={};

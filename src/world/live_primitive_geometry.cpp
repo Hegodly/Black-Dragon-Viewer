@@ -1,0 +1,215 @@
+#include "kami/world/live_primitive_geometry.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <vector>
+
+namespace kami::world {
+namespace {
+using Transform=protocol::objectspatial::Transform;
+using Kind=protocol::objectspatial::PrimitiveKind;
+struct V {float x,y,z;};
+struct Q {float x,y,z,w;};
+struct Pose {V pos;Q rot;};
+V add(V a,V b) noexcept {return {a.x+b.x,a.y+b.y,a.z+b.z};}
+V sub(V a,V b) noexcept {return {a.x-b.x,a.y-b.y,a.z-b.z};}
+V scale(V a,float k) noexcept {return {a.x*k,a.y*k,a.z*k};}
+V cross(V a,V b) noexcept {
+    return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};
+}
+float dot(V a,V b) noexcept {return a.x*b.x+a.y*b.y+a.z*b.z;}
+Q quat(const Transform& t) noexcept {return {t.rx,t.ry,t.rz,t.rw};}
+V pos(const Transform& t) noexcept {return {t.x,t.y,t.z};}
+Q multiply(Q a,Q b) noexcept {
+    return {a.w*b.x+a.x*b.w+a.y*b.z-a.z*b.y,
+            a.w*b.y-a.x*b.z+a.y*b.w+a.z*b.x,
+            a.w*b.z+a.x*b.y-a.y*b.x+a.z*b.w,
+            a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z};
+}
+V rotate(Q q,V v) noexcept {
+    const V axis{q.x,q.y,q.z};
+    return add(v,scale(add(scale(cross(axis,v),q.w),
+                           cross(axis,cross(axis,v))),2.f));
+}
+bool finite(V p) noexcept {
+    return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);
+}
+bool valid_quat(Q q) noexcept {
+    const float sq=q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
+    return std::isfinite(sq)&&sq>.99f&&sq<1.01f;
+}
+bool resolve(const Transform& t,
+    const std::map<std::uint32_t,Transform>& roots,
+    const std::map<std::uint32_t,Transform>& children,
+    Pose& out) noexcept {
+    if(t.parent_id==0U||t.local_id==0U||!valid_quat(quat(t)))
+        return false;
+    Pose next{pos(t),quat(t)};
+    std::array<std::uint32_t,8> seen{};
+    std::size_t count=0U;
+    seen[count++]=t.local_id;
+    std::uint32_t parent=t.parent_id;
+    while(parent!=0U&&count<seen.size()){
+        if(std::find(seen.begin(),seen.begin()+count,parent)!=
+           seen.begin()+count)return false; // cyclic linkset
+        seen[count++]=parent;
+        const Transform* candidate=nullptr;
+        const auto r=roots.find(parent);
+        if(r!=roots.end())candidate=&r->second;
+        else {
+            const auto c=children.find(parent);
+            if(c!=children.end())candidate=&c->second;
+        }
+        if(!candidate||!valid_quat(quat(*candidate)))return false;
+        next.pos=add(pos(*candidate),rotate(quat(*candidate),next.pos));
+        next.rot=multiply(quat(*candidate),next.rot);
+        if(candidate->parent_id==0U){
+            if(r==roots.end())return false; // never anchor to an orphan
+            if(!finite(next.pos)||!valid_quat(next.rot))return false;
+            out=next;
+            return true;
+        }
+        parent=candidate->parent_id;
+    }
+    return false;
+}
+struct Emitter {
+    std::vector<Vertex>& out;
+    Pose pose;
+    V half;
+    V origin;
+    float red=.78f,green=.83f,blue=.92f;
+    V transform(V v) const noexcept {
+        return add(pose.pos,rotate(pose.rot,
+            {v.x*half.x*2.f,v.y*half.y*2.f,v.z*half.z*2.f}));
+    }
+    V render(V v) const noexcept {
+        return {v.x-origin.x,v.z-origin.z,v.y-origin.y};
+    }
+    void tri(V x,V y,V z){
+        // Construct normals from the final DX12 Y-up transform.
+        // The SL->DX12 axis permutation reverses handedness.
+        const V local_center=scale(add(add(x,y),z),1.f/3.f);
+        V a=render(transform(x)),b=render(transform(y)),c=render(transform(z));
+        const V normal=cross(sub(b,a),sub(c,a));
+        // Point outward on convex elementary primitives, including
+        // caps and the sphere poles, despite the handedness conversion.
+        const V expected=render(add(pose.pos,rotate(pose.rot,
+            {local_center.x*half.x*2.f,
+             local_center.y*half.y*2.f,
+             local_center.z*half.z*2.f})));
+        const V center=render(pose.pos);
+        V n=normal;
+        if(dot(n,sub(expected,center))<0.f){std::swap(b,c);n=scale(n,-1.f);}
+        const float len=std::sqrt(dot(n,n));
+        if(len<1.e-6f||!std::isfinite(len))return;
+        n=scale(n,1.f/len);
+        if(!finite(a)||!finite(b)||!finite(c))return;
+        for(const V p:{a,b,c})
+            out.push_back({p.x,p.y,p.z,n.x,n.y,n.z,
+                red,green,blue,.06f,.79f,0.f,0.f});
+    }
+    void quad(V a,V b,V c,V d){tri(a,b,c);tri(a,c,d);}
+};
+void build_box(Emitter& e) {
+    const std::array<V,8> p={{
+      {-.5f,-.5f,-.5f},{.5f,-.5f,-.5f},
+      {.5f,.5f,-.5f},{-.5f,.5f,-.5f},
+      {-.5f,-.5f,.5f},{.5f,-.5f,.5f},
+      {.5f,.5f,.5f},{-.5f,.5f,.5f}
+    }};
+    e.quad(p[4],p[5],p[6],p[7]);
+    e.quad(p[1],p[0],p[3],p[2]);
+    e.quad(p[0],p[4],p[7],p[3]);
+    e.quad(p[5],p[1],p[2],p[6]);
+    e.quad(p[3],p[7],p[6],p[2]);
+    e.quad(p[0],p[1],p[5],p[4]);
+}
+void build_cylinder(Emitter& e){
+    constexpr unsigned kSides=20U;
+    constexpr float pi=3.14159265358979323846f;
+    for(unsigned i=0;i<kSides;++i){
+        const float a=2.f*pi*static_cast<float>(i)/kSides;
+        const float b=2.f*pi*static_cast<float>(i+1)/kSides;
+        const V lo{std::cos(a)*.5f,std::sin(a)*.5f,-.5f};
+        const V hi{lo.x,lo.y,.5f};
+        const V lon{std::cos(b)*.5f,std::sin(b)*.5f,-.5f};
+        const V hin{lon.x,lon.y,.5f};
+        e.quad(lo,lon,hin,hi);
+        e.tri({0,0,.5f},hi,hin);
+        e.tri({0,0,-.5f},lon,lo);
+    }
+}
+void build_sphere(Emitter& e){
+    constexpr unsigned lat=10U,lon=20U;
+    constexpr float pi=3.14159265358979323846f;
+    const auto vertex=[](float t,float p)->V{
+        return {std::sin(t)*std::cos(p)*.5f,
+                std::sin(t)*std::sin(p)*.5f,std::cos(t)*.5f};
+    };
+    for(unsigned row=0;row<lat;++row){
+        const float a=pi*static_cast<float>(row)/lat;
+        const float b=pi*static_cast<float>(row+1)/lat;
+        for(unsigned col=0;col<lon;++col){
+            const float x=2*pi*static_cast<float>(col)/lon;
+            const float y=2*pi*static_cast<float>(col+1)/lon;
+            e.quad(vertex(a,x),vertex(a,y),vertex(b,y),vertex(b,x));
+        }
+    }
+}
+bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin){
+    if(t.primitive==Kind::Unknown||!valid_quat(p.rot)||!finite(p.pos))
+        return false;
+    const std::size_t start=out.size();
+    Emitter e{out,p,{t.sx*.5f,t.sy*.5f,t.sz*.5f},origin};
+    switch(t.primitive){
+        case Kind::Box:build_box(e);break;
+        case Kind::Cylinder:build_cylinder(e);break;
+        case Kind::Sphere:build_sphere(e);break;
+        default:break;
+    }
+    return out.size()>start;
+}
+} // namespace
+PrimitiveBatch build_live_primitive_geometry(
+    const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
+    const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
+    float agent_x,float agent_y,float agent_z,std::size_t limit){
+    PrimitiveBatch result{};
+    const V origin{agent_x,agent_y,agent_z};
+    if(!finite(origin))return result;
+    limit=std::min<std::size_t>(limit,64U);
+    struct Draw {const Transform* item;Pose pose;bool child;float distance;};
+    std::vector<Draw> chosen;
+    chosen.reserve(roots.size()+children.size());
+    const auto collect=[&](const Transform& t,Pose p,bool child){
+        if(t.primitive==Kind::Unknown||!finite(p.pos))return;
+        const V d=sub(p.pos,origin);
+        if(std::abs(d.x)>96.f||std::abs(d.y)>96.f||
+           std::abs(d.z)>60.f)return;
+        chosen.push_back({&t,p,child,d.x*d.x+d.y*d.y+d.z*d.z});
+    };
+    for(const auto& [id,t]:roots){
+        (void)id;
+        if(t.parent_id==0U)collect(t,{pos(t),quat(t)},false);
+    }
+    for(const auto& [id,t]:children){
+        (void)id;
+        Pose p{};
+        if(resolve(t,roots,children,p))collect(t,p,true);
+    }
+    std::sort(chosen.begin(),chosen.end(),
+        [](const Draw& a,const Draw& b){return a.distance<b.distance;});
+    if(chosen.size()>limit)chosen.resize(limit);
+    auto& vertices=result.scene.vertices;
+    vertices.reserve(chosen.size()*1200U);
+    for(const auto& item:chosen){
+        if(emit(vertices,*item.item,item.pose,origin)){
+            if(item.child)++result.linked_shapes;
+            else ++result.root_shapes;
+        }
+    }
+    result.scene.terrain_count=vertices.size();
+    return result;
+}
+} // namespace kami::world

@@ -74,6 +74,11 @@ public:
     }
     [[nodiscard]] const std::map<std::uint32_t,objectspatial::Transform>&
     decoded_spatial_objects() const noexcept {return spatial_objects_;}
+    [[nodiscard]] const std::map<std::uint32_t,objectspatial::Transform>&
+    decoded_linked_objects() const noexcept {return linked_objects_;}
+    [[nodiscard]] std::size_t retained_linked_objects() const noexcept {
+        return linked_objects_.size();
+    }
     [[nodiscard]] std::uint32_t spatial_object_frames() const noexcept {
         return spatial_object_frames_;
     }
@@ -152,6 +157,9 @@ private:
     // Untextured root volume positions/sizes from verified connected
     // ObjectUpdateCompressed frames, NOT actual mesh or texture assets.
     std::map<std::uint32_t,objectspatial::Transform> spatial_objects_;
+    // Safe local-space transforms kept until their parent region pose
+    // is confirmed. Avatar attachments stay unresolved and invisible.
+    std::map<std::uint32_t,objectspatial::Transform> linked_objects_;
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};

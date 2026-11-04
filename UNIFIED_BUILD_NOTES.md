@@ -436,3 +436,49 @@ LIVE TEST: In Attalia go to WORLD, then F9. Check Requested>0 and
 compare Roots/Amber. If Requested rises while Roots remains 0, the
 server may be sending avatar parents or missing world updates remain
 unsupported. Read Volume/Linked/Accepted and screenshot.
+
+## R26: basic real SL primitive geometry and linked-object hierarchy
+
+R25 proved eight *actual* simulator-derived root bounds and confirmed
+platform visibility as amber frames. It also received numerous volume
+children (parent ID nonzero), which cannot simply be displayed at
+their own parent-relative coordinates.
+
+R26 safely retains validated full ObjectUpdate volume-child records
+with independent local-scale/position and LLQuaternion (three floats
+plus recovered fourth component). Linked objects are composed through
+parents up to 8 entries deep and rendered only if the terminal parent
+is an authenticated cached ROOT object. Missing roots, cycles,
+unresolved avatar parents and invalid rotations are not drawn.
+
+The full packet's 23-byte official profile/path parameters are decoded
+and conservatively classified. Only uncut, unhollowed, untapered
+basic Box (line/square), Cylinder (line/circle), and Sphere
+(circle/circle-half) profiles get generated into KAMI's native DX12
+triangle buffer with real server size and rotation. **This is NOT the
+complete Linden Lab volume tessellator.** Complex/cut/twisted,
+sculpted, mesh, PBR or asset-based content must remain unsupported.
+Unknown cached roots retain their prior amber frame outlines.
+
+DX12 world geometry now batches terrain, clipped water, root amber
+bounds and eligible primitive meshes in the same static upload.
+The 800ms terrain/object revision coalescing remains in place.
+Near-object selection is capped at 64 simple shapes within
+96m horizontal/60m vertical from the verified login anchor.
+Terrain vertex counts subtract both amber and solid vertices.
+R17 camera movement and server movement remain unchanged.
+
+F9 displays cached linked count and number of SOLID primitives;
+WORLD footer splits SOLID ROOTS/SOLID LINKED from AMBER BOUNDS.
+R26 tests verify box/cylinder/sphere triangulation, finite vertices,
+parent+child quaternion composition, multi-level linked hierarchy,
+orphan/cycle prevention, local-state clearing and mesh size limits.
+
+ATTENTION: R26 may still show only amber bounds on regions where
+the simulator delivers no supported simple profile/path records.
+This does NOT mean KAMI has finished displaying mesh buildings,
+attachment avatars, texture assets or production SL parity.
+
+User test: login to Attalia, press V for scenery, check AMBER BOUNDS,
+SOLID ROOTS, SOLID LINKED, world FPS, and F9 Linked vs SOLID.
+Verify W/S and A/D movement, camera, 256 land patches.
