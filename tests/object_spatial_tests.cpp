@@ -36,8 +36,8 @@ std::vector<std::uint8_t> packed(std::uint32_t id,
     if(parent!=0U)u32(b,parent);
     return b;
 }
-lludp::Packet compressed(const std::vector<std::uint8_t>& one){
-    lludp::Packet p{};
+kami::protocol::lludp::Packet compressed(const std::vector<std::uint8_t>& one){
+    kami::protocol::lludp::Packet p{};
     p.body.push_back(13);
     p.body.insert(p.body.end(),10,0); // region handle, time dilation
     p.body.push_back(1);
