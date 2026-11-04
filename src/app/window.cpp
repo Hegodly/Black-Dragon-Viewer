@@ -693,8 +693,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
         label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
               title_font_.Get(),p.text);
-        label(L"Offline KAMI scene lab: GPU geometry, lighting, depth and materials",
-              box(contentX+30,151,contentWidth-50,30),small_font_.Get(),p.accent);
+        label(world_renderer_.region_geometry_active()?
+              L"Authenticated Attalia land / untextured DirectX 12 preview":
+              L"KAMI scene lab / awaiting verified live terrain upload",
+              box(contentX+30,151,contentWidth-50,30),
+              small_font_.Get(),p.accent);
         const std::wstring fps_label=L"FPS: "+std::to_wstring(fps_display_);
         label(fps_label,box(contentX+contentWidth-130,116,112,28),
               small_font_.Get(),p.accent);
@@ -710,8 +713,23 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             perf+=L"  |  DX12 VRAM "+std::to_wstring(last_performance_.gpu_vram_used_mb)+
                   L"/"+std::to_wstring(last_performance_.gpu_vram_budget_mb)+L"MB";
         label(perf,box(contentX+28,height-136,contentWidth-48,24),small_font_.Get(),p.accent);
-        label(L"Procedural test scene only. SL region and avatar transport: not connected.",
-              box(contentX+29,height-71,contentWidth-50,30),small_font_.Get(),p.muted);
+        std::wstring world_status;
+        if(world_renderer_.region_geometry_active()){
+            world_status=L"LIVE land GPU vertices "+
+                std::to_wstring(world_renderer_.uploaded_live_land_vertices())+
+                L" | decoded patches "+
+                std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+                L" | SL objects NOT rendered";
+        }else if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
+            world_status=L"Connected to Attalia | land patches "+
+                std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+                L" | "+(world_renderer_.error().empty()?
+                         L"DX12 terrain upload pending":world_renderer_.error());
+        }else {
+            world_status=L"Offline procedural preview | connect to SL to receive live land";
+        }
+        label(world_status,box(contentX+29,height-71,contentWidth-50,30),
+              small_font_.Get(),p.muted);
         return;
     }
 
@@ -1113,7 +1131,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                (L"R12 LIVE LAND DX12 | Patches "+
                 std::to_wstring(sl_circuit_.decoded_land_patches().size())+
                 L" | Obj Full "+std::to_wstring(
-                    sl_circuit_.full_object_packets())+L" NOT RENDERED"):
+                    sl_circuit_.full_object_packets())+L" objects NOT RENDERED"):
                (L"R12 DECODE | Land "+
                 std::to_wstring(sl_circuit_.terrain_packets())+
                 L" | Patches "+

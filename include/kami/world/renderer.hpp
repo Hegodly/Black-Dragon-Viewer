@@ -94,6 +94,11 @@ public:
     [[nodiscard]] bool region_geometry_active() const noexcept {
         return region_mesh_.has_value();
     }
+    // Geometry successfully accepted into the active DX12 scene buffer,
+    // NOT proof it is currently visible in the camera's frustum.
+    [[nodiscard]] std::size_t uploaded_live_land_vertices() const noexcept {
+        return region_mesh_?region_mesh_->terrain_count:0U;
+    }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
     [[nodiscard]] bool creator_preview_active() const noexcept {return preview_mesh_.has_value();}

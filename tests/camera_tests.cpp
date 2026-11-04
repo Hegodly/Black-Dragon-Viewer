@@ -64,5 +64,16 @@ int main() {
     c.reset();
     c.update(.1f, 2.2f, flat, false);
     if (!near(c.pose().focus.y, 1.7f)) return 13;
+    // Regression: an authenticated land patch located away from the
+    // original offline mannequin must be frameable by the wide camera.
+    c.set_settings({50,0,400,true,false,true,false});
+    c.set_subject({48.f,-2.f,17.f});
+    c.apply_studio_shot(StudioShot::Wide);
+    c.update(.1f,2.3f,nullptr,false);
+    const auto live=c.pose();
+    if(!near(live.focus.x,48.f)||!near(live.focus.z,17.f)||
+       !near(live.focus.y,.77f)||!(live.eye.y>live.focus.y)||
+       !std::isfinite(live.eye.x)||!std::isfinite(live.eye.z))
+        return 16;
     return 0;
 }

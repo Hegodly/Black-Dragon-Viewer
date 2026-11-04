@@ -391,3 +391,25 @@ no prim, mesh, material, texture, animation or chat body dispatcher
 exists yet. There is no guarantee live terrain is visible until a
 real simulator confirms it. Existing offline DX12 smoke and a loopback
 test for a genuine encoded land patch cover parts of the path.
+
+## R12 camera and viewport diagnostic hotfix
+
+The R12 decoder can report dozens of land patches while the live WORLD
+viewport remains dark: receiving valid simulator terrain is not the same
+as viewing its GPU geometry. On the **first successful** authenticated
+land mesh upload, place the independent DX12 camera at the nearest
+decoded patch's simulator-relative center, aim toward the land surface,
+and select a wide shot. This avoids leaving the camera pointed over
+terrain or entirely outside the received area (e.g. when the avatar
+is standing over water). Later packet bursts do not reset user orbit.
+
+The WORLD tab now distinguishes **live GPU-uploaded triangle vertices**
+from decoded patch counts and explicitly reports that Second Life objects
+still lack rendering. Offline procedural terrain must not be used as a
+collision height field for live simulator geometry. A camera regression
+test guards focus framing on remote terrain positions.
+
+The fix does not fetch textures, decode object meshes, or implement
+live avatar animations. Reported GPU vertices indicate accepted buffers
+and do not independently verify pixel visibility; check the WORLD
+viewport on the target device.

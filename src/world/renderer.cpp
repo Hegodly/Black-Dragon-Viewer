@@ -575,6 +575,10 @@ bool Renderer::set_verified_live_terrain(
             return d(a)<d(b);
         });
     if(nearest.size()>64U)nearest.resize(64U);
+    // The first land upload also needs to reframe the offline camera.
+    // Without this, a user can receive dozens of valid height patches
+    // and still see only sky because the camera is looking over them.
+    const bool first_live_land=!region_mesh_;
     SceneMesh scene{};
     scene.vertices.reserve(nearest.size()*31U*31U*6U);
     const auto make_vertex=[&](const protocol::terrain::Patch& patch,
@@ -629,6 +633,21 @@ bool Renderer::set_verified_live_terrain(
         region_mesh_=std::move(previous);
         error_=L"R12 DX12 land mesh upload failed";
         return false;
+    }
+    if(first_live_land&&!nearest.empty()){
+        const auto& patch=*nearest.front();
+        const unsigned middle=patch.size/2U;
+        const float ground=patch.elevation[middle*patch.size+middle]-agent.z;
+        const float x=static_cast<float>(patch.x)*patch.size+middle-agent.x;
+        const float z=static_cast<float>(patch.y)*patch.size+middle-agent.y;
+        // Anchor near a real decoded land patch, even if the avatar is
+        // over water or the nearest patch is beyond the 200m far plane.
+        // System::update adds the 2.77m head offset when head-tracking
+        // is enabled, so lowering the subject centers nearby terrain.
+        if(std::isfinite(x)&&std::isfinite(z)&&std::isfinite(ground)){
+            camera_.set_subject({x,ground-1.7f,z});
+            camera_.apply_studio_shot(camera::StudioShot::Wide);
+        }
     }
     error_.clear();
     return true;
@@ -697,6 +716,8 @@ void Renderer::clear_decoded_region_geometry() {
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
+    camera_.set_subject({0.f,0.f,0.f});
+    camera_.reset();
     if(ready_&&!make_geometry()) {
         ready_=false;
         error_=L"DX12 could not restore offline scene on disconnect";
@@ -744,7 +765,12 @@ void Renderer::draw() {
         camera_.set_subject({state.x,state.y,state.z},state.heading);
     }
     avatar_spring_.step(std::sin(seconds*2.f),dt);
-    camera_.update(dt,seconds,sample_test_terrain_height,graphics_.animate_avatar);
+    // Live SL terrain must not collide against the procedural offline
+    // scene's unrelated height sampler. A live collision sampler will be
+    // connected after the region height grid is fully assembled.
+    camera_.update(dt,seconds,
+                   region_mesh_?nullptr:sample_test_terrain_height,
+                   graphics_.animate_avatar);
     const auto camera=camera_.pose();
     const XMVECTOR eye=XMVectorSet(camera.eye.x,camera.eye.y,camera.eye.z,0.f);
     const XMVECTOR focus=XMVectorSet(camera.focus.x,camera.focus.y,camera.focus.z,0.f);
