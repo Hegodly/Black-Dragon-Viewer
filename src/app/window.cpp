@@ -1092,9 +1092,19 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       box(contentX+252,y+28,contentWidth-269,21.f),
                       small_font_.Get(),p.muted);
             }
-            label(caps_status_.empty()?
-                  L"CAPS negotiation not started":caps_status_,
-                  box(contentX+252,y+54,contentWidth-269,24.f),
+            // Keep processed events and neutral camera telemetry visible
+            // while the next long poll is in flight. Never obscure errors.
+            const auto shown=(!caps_dispatch_blocked_&&
+                caps_events_handled_>0)?
+                L"R9 handled "+std::to_wstring(caps_events_handled_)+
+                L" events | groups "+std::to_wstring(
+                    caps_event_state_.groups.size())+
+                L" | AgentUpdate "+std::to_wstring(
+                    sl_circuit_.agent_updates_sent()):
+                (caps_status_.empty()?
+                    std::wstring(L"CAPS negotiation not started"):
+                    caps_status_);
+            label(shown,box(contentX+252,y+54,contentWidth-269,24.f),
                   small_font_.Get(),p.muted);
         }else{
             const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
