@@ -7,12 +7,15 @@
 #include "kami/protocol/live_chat.hpp"
 #include "kami/protocol/avatar_appearance.hpp"
 #include "kami/protocol/load_scheduler.hpp"
+#include "kami/protocol/mesh_lod.hpp"
+#include "kami/protocol/caps.hpp"
 #include <winsock2.h>
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <map>
 #include <set>
+#include <future>
 #include <vector>
 #include <string_view>
 
@@ -99,6 +102,15 @@ public:
     [[nodiscard]] const std::set<std::uint32_t>& known_avatar_roots() const noexcept {
         return avatar_root_ids_;
     }
+    [[nodiscard]] bool set_mesh_capability(std::wstring capability) noexcept;
+    [[nodiscard]] const std::map<std::string,mesh::LOD>&
+    decoded_mesh_assets() const noexcept {return loaded_meshes_;}
+    [[nodiscard]] std::size_t mesh_download_count() const noexcept {
+        return mesh_download_count_;
+    }
+    [[nodiscard]] std::size_t mesh_failure_count() const noexcept {
+        return mesh_failure_count_;
+    }
     [[nodiscard]] load::Stats mesh_asset_stats() const noexcept {
         return mesh_scheduler_.statistics();
     }
@@ -159,6 +171,7 @@ private:
     [[nodiscard]] bool send_startup_messages() noexcept;
     void maybe_send_agent_update() noexcept;
     void maybe_send_missing_object_requests() noexcept;
+    void maybe_fetch_mesh() noexcept;
     void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
@@ -191,7 +204,18 @@ private:
     // is confirmed. Avatar attachments stay unresolved and invisible.
     std::map<std::uint32_t,objectspatial::Transform> linked_objects_;
     std::set<std::uint32_t> avatar_root_ids_; // known, never rendered
-    load::Scheduler mesh_scheduler_{}; // queued assets, downloader pending
+    load::Scheduler mesh_scheduler_{};
+    std::wstring mesh_capability_url_; // in-memory bearer only
+    struct MeshResult {
+        std::string id;
+        std::uint32_t bytes=0;
+        bool fetched=false,decoded=false;
+        mesh::LOD lod;
+    };
+    std::future<MeshResult> mesh_worker_;
+    std::map<std::string,mesh::LOD> loaded_meshes_;
+    std::size_t mesh_download_count_=0,mesh_failure_count_=0;
+    std::chrono::steady_clock::time_point mesh_last_start_{};
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};

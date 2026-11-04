@@ -4,6 +4,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/live_chat.hpp"
 #include "kami/protocol/avatar_appearance.hpp"
+#include "kami/protocol/mesh_lod.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
 #include <cmath>
@@ -98,6 +99,59 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
         stop();state_=CircuitState::Failed;return false;
     }
     return true;
+}
+bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
+    if(!caps::trusted_caps_url(capability)||!mesh_capability_url_.empty()||
+       state_!=CircuitState::MovementConfirmed)return false;
+    mesh_capability_url_=std::move(capability);
+    return true;
+}
+void Circuit::maybe_fetch_mesh() noexcept {
+    if(state_!=CircuitState::MovementConfirmed)return;
+    if(mesh_worker_.valid()){
+        if(mesh_worker_.wait_for(std::chrono::seconds(0))!=
+           std::future_status::ready)return;
+        try{
+            auto result=mesh_worker_.get();
+            (void)mesh_scheduler_.download_finished(
+                result.id,result.bytes,result.fetched);
+            if(result.fetched){
+                ++mesh_download_count_;
+                const auto item=mesh_scheduler_.next_decode();
+                if(item&&item->id==result.id){
+                    const bool room=loaded_meshes_.contains(result.id)||
+                                    loaded_meshes_.size()<32U;
+                    const bool ok=result.decoded&&room;
+                    (void)mesh_scheduler_.decode_finished(result.id,ok);
+                    if(ok){
+                        loaded_meshes_.insert_or_assign(
+                            result.id,std::move(result.lod));
+                        ++spatial_object_revision_;
+                    }else ++mesh_failure_count_;
+                }
+            }else ++mesh_failure_count_;
+        }catch(...){++mesh_failure_count_;}
+    }
+    if(mesh_worker_.valid()||mesh_capability_url_.empty())return;
+    const auto now=std::chrono::steady_clock::now();
+    if(mesh_last_start_!=std::chrono::steady_clock::time_point{}&&
+       now-mesh_last_start_<std::chrono::milliseconds(350))return;
+    if(loaded_meshes_.size()>=32U)return;
+    auto selected=mesh_scheduler_.next_download();
+    if(!selected)return;
+    mesh_last_start_=now;
+    auto cap=mesh_capability_url_;
+    mesh_worker_=std::async(std::launch::async,
+       [url=std::move(cap),id=selected->id]()mutable{
+        MeshResult result{};
+        result.id=id;
+        const auto reply=caps::fetch_mesh_asset(std::move(url),id);
+        result.fetched=reply.fetched;
+        result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
+        if(reply.fetched)
+            result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
+        return result;
+    });
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -328,6 +382,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                             updated.mesh_asset_id=previous->second.mesh_asset_id;
                         }
                         linked_objects_.insert_or_assign(child.local_id,updated);
+                        if(!updated.mesh_asset_id.empty())
+                            (void)mesh_scheduler_.request(updated.mesh_asset_id,
+                                  load::Kind::NearbyMesh,1000.f,false,0U);
                         missing_objects_.erase(child.local_id);
                         ++spatial_object_revision_;
                     }
@@ -343,6 +400,14 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                             updated.mesh_asset_id=previous->second.mesh_asset_id;
                         }
                         spatial_objects_.insert_or_assign(obj.local_id,updated);
+                        if(!updated.mesh_asset_id.empty()){
+                            const float distance=std::hypot(
+                                std::hypot(updated.x-movement_position_.x,
+                                           updated.y-movement_position_.y),
+                                updated.z-movement_position_.z);
+                            (void)mesh_scheduler_.request(updated.mesh_asset_id,
+                                  load::Kind::VisibleMesh,distance,true,0U);
+                        }
                         missing_objects_.erase(obj.local_id);
                         ++spatial_object_revision_;
                     }
@@ -475,8 +540,20 @@ void Circuit::poll(unsigned budget) noexcept {
     maybe_retry();
     maybe_send_agent_update();
     maybe_send_missing_object_requests();
+    maybe_fetch_mesh();
 }
 void Circuit::stop() noexcept {
+    if(mesh_worker_.valid()){
+        try{(void)mesh_worker_.get();}catch(...){}
+    }
+    if(!mesh_capability_url_.empty()){
+        SecureZeroMemory(mesh_capability_url_.data(),
+                         mesh_capability_url_.size()*sizeof(wchar_t));
+        mesh_capability_url_.clear();
+    }
+    loaded_meshes_.clear();
+    mesh_download_count_=mesh_failure_count_=0U;
+    mesh_last_start_={};
     if(socket_!=INVALID_SOCKET){closesocket(socket_);socket_=INVALID_SOCKET;}
     if(winsock_ready_){WSACleanup();winsock_ready_=false;}
     clear_login(login_);
