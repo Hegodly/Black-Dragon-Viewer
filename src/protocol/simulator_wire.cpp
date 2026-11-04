@@ -152,6 +152,29 @@ bool neutral_agent_update(const LoginResult& login,
                           float draw_distance) noexcept {
     return controlled_agent_update(login,position,seq,output,0U,draw_distance);
 }
+bool request_missing_objects(const LoginResult& login,
+                             std::span<const std::uint32_t> local_ids,
+                             std::uint32_t seq,lludp::Packet& output) noexcept {
+    if(!accepted(login)||seq<3U||local_ids.empty()||
+       local_ids.size()>16U)return false;
+    std::array<std::uint8_t,16> agent{},session{};
+    if(!parse_uuid(login.handoff.agent_id,agent)||
+       !parse_uuid(login.handoff.session_id,session))return false;
+    lludp::Packet value{};
+    value.flags=lludp::kReliable|lludp::kZerocoded;
+    value.sequence=seq;
+    value.body={0xff,0x03}; // RequestMultipleObjects Medium 3
+    push_uuid(value.body,agent);
+    push_uuid(value.body,session);
+    value.body.push_back(static_cast<std::uint8_t>(local_ids.size()));
+    for(std::uint32_t id:local_ids){
+        if(id==0U)return false;
+        value.body.push_back(0U); // CacheMissType 0: need full object
+        le32(value.body,id);
+    }
+    output=std::move(value);
+    return true;
+}
 bool packet_ack(std::span<const std::uint32_t> acks,std::uint32_t seq,
                 lludp::Packet& output) noexcept {
     if(seq==0||acks.empty()||acks.size()>255)return false;

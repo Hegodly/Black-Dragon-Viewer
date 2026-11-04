@@ -1,5 +1,6 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <span>
@@ -73,7 +74,8 @@ bool valid(const Transform& p) noexcept {
 // every field so the next block begins at the *correct* boundary.
 bool decode_full_transforms(const lludp::Packet& packet,
                             std::vector<Transform>& out,
-                            FullDecodeAudit* audit) noexcept {
+                            FullDecodeAudit* audit,
+                            std::vector<std::uint32_t>* parent_references) noexcept {
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -83,6 +85,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     std::vector<Transform> decoded;
     decoded.reserve(info.blocks);
     FullDecodeAudit frame{};
+    std::vector<std::uint32_t> parents;
     for(unsigned n=0U;n<info.blocks;++n){
         Transform t{};
         std::uint8_t pcode=0U;
@@ -113,7 +116,13 @@ bool decode_full_transforms(const lludp::Packet& packet,
             return false;
         if(pcode!=9U){++frame.non_volume;continue;}
         ++frame.volume;
-        if(parent!=0U){++frame.linked;continue;}
+        if(parent!=0U){
+            ++frame.linked;
+            if(parent!=t.local_id &&
+               std::find(parents.begin(),parents.end(),parent)==parents.end())
+                parents.push_back(parent);
+            continue;
+        }
         // Per the official viewer, full-precision ObjectData has
         // 60-byte position/velocity/acceleration/rotation/omega,
         // optionally prefixed by 16-byte avatar collision plane.
@@ -146,6 +155,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     if(!cur.done())return false;
     out=std::move(decoded);
     if(audit)*audit=frame; // publish only after full frame validation
+    if(parent_references)*parent_references=std::move(parents);
     return true;
 }
 } // namespace kami::protocol::objectspatial

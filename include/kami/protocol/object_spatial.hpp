@@ -21,9 +21,13 @@ struct FullDecodeAudit {
 // unlike the packed compressed (High 13) message.
 [[nodiscard]] bool decode_full_transforms(
     const lludp::Packet& packet,std::vector<Transform>& out,
-    FullDecodeAudit* audit=nullptr) noexcept;
+    FullDecodeAudit* audit=nullptr,
+    std::vector<std::uint32_t>* parent_references=nullptr) noexcept;
 [[nodiscard]] bool decode_compressed_transforms(
     const lludp::Packet& packet,std::vector<Transform>& out) noexcept;
+// ObjectUpdateCached is an inventory of local IDs, NOT full object data.
+[[nodiscard]] bool decode_cached_ids(
+    const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
 [[nodiscard]] bool decode_killed_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
 } // namespace kami::protocol::objectspatial

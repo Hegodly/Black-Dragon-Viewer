@@ -65,12 +65,14 @@ int main(){
     std::vector<objectspatial::Transform> out;
     auto live=packet({block(77U),block(78U,77U)});
     objectspatial::FullDecodeAudit audit{};
-    if(!objectspatial::decode_full_transforms(live,out,&audit)||
+    std::vector<std::uint32_t> parents;
+    if(!objectspatial::decode_full_transforms(live,out,&audit,&parents)||
        out.size()!=1U||out[0].local_id!=77U||
        out[0].x!=128.f||out[0].y!=140.f||out[0].z!=35.f||
        out[0].sx!=2.f||out[0].sy!=3.f||out[0].sz!=4.f||
        audit.volume!=2U||audit.accepted_roots!=1U||
-       audit.linked!=1U||audit.non_volume!=0U)return 1;
+       audit.linked!=1U||audit.non_volume!=0U||
+       parents.size()!=1U||parents[0]!=77U)return 1;
     // Full updates can have more than one variable-length field. Guard
     // against accidentally using an offset into the preceding block.
     auto second=packet({block(77U),block(80U,0,9U,222.f)});
@@ -78,8 +80,8 @@ int main(){
        out.size()!=2U||out[1].local_id!=80U||
        out[1].x!=222.f)return 2;
     auto bot=packet({block(81U,0,47U)});
-    if(!objectspatial::decode_full_transforms(bot,out,&audit)||
-       !out.empty()||audit.non_volume!=1U||
+    if(!objectspatial::decode_full_transforms(bot,out,&audit,&parents)||
+       !out.empty()||!parents.empty()||audit.non_volume!=1U||
        audit.accepted_roots!=0U)return 3;
     auto badpos=packet({block(82U,0,9U,800.f)});
     if(!objectspatial::decode_full_transforms(badpos,out,&audit)||

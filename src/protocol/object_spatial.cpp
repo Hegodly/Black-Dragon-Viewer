@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <span>
@@ -83,6 +84,23 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     }
     if(at!=b.size())return false;
     out=std::move(decoded);
+    return true;
+}
+bool decode_cached_ids(const lludp::Packet& packet,
+                       std::vector<std::uint32_t>& out) noexcept {
+    const auto info=worldwire::inspect(packet);
+    if(info.kind!=worldwire::Kind::ObjectCached||!info.complete_frame)
+        return false;
+    const std::span<const std::uint8_t> b(packet.body);
+    std::vector<std::uint32_t> ids;
+    ids.reserve(info.blocks);
+    for(unsigned i=0;i<info.blocks;++i){
+        // ID U32, CRC U32 and UpdateFlags U32 follow the RegionData.
+        const auto id=u32(b,12U+i*12U);
+        if(id!=0U && std::find(ids.begin(),ids.end(),id)==ids.end())
+            ids.push_back(id);
+    }
+    out=std::move(ids);
     return true;
 }
 bool decode_killed_ids(const lludp::Packet& packet,

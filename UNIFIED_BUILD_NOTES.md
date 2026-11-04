@@ -393,3 +393,46 @@ and no root-volume position can yet be drawn.
 
 R24 remains a diagnostic and safety patch, NOT full mesh or texture
 rendering. Do not treat the F9 stage statuses as viewer completeness.
+
+## R25: recover missing parent/root objects via real simulator requests
+
+R24 live screenshot: 165 full wire frames decoded, volume blocks 618,
+linked volume blocks 618, accepted ROOT=0, amber bounds=0. Correctly
+parsed ParentID is nonzero for those volume blocks. It is possible
+those blocks are children of linksets or attachments; R25 cannot
+infer parent world coordinates from child offsets alone.
+
+The official Second Life message template defines Medium 3
+RequestMultipleObjects with AgentID, SessionID and variable
+CacheMissType=0 plus local ID blocks. Also ObjectUpdateCached High 14
+contains ID, CRC, UpdateFlags, not an object's position.
+
+R25 changes:
+- Preserve unique parent local IDs referenced by validated volume blocks
+  and extract IDs from fully validated ObjectUpdateCached packets.
+- Queue only bounded missing object IDs (at most 256/session).
+- Once authenticated region/agent movement is confirmed, send at most
+  16 missing-object IDs in a reliable zero-coded Medium 3 packet every
+  >=400ms, at most two attempts per ID spaced >=8 seconds.
+- Retain confirmed root volume positions/sizes only when the simulator
+  replies with a supported valid update (no synthetic root placement).
+- Existing ROOT/AMBER counters remain truthful. F9 now additionally
+  exposes Pending object IDs, Requested transmissions and Cached IDs,
+  while the second line still shows Volume/Other/Linked/Motion/Invalid/
+  Accepted statistics.
+- Wire packet and full-object decoder tests exercise authorizing UUIDs,
+  endian-aware IDs, cache misses, malformed and overlarge batches,
+  bounds and linked parent references.
+
+IMPORTANT: R25 does NOT construct linked children, their rotation
+hierarchies, avatar attachments, real prim shapes, mesh geometry or
+textures. The missing parent might be an avatar (PCode 47) and thus
+would not produce an amber root-volume frame. Some servers may ignore
+requests, so this is a test of real scene recovery, not proof of
+visible buildings. Movement, terrain, water, V camera and R17 turn
+functionality must remain unchanged.
+
+LIVE TEST: In Attalia go to WORLD, then F9. Check Requested>0 and
+compare Roots/Amber. If Requested rises while Roots remains 0, the
+server may be sending avatar parents or missing world updates remain
+unsupported. Read Volume/Linked/Accepted and screenshot.

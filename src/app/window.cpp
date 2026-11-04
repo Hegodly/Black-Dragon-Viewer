@@ -534,14 +534,16 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 // Never imply Frame OK equals visible object count.
                 detail=L"Full RX "+std::to_wstring(
                     sl_circuit_.full_object_packets())+
-                    L" | Frame OK "+std::to_wstring(
-                    sl_circuit_.decoded_full_spatial_frames())+
-                    L" | Cached RX "+std::to_wstring(
-                    sl_circuit_.cached_object_packets())+
                     L" | Roots "+std::to_wstring(
                     sl_circuit_.decoded_root_count())+
                     L" | Amber "+std::to_wstring(
-                    world_renderer_.uploaded_root_bounds());
+                    world_renderer_.uploaded_root_bounds())+
+                    L" | Pending "+std::to_wstring(
+                    sl_circuit_.pending_object_requests())+
+                    L" | Requested "+std::to_wstring(
+                    sl_circuit_.requested_object_ids())+
+                    L" | Cached IDs "+std::to_wstring(
+                    sl_circuit_.cached_object_ids());
             }
             label(detail,
                   box(contentX+36,y+25,contentWidth-76,20),

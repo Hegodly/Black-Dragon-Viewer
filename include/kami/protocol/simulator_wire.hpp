@@ -68,6 +68,12 @@ inline constexpr std::uint32_t kAllowedMovement=
                                         std::uint32_t sequence,
                                         lludp::Packet& output,
                                         float draw_distance=96.f) noexcept;
+// Second Life Medium 3 RequestMultipleObjects, CacheMissType=0 only.
+// Requests data; does NOT manipulate an object's world state.
+[[nodiscard]] bool request_missing_objects(
+    const LoginResult& authorized_login,
+    std::span<const std::uint32_t> local_ids,
+    std::uint32_t sequence,lludp::Packet& output) noexcept;
 [[nodiscard]] bool packet_ack(std::span<const std::uint32_t> sequences,
                               std::uint32_t sequence,
                               lludp::Packet& output) noexcept;

@@ -88,6 +88,15 @@ public:
     [[nodiscard]] std::size_t decoded_root_count() const noexcept {
         return spatial_objects_.size();
     }
+    [[nodiscard]] std::size_t pending_object_requests() const noexcept {
+        return missing_objects_.size();
+    }
+    [[nodiscard]] std::uint32_t requested_object_ids() const noexcept {
+        return requested_object_ids_;
+    }
+    [[nodiscard]] std::uint32_t cached_object_ids() const noexcept {
+        return cached_object_ids_;
+    }
     [[nodiscard]] const std::map<std::uint16_t,terrain::Patch>&
     decoded_land_patches() const noexcept {return land_patches_;}
     [[nodiscard]] std::uint32_t wind_packets() const noexcept {return wind_packets_;}
@@ -118,6 +127,8 @@ private:
     [[nodiscard]] bool send_packet(lludp::Packet packet) noexcept;
     [[nodiscard]] bool send_startup_messages() noexcept;
     void maybe_send_agent_update() noexcept;
+    void maybe_send_missing_object_requests() noexcept;
+    void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
     SOCKET socket_=INVALID_SOCKET;
@@ -141,6 +152,13 @@ private:
     // Untextured root volume positions/sizes from verified connected
     // ObjectUpdateCompressed frames, NOT actual mesh or texture assets.
     std::map<std::uint32_t,objectspatial::Transform> spatial_objects_;
+    struct MissingObject {
+        unsigned attempts=0U;
+        std::chrono::steady_clock::time_point sent_at{};
+    };
+    std::map<std::uint32_t,MissingObject> missing_objects_;
+    std::uint32_t requested_object_ids_=0,cached_object_ids_=0;
+    std::chrono::steady_clock::time_point last_object_request_{};
     std::uint64_t spatial_object_revision_=0;
     std::uint32_t spatial_object_frames_=0,rejected_spatial_frames_=0;
     std::uint32_t decoded_full_spatial_frames_=0;

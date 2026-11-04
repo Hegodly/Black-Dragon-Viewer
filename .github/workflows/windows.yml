@@ -31,6 +31,7 @@ on:
       - release/kami-r22-true-terrain-dct-20261104
       - release/kami-r23-full-object-world-intake-20261104
       - release/kami-r24-object-intake-audit-20261104
+      - release/kami-r25-request-missing-roots-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -112,9 +113,9 @@ jobs:
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R24-Object-Intake-Audit.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R25-Root-Object-Recovery.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R24-Object-Intake-Audit
-          path: dist/KAMI-R24-Object-Intake-Audit.zip
+          name: KAMI-R25-Root-Object-Recovery
+          path: dist/KAMI-R25-Root-Object-Recovery.zip
           retention-days: 14

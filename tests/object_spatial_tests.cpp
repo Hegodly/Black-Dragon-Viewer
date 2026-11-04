@@ -95,5 +95,16 @@ int main(){
     if(objectspatial::decode_killed_ids(killed,ids))return 9;
     if(world::build_live_object_spatial_proxies(
         objects,0.f,0.f,0.f).terrain_count!=0U)return 10;
+    // One ObjectUpdateCached High 14 frame with two object IDs.
+    lludp::Packet cached{};
+    cached.body={14U};
+    cached.body.insert(cached.body.end(),10U,0U);
+    cached.body.push_back(2U);
+    u32(cached.body,77U);u32(cached.body,123U);u32(cached.body,0U);
+    u32(cached.body,78U);u32(cached.body,124U);u32(cached.body,0U);
+    if(!objectspatial::decode_cached_ids(cached,ids)||
+       ids.size()!=2U||ids[0]!=77U||ids[1]!=78U)return 11;
+    cached.body.pop_back();
+    if(objectspatial::decode_cached_ids(cached,ids))return 12;
     return 0;
 }

@@ -122,6 +122,44 @@ void Circuit::maybe_send_agent_update() noexcept {
         last_agent_update_=now;
     }
 }
+void Circuit::remember_missing_object(std::uint32_t id) noexcept {
+    if(id==0U||spatial_objects_.contains(id)||
+       missing_objects_.contains(id)||missing_objects_.size()>=256U)return;
+    missing_objects_.try_emplace(id);
+}
+void Circuit::maybe_send_missing_object_requests() noexcept {
+    if(state_!=CircuitState::MovementConfirmed||
+       !movement_position_.verified||socket_==INVALID_SOCKET||
+       missing_objects_.empty())return;
+    const auto now=std::chrono::steady_clock::now();
+    if(last_object_request_!=std::chrono::steady_clock::time_point{}&&
+       now-last_object_request_<std::chrono::milliseconds(400))return;
+    std::vector<std::uint32_t> ids;
+    ids.reserve(16U);
+    for(const auto& [id,state]:missing_objects_){
+        if(state.attempts>=2U)continue;
+        if(state.sent_at!=std::chrono::steady_clock::time_point{}&&
+           now-state.sent_at<std::chrono::seconds(8))continue;
+        if(spatial_objects_.contains(id))continue;
+        ids.push_back(id);
+        if(ids.size()==16U)break;
+    }
+    if(ids.empty())return;
+    lludp::Packet pkt{};
+    if(!request_missing_objects(login_,ids,sequence_,pkt))return;
+    if(send_packet(std::move(pkt))){
+        ++sequence_;
+        last_object_request_=now;
+        for(auto id:ids){
+            auto entry=missing_objects_.find(id);
+            if(entry!=missing_objects_.end()){
+                ++entry->second.attempts;
+                entry->second.sent_at=now;
+            }
+        }
+        requested_object_ids_+=static_cast<std::uint32_t>(ids.size());
+    }
+}
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     ++packets_received_;
     // These are bounded packet/framing observations from the actual
@@ -166,8 +204,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             if(region_seen_&&movement_seen_&&region_metadata_.verified&&
                movement_position_.verified){
                 std::vector<objectspatial::Transform> objects;
+                std::vector<std::uint32_t> parent_ids;
                 objectspatial::FullDecodeAudit frame{};
-                if(objectspatial::decode_full_transforms(incoming,objects,&frame)){
+                if(objectspatial::decode_full_transforms(
+                       incoming,objects,&frame,&parent_ids)){
                     ++spatial_object_frames_;
                     ++decoded_full_spatial_frames_;
                     full_decode_audit_.volume+=frame.volume;
@@ -176,10 +216,12 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.unsupported_motion+=frame.unsupported_motion;
                     full_decode_audit_.invalid_transform+=frame.invalid_transform;
                     full_decode_audit_.accepted_roots+=frame.accepted_roots;
+                    for(auto id:parent_ids)remember_missing_object(id);
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
                         spatial_objects_.insert_or_assign(obj.local_id,obj);
+                        missing_objects_.erase(obj.local_id);
                         ++spatial_object_revision_;
                     }
                 }else ++rejected_spatial_frames_;
@@ -197,13 +239,25 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
                         spatial_objects_.insert_or_assign(obj.local_id,obj);
+                        missing_objects_.erase(obj.local_id);
                         ++spatial_object_revision_;
                     }
                 }else ++rejected_spatial_frames_;
             }
             break;
         }
-        case worldwire::Kind::ObjectCached:++object_cached_packets_;break;
+        case worldwire::Kind::ObjectCached:{
+            ++object_cached_packets_;
+            if(region_seen_&&movement_seen_&&region_metadata_.verified&&
+               movement_position_.verified){
+                std::vector<std::uint32_t> ids;
+                if(objectspatial::decode_cached_ids(incoming,ids)){
+                    cached_object_ids_+=static_cast<std::uint32_t>(ids.size());
+                    for(auto id:ids)remember_missing_object(id);
+                }
+            }
+            break;
+        }
         case worldwire::Kind::ObjectTerse:++object_terse_packets_;break;
         case worldwire::Kind::ObjectKilled:{
             ++object_killed_packets_;
@@ -211,6 +265,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 std::vector<std::uint32_t> ids;
                 if(objectspatial::decode_killed_ids(incoming,ids))
                     for(const auto id:ids){
+                        missing_objects_.erase(id);
                         if(spatial_objects_.erase(id)>0U)
                             ++spatial_object_revision_;
                     }
@@ -309,6 +364,7 @@ void Circuit::poll(unsigned budget) noexcept {
     }
     maybe_retry();
     maybe_send_agent_update();
+    maybe_send_missing_object_requests();
 }
 void Circuit::stop() noexcept {
     if(socket_!=INVALID_SOCKET){closesocket(socket_);socket_=INVALID_SOCKET;}
@@ -331,6 +387,9 @@ void Circuit::stop() noexcept {
     decoded_full_spatial_frames_=0;
     full_decode_audit_={};
     spatial_objects_.clear();
+    missing_objects_.clear();
+    requested_object_ids_=cached_object_ids_=0U;
+    last_object_request_={};
     object_full_packets_=object_compressed_packets_=0;
     object_cached_packets_=object_terse_packets_=object_killed_packets_=0;
     sequence_=3;attempts_=0;last_retry_={};started_={};

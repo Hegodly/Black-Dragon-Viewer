@@ -147,5 +147,30 @@ int main(){
        sim::controlled_agent_update(rejected,verified,11U,packet,controls)||
        sim::controlled_agent_update(login,unverified,11U,packet,controls))
         return 27;
+    // R25 real, authenticated Medium 3 cache-miss messages. Only valid
+    // nonzero IDs, bounded batch size, and zero-coded reliable framing.
+    const std::array<std::uint32_t,2> missing={0x12345678U,77U};
+    if(!sim::request_missing_objects(login,missing,12U,packet)||
+       packet.flags!=(lludp::kReliable|lludp::kZerocoded)||
+       packet.body.size()!=45U||
+       packet.body[0]!=0xffU||packet.body[1]!=3U||
+       packet.body[2]!=0x12U||packet.body[18]!=0x12U||
+       packet.body[34]!=2U||packet.body[35]!=0U||
+       packet.body[36]!=0x78U||packet.body[39]!=0x12U||
+       packet.body[40]!=0U||packet.body[41]!=77U)return 28;
+    if(!lludp::encode(packet,updatedWire)||
+       !lludp::decode(updatedWire,decodedUpdate)||
+       decodedUpdate.body!=packet.body||
+       decodedUpdate.sequence!=12U)return 29;
+    const std::array<std::uint32_t,1> zero={0U};
+    const std::array<std::uint32_t,17> too_many={1U,2U,3U,4U,5U,
+        6U,7U,8U,9U,10U,11U,12U,13U,14U,15U,16U,17U};
+    const std::array<std::uint32_t,0> none={};
+    if(sim::request_missing_objects(rejected,missing,12U,packet)||
+       sim::request_missing_objects(login,none,12U,packet)||
+       sim::request_missing_objects(login,zero,12U,packet)||
+       sim::request_missing_objects(login,too_many,12U,packet)||
+       sim::request_missing_objects(login,missing,2U,packet))
+        return 30;
     return 0;
 }
