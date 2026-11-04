@@ -377,6 +377,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.unsupported_shapes+=frame.unsupported_shapes;
                     full_decode_audit_.texture_references+=frame.texture_references;
                     full_decode_audit_.mesh_references+=frame.mesh_references;
+                    full_decode_audit_.extra_records+=frame.extra_records;
+                    full_decode_audit_.sculpt_records+=frame.sculpt_records;
+                    full_decode_audit_.malformed_extras+=frame.malformed_extras;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
                             if(avatar_root_ids_.insert(id).second)
@@ -426,6 +429,8 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     compressed_decode_audit_.shape_fields+=frame.shape_fields;
                     compressed_decode_audit_.supported_shapes+=frame.supported_shapes;
                     compressed_decode_audit_.mesh_references+=frame.mesh_references;
+                    compressed_decode_audit_.legacy_particles_skipped+=
+                        frame.legacy_particles_skipped;
                     compressed_decode_audit_.unsupported_optional+=
                         frame.unsupported_optional;
                     ++spatial_object_frames_;
