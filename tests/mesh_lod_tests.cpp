@@ -1,4 +1,5 @@
 #include "kami/protocol/mesh_lod.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -34,5 +35,35 @@ int main() {
     if(decode_mesh_lod(bad,good))return 4;
     bad=bytes;bad[67]=0xffU; // corrupted compressed deflate stream
     if(decode_mesh_lod(bad,good))return 5;
+
+    // Real SL mesh headers may include a medium_lod map with size 0.
+    // The required high_lod must remain usable, without accepting an
+    // invalid medium_lod with nonzero size or a malformed stream.
+    std::vector<std::uint8_t> missing_medium=bytes;
+    const std::vector<std::uint8_t> marker{0x7d,0x7d,0x78,0x9c};
+    const auto close=std::search(missing_medium.begin(),missing_medium.end(),
+                                 marker.begin(),marker.end());
+    if(close==missing_medium.end()||missing_medium[20]!=1U)return 6;
+    const auto at=std::size_t(close-missing_medium.begin())+1U;
+    missing_medium[20]=2U; // root LLSD map: high_lod + medium_lod
+    const std::vector<std::uint8_t> medium={
+        'k',0,0,0,10,'m','e','d','i','u','m','_','l','o','d',
+        '{',0,0,0,2,
+        'k',0,0,0,6,'o','f','f','s','e','t','i',
+        0xff,0xff,0xff,0xff, // offset -1 for missing medium
+        'k',0,0,0,4,'s','i','z','e','i',
+        0,0,0,0, // size 0 is the missing LOD sentinel
+        '}'
+    };
+    missing_medium.insert(missing_medium.begin()+at,
+                          medium.begin(),medium.end());
+    if(!decode_mesh_lod(missing_medium,good)||
+       good.triangles.size()!=1U||good.decoded_bytes!=92U)return 7;
+    bad=missing_medium;
+    bad[at+medium.size()-2U]=7U; // nonzero size with missing offset
+    if(decode_mesh_lod(bad,good))return 8;
+    bad=missing_medium;
+    bad.back()=0U; // still reject damaged compressed stream
+    if(decode_mesh_lod(bad,good))return 9;
     return 0;
 }
