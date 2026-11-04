@@ -1,5 +1,6 @@
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/protocol/simulator_wire.hpp"
+#include "kami/protocol/simulator_agent_update.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include <ws2tcpip.h>
 #include <algorithm>
@@ -150,11 +151,32 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         }
     }
     if(type==Inbound::AgentMovementComplete &&
-       movement_complete_identifies(incoming,login_))
+       movement_complete_identifies(incoming,login_)){
         movement_seen_=true;
+        SimulatorPose position{};
+        if(decode_movement_pose(incoming,login_,position))
+            simulator_pose_=position;
+    }
     if(region_seen_&&movement_seen_)
         state_=CircuitState::MovementConfirmed;
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+}
+void Circuit::maybe_send_agent_update() noexcept {
+    if(socket_==INVALID_SOCKET||!login_.accepted()||
+       state_!=CircuitState::MovementConfirmed||
+       !simulator_pose_.verified)return;
+    const auto now=std::chrono::steady_clock::now();
+    // Send neutral, simulator-derived interest camera 5 times per second.
+    // No fake WASD controls, no offline viewport/scene coordinates.
+    if(last_agent_update_!=std::chrono::steady_clock::time_point{}&&
+       now-last_agent_update_<std::chrono::milliseconds(200))return;
+    lludp::Packet packet{};
+    if(build_agent_update(login_,simulator_pose_,sequence_,packet)&&
+       send_packet(std::move(packet))){
+        ++sequence_;
+        ++agent_updates_sent_;
+        last_agent_update_=now;
+    }
 }
 void Circuit::maybe_retry() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed||
@@ -189,12 +211,16 @@ void Circuit::poll(unsigned budget) noexcept {
             packet))handle_packet(packet);
     }
     maybe_retry();
+    maybe_send_agent_update();
 }
 void Circuit::stop() noexcept {
     if(socket_!=INVALID_SOCKET){closesocket(socket_);socket_=INVALID_SOCKET;}
     if(winsock_ready_){WSACleanup();winsock_ready_=false;}
     clear_login(login_);
     region_metadata_={};
+    simulator_pose_={};
+    agent_updates_sent_=0;
+    last_agent_update_={};
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
     packets_received_=0;
