@@ -236,3 +236,43 @@ colored grass/slope/shore terrain, water plane and any R19 amber bounds.
 Verify WASD and A/D, watch FPS and look for shader startup errors.
 If land colors appear but bounds count remains zero, R19 object
 packet coverage remains unfinished, not a R20 shading failure.
+
+## R21: Fix blue-only WORLD despite decoded land
+
+A real user screen from R20 displayed 256 accepted decoded land patches
+and ~97,344 terrain vertices at 200 FPS, but the viewport showed
+little beyond a blue gradient and the R17 avatar placeholder.
+
+Two grounded fixes:
+1. R20 mistakenly drew a huge opaque 256m by 256m water rectangle at
+   region water height even over land above the waterline. R21 clips
+   narrow DX12 water triangles ONLY to actually decoded, submerged
+   SL terrain triangles. It interpolates the actual land-sample edges
+   to find shoreline intersections. No height samples are invented.
+   Limits water vertices (96k by default) to protect CPU/GPU.
+   The WORLD footer now reports whether any decoded wet land exists.
+2. Press V on WORLD to toggle a true *Landscape Camera* that looks
+   down toward the ground elevation at the nearest authenticated
+   land patch. This is a camera-only preview; W/A/S/D still transmit
+   the same movement controls and update the blue placeholder.
+   Press V again to resume avatar-follow mode. Suppress Win32 key
+   auto-repeat so one press flips only once.
+
+R21 preserves the native DX12 sky shader, procedural terrain biome
+shading, R19 root-volume object bounds, R17 moving/turning avatar
+preview, and R9–R18 SL connection/diagnostics.
+
+New automated tests cover dry terrain -> zero water triangles, mixed
+shoreline clipping, completely submerged terrain, finite water vertex
+data, vertex budgets, and the camera's raised scenic viewpoint.
+
+LIMITATIONS: This is an experimental SL-connected DX12 prototype.
+Avatar position remains a local prediction, amber object bounds only
+cover some update packet types, and actual SL appearance/mesh/PBR
+texture streaming is not yet integrated. Compiling the test doesn't
+confirm what the user sees in Attalia; live verification is required.
+
+LIVE TEST: Log into Attalia and open WORLD. Press V to show LANDSCAPE
+CAMERA. The cyan sky should give way to visible green/stone shoreline
+and hills where decoded terrain exists. Press V again for the avatar
+camera and verify A/D turning, W/S movement and FPS remain intact.

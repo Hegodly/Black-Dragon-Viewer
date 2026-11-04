@@ -96,5 +96,20 @@ int main() {
         follow.update(.1f,10.f+i*.1f,nullptr,false);
     const auto complete=follow.pose();
     if(!(complete.eye.z>complete.focus.z+1.f))return 19;
+    // Scenic mode deliberately centers a real decoded land point well
+    // below the default avatar/skyward follow camera.
+    System scenic;
+    scenic.set_settings({50,0,400,true,true,true,false});
+    scenic.set_subject({2.f,-2.77f,3.f},0.f);
+    scenic.set_scenic_overlook(true);
+    if(!scenic.scenic_overlook_active())return 20;
+    for(int i=0;i<20;++i)
+        scenic.update(.1f,12.f+.1f*i,nullptr,false);
+    const auto overview=scenic.pose();
+    if(!(overview.eye.y>overview.focus.y+7.f)||
+       !near(overview.focus.x,2.f,.15f)||
+       !near(overview.focus.z,3.f,.15f))return 21;
+    scenic.set_scenic_overlook(false);
+    if(scenic.scenic_overlook_active())return 22;
     return 0;
 }

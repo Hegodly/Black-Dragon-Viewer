@@ -55,6 +55,21 @@ void System::set_subject(Vec3 feet, float heading_radians) noexcept {
     subject_ = feet;
     subject_heading_ = heading_radians;
 }
+void System::set_scenic_overlook(bool enabled) noexcept {
+    scenic_overlook_=enabled;
+    if(enabled){
+        distance_m_=17.f;
+        desired_pitch_=1.08f;
+        // Keep the current azimuth, but don't automatically track the
+        // marker heading while looking at actual land elevations.
+        focus_lock_=true;
+        idle_seconds_=0.f;
+    } else {
+        distance_m_=4.f;
+        desired_pitch_=.18f;
+        idle_seconds_=2.f;
+    }
+}
 void System::cycle_shoulder() noexcept {
     switch (shoulder_) {
     case Shoulder::Center: shoulder_ = Shoulder::Right; break;
@@ -86,6 +101,7 @@ void System::reset() noexcept {
     precision_ = false;
     focus_lock_ = true;
     cinematic_orbit_ = false;
+    scenic_overlook_ = false;
     idle_seconds_ = 0.f;
 }
 void System::update(float delta_seconds, float elapsed_seconds,
@@ -93,7 +109,10 @@ void System::update(float delta_seconds, float elapsed_seconds,
     const float dt = std::clamp(finite_or(delta_seconds, 0.f), 0.f, .1f);
     const float time = finite_or(elapsed_seconds, 0.f);
     if (!dragging_) idle_seconds_ += dt;
-    if (cinematic_orbit_) {
+    if (scenic_overlook_) {
+        // Maintain high-angle land framing rather than recentering on
+        // the avatar while the live simulator is connected.
+    } else if (cinematic_orbit_) {
         desired_yaw_ += .20f * dt;
         idle_seconds_ = 0.f;
     } else if (live_avatar_follow_) {

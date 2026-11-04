@@ -44,6 +44,12 @@ public:
         live_avatar_follow_=enabled;
         live_avatar_turning_=turning;
     }
+    // Switch to a high-angle look at known decoded land. This never
+    // changes simulator movement or the local avatar pose.
+    void set_scenic_overlook(bool enabled) noexcept;
+    [[nodiscard]] bool scenic_overlook_active() const noexcept {
+        return scenic_overlook_;
+    }
     void set_dragging(bool dragging) noexcept { dragging_ = dragging; if (dragging) idle_seconds_ = 0.f; }
     void toggle_precision() noexcept { precision_ = !precision_; }
     void toggle_focus_lock() noexcept { focus_lock_ = !focus_lock_; }
@@ -82,6 +88,7 @@ private:
     bool cinematic_orbit_ = false;
     bool live_avatar_follow_ = false;
     bool live_avatar_turning_ = false;
+    bool scenic_overlook_ = false;
     bool clipped_ = false;
 };
 } // namespace kami::camera

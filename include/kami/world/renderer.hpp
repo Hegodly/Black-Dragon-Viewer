@@ -48,6 +48,10 @@ public:
     [[nodiscard]] bool live_avatar_placeholder_active() const noexcept {
         return region_mesh_.has_value() && live_avatar_preview_.active();
     }
+    void toggle_landscape_view() noexcept;
+    [[nodiscard]] bool landscape_view_active() const noexcept {
+        return landscape_view_&&landscape_anchor_valid_;
+    }
     [[nodiscard]] int live_avatar_heading_degrees() const noexcept {
         constexpr float kToDegrees=57.2957795131f;
         const int deg=static_cast<int>(
@@ -118,7 +122,7 @@ public:
         return region_mesh_?uploaded_root_bounds_:0U;
     }
     [[nodiscard]] bool live_water_surface_active() const noexcept {
-        return region_mesh_ && uploaded_water_vertices_==6U;
+        return region_mesh_ && uploaded_water_vertices_>0U;
     }
     [[nodiscard]] bool set_creator_preview(SceneMesh mesh);
     void clear_creator_preview();
@@ -186,6 +190,9 @@ private:
     std::size_t uploaded_water_vertices_=0;
     std::optional<SceneMesh> live_water_mesh_;
     LiveAvatarPreview live_avatar_preview_{};
+    bool landscape_view_=false;
+    bool landscape_anchor_valid_=false;
+    camera::Vec3 landscape_anchor_{};
     avatar::Controls live_preview_controls_{};
     photo::Settings photo_{};
     CaptureStatus capture_status_=CaptureStatus::Idle;

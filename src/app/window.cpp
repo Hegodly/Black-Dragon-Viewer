@@ -283,6 +283,13 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_KEYDOWN:
+        if(page_==1&&world_ready_&&wp=='V'){
+            // Ignore auto-repeat: only one scenic switch per physical press.
+            if((static_cast<unsigned long long>(lp)&(1ULL<<30))==0ULL)
+                world_renderer_.toggle_landscape_view();
+            InvalidateRect(hwnd_,nullptr,FALSE);
+            return 0;
+        }
         if(wp==VK_F9){
             const bool open=!seven_systems_open_;
             select_page(0);
@@ -750,6 +757,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(world_renderer_.live_avatar_heading_degrees())+
                 L" deg";
         }
+        if(world_renderer_.landscape_view_active())
+            heading_status+=L"  |  LANDSCAPE CAMERA [V]";
+        else if(world_renderer_.region_geometry_active())
+            heading_status+=L"  |  V: VIEW LAND";
         label(heading_status,box(contentX+30,151,contentWidth-50,30),
               small_font_.Get(),p.accent);
         const std::wstring fps_label=L"FPS: "+std::to_wstring(fps_display_);
@@ -759,7 +770,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(world_initialized_?world_renderer_.error():L"Loading DX12 viewport...",
                   box(contentX+35,234,contentWidth-70,55),body_font_.Get(),p.muted);
         }
-        label(L"WASD / arrows: walk + turn  |  Shift: run  |  Space: jump  |  Z/C: strafe",
+        label(L"WASD: walk/turn | V: LANDSCAPE / AVATAR | Shift: run | Space: jump",
               box(contentX+29,height-103,contentWidth-50,30),small_font_.Get(),p.muted);
         std::wstring perf=L"CPU "+std::to_wstring(static_cast<unsigned>(last_performance_.process_cpu_percent))+
             L"%  |  RAM "+std::to_wstring(last_performance_.process_ram_mb)+L"MB";
@@ -780,7 +791,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 L" | AMBER BOUNDS "+
                 std::to_wstring(world_renderer_.uploaded_root_bounds())+
                 (world_renderer_.live_water_surface_active()?
-                    L" | WATER SURFACE":L" | WATER PENDING")+
+                    L" | WATER BELOW TERRAIN":L" | NO WET LAND IN VIEW")+
                 L" | avatar LOCAL";
         }else if(sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
             world_status+=L"Connected to region | land patches "+

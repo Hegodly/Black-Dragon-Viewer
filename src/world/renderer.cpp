@@ -1,5 +1,6 @@
 #include "kami/world/renderer.hpp"
 #include "kami/world/live_terrain.hpp"
+#include "kami/world/live_water.hpp"
 #include "kami/world/object_proxies.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
@@ -597,11 +598,12 @@ bool Renderer::set_verified_live_terrain(
     SceneMesh scene=std::move(built.scene);
     // The flat water surface sits at the authenticated region water
     // height, with procedural blue styling (not an SL texture).
-    const auto water=build_live_region_water_preview(
-        region.water_height-agent.z,agent.x,agent.y);
-    const std::size_t new_water_count=water.vertices.size();
+    const auto water=build_live_masked_water(
+        patches,nearest,agent.x,agent.y,agent.z,region.water_height);
+    const std::size_t new_water_count=water.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
-                          water.vertices.begin(),water.vertices.end());
+                          water.scene.vertices.begin(),
+                          water.scene.vertices.end());
     scene.terrain_count+=new_water_count;
     // Draw only server-sourced spatial root *bounding frames* in amber.
     // They are not prim meshes: profiles, rotations, textures and
@@ -635,7 +637,7 @@ bool Renderer::set_verified_live_terrain(
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_water_vertices_=new_water_count;
-    if(first_live_land&&!nearest.empty()){
+    if(!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;
         const float ground=patch.elevation[middle*patch.size+middle]-agent.z;
@@ -646,8 +648,14 @@ bool Renderer::set_verified_live_terrain(
         // System::update adds the 2.77m head offset when head-tracking
         // is enabled, so lowering the subject centers nearby terrain.
         if(std::isfinite(x)&&std::isfinite(z)&&std::isfinite(ground)){
-            camera_.set_subject({x,ground-1.7f,z});
-            camera_.apply_studio_shot(camera::StudioShot::Wide);
+            // Height is actual decoded land. Camera::update adds 2.77m
+            // to the target, so focus precisely on this land point.
+            landscape_anchor_={x,ground-2.77f,z};
+            landscape_anchor_valid_=true;
+            if(first_live_land){
+                camera_.set_subject({x,ground-1.7f,z});
+                camera_.apply_studio_shot(camera::StudioShot::Wide);
+            }
         }
     }
     error_.clear();
@@ -719,6 +727,9 @@ void Renderer::clear_decoded_region_geometry() {
     region_mesh_.reset();
     uploaded_root_bounds_=0;
     uploaded_water_vertices_=0;
+    landscape_view_=false;
+    landscape_anchor_valid_=false;
+    camera_.set_scenic_overlook(false);
     live_avatar_preview_.clear();
     live_preview_controls_={};
     camera_.set_subject({0.f,0.f,0.f});
@@ -745,6 +756,11 @@ bool Renderer::capture_png(std::wstring destination) {
     capture_path_=std::move(destination);
     capture_status_=CaptureStatus::Pending;
     return true;
+}
+void Renderer::toggle_landscape_view() noexcept {
+    if(!region_mesh_||!landscape_anchor_valid_)return;
+    landscape_view_=!landscape_view_;
+    camera_.set_scenic_overlook(landscape_view_);
 }
 void Renderer::draw() {
     if(!ready_ || !width_ || !height_) return;
@@ -776,11 +792,15 @@ void Renderer::draw() {
         const auto& marker=live_avatar_preview_.pose();
         // Marker follows LOCAL key prediction based on the verified initial
         // spawn. We still require real own-avatar ObjectUpdate replication.
-        camera_.set_subject({marker.x,marker.y-1.f,marker.z},
-                            marker.heading);
+        if(landscape_view_&&landscape_anchor_valid_)
+            camera_.set_subject(landscape_anchor_,0.f);
+        else
+            camera_.set_subject({marker.x,marker.y-1.f,marker.z},
+                                marker.heading);
     }
     camera_.set_live_avatar_follow(
-        preview_visible,preview_visible&&
+        preview_visible&&!landscape_view_,preview_visible&&
+        !landscape_view_&&
         std::fabs(live_preview_controls_.turn)>.01f);
     avatar_spring_.step(std::sin(seconds*2.f),dt);
     // Live SL terrain must not collide against the procedural offline
