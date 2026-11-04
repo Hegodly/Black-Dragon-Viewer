@@ -116,7 +116,7 @@ int main(){
     // Official High 12: ProfileCurve is byte 1; PathScaleX is byte 6.
     // Neither field may be incorrectly taken from the packed High 13 layout.
     auto changed_profile=box;
-    changed_profile[110]=1U;
+    changed_profile[110]=2U; // actual High 12 ProfileCurve changed from square to triangle
     if(!objectspatial::decode_full_transforms(
         packet({changed_profile}),out,&audit)||out.size()!=1U||
         out[0].primitive!=objectspatial::PrimitiveKind::Unknown)return 13;
