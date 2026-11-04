@@ -22,5 +22,9 @@ struct SceneMesh {
 
 // Original procedural test assets, not Second Life content.
 [[nodiscard]] SceneMesh build_test_scene(unsigned divisions = 32);
+// R9: a flat, original DX12 mesh positioned from verified SL water
+// elevation relative to a session-verified avatar elevation. This is
+// NOT a terrain decoder, mesh asset, or water texture simulation.
+[[nodiscard]] SceneMesh build_live_water_preview(float relative_water_y);
 [[nodiscard]] float sample_test_terrain_height(float x, float z) noexcept;
 } // namespace kami::world
