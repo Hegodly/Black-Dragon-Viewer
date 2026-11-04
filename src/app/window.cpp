@@ -581,38 +581,30 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 const auto& audit=sl_circuit_.full_decode_audit();
                 // Surface why solid geometry is missing, not just totals.
                 const std::wstring reasons=
-                    L"MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
-                    L" | Queue "+std::to_wstring(
-                        sl_circuit_.mesh_asset_stats().queued)+
-                    L" | CAP "+std::wstring(
+                    L"CAP "+std::wstring(
                         sl_circuit_.mesh_capability_ready()?L"YES":L"NO")+
+                    L" | MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
+                    L" | Q "+std::to_wstring(
+                        sl_circuit_.mesh_asset_stats().queued)+
                     L" | Fetch "+std::to_wstring(
                         sl_circuit_.mesh_download_count())+
                     L" | LOD "+std::to_wstring(
                         sl_circuit_.decoded_mesh_assets().size())+
-                    L" | Shapes "+std::to_wstring(
-                        sl_circuit_.compressed_decode_audit().supported_shapes)+
-                    L" | Extra "+std::to_wstring(
-                        sl_circuit_.compressed_decode_audit().extra_records)+
-                    L" | Sculpt "+std::to_wstring(
+                    L" | CSc "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().sculpt_records)+
-                    L" | FullExtra "+std::to_wstring(audit.extra_records)+
-                    L" | FullMesh "+std::to_wstring(audit.mesh_sculpt_records)+
-                    L" | Particle "+std::to_wstring(
-                        sl_circuit_.compressed_decode_audit().legacy_particle_blocks)+
-                    L" | Skip "+std::to_wstring(
-                        sl_circuit_.compressed_decode_audit().unsupported_optional)+
-                    L" | Eligible "+std::to_wstring(
-                        world_renderer_.live_primitive_eligible())+
-                    L" | Orphan "+std::to_wstring(
-                        world_renderer_.live_missing_anchor_shapes())+
-                    L" | Attached "+std::to_wstring(
-                        world_renderer_.live_avatar_attachment_shapes());
+                    L" | FSc "+std::to_wstring(audit.sculpt_records)+
+                    L" | FMesh "+std::to_wstring(audit.mesh_sculpt_records)+
+                    L" | FLight "+std::to_wstring(audit.light_records)+
+                    L" | FFlex "+std::to_wstring(audit.flexible_records)+
+                    L" | FOther "+std::to_wstring(
+                        audit.projector_records+audit.other_extra_records)+
+                    L" | FBad "+std::to_wstring(
+                        audit.malformed_extra_envelopes);
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R42: legacy compressed particle intake + full mesh audit | textures, avatar, IM pending",
+        label(L"R43: corrected full object shape fields + ExtraParams audit | mesh, textures, avatar pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
