@@ -126,6 +126,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
           Copy-Item build/Release/KAMIViewer.exe dist/KAMI
           Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_LLUdpCodec.dll dist/KAMI
+          New-Item -ItemType Directory -Force -Path dist/KAMI/Source/lludp | Out-Null
+          Copy-Item src/sl_reference/official_lludp_zerocode.cpp dist/KAMI/Source/lludp
+          Copy-Item include/kami/protocol/official_lludp_zerocode.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/lludp/llzerocode.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/lludp/stdtypes.h dist/KAMI/Source/lludp
           Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
@@ -143,10 +149,11 @@ jobs:
           Copy-Item R42_STATUS.md dist/KAMI
           Copy-Item R43_STATUS.md dist/KAMI
           Copy-Item R43_1_STATUS.md dist/KAMI
+          Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Official-LLUDP-Bridge-Prototype-20261104.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R43.1-Pretest-Mesh-Fallback-DX12
-          path: dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          name: KAMI-Official-LLUDP-Bridge-Prototype-20261104
+          path: dist/KAMI-Official-LLUDP-Bridge-Prototype-20261104.zip
           retention-days: 14
