@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <thread>
 #include <vector>
 
@@ -97,6 +98,9 @@ int main() {
         movement.body.insert(movement.body.end(),agent.begin(),agent.end());
         movement.body.insert(movement.body.end(),session.begin(),session.end());
         movement.body.insert(movement.body.end(),38U,0);
+        // Realistically formatted but synthetic avatar location.
+        const std::array<float,3> xyz={130.f,98.f,25.f};
+        std::memcpy(movement.body.data()+36,xyz.data(),sizeof(xyz));
         if(!send_test(server,viewer,viewer_len,movement))
             server_result=11;
     });
@@ -116,6 +120,9 @@ int main() {
                   circuit.object_update_packets()==0&&
                   circuit.region_metadata().verified&&
                   circuit.region_metadata().name=="Test"&&
+                  circuit.movement_position().verified&&
+                  circuit.movement_position().x==130.f&&
+                  circuit.movement_position().z==25.f&&
                   circuit.movement_seen()&&
                   circuit.state()==sim::CircuitState::MovementConfirmed&&
                   circuit.packets_received()>=3;
