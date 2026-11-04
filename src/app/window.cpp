@@ -527,7 +527,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             label(checks[i].title,
                   box(contentX+36,y+3,contentWidth-190,22),
                   small_font_.Get(),p.text);
-            label(diagnostics::stage_label(checks[i].stage),
+            label((i==4U &&
+                   sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed)?
+                  L"PARTIAL":diagnostics::stage_label(checks[i].stage),
                   box(contentX+contentWidth-153,y+3,128,22),
                   small_font_.Get(),p.accent);
             std::wstring detail=checks[i].details;
@@ -542,7 +544,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     world_renderer_.uploaded_root_bounds())+
                     L" | SOLID "+std::to_wstring(
                     world_renderer_.uploaded_root_primitive_shapes()+
-                    world_renderer_.uploaded_linked_primitive_shapes())+
+                    world_renderer_.uploaded_linked_primitive_shapes()+
+                    world_renderer_.uploaded_live_meshes())+
+                    L" | Mesh DRAW "+std::to_wstring(
+                        world_renderer_.uploaded_live_meshes())+
                     L" | Missing "+std::to_wstring(
                     sl_circuit_.pending_object_requests())+
                     L" | Requested "+std::to_wstring(
@@ -568,9 +573,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 const auto& audit=sl_circuit_.full_decode_audit();
                 // Surface why solid geometry is missing, not just totals.
                 const std::wstring reasons=
-                    L"Mesh refs "+std::to_wstring(audit.mesh_references)+
-                    L" | Mesh queued "+std::to_wstring(
+                    L"Mesh refs "+std::to_wstring(sl_circuit_.mesh_object_count())+
+                    L" | Q "+std::to_wstring(
                         sl_circuit_.mesh_asset_stats().queued)+
+                    L" | Fetched "+std::to_wstring(
+                        sl_circuit_.mesh_download_count())+
+                    L" | Decoded "+std::to_wstring(
+                        sl_circuit_.decoded_mesh_assets().size())+
                     L" | Eligible "+std::to_wstring(
                         world_renderer_.live_primitive_eligible())+
                     L" | Missing root "+std::to_wstring(
@@ -585,7 +594,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R33: mesh requests queued, NOT downloaded | full avatar/IM/inventory pending",
+        label(L"R34: untextured static meshes when decoded | avatar/IM/inventory pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
@@ -849,6 +858,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 std::to_wstring(world_renderer_.uploaded_root_primitive_shapes())+
                 L" | SOLID LINKED "+
                 std::to_wstring(world_renderer_.uploaded_linked_primitive_shapes())+
+                L" | MESH "+std::to_wstring(
+                    world_renderer_.uploaded_live_meshes())+
                 (world_renderer_.live_water_surface_active()?
                     L" | WATER BELOW TERRAIN":L" | NO WET LAND IN VIEW")+
                 L" | avatar LOCAL";
