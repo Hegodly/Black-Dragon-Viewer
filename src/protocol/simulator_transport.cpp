@@ -380,6 +380,12 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.extra_records+=frame.extra_records;
                     full_decode_audit_.sculpt_records+=frame.sculpt_records;
                     full_decode_audit_.mesh_sculpt_records+=frame.mesh_sculpt_records;
+                    full_decode_audit_.extra_envelopes+=frame.extra_envelopes;
+                    full_decode_audit_.malformed_extra_envelopes+=frame.malformed_extra_envelopes;
+                    full_decode_audit_.flexible_records+=frame.flexible_records;
+                    full_decode_audit_.light_records+=frame.light_records;
+                    full_decode_audit_.projector_records+=frame.projector_records;
+                    full_decode_audit_.other_extra_records+=frame.other_extra_records;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
                             if(avatar_root_ids_.insert(id).second)
