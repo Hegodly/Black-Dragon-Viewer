@@ -1,6 +1,7 @@
 #include "kami/protocol/lludp.hpp"
 #include "kami/protocol/official_lludp_zerocode.h"
 #include <algorithm>
+#include <array>
 #include <limits>
 
 namespace kami::protocol::lludp {
@@ -27,12 +28,14 @@ bool uncompress(std::span<const std::uint8_t> bytes,
                 std::vector<std::uint8_t>& out) {
     out.clear();
     if(bytes.empty()||bytes.size()>kMaxWire)return false;
-    out.resize(kMaxBody);
+    // Decode into bounded stack storage, not a new 16 KiB heap block
+    // for every simulator packet. Copy only the valid decoded region.
+    std::array<std::uint8_t,kMaxBody> scratch{};
     const auto written=kami_sl_official_zerocode_decode(
         bytes.data(),static_cast<std::uint32_t>(bytes.size()),
-        out.data(),static_cast<std::uint32_t>(out.size()));
-    if(written<=0){out.clear();return false;}
-    out.resize(static_cast<std::size_t>(written));
+        scratch.data(),static_cast<std::uint32_t>(scratch.size()));
+    if(written<=0)return false;
+    out.assign(scratch.data(),scratch.data()+written);
     return true;
 }
 bool compress(std::span<const std::uint8_t> body,
@@ -40,10 +43,12 @@ bool compress(std::span<const std::uint8_t> body,
     out.clear();
     compressed=false;
     if(body.empty()||body.size()>kMaxBody)return false;
-    out.resize(2U*body.size()+12U);
+    // Avoid a temporary heap allocation proportional to the maximum
+    // encoded packet size. The DLL's bounded encoder owns validation.
+    std::array<std::uint8_t,2U*kMaxBody+12U> scratch{};
     const auto written=kami_sl_official_zerocode_encode(
         body.data(),static_cast<std::uint32_t>(body.size()),
-        out.data(),static_cast<std::uint32_t>(out.size()));
+        scratch.data(),static_cast<std::uint32_t>(scratch.size()));
     if(written<0)return false;
     if(written==0){
         // Official writer refuses to set the zero-code bit when compression
@@ -52,7 +57,7 @@ bool compress(std::span<const std::uint8_t> body,
         return true;
     }
     compressed=true;
-    out.resize(static_cast<std::size_t>(written));
+    out.assign(scratch.data(),scratch.data()+written);
     return true;
 }
 } // namespace
