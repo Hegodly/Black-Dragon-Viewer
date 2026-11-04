@@ -35,10 +35,21 @@ bool sane(const Transform& p) noexcept {
         p.sx>=.01f&&p.sy>=.01f&&p.sz>=.01f&&
         p.sx<=64.f&&p.sy<=64.f&&p.sz<=64.f;
 }
+bool sane_child(const Transform& p) noexcept {
+    return p.local_id!=0U&&p.parent_id!=0U&&
+        p.parent_id!=p.local_id&&
+        std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z)&&
+        std::abs(p.x)<=128.f&&std::abs(p.y)<=128.f&&
+        std::abs(p.z)<=128.f&&
+        std::isfinite(p.sx)&&std::isfinite(p.sy)&&std::isfinite(p.sz)&&
+        p.sx>=.01f&&p.sy>=.01f&&p.sz>=.01f&&
+        p.sx<=64.f&&p.sy<=64.f&&p.sz<=64.f;
+}
 } // namespace
 
 bool decode_compressed_transforms(const lludp::Packet& packet,
-                                  std::vector<Transform>& out) noexcept {
+                                  std::vector<Transform>& out,
+                                  std::vector<Transform>* child_transforms) noexcept {
     // High 13: ObjectUpdateCompressed. All blocks must have bounded
     // framing before any untrusted fields are read.
     if(worldwire::inspect(packet).kind!=worldwire::Kind::ObjectCompressed ||
@@ -47,7 +58,9 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     const unsigned count=b[11];
     std::size_t at=12;
     std::vector<Transform> decoded;
+    std::vector<Transform> linked;
     decoded.reserve(count);
+    linked.reserve(count);
     for(unsigned i=0;i<count;++i){
         if(at>b.size()||b.size()-at<6U)return false;
         const std::size_t len=u16(b,at+4);
@@ -73,13 +86,13 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
             parent=u32(data,cursor);
             cursor+=4U;
         }
-        // Parent-relative link children cannot be placed in region space
-        // until their root transform has been decoded and composed.
-        if(parent!=0U)continue;
+        // Retain parent-relative children separately; never pass their
+        // local coordinates to the region-space root renderer.
         Transform t{
             u32(data,16U),f32(data,40U),f32(data,44U),
             f32(data,48U),f32(data,28U),f32(data,32U),f32(data,36U)
         };
+        t.parent_id=parent;
         // Compressed ObjectUpdate stores 3 floats for LLQuaternion.
         t.rx=f32(data,52U);
         t.ry=f32(data,56U);
@@ -87,10 +100,15 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         const float q=t.rx*t.rx+t.ry*t.ry+t.rz*t.rz;
         if(!std::isfinite(q)||q>1.0001f)continue;
         t.rw=std::sqrt(std::max(0.f,1.f-q));
-        if(sane(t))decoded.push_back(t);
+        if(parent==0U){
+            if(sane(t))decoded.push_back(t);
+        }else if(sane_child(t)){
+            linked.push_back(t);
+        }
     }
     if(at!=b.size())return false;
     out=std::move(decoded);
+    if(child_transforms)*child_transforms=std::move(linked);
     return true;
 }
 bool decode_cached_ids(const lludp::Packet& packet,
