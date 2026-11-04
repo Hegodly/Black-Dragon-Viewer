@@ -250,3 +250,42 @@ Second Life content.
 
 Source for the message IDs: Linden Lab's published
 `master-message-template/message_template.msg` (High 11-16).
+
+## R9 — authenticated AgentUpdate and two known EventQueue handlers
+
+This branch extends the successful R8 authenticated simulator connection.
+
+- Parses the real `AgentMovementComplete` (agent/session-checked)
+  `Position` and `LookAt` vectors; verifies bounded finite values.
+- Sends Linden Lab's High 4 `AgentUpdate` **at 5Hz**, using the
+  simulator-derived region-local pose, an initial 64m interest
+  distance and neutral movement controls. It does **not** send
+  offline demonstration coordinates or claim full WASD replication.
+- Validates `AgentStateUpdate`'s `can_modify_navmesh` boolean and
+  `AgentGroupDataUpdate`'s authenticated AgentID and bounded group
+  records. Message names and the event schema come from Linden Lab's
+  official viewer. Groups are an in-memory snapshot, never printed.
+- A complete event batch is accepted for ACK only if all events are
+  recognized and valid. The UI thread commits the parsed state first;
+  then the next EventQueueGet carries the server's acknowledgment ID.
+  Unknown/invalid/mismatched-agent events still block and are **not ACKed**.
+- The Home screen shows processed event count, group count and
+  AgentUpdate sent count, plus real LayerData/ObjectUpdate packet counts.
+- Offline tests cover authenticated UUID matching, binary update
+  layout, invalid position/angle, malformed LLSD, unknown event types,
+  and event-batch atomicity.
+
+### Deliberate boundaries
+
+This is **not** avatar geometry or appearance rendering, terrain
+decompression, a complete group-membership UI, live WASD movement or
+teleport handling. The current DX12 viewport remains its original
+offline test scene. Camera telemetry is an initial simulator-derived
+interest view, not the independent KAMI orbit camera. No live login
+is performed in GitHub CI: a successful build does not prove the
+simulator accepted or acted upon AgentUpdate.
+
+Official reference: `secondlife/viewer` current
+`indra/newview/llviewermessage.cpp`,
+`indra/newview/llpathfindingmanager.cpp`, `indra/newview/llagent.cpp`,
+and `secondlife/master-message-template/message_template.msg`.

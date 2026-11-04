@@ -112,6 +112,8 @@ private:
     std::wstring caps_seed_url_;
     std::wstring caps_event_queue_url_; // secret signed bearer URL, never shown
     protocol::caps::QueueCursor caps_ack_{};
+    protocol::caps::EventCommit caps_event_state_{};
+    unsigned caps_events_handled_=0;
     std::wstring caps_status_;
     unsigned caps_completed_polls_=0;
     bool caps_dispatch_blocked_=false;

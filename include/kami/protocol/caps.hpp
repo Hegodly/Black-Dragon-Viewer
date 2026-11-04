@@ -1,4 +1,5 @@
 #pragma once
+#include "kami/protocol/event_dispatch.hpp"
 #include <string>
 #include <string_view>
 #include <cstdint>
@@ -30,6 +31,7 @@ struct PollResponse {
     unsigned http_status=0;
     unsigned event_count=0;
     std::vector<std::string> event_types; // no sensitive LLSD bodies
+    EventCommit committed; // only valid if safe_to_ack; no raw LLSD stored
     QueueCursor next_ack; // only valid when safe_to_ack=true
     std::wstring diagnostic; // no event bodies, credentials or bearer URLs
 };
@@ -47,5 +49,6 @@ struct PollResponse {
 [[nodiscard]] std::string build_event_queue_post(const QueueCursor& previous);
 [[nodiscard]] SeedResponse request_seed(std::wstring seed_url);
 [[nodiscard]] PollResponse probe_event_queue_once(
-    std::wstring queue_url,const QueueCursor& previous={});
+    std::wstring queue_url,const QueueCursor& previous={},
+    std::string_view authenticated_agent_id={});
 }
