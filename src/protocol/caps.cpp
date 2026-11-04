@@ -35,6 +35,7 @@ struct BStr {
 struct Parts {
     std::wstring host,path;
     INTERNET_PORT port=0;
+    bool secure=true;
 };
 bool suffix(std::wstring_view s,std::wstring_view end) noexcept {
     return s.size()>end.size()&&s.ends_with(end);
@@ -79,7 +80,8 @@ bool parse_url(std::wstring_view input,Parts& result,
                bool authenticated_mesh=false) noexcept {
     if(authenticated_mesh){
         if(input.size()<12U||input.size()>2048U||
-           !input.starts_with(L"https://")||
+           !(input.starts_with(L"https://")||
+             input.starts_with(L"http://"))||
            input.find_first_of(L"\r\n\t")!=std::wstring_view::npos||
            input.find(wchar_t{0})!=std::wstring_view::npos||
            input.find_first_of(L"#@\\")!=std::wstring_view::npos)
@@ -92,7 +94,8 @@ bool parse_url(std::wstring_view input,Parts& result,
     u.dwUrlPathLength=DWORD(-1);
     u.dwExtraInfoLength=DWORD(-1);
     if(!WinHttpCrackUrl(input.data(),static_cast<DWORD>(input.size()),0,&u)||
-       u.nScheme!=INTERNET_SCHEME_HTTPS||
+       !(u.nScheme==INTERNET_SCHEME_HTTPS||
+         (authenticated_mesh&&u.nScheme==INTERNET_SCHEME_HTTP))||
        !u.lpszHostName||u.dwHostNameLength==0U)return false;
     std::wstring host(u.lpszHostName,u.dwHostNameLength);
     std::transform(host.begin(),host.end(),host.begin(),[](wchar_t c){
@@ -100,6 +103,14 @@ bool parse_url(std::wstring_view input,Parts& result,
     });
     if(authenticated_mesh){
         if(!public_mesh_host(host))return false;
+        // Legacy SL GetMesh/ViewerAsset CDN grants can be plaintext HTTP.
+        // Permit HTTP only to Linden-controlled asset-cdn.*.lindenlab.com
+        // on port 80. All other mesh CDN grants still require HTTPS.
+        if(u.nScheme==INTERNET_SCHEME_HTTP&&
+           (!host.starts_with(L"asset-cdn.")||
+            !suffix(host,L".lindenlab.com")||
+            (u.nPort!=0U&&u.nPort!=INTERNET_DEFAULT_HTTP_PORT)))
+            return false;
     }else if(!(suffix(host,L".lindenlab.com")||
                suffix(host,L".secondlife.io")||
                suffix(host,L".secondlife.com")))return false;
@@ -114,7 +125,10 @@ bool parse_url(std::wstring_view input,Parts& result,
         if(ch<32||ch==127)return false;
     result.host=std::move(host);
     result.path=std::move(path);
-    result.port=u.nPort?u.nPort:INTERNET_DEFAULT_HTTPS_PORT;
+    result.port=u.nPort?u.nPort:
+        (u.nScheme==INTERNET_SCHEME_HTTPS?
+            INTERNET_DEFAULT_HTTPS_PORT:INTERNET_DEFAULT_HTTP_PORT);
+    result.secure=u.nScheme==INTERNET_SCHEME_HTTPS;
     return true;
 }
 // A bounded, non-sensitive rejection category for a server-provided URL.
@@ -295,7 +309,11 @@ bool trusted_caps_url(std::wstring_view url) noexcept {
 }
 bool trusted_mesh_caps_url(std::wstring_view url) noexcept {
     Parts dummy;
-    return parse_url(url,dummy,true);
+    if(!parse_url(url,dummy,true))return false;
+    // Never put a signed token, request path, or query string on a
+    // plaintext HTTP connection. Only the old, public CDN root may
+    // be used; fetch_mesh_asset later adds the asset UUID itself.
+    return dummy.secure||dummy.path==L"/";
 }
 bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                      std::wstring* mesh_capability_url,
@@ -543,9 +561,11 @@ PollResponse observe_event_queue_response(std::string_view xml) {
 
 MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
     MeshReply response{};
-    // The signed mesh URL must originate from authenticated seed LLSD.
-    // A CDN hostname is permissible, but the request stays HTTPS-only
-    // with TLS validation and all redirects blocked.
+    // The mesh endpoint comes from authenticated seed LLSD. Most
+    // capabilities are HTTPS; legacy Linden-owned mesh CDN roots can
+    // use HTTP with no bearer path/query. Their mesh asset bytes are
+    // unencrypted and unauthenticated: limit size and validate decode.
+    // Never use the plaintext exception for seed/EventQueue requests.
     if(!valid_uuid(mesh_id)||mesh_id.size()!=36U||
        !trusted_mesh_caps_url(capability_url))return response;
     std::wstring suffix;
@@ -573,7 +593,8 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
     if(!connection.value)return response;
     HttpHandle req(WinHttpOpenRequest(connection.value,L"GET",
         target.path.c_str(),nullptr,WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE));
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        target.secure?WINHTTP_FLAG_SECURE:0));
     if(!req.value)return response;
     DWORD redirects=WINHTTP_DISABLE_REDIRECTS;
     if(!WinHttpSetOption(req.value,WINHTTP_OPTION_DISABLE_FEATURE,
