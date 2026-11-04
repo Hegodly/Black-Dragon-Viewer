@@ -140,6 +140,22 @@ int main(int argc,char** argv){
         m("circuit_code","1")+
         m("seed_capability","http://localhost/cap/evil")));
     if(bad_seed.status!=LoginStatus::MalformedReply)return 7;
+    // Reject Unicode lookalikes in login UUID or simulator host rather
+    // than truncating UTF-16 code units into untrusted ASCII bytes.
+    auto unicode_agent=accepted;
+    const std::string original_agent="12345678-90ab-4cde-8fab-000000000001";
+    const auto pos=unicode_agent.find(original_agent);
+    if(pos==std::string::npos)return 27;
+    unicode_agent.replace(pos,original_agent.size(),
+        "12345678-90ab-4cde-8fab-0000000000&#xFF11;");
+    if(parse_login_xmlrpc(unicode_agent).accepted())return 28;
+    auto unicode_host=accepted;
+    const std::string original_host="sim1234.agni.lindenlab.com";
+    const auto hp=unicode_host.find(original_host);
+    if(hp==std::string::npos)return 29;
+    unicode_host.replace(hp,original_host.size(),
+        "sim1234.agni.lindenlab.c&#x6F00;m");
+    if(parse_login_xmlrpc(unicode_host).accepted())return 30;
     const auto xml_entity=parse_login_xmlrpc(
         "<?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY x SYSTEM \"file:///C:/Windows/win.ini\">]>"
         "<methodResponse><params><param><value><struct>"
