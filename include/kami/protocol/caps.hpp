@@ -11,6 +11,8 @@ namespace kami::protocol::caps {
 // Don't present an observed event as a fully handled SL viewer action.
 struct SeedResponse {
     bool granted=false;
+    bool event_queue_granted=false;
+    bool mesh_granted=false;
     unsigned http_status=0;
     std::wstring event_queue_url; // secret bearer capability; do not log
     std::wstring mesh_capability_url; // ViewerAsset or GetMesh, never logged
@@ -41,10 +43,19 @@ struct PollResponse {
 // Pure URL checks, useful for offline tests. Only Linden-owned HTTPS
 // capability hosts are accepted; redirects are prohibited.
 [[nodiscard]] bool trusted_caps_url(std::wstring_view url) noexcept;
+// Do not expose bearer URLs in diagnostics. A server may grant one CAPS
+// service without the other. Reject malformed/unsafe URLs individually.
+struct SeedParseReport {
+    bool xml_map=false;
+    bool event_named=false,mesh_named=false;
+    bool event_rejected=false,mesh_rejected=false;
+};
 // These parse only the bounded LLSD XML envelope, never execute events.
+// Returns true when at least one supported, trusted capability is present.
 [[nodiscard]] bool parse_seed_llsd(std::string_view xml,
                                    std::wstring& event_queue_url,
-    std::wstring* mesh_capability_url=nullptr);
+    std::wstring* mesh_capability_url=nullptr,
+    SeedParseReport* report=nullptr);
 [[nodiscard]] bool parse_event_queue_llsd(std::string_view xml,
                                           unsigned& event_count);
 // Full bounded event-queue envelope; bodies are not applied. Successful

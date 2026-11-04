@@ -207,38 +207,65 @@ bool trusted_caps_url(std::wstring_view url) noexcept {
     return parse_url(url,dummy);
 }
 bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
-                     std::wstring* mesh_capability_url) {
+                     std::wstring* mesh_capability_url,
+                     SeedParseReport* report) {
     event_queue_url.clear();
     if(mesh_capability_url)mesh_capability_url->clear();
+    if(report)*report={};
     ComPtr<IXMLDOMDocument2> dom;
     if(!parse_dom(xml,dom))return false;
     ComPtr<IXMLDOMNodeList> nodes;
     if(!child_elements(dom.Get(),nodes))return false;
     long count=0;
-    if(FAILED(nodes->get_length(&count))||count<2||count>500)return false;
-    std::wstring viewer_asset,legacy_mesh;
-    for(long i=0;i<count-1;++i){
+    if(FAILED(nodes->get_length(&count))||count>500||count%2!=0)
+        return false;
+    if(report)report->xml_map=true;
+    std::wstring viewer_asset,getmesh2,getmesh;
+    bool event_seen=false;
+    for(long i=0;i<count;i+=2){
         ComPtr<IXMLDOMNode> key,value;
         if(FAILED(nodes->get_item(i,key.GetAddressOf()))||!key||
-           node_name(key.Get())!=L"key")continue;
-        const auto name=node_text(key.Get());
-        if(name!=L"EventQueueGet"&&name!=L"ViewerAsset"&&
-           name!=L"GetMesh2"&&name!=L"GetMesh")continue;
+           node_name(key.Get())!=L"key")return false;
         if(FAILED(nodes->get_item(i+1,value.GetAddressOf()))||!value)
             return false;
-        // Never accept untrusted bearer URLs for any of these services.
+        const auto name=node_text(key.Get());
+        const bool event=(name==L"EventQueueGet");
+        const bool mesh=(name==L"ViewerAsset"||
+                         name==L"GetMesh2"||name==L"GetMesh");
+        if(!event&&!mesh)continue;
+        if(report){
+            if(event)report->event_named=true;
+            else report->mesh_named=true;
+        }
+        // LLSD can legally grant <undef/> for unsupported capabilities.
+        // An invalid or absent optional mesh grant must not destroy a
+        // separate valid EventQueueGet grant.
         const auto type=node_name(value.Get());
-        if(type!=L"string"&&type!=L"uri")return false;
         const auto url=node_text(value.Get());
-        if(!trusted_caps_url(url))return false;
-        if(name==L"EventQueueGet")event_queue_url=url;
-        else if(name==L"ViewerAsset")viewer_asset=url;
-        else if(legacy_mesh.empty())legacy_mesh=url;
+        const bool valid=(type==L"string"||type==L"uri")&&
+                         trusted_caps_url(url);
+        if(event){
+            if(event_seen){ // reject ambiguous duplicate EventQueueGet
+                event_queue_url.clear();
+                if(report)report->event_rejected=true;
+                continue;
+            }
+            event_seen=true;
+            if(valid)event_queue_url=url;
+            else if(report)report->event_rejected=true;
+        }else if(valid){
+            if(name==L"ViewerAsset")viewer_asset=url;
+            else if(name==L"GetMesh2")getmesh2=url;
+            else getmesh=url;
+        }else if(report)report->mesh_rejected=true;
     }
-    if(mesh_capability_url)
-        *mesh_capability_url=viewer_asset.empty()?
-             std::move(legacy_mesh):std::move(viewer_asset);
-    return !event_queue_url.empty();
+    if(mesh_capability_url){
+        *mesh_capability_url=!viewer_asset.empty()?std::move(viewer_asset):
+                             !getmesh2.empty()?std::move(getmesh2):
+                             std::move(getmesh);
+    }
+    return !event_queue_url.empty()||
+           (mesh_capability_url&&!mesh_capability_url->empty());
 }
 bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     event_count=0;
@@ -503,13 +530,27 @@ SeedResponse request_seed(std::wstring seed_url) {
         result.diagnostic=L"CAPS seed HTTP "+
             std::to_wstring(reply.status);return result;
     }
+    SeedParseReport report{};
     if(!parse_seed_llsd(reply.body,result.event_queue_url,
-                         &result.mesh_capability_url)){
-        result.diagnostic=L"CAPS seed missing valid EventQueueGet";
+                        &result.mesh_capability_url,&report)){
+        result.diagnostic=!report.xml_map?
+            L"CAPS seed: invalid or unsupported LLSD XML map":
+            report.event_rejected?
+                L"CAPS seed: EventQueue URL rejected by HTTPS/host policy":
+                L"CAPS seed: no usable EventQueueGet or mesh capability";
         return result;
     }
-    result.granted=true;
-    result.diagnostic=L"CAPS seed OK; EventQueueGet granted";
+    result.event_queue_granted=!result.event_queue_url.empty();
+    result.mesh_granted=!result.mesh_capability_url.empty();
+    result.granted=result.event_queue_granted||result.mesh_granted;
+    if(result.event_queue_granted&&result.mesh_granted)
+        result.diagnostic=L"CAPS seed OK: EventQueue + mesh granted";
+    else if(result.event_queue_granted)
+        result.diagnostic=L"CAPS seed OK: EventQueue granted; mesh unavailable";
+    else
+        result.diagnostic=report.event_rejected?
+            L"CAPS mesh granted; EventQueue URL rejected":
+            L"CAPS mesh granted; EventQueue unavailable";
     return result;
 }
 PollResponse probe_event_queue_once(

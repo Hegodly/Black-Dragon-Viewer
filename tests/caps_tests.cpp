@@ -29,9 +29,11 @@ int exercise(){
     std::wstring mesh_cap;
     if(!parse_seed_llsd(seed,cap,&mesh_cap)||cap!=trusted||
        mesh_cap!=L"https://simhost-123.agni.secondlife.io/cap/z")return 4;
+    SeedParseReport parse_report{};
     if(parse_seed_llsd("<llsd><map><key>EventQueueGet</key>"
-        "<string>http://localhost/cap/no</string></map></llsd>",cap))
-        return 5;
+        "<string>http://localhost/cap/no</string></map></llsd>",
+        cap,&mesh_cap,&parse_report)||!parse_report.xml_map||
+       !parse_report.event_rejected)return 5;
     if(parse_seed_llsd("<!DOCTYPE x [ <!ENTITY x SYSTEM "
          "\"file:///etc/passwd\"> ]><llsd><map></map></llsd>",cap))
         return 6;
@@ -140,6 +142,40 @@ int exercise(){
        possible_idle_event_queue_http_error(
             ERROR_WINHTTP_SECURE_FAILURE,true))
         return 27;
+    // Independent grant negotiation: an invalid or absent optional mesh
+    // URL must not erase a valid EventQueueGet bearer capability.
+    const auto optional_bad=
+        "<llsd><map><key>EventQueueGet</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/events</uri>"
+        "<key>ViewerAsset</key>"
+        "<string>https://example.org/mesh</string></map></llsd>";
+    if(!parse_seed_llsd(optional_bad,cap,&mesh_cap,&parse_report)||
+       cap!=L"https://simhost-123.agni.secondlife.io/cap/events"||
+       !mesh_cap.empty()||!parse_report.mesh_rejected)return 28;
+    // A simulator may supply mesh but not EventQueue. Keep the usable
+    // mesh capability rather than failing the entire seed response.
+    const auto mesh_only=
+        "<llsd><map><key>ViewerAsset</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/mesh</uri>"
+        "<key>EventQueueGet</key><undef/></map></llsd>";
+    if(!parse_seed_llsd(mesh_only,cap,&mesh_cap,&parse_report)||
+       !cap.empty()||
+       mesh_cap!=L"https://simhost-123.agni.secondlife.io/cap/mesh"||
+       !parse_report.event_rejected)return 29;
+    // Prefer ViewerAsset when present; otherwise prefer GetMesh2 to GetMesh.
+    const auto alternate=
+        "<llsd><map><key>GetMesh</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/legacy</string>"
+        "<key>GetMesh2</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/new</string>"
+        "</map></llsd>";
+    if(!parse_seed_llsd(alternate,cap,&mesh_cap)||
+       !cap.empty()||
+       mesh_cap!=L"https://simhost-123.agni.secondlife.io/cap/new")
+       return 30;
+    // An empty or syntactically invalid seed never grants a service.
+    if(parse_seed_llsd("<llsd><map/></llsd>",cap,&mesh_cap,&parse_report)||
+       !parse_report.xml_map)return 31;
     return 0;
 }
 }

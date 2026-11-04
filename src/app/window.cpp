@@ -2009,15 +2009,19 @@ void Window::update_sl_connection() {
         caps_status_=result.diagnostic;
         if(result.granted&&
            sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
-            caps_poll_started_=true;
-            // Retain the signed capability only for this simulator session;
-            // R6 lost it after a single poll and could not resume.
-            caps_event_queue_url_=std::move(result.event_queue_url);
-            if(!result.mesh_capability_url.empty())
+            // CAPS services are independent. Mesh assets may be granted
+            // without EventQueueGet. Never fabricate a queue URL.
+            if(result.mesh_granted)
                 (void)sl_circuit_.set_mesh_capability(
                     std::move(result.mesh_capability_url));
-            caps_status_=L"CAPS seed OK; EventQueueGet starting...";
-            start_caps_poll();
+            if(result.event_queue_granted){
+                caps_poll_started_=true;
+                caps_event_queue_url_=std::move(result.event_queue_url);
+                caps_status_=result.mesh_granted?
+                    L"CAPS seed OK: EventQueue + mesh granted":
+                    L"CAPS seed OK: EventQueue granted; mesh unavailable";
+                start_caps_poll();
+            }
         }
         if(!result.mesh_capability_url.empty())
             SecureZeroMemory(result.mesh_capability_url.data(),
