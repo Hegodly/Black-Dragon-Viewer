@@ -1,6 +1,7 @@
 #include "kami/protocol/event_dispatch.hpp"
 #include <objbase.h>
 #include <string>
+#include <iostream>
 using namespace kami::protocol::caps;
 namespace {
 const std::string uuid="12345678-90ab-4cde-8fab-000000000001";
@@ -52,6 +53,8 @@ int main(){
     const auto hr=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(hr))return 90;
     const int result=exercise();
+    if(result!=0)std::cerr<<"R9 validated event fixture case failed: "<<
+        result<<"\n";
     CoUninitialize();
     return result;
 }
