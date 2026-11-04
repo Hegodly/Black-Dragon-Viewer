@@ -375,3 +375,19 @@ Synthetic deterministically bit-packed test fixtures cover a constant
 failure to publish partially decoded output. A future stage uploads
 verified height-field triangles to DX12. This codec does NOT implement
 texture/mesh assets or viewer chat events.
+
+### R12 live terrain DX12 upload (experimental)
+
+Once the same authenticated region has a verified simulator handshake
+and avatar position, R12 decodes bounded land packets into a per-region
+patch cache. The DX12 renderer builds nearest-first, untextured static
+triangles anchored to the verified avatar. It uses the existing GPU
+resource path without OpenGL, throttles uploads to avoid rebuilding per
+packet, and clears land data on disconnect or a new login.
+
+The Home screen identifies **R12 LIVE LAND DX12** only after a
+successfully uploaded terrain mesh. Obj Full remains **NOT RENDERED**:
+no prim, mesh, material, texture, animation or chat body dispatcher
+exists yet. There is no guarantee live terrain is visible until a
+real simulator confirms it. Existing offline DX12 smoke and a loopback
+test for a genuine encoded land patch cover parts of the path.

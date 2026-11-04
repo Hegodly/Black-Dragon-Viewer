@@ -2,10 +2,12 @@
 #include "kami/protocol/login.hpp"
 #include "kami/protocol/lludp.hpp"
 #include "kami/protocol/simulator_wire.hpp"
+#include "kami/protocol/terrain.hpp"
 #include <winsock2.h>
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <map>
 
 namespace kami::protocol::sim {
 // A live WinSock *UDP circuit transport*; not a complete in-world
@@ -47,6 +49,17 @@ public:
         return object_update_packets_;
     }
     [[nodiscard]] std::uint32_t terrain_packets() const noexcept {return terrain_packets_;}
+    [[nodiscard]] std::uint32_t decoded_land_packets() const noexcept {
+        return decoded_land_packets_;
+    }
+    [[nodiscard]] std::uint32_t rejected_land_packets() const noexcept {
+        return rejected_land_packets_;
+    }
+    [[nodiscard]] std::uint64_t land_revision() const noexcept {
+        return land_revision_;
+    }
+    [[nodiscard]] const std::map<std::uint16_t,terrain::Patch>&
+    decoded_land_patches() const noexcept {return land_patches_;}
     [[nodiscard]] std::uint32_t wind_packets() const noexcept {return wind_packets_;}
     [[nodiscard]] std::uint32_t cloud_packets() const noexcept {return cloud_packets_;}
     [[nodiscard]] std::uint32_t unknown_layer_packets() const noexcept {
@@ -89,6 +102,9 @@ private:
     std::uint32_t agent_updates_sent_=0;
     std::uint32_t layer_packets_=0;
     std::uint32_t terrain_packets_=0,wind_packets_=0;
+    std::uint32_t decoded_land_packets_=0,rejected_land_packets_=0;
+    std::uint64_t land_revision_=0;
+    std::map<std::uint16_t,terrain::Patch> land_patches_;
     std::uint32_t cloud_packets_=0,unknown_layer_packets_=0;
     std::uint32_t object_update_packets_=0;
     std::uint32_t object_full_packets_=0,object_compressed_packets_=0;

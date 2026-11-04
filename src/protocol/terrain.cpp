@@ -48,7 +48,7 @@ private:
                                 float offset,std::uint16_t range,
                                 Patch& patch) noexcept {
     if((size!=16U&&size!=32U)||!std::isfinite(offset)||
-       offset < -4096.f||offset>8192.f||range==0)return false;
+       offset < -4096.f||offset>8192.f)return false;
     constexpr double kAlpha=0.7071067811865475244;
     std::array<double,1024> freq{},tmp{};
     // Build the frequency positions from the same zigzag traversal

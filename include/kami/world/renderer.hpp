@@ -83,6 +83,10 @@ public:
     // Does not claim to decode terrain, water textures or region objects.
     [[nodiscard]] bool set_verified_live_water(
         const protocol::sim::Circuit& circuit);
+    // Render only genuine decoded land heights from the current
+    // authenticated region. Materials remain clearly untextured.
+    [[nodiscard]] bool set_verified_live_terrain(
+        const protocol::sim::Circuit& circuit);
     void clear_live_water_preview();
     [[nodiscard]] bool live_water_preview_active() const noexcept {
         return live_water_mesh_.has_value();

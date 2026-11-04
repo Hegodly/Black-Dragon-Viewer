@@ -1109,21 +1109,26 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
         label(world_renderer_.live_water_preview_active()?
-              (L"R11 DX12 WATER ONLY | TX "+
-               std::to_wstring(sl_circuit_.agent_updates_sent())+
-               L" | Land "+std::to_wstring(sl_circuit_.terrain_packets())+
-               L" | Obj Full/Cmp/Cache "+
-               std::to_wstring(sl_circuit_.full_object_packets())+L"/"+
-               std::to_wstring(sl_circuit_.compressed_object_packets())+L"/"+
-               std::to_wstring(sl_circuit_.cached_object_packets())+
-               L" NOT RENDERED"):
-              (L"R11 STREAM | TX "+
-               std::to_wstring(sl_circuit_.agent_updates_sent())+
-               L" | Land "+std::to_wstring(sl_circuit_.terrain_packets())+
-               L" | Obj Full/Cmp/Cache "+
-               std::to_wstring(sl_circuit_.full_object_packets())+L"/"+
-               std::to_wstring(sl_circuit_.compressed_object_packets())+L"/"+
-               std::to_wstring(sl_circuit_.cached_object_packets())+
+              (world_renderer_.region_geometry_active()?
+               (L"R12 LIVE LAND DX12 | Patches "+
+                std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+                L" | Obj Full "+std::to_wstring(
+                    sl_circuit_.full_object_packets())+L" NOT RENDERED"):
+               (L"R12 DECODE | Land "+
+                std::to_wstring(sl_circuit_.terrain_packets())+
+                L" | Patches "+
+                std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+                L" | Bad "+std::to_wstring(
+                    sl_circuit_.rejected_land_packets())+
+                L" | Obj Full "+std::to_wstring(
+                    sl_circuit_.full_object_packets())+
+                L" NOT RENDERED")):
+              (L"R12 STREAM | Land "+
+               std::to_wstring(sl_circuit_.terrain_packets())+
+               L" | Patches "+
+               std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+               L" | Obj Full "+std::to_wstring(
+                   sl_circuit_.full_object_packets())+
                L" NOT RENDERED"),
               box(contentX,height-35,contentWidth,23),
               small_font_.Get(),p.muted);
@@ -1599,7 +1604,10 @@ void Window::begin_sl_login() {
     SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
     SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
     sl_circuit_.stop();
+    world_renderer_.clear_decoded_region_geometry();
     world_renderer_.clear_live_water_preview();
+    live_land_uploaded_revision_=0;
+    live_land_last_upload_={};
     live_water_attempted_=false;
     live_water_status_.clear();
     sl_login_status_=protocol::LoginStatus::NotAttempted;
@@ -1704,10 +1712,32 @@ void Window::update_sl_connection() {
         else
             live_water_status_=L"R9 water DX12 upload unavailable";
     }
-    if((sl_circuit_.state()==protocol::sim::CircuitState::Closed||
-        sl_circuit_.state()==protocol::sim::CircuitState::Failed)&&
-       world_renderer_.live_water_preview_active()){
-        world_renderer_.clear_live_water_preview();
+    const auto land_revision=sl_circuit_.land_revision();
+    const auto now=std::chrono::steady_clock::now();
+    // Coalesce bursts of land patches. Upload only verified, finite
+    // decoded elevations and never block the UI on every network packet.
+    if(sl_login_status_==protocol::LoginStatus::Accepted&&
+       sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
+       world_renderer_.ready()&&land_revision>0U&&
+       land_revision!=live_land_uploaded_revision_&&
+       (live_land_last_upload_==std::chrono::steady_clock::time_point{}||
+        now-live_land_last_upload_>=std::chrono::milliseconds(800))){
+        live_land_last_upload_=now;
+        if(world_renderer_.set_verified_live_terrain(sl_circuit_)){
+            live_land_uploaded_revision_=land_revision;
+            live_water_status_=L"R12 real land heights uploaded to DX12 (untextured)";
+        }else{
+            live_water_status_=L"R12 land geometry could not be uploaded";
+        }
+    }
+    if(sl_circuit_.state()==protocol::sim::CircuitState::Closed||
+       sl_circuit_.state()==protocol::sim::CircuitState::Failed){
+        if(world_renderer_.region_geometry_active())
+            world_renderer_.clear_decoded_region_geometry();
+        if(world_renderer_.live_water_preview_active())
+            world_renderer_.clear_live_water_preview();
+        live_land_uploaded_revision_=0;
+        live_land_last_upload_={};
         live_water_attempted_=false;
         live_water_status_.clear();
     }

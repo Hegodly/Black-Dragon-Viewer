@@ -118,7 +118,25 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     if(world.kind==worldwire::Kind::LayerData){
         ++layer_packets_;
         switch(world.layer_type){
-        case worldwire::LayerType::Terrain:++terrain_packets_;break;
+        case worldwire::LayerType::Terrain:{
+            ++terrain_packets_;
+            if(region_seen_&&movement_seen_&&region_metadata_.verified&&
+               movement_position_.verified){
+                std::vector<terrain::Patch> decoded;
+                if(terrain::decode_land_layer(incoming,decoded)){
+                    ++decoded_land_packets_;
+                    for(auto& patch:decoded){
+                        const auto key=static_cast<std::uint16_t>(
+                            static_cast<unsigned>(patch.y)*32U+patch.x);
+                        if(land_patches_.size()>=1024U &&
+                           !land_patches_.contains(key))continue;
+                        land_patches_.insert_or_assign(key,std::move(patch));
+                        ++land_revision_;
+                    }
+                }else ++rejected_land_packets_;
+            }
+            break;
+        }
         case worldwire::LayerType::Wind:++wind_packets_;break;
         case worldwire::LayerType::Cloud:++cloud_packets_;break;
         default:++unknown_layer_packets_;break;
@@ -236,6 +254,8 @@ void Circuit::stop() noexcept {
     packets_received_=agent_updates_sent_=0;
     layer_packets_=object_update_packets_=invalid_world_packets_=0;
     terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;
+    decoded_land_packets_=rejected_land_packets_=0;
+    land_revision_=0;land_patches_.clear();
     object_full_packets_=object_compressed_packets_=0;
     object_cached_packets_=object_terse_packets_=object_killed_packets_=0;
     sequence_=3;attempts_=0;last_retry_={};started_={};

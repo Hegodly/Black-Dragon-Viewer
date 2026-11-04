@@ -135,8 +135,16 @@ int main() {
         lludp::Packet killed{};
         killed.sequence=24;
         killed.body={16,1,9,0,0,0};
+        // An independently encoded 16x16 constant-height land
+        // patch: patch (3,4), 20m DC offset + 2m range midpoint.
+        lludp::Packet good_land{};
+        good_land.sequence=25;
+        good_land.body={
+            11,76,14,0,16,0,16,76,64,0,0,160,65,4,0,100,38,16
+        };
         if(!send_test(server,viewer,viewer_len,layer)||
-           !send_test(server,viewer,viewer_len,killed))
+           !send_test(server,viewer,viewer_len,killed)||
+           !send_test(server,viewer,viewer_len,good_land))
             server_result=18;
     });
     sim::Circuit circuit;
@@ -147,8 +155,9 @@ int main() {
               std::chrono::seconds(3)&&
               !(circuit.movement_seen()&&
                 circuit.agent_updates_sent()>0U&&
-                circuit.layer_packets()>0U&&
-                circuit.object_update_packets()>0U)){
+                circuit.layer_packets()>=2U&&
+                circuit.object_update_packets()>0U&&
+                circuit.decoded_land_packets()>0U)){
             circuit.poll();
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }
@@ -156,8 +165,12 @@ int main() {
     mock.join();
     const bool ok=started&&server_result==0&&circuit.region_seen()&&
                   circuit.agent_updates_sent()>=1U&&
-                  circuit.layer_packets()==1U&&
-                  circuit.terrain_packets()==1U&&
+                  circuit.layer_packets()==2U&&
+                  circuit.terrain_packets()==2U&&
+                  circuit.decoded_land_packets()==1U&&
+                  circuit.rejected_land_packets()==1U&&
+                  circuit.decoded_land_patches().size()==1U&&
+                  circuit.land_revision()>0U&&
                   circuit.wind_packets()==0U&&
                   circuit.cloud_packets()==0U&&
                   circuit.object_update_packets()==1U&&

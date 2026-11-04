@@ -544,6 +544,95 @@ bool Renderer::set_creator_preview(SceneMesh mesh) {
     error_.clear();
     return true;
 }
+bool Renderer::set_verified_live_terrain(
+    const protocol::sim::Circuit& circuit) {
+    const auto& region=circuit.region_metadata();
+    const auto& agent=circuit.movement_position();
+    const auto& patches=circuit.decoded_land_patches();
+    if(circuit.state()!=protocol::sim::CircuitState::MovementConfirmed||
+       !region.verified||!agent.verified||patches.empty()){
+        error_=L"R12 terrain needs verified SL simulator and decoded land";
+        return false;
+    }
+    // Work in local meters relative to the verified avatar, mapping
+    // the simulator's Z-up coordinate system to DX12's Y-up scene.
+    std::vector<const protocol::terrain::Patch*> nearest;
+    nearest.reserve(patches.size());
+    for(const auto& entry:patches){
+        const auto& patch=entry.second;
+        if(patch.size!=16U&&patch.size!=32U)continue;
+        nearest.push_back(&patch);
+    }
+    std::sort(nearest.begin(),nearest.end(),
+        [&](const auto* a,const auto* b){
+            auto d=[&](const auto* p){
+                const float cx=static_cast<float>(p->x)*p->size+
+                               p->size*.5f-agent.x;
+                const float cy=static_cast<float>(p->y)*p->size+
+                               p->size*.5f-agent.y;
+                return cx*cx+cy*cy;
+            };
+            return d(a)<d(b);
+        });
+    if(nearest.size()>64U)nearest.resize(64U);
+    SceneMesh scene{};
+    scene.vertices.reserve(nearest.size()*31U*31U*6U);
+    const auto make_vertex=[&](const protocol::terrain::Patch& patch,
+                               unsigned x,unsigned z)->Vertex {
+        const unsigned size=patch.size;
+        const float px=static_cast<float>(patch.x)*size+x-agent.x;
+        const float pz=static_cast<float>(patch.y)*size+z-agent.y;
+        const float py=patch.elevation[z*size+x]-agent.z;
+        // No SL material/texture is decoded yet: neutral diagnostic tint.
+        return {px,py,pz,0.f,1.f,0.f,
+                .20f,.38f,.27f,0.f,.9f,px*.025f,pz*.025f};
+    };
+    const auto add_triangle=[&](Vertex a,Vertex b,Vertex c){
+        const float ux=b.px-a.px,uy=b.py-a.py,uz=b.pz-a.pz;
+        const float vx=c.px-a.px,vy=c.py-a.py,vz=c.pz-a.pz;
+        const float nx=uy*vz-uz*vy;
+        const float ny=uz*vx-ux*vz;
+        const float nz=ux*vy-uy*vx;
+        const float length=std::sqrt(nx*nx+ny*ny+nz*nz);
+        if(!std::isfinite(length)||length<1.e-6f)return;
+        const float inv=1.f/length;
+        for(auto& v:{&a,&b,&c}){
+            v->nx=nx*inv;v->ny=ny*inv;v->nz=nz*inv;
+        }
+        scene.vertices.push_back(a);
+        scene.vertices.push_back(b);
+        scene.vertices.push_back(c);
+    };
+    for(const auto* patch:nearest){
+        const unsigned size=patch->size;
+        for(unsigned z=0;z+1U<size;++z){
+            for(unsigned x=0;x+1U<size;++x){
+                const auto a=make_vertex(*patch,x,z);
+                const auto b=make_vertex(*patch,x,z+1U);
+                const auto cc=make_vertex(*patch,x+1U,z+1U);
+                const auto d=make_vertex(*patch,x+1U,z);
+                add_triangle(a,b,cc);
+                add_triangle(a,cc,d);
+            }
+        }
+    }
+    scene.terrain_count=scene.vertices.size();
+    scene.avatar_count=0;
+    if(scene.vertices.empty()||scene.vertices.size()>750000U){
+        error_=L"R12 verified land triangles exceeded safety budget";
+        return false;
+    }
+    if(ready_)wait_for_gpu();
+    auto previous=std::move(region_mesh_);
+    region_mesh_=std::move(scene);
+    if(ready_&&!make_geometry()){
+        region_mesh_=std::move(previous);
+        error_=L"R12 DX12 land mesh upload failed";
+        return false;
+    }
+    error_.clear();
+    return true;
+}
 bool Renderer::set_verified_live_water(
     const protocol::sim::Circuit& circuit) {
     const auto& region=circuit.region_metadata();
