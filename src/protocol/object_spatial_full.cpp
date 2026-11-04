@@ -233,7 +233,10 @@ bool decode_full_transforms(const lludp::Packet& packet,
                 frame.other_extra_records+=seen.other_extra_records;
             }else ++frame.malformed_extra_envelopes;
         }
+        // A corrupt sculpt envelope may conceal mesh topology. Never
+        // render a guessed primitive for such an object.
         if(extras_valid)t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+        else t.primitive=PrimitiveKind::Unknown;
         if(!t.mesh_asset_id.empty()){
             t.primitive=PrimitiveKind::Unknown;
             ++frame.mesh_references;
