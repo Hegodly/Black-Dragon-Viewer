@@ -332,27 +332,24 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     for(const auto& child:linked){
                         if(linked_objects_.size()>=1024U&&
                            !linked_objects_.contains(child.local_id))continue;
-                        linked_objects_.insert_or_assign(child.local_id,child);
-                        if(!child.mesh_asset_id.empty())
-                            (void)mesh_scheduler_.request(child.mesh_asset_id,
-                                load::Kind::NearbyMesh,1000.f,false,0U);
+                        const auto prior=linked_objects_.find(child.local_id);
+                        if(prior==linked_objects_.end()||
+                           !objectspatial::same_spatial_transform(prior->second,child)){
+                            linked_objects_.insert_or_assign(child.local_id,child);
+                            ++spatial_object_revision_;
+                        }
                         missing_objects_.erase(child.local_id);
-                        ++spatial_object_revision_;
                     }
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
                            !spatial_objects_.contains(obj.local_id))continue;
-                        spatial_objects_.insert_or_assign(obj.local_id,obj);
-                        if(!obj.mesh_asset_id.empty()){
-                            const float distance=std::hypot(
-                                std::hypot(obj.x-movement_position_.x,
-                                           obj.y-movement_position_.y),
-                                obj.z-movement_position_.z);
-                            (void)mesh_scheduler_.request(obj.mesh_asset_id,
-                                load::Kind::VisibleMesh,distance,true,0U);
+                        const auto prior=spatial_objects_.find(obj.local_id);
+                        if(prior==spatial_objects_.end()||
+                           !objectspatial::same_spatial_transform(prior->second,obj)){
+                            spatial_objects_.insert_or_assign(obj.local_id,obj);
+                            ++spatial_object_revision_;
                         }
                         missing_objects_.erase(obj.local_id);
-                        ++spatial_object_revision_;
                     }
                 }else ++rejected_spatial_frames_;
             }
@@ -385,12 +382,13 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         if(previous!=linked_objects_.end())
                             updated=objectspatial::merge_compressed_transform(
                                 child,previous->second);
-                        linked_objects_.insert_or_assign(child.local_id,updated);
-                        if(!updated.mesh_asset_id.empty())
-                            (void)mesh_scheduler_.request(updated.mesh_asset_id,
-                                  load::Kind::NearbyMesh,1000.f,false,0U);
+                        if(previous==linked_objects_.end()||
+                           !objectspatial::same_spatial_transform(
+                                previous->second,updated)){
+                            linked_objects_.insert_or_assign(child.local_id,updated);
+                            ++spatial_object_revision_;
+                        }
                         missing_objects_.erase(child.local_id);
-                        ++spatial_object_revision_;
                     }
                     for(const auto& obj:objects){
                         if(spatial_objects_.size()>=512U &&
@@ -400,17 +398,13 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         if(previous!=spatial_objects_.end())
                             updated=objectspatial::merge_compressed_transform(
                                 obj,previous->second);
-                        spatial_objects_.insert_or_assign(obj.local_id,updated);
-                        if(!updated.mesh_asset_id.empty()){
-                            const float distance=std::hypot(
-                                std::hypot(updated.x-movement_position_.x,
-                                           updated.y-movement_position_.y),
-                                updated.z-movement_position_.z);
-                            (void)mesh_scheduler_.request(updated.mesh_asset_id,
-                                  load::Kind::VisibleMesh,distance,true,0U);
+                        if(previous==spatial_objects_.end()||
+                           !objectspatial::same_spatial_transform(
+                                previous->second,updated)){
+                            spatial_objects_.insert_or_assign(obj.local_id,updated);
+                            ++spatial_object_revision_;
                         }
                         missing_objects_.erase(obj.local_id);
-                        ++spatial_object_revision_;
                     }
                 }else ++rejected_spatial_frames_;
             }
