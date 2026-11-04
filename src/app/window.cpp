@@ -592,10 +592,16 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         sl_circuit_.decoded_mesh_assets().size())+
                     L" | Shapes "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().supported_shapes)+
-                    L" | Extra "+std::to_wstring(
+                    L" | Extra C/F "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().extra_records)+
-                    L" | Sculpt "+std::to_wstring(
+                    L"/"+std::to_wstring(
+                        sl_circuit_.full_decode_audit().extra_records)+
+                    L" | Sculpt C/F "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().sculpt_records)+
+                    L"/"+std::to_wstring(
+                        sl_circuit_.full_decode_audit().sculpt_records)+
+                    L" | BadExtra "+std::to_wstring(
+                        sl_circuit_.full_decode_audit().malformed_extra_envelopes)+
                     L" | Skip "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().unsupported_optional)+
                     L" | Eligible "+std::to_wstring(
@@ -608,7 +614,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R40: mesh URL rejection classification | avatar, textures, IM pending",
+        label(L"R42: corrected full object fields + sculpt audit | textures, avatars pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
