@@ -125,5 +125,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KAMI-R34-Real-Mesh-Alpha
-          path: dist/KAMI-R33-Hierarchy-Mesh-Intake.zip
+          path: dist/KAMI-R34-Real-Mesh-Alpha.zip
           retention-days: 14
