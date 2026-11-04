@@ -30,6 +30,9 @@ public:
     [[nodiscard]] const RegionMetadata& region_metadata() const noexcept {
         return region_metadata_;
     }
+    [[nodiscard]] const AgentPosition& movement_position() const noexcept {
+        return movement_position_;
+    }
     [[nodiscard]] bool simulator_responded() const noexcept {return packets_received_>0;}
     [[nodiscard]] std::uint32_t packets_received() const noexcept {
         return packets_received_;
@@ -53,6 +56,7 @@ private:
     bool winsock_ready_=false;
     LoginResult login_{};
     RegionMetadata region_metadata_{};
+    AgentPosition movement_position_{};
     CircuitState state_=CircuitState::Closed;
     bool region_seen_=false,movement_seen_=false;
     bool use_acked_=false,move_acked_=false,handshake_replied_=false;
