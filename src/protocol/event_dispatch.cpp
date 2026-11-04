@@ -75,7 +75,8 @@ bool is_boolean(IXMLDOMNode* node,bool& out){
     if(value==L"false"||value==L"0"){out=false;return true;}
     return false;
 }
-bool ascii_uuid(IXMLDOMNode* node,std::string& result){
+bool ascii_uuid(IXMLDOMNode* node,std::string& result,
+                bool allow_null=false){
     auto type=name_of(node);
     if(type!=L"uuid"&&type!=L"string")return false;
     const auto value=text_of(node);
@@ -86,7 +87,9 @@ bool ascii_uuid(IXMLDOMNode* node,std::string& result){
         result.push_back(static_cast<char>(
             x>=L'A'&&x<=L'F'?x+32:x));
     }
-    return valid_uuid(result);
+    // A group insignia may be the null UUID; agent and group IDs may not.
+    return valid_uuid(result)||
+       (allow_null&&result=="00000000-0000-0000-0000-000000000000");
 }
 bool integer(IXMLDOMNode* node,int& result){
     if(name_of(node)!=L"integer")return false;
@@ -133,7 +136,7 @@ bool group_entry(IXMLDOMNode* map,GroupSnapshot& group){
        !map_value(map,L"Contribution",contribution))
         return false;
     if(!ascii_uuid(uuid.Get(),group.id)||
-       !ascii_uuid(insignia.Get(),group.insignia)||
+       !ascii_uuid(insignia.Get(),group.insignia,true)||
        !bounded_powers(powers.Get(),group.powers)||
        !is_boolean(notices.Get(),group.notices)||
        !integer(contribution.Get(),group.contribution)||
