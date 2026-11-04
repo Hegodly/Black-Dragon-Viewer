@@ -5,8 +5,10 @@
 #include <vector>
 
 namespace kami::protocol::caps {
-// This is the *first* CAPS transport milestone. Event payloads are never
-// dispatched or acknowledged until safe event handlers are implemented.
+// CAPS transport observation stage. Validated LLSD event envelopes are
+// admitted into bounded metadata telemetry and ACKed to keep polling alive.
+// Body-dependent simulator actions are deliberately NOT implemented yet.
+// Don't present an observed event as a fully handled SL viewer action.
 struct SeedResponse {
     bool granted=false;
     unsigned http_status=0;
@@ -21,14 +23,16 @@ struct EventQueueFrame {
     QueueCursor id;
     unsigned event_count=0;
     std::vector<std::string> event_types; // sanitized names, at most 8
-    // Never retain untrusted event bodies until a verified dispatcher exists.
+    // Only sanitized type names are kept. Event bodies are not applied.
 };
 struct PollResponse {
     bool structurally_valid=false;
     bool idle=false;
-    bool safe_to_ack=false;
+    bool transient=false; // retry bounded transient HTTP/WinHTTP faults
+    bool safe_to_ack=false; // UI must commit observation before next ACK
     unsigned http_status=0;
     unsigned event_count=0;
+    unsigned unsupported_events=0; // explicitly observed but NOT applied
     std::vector<std::string> event_types; // no sensitive LLSD bodies
     QueueCursor next_ack; // only valid when safe_to_ack=true
     std::wstring diagnostic; // no event bodies, credentials or bearer URLs
@@ -41,7 +45,8 @@ struct PollResponse {
                                    std::wstring& event_queue_url);
 [[nodiscard]] bool parse_event_queue_llsd(std::string_view xml,
                                           unsigned& event_count);
-// Full bounded event queue metadata; bodies are NOT dispatched or acked.
+// Full bounded event-queue envelope; bodies are not applied. Successful
+// observation is acknowledged so the next long-poll can proceed.
 [[nodiscard]] bool parse_event_queue_frame(
     std::string_view xml,EventQueueFrame& out);
 [[nodiscard]] std::string build_event_queue_post(const QueueCursor& previous);
