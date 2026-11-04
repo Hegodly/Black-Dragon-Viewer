@@ -1109,15 +1109,18 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
         label(world_renderer_.live_water_preview_active()?
-              (L"R9 LIVE WATER-HEIGHT DX12 ONLY | LayerData "+
-               std::to_wstring(sl_circuit_.layer_packets())+
+              (L"R10 WATER DX12 ONLY | AgentUpdate TX "+
+               std::to_wstring(sl_circuit_.agent_updates_sent())+
+               L" | LayerData "+std::to_wstring(sl_circuit_.layer_packets())+
                L" | Objects "+std::to_wstring(
                    sl_circuit_.object_update_packets())+
                L" NOT RENDERED"):
-              (L"R9: Awaiting verified avatar/water elevation | LayerData "+
-               std::to_wstring(sl_circuit_.layer_packets())+
+              (L"R10 STREAM | AgentUpdate TX "+
+               std::to_wstring(sl_circuit_.agent_updates_sent())+
+               L" | LayerData "+std::to_wstring(sl_circuit_.layer_packets())+
                L" | Objects "+std::to_wstring(
-                   sl_circuit_.object_update_packets())),
+                   sl_circuit_.object_update_packets())+
+               L" NOT RENDERED"),
               box(contentX,height-35,contentWidth,23),
               small_font_.Get(),p.muted);
     }else{

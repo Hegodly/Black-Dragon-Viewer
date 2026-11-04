@@ -98,5 +98,38 @@ int main(){
     const float invalid=std::numeric_limits<float>::infinity();
     std::memcpy(region.body.data()+31,&invalid,sizeof(float));
     if(sim::decode_region_metadata(region,snapshot))return 15;
+    // R10 authenticated, neutral interest-list packet. A High 4 message
+    // has an exact 115-byte decoded body with ControlFlags=0.
+    const sim::AgentPosition verified{128.f,96.f,22.5f,true};
+    if(!sim::neutral_agent_update(login,verified,9U,packet,96.f)||
+       packet.flags!=lludp::kZerocoded||packet.body.size()!=115U||
+       packet.body[0]!=4||packet.body[1]!=0x12||
+       packet.body[17]!=0x12||packet.body[57]!=0||
+       packet.body[110]!=0||packet.body[111]!=0||
+       packet.body[112]!=0||packet.body[113]!=0||
+       packet.body[114]!=0)return 18;
+    // CameraCenter starts at byte 58, Far at byte 106.
+    const float cameraZ=22.5f+1.6f;
+    float decodedZ=0.f,decodedFar=0.f;
+    std::memcpy(&decodedZ,packet.body.data()+66,sizeof(float));
+    std::memcpy(&decodedFar,packet.body.data()+106,sizeof(float));
+    if(decodedZ!=cameraZ||decodedFar!=96.f)return 19;
+    std::vector<std::uint8_t> updatedWire{};
+    lludp::Packet decodedUpdate{};
+    if(!lludp::encode(packet,updatedWire)||
+       !lludp::decode(updatedWire,decodedUpdate)||
+       decodedUpdate.sequence!=9U||decodedUpdate.body!=packet.body)
+        return 20;
+    sim::AgentPosition unverified=verified;
+    unverified.verified=false;
+    if(sim::neutral_agent_update(login,unverified,9U,packet)||
+       sim::neutral_agent_update(rejected,verified,9U,packet)||
+       sim::neutral_agent_update(login,verified,1U,packet)||
+       sim::neutral_agent_update(login,verified,9U,packet,0.f))
+        return 21;
+    unverified=verified;
+    unverified.z=std::numeric_limits<float>::infinity();
+    if(sim::neutral_agent_update(login,unverified,9U,packet))
+        return 22;
     return 0;
 }

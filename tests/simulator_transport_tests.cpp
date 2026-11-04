@@ -101,23 +101,63 @@ int main() {
         // Realistically formatted but synthetic avatar location.
         const std::array<float,3> xyz={130.f,98.f,25.f};
         std::memcpy(movement.body.data()+36,xyz.data(),sizeof(xyz));
-        if(!send_test(server,viewer,viewer_len,movement))
-            server_result=11;
+        if(!send_test(server,viewer,viewer_len,movement)){
+            server_result=11;return;
+        }
+        // Wait for the viewer's session-authorized neutral AgentUpdate.
+        bool got_update=false;
+        for(int attempt=0;attempt<12;++attempt){
+            const int n=recvfrom(server,reinterpret_cast<char*>(bytes.data()),
+                static_cast<int>(bytes.size()),0,
+                reinterpret_cast<sockaddr*>(&viewer),&viewer_len);
+            if(n<=0){server_result=14;return;}
+            lludp::Packet p{};
+            if(!lludp::decode(
+                std::span<const std::uint8_t>(bytes.data(),
+                    static_cast<std::size_t>(n)),p)){
+                server_result=15;return;
+            }
+            std::uint32_t id=0;unsigned width=0;
+            if(!lludp::message_number(p.body,id,width))continue;
+            if(id==4U){
+                if(p.body.size()!=115U||p.body[114]!=0U||
+                   p.body[110]!=0U||p.body[111]!=0U||
+                   p.body[112]!=0U||p.body[113]!=0U){
+                    server_result=16;return;
+                }
+                got_update=true;break;
+            }
+        }
+        if(!got_update){server_result=17;return;}
+        lludp::Packet layer{};
+        layer.sequence=23;
+        layer.body={11,0x4c,4,0,1,2,3,4};
+        lludp::Packet killed{};
+        killed.sequence=24;
+        killed.body={16,1,9,0,0,0};
+        if(!send_test(server,viewer,viewer_len,layer)||
+           !send_test(server,viewer,viewer_len,killed))
+            server_result=18;
     });
     sim::Circuit circuit;
     const bool started=circuit.start(login);
     if(started){
         const auto begin=std::chrono::steady_clock::now();
         while(std::chrono::steady_clock::now()-begin<
-              std::chrono::seconds(3)&&!circuit.movement_seen()){
+              std::chrono::seconds(3)&&
+              !(circuit.movement_seen()&&
+                circuit.agent_updates_sent()>0U&&
+                circuit.layer_packets()>0U&&
+                circuit.object_update_packets()>0U)){
             circuit.poll();
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }
     }
     mock.join();
     const bool ok=started&&server_result==0&&circuit.region_seen()&&
-                  circuit.layer_packets()==0&&
-                  circuit.object_update_packets()==0&&
+                  circuit.agent_updates_sent()>=1U&&
+                  circuit.layer_packets()==1U&&
+                  circuit.object_update_packets()==1U&&
                   circuit.region_metadata().verified&&
                   circuit.region_metadata().name=="Test"&&
                   circuit.movement_position().verified&&
@@ -127,7 +167,7 @@ int main() {
                   circuit.state()==sim::CircuitState::MovementConfirmed&&
                   circuit.packets_received()>=3;
     circuit.stop();closesocket(server);WSACleanup();
-    if(!ok)return 12;
+    if(!ok||circuit.agent_updates_sent()!=0U)return 12;
     sim::Circuit rejected{};
     auto invalid=login;
     invalid.status=LoginStatus::Rejected;

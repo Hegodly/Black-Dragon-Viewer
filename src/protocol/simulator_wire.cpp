@@ -19,6 +19,15 @@ void push_uuid(std::vector<std::uint8_t>& to,
                const std::array<std::uint8_t,16>& id) {
     to.insert(to.end(),id.begin(),id.end());
 }
+void le_float(std::vector<std::uint8_t>& to,float value) {
+    static_assert(sizeof(float)==4);
+    std::uint32_t bits=0;
+    std::memcpy(&bits,&value,sizeof(bits));
+    le32(to,bits);
+}
+void vector3(std::vector<std::uint8_t>& to,float x,float y,float z) {
+    le_float(to,x);le_float(to,y);le_float(to,z);
+}
 bool accepted(const LoginResult& login) noexcept {
     return login.accepted()&&login.circuit_code!=0&&valid_handoff(login.handoff);
 }
@@ -85,6 +94,42 @@ bool region_handshake_reply(const LoginResult& login,std::uint32_t seq,
     push_uuid(value.body,agent);
     push_uuid(value.body,session);
     le32(value.body,0);
+    output=std::move(value);
+    return true;
+}
+bool neutral_agent_update(const LoginResult& login,
+                          const AgentPosition& position,
+                          std::uint32_t seq,lludp::Packet& output,
+                          float draw_distance) noexcept {
+    if(!accepted(login)||!position.verified||seq<3U||
+       !std::isfinite(position.x)||!std::isfinite(position.y)||
+       !std::isfinite(position.z)||position.x<0.f||
+       position.y<0.f||position.x>=4096.f||position.y>=4096.f||
+       position.z< -4096.f||position.z>8192.f||
+       !std::isfinite(draw_distance)||draw_distance<16.f||
+       draw_distance>256.f)return false;
+    std::array<std::uint8_t,16> agent{},session{};
+    if(!parse_uuid(login.handoff.agent_id,agent)||
+       !parse_uuid(login.handoff.session_id,session))return false;
+    lludp::Packet value;
+    value.flags=lludp::kZerocoded; // AgentUpdate High 4
+    value.sequence=seq;
+    value.body={0x04};
+    push_uuid(value.body,agent);
+    push_uuid(value.body,session);
+    // Wire LLQuaternion = 3 little-endian F32s. (0,0,0) means w=1.
+    vector3(value.body,0.f,0.f,0.f); // BodyRotation
+    vector3(value.body,0.f,0.f,0.f); // HeadRotation
+    value.body.push_back(0);        // State: neutral
+    // Validated simulator-local coordinates; do not invent a region.
+    vector3(value.body,position.x,position.y,position.z+1.6f);
+    vector3(value.body,1.f,0.f,0.f); // CameraAtAxis
+    vector3(value.body,0.f,1.f,0.f); // CameraLeftAxis
+    vector3(value.body,0.f,0.f,1.f); // CameraUpAxis
+    le_float(value.body,draw_distance);
+    le32(value.body,0U);            // No movement control flags
+    value.body.push_back(0);        // Flags: no change
+    if(value.body.size()!=115U)return false;
     output=std::move(value);
     return true;
 }

@@ -95,6 +95,21 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
     }
     return true;
 }
+void Circuit::maybe_send_agent_update() noexcept {
+    if(state_!=CircuitState::MovementConfirmed||
+       !movement_position_.verified||socket_==INVALID_SOCKET)return;
+    const auto now=std::chrono::steady_clock::now();
+    if(last_agent_update_!=std::chrono::steady_clock::time_point{}&&
+       now-last_agent_update_<std::chrono::milliseconds(200))return;
+    lludp::Packet update{};
+    if(!neutral_agent_update(login_,movement_position_,sequence_,update))
+        return;
+    if(send_packet(std::move(update))){
+        ++sequence_;
+        ++agent_updates_sent_;
+        last_agent_update_=now;
+    }
+}
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     ++packets_received_;
     // These are bounded packet/framing observations from the actual
@@ -193,6 +208,7 @@ void Circuit::poll(unsigned budget) noexcept {
             packet))handle_packet(packet);
     }
     maybe_retry();
+    maybe_send_agent_update();
 }
 void Circuit::stop() noexcept {
     if(socket_!=INVALID_SOCKET){closesocket(socket_);socket_=INVALID_SOCKET;}
@@ -202,9 +218,10 @@ void Circuit::stop() noexcept {
     movement_position_={};
     state_=CircuitState::Closed;
     region_seen_=movement_seen_=use_acked_=move_acked_=handshake_replied_=false;
-    packets_received_=0;
+    packets_received_=agent_updates_sent_=0;
     layer_packets_=object_update_packets_=invalid_world_packets_=0;
-    sequence_=1;attempts_=0;last_retry_={};started_={};
+    sequence_=3;attempts_=0;last_retry_={};started_={};
+    last_agent_update_={};
 }
 std::wstring Circuit::diagnostic() const {
     switch(state_){

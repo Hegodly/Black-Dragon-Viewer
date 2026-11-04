@@ -316,3 +316,27 @@ events now yield a next-cursor ACK, that unsupported events remain
 visible as counters, and that malformed/undefined cursor payloads
 cannot be acknowledged. Windows CI verifies the executable build and
 offline CTest; real simulator behavior still requires a separate test.
+
+## R10: authenticated AgentUpdate interest-list heartbeat
+
+R9 receives authenticated simulator and CAPS events, but did not transmit
+the periodic AgentUpdate High 4 message used by Second Life to advertise
+the camera's position and draw distance. R10 adds:
+
+- A validated neutral AgentUpdate serializer using the public Linden
+  message template. It sends only after a session-matched
+  AgentMovementComplete and a successful region handshake, on the same
+  WinSock circuit, at most five times per second.
+- Camera center at validated agent coordinates plus 1.6 m, neutral
+  orthonormal axes and rotations, 96 m draw distance, no movement flags.
+- Sequence numbers 1 and 2 remain reserved for the initial reliable
+  UseCircuitCode and CompleteAgentMovement packets; new packets use 3+.
+- Home-screen TX and incoming LayerData/Object counters. Unit tests
+  verify wire offsets, LLUDP zerocoding, invalid data rejection and
+  synthetic loopback delivery of framed simulator world packets.
+
+**Limits:** A nonzero LayerData or Objects count only establishes that
+world-message envelopes arrived. Terrain patch decompression, ObjectUpdate
+field decoding, texture/mesh fetching, avatar rendering, and live-world
+DX12 geometry remain incomplete. No synthetic geometry is presented as
+real Second Life content. Prefer test accounts for this pre-release build.

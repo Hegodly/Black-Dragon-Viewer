@@ -42,6 +42,13 @@ struct AgentPosition {
 [[nodiscard]] bool region_handshake_reply(const LoginResult& authorized_login,
                                           std::uint32_t sequence,
                                           lludp::Packet& output) noexcept;
+// Authenticated, neutral AgentUpdate High 4 to request the simulator's
+// object interest list. No avatar movement/click flags are sent.
+[[nodiscard]] bool neutral_agent_update(const LoginResult& authorized_login,
+                                        const AgentPosition& position,
+                                        std::uint32_t sequence,
+                                        lludp::Packet& output,
+                                        float draw_distance=96.f) noexcept;
 [[nodiscard]] bool packet_ack(std::span<const std::uint32_t> sequences,
                               std::uint32_t sequence,
                               lludp::Packet& output) noexcept;

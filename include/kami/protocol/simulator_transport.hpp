@@ -9,8 +9,8 @@
 
 namespace kami::protocol::sim {
 // A live WinSock *UDP circuit transport*; not a complete in-world
-// session. R6 negotiates initial CAPS separately; event dispatch,
-// AgentUpdate, live assets and world rendering are still absent.
+// session. R10 sends neutral AgentUpdate interest-list heartbeats;
+// event body dispatch, live assets and world rendering are still absent.
 enum class CircuitState : std::uint8_t {
     Closed, WaitingForSimulator, SimulatorResponded,
     RegionHandshakeReceived, MovementConfirmed, Failed
@@ -37,6 +37,9 @@ public:
     [[nodiscard]] std::uint32_t packets_received() const noexcept {
         return packets_received_;
     }
+    [[nodiscard]] std::uint32_t agent_updates_sent() const noexcept {
+        return agent_updates_sent_;
+    }
     [[nodiscard]] std::uint32_t layer_packets() const noexcept {
         return layer_packets_;
     }
@@ -50,6 +53,7 @@ public:
 private:
     [[nodiscard]] bool send_packet(lludp::Packet packet) noexcept;
     [[nodiscard]] bool send_startup_messages() noexcept;
+    void maybe_send_agent_update() noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
     SOCKET socket_=INVALID_SOCKET;
@@ -61,11 +65,14 @@ private:
     bool region_seen_=false,movement_seen_=false;
     bool use_acked_=false,move_acked_=false,handshake_replied_=false;
     std::uint32_t packets_received_=0;
+    std::uint32_t agent_updates_sent_=0;
     std::uint32_t layer_packets_=0;
     std::uint32_t object_update_packets_=0;
     std::uint32_t invalid_world_packets_=0;
-    std::uint32_t sequence_=1;
+    // Sequences 1/2 are reserved for startup packets.
+    std::uint32_t sequence_=3;
     unsigned attempts_=0;
+    std::chrono::steady_clock::time_point last_agent_update_{};
     std::chrono::steady_clock::time_point last_retry_{};
     std::chrono::steady_clock::time_point started_{};
 };
