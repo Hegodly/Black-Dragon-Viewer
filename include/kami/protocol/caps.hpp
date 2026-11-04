@@ -13,6 +13,8 @@ struct SeedResponse {
     bool granted=false;
     bool event_queue_granted=false;
     bool mesh_granted=false;
+    bool mesh_named=false;  // grant mentioned but absent or invalid
+    bool mesh_rejected=false; // grant violates URL allowlist
     unsigned http_status=0;
     std::wstring event_queue_url; // secret bearer capability; do not log
     std::wstring mesh_capability_url; // ViewerAsset or GetMesh, never logged

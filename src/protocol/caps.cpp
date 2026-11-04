@@ -531,8 +531,11 @@ SeedResponse request_seed(std::wstring seed_url) {
             std::to_wstring(reply.status);return result;
     }
     SeedParseReport report{};
-    if(!parse_seed_llsd(reply.body,result.event_queue_url,
-                        &result.mesh_capability_url,&report)){
+    const bool parsed=parse_seed_llsd(reply.body,result.event_queue_url,
+                                     &result.mesh_capability_url,&report);
+    result.mesh_named=report.mesh_named;
+    result.mesh_rejected=report.mesh_rejected;
+    if(!parsed){
         result.diagnostic=!report.xml_map?
             L"CAPS seed: invalid or unsupported LLSD XML map":
             report.event_rejected?
@@ -546,7 +549,11 @@ SeedResponse request_seed(std::wstring seed_url) {
     if(result.event_queue_granted&&result.mesh_granted)
         result.diagnostic=L"CAPS seed OK: EventQueue + mesh granted";
     else if(result.event_queue_granted)
-        result.diagnostic=L"CAPS seed OK: EventQueue granted; mesh unavailable";
+        result.diagnostic=report.mesh_rejected?
+            L"CAPS seed: EventQueue OK; mesh URL rejected by host policy":
+            report.mesh_named?
+            L"CAPS seed: EventQueue OK; mesh grant missing valid URL":
+            L"CAPS seed: EventQueue OK; mesh grant not offered";
     else
         result.diagnostic=report.event_rejected?
             L"CAPS mesh granted; EventQueue URL rejected":

@@ -590,8 +590,14 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         sl_circuit_.mesh_download_count())+
                     L" | LOD "+std::to_wstring(
                         sl_circuit_.decoded_mesh_assets().size())+
-                    L" | Prim updates "+std::to_wstring(
+                    L" | Shapes "+std::to_wstring(
                         sl_circuit_.compressed_decode_audit().supported_shapes)+
+                    L" | Extra "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().extra_records)+
+                    L" | Sculpt "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().sculpt_records)+
+                    L" | Skip "+std::to_wstring(
+                        sl_circuit_.compressed_decode_audit().unsupported_optional)+
                     L" | Eligible "+std::to_wstring(
                         world_renderer_.live_primitive_eligible())+
                     L" | Orphan "+std::to_wstring(
@@ -602,7 +608,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R36: audited volume decoding | mesh textures, full avatar, IM/inventory pending",
+        label(L"R38: CAPS seed + mesh parameter diagnostics | full avatar, textures, IM/inventory pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
@@ -1301,6 +1307,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   L"CAPS negotiation not started":caps_status_,
                   box(contentX+252,y+54,contentWidth-269,24.f),
                   small_font_.Get(),p.muted);
+            label(caps_seed_summary_.empty()?
+                  L"Seed: waiting for CAPS response":
+                  L"Seed: "+caps_seed_summary_,
+                  box(contentX+252,y+78,contentWidth-269,23.f),
+                  small_font_.Get(),p.muted);
         }else{
             const auto status=sl_login_status_==protocol::LoginStatus::Accepted&&
                 sl_circuit_.state()!=protocol::sim::CircuitState::Closed?
@@ -1783,6 +1794,7 @@ void Window::begin_sl_login() {
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
     caps_status_.clear();
+    caps_seed_summary_.clear();
     caps_recent_types_.clear();
     caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
@@ -2007,6 +2019,7 @@ void Window::update_sl_connection() {
         try{result=caps_seed_future_.get();}
         catch(...){result.diagnostic=L"CAPS seed worker failed";}
         caps_status_=result.diagnostic;
+        caps_seed_summary_=result.diagnostic;
         if(result.granted&&
            sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed){
             // CAPS services are independent. Mesh assets may be granted
