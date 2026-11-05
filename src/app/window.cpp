@@ -584,6 +584,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L"CAP "+std::wstring(
                         sl_circuit_.mesh_capability_ready()?L"YES":L"NO")+
                     L" | MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
+                    L" | J2C "+std::to_wstring(
+                        sl_circuit_.decoded_texture_count())+
                     L" | Q "+std::to_wstring(
                         sl_circuit_.mesh_asset_stats().queued)+
                     L" | Fetch "+std::to_wstring(
@@ -605,7 +607,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"Official LLUDP + SL ExtraParams bridge | full SL backend, textures, avatar still pending",
+        label(L"JPEG2000 CPU decoded "+std::to_wstring(
+                  sl_circuit_.decoded_texture_count())+
+              L" assets; DX12 per-face texture binding still pending | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
