@@ -769,8 +769,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         // Region label and water elevation are extracted from the actual
         // connected simulator, never from KAMI's offline DX12 test scene.
         RegionMetadata parsed{};
-        if(decode_region_metadata(incoming,parsed))
-            region_metadata_=std::move(parsed);
+        if(decode_region_metadata(incoming,parsed)){
+            region_metadata_=std::move(parsed);++spatial_object_revision_;
+            texture_scan_revision_=~std::uint64_t{0};
+        }
         region_seen_=true;
         if(!handshake_replied_){
             lludp::Packet reply{};

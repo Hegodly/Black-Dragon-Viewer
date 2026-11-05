@@ -262,12 +262,12 @@ PrimitiveBatch build_live_primitive_geometry(
     if(!finite(origin))return result;
     // R32: larger closest-first batch with an upper bound on the DX12
     // vertex workload. Mesh asset geometry remains a separate pipeline.
-    limit=std::min<std::size_t>(limit,128U);
+    limit=std::min<std::size_t>(limit,1024U);
     struct Draw {const Transform* item;Pose pose;bool child;float distance;};
     std::vector<Draw> chosen;
     chosen.reserve(roots.size()+children.size());
     const auto collect=[&](const Transform& t,Pose p,bool child){
-        if(t.primitive==Kind::Unknown)return;
+        if(t.reflection_probe||t.primitive==Kind::Unknown)return;
         if(!finite(p.pos)||!valid_quat(p.rot)){
             ++result.invalid_pose_shapes;
             return;
@@ -482,7 +482,7 @@ MeshBatch build_live_mesh_geometry(
     };
     std::vector<Item> chosen;
     const auto try_add=[&](const Transform& t,Pose pose,bool child){
-        if(t.mesh_asset_id.empty())return;
+        if(t.reflection_probe||t.mesh_asset_id.empty())return;
         const auto found=loaded.find(t.mesh_asset_id);
         if(found==loaded.end()||found->second.triangles.empty())return;
         if(!finite(pose.pos)||!valid_quat(pose.rot))return;

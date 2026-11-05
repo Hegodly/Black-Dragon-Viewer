@@ -165,7 +165,8 @@ uint material_offset(uint index) {
 }
 float2 pbr_uv(float2 uv,uint offset,uint slot) {
     float4 transform=materialRows[offset+5U+2U*slot];
-    float2 shifted=uv*transform.xy;
+)"
+R"(    float2 shifted=uv*transform.xy;
     float co=cos(transform.z),si=sin(transform.z);
     return float2(co*shifted.x-si*shifted.y,si*shifted.x+co*shifted.y)+
         materialRows[offset+6U+2U*slot].xy;
@@ -302,7 +303,8 @@ Surface load_surface(Interpolant input,bool front,uint offset,bool terrain,float
         s.emissive=materialRows[offset+1U].rgb*pbr_texel(input.uv,offset,3U,layers.w).rgb;
         s.opacity=!terrain&&flags.x>1.5?base.a:1.0;
     }else if(terrain){
-        s.base=legacyLayer>.5?colorTexture.Sample(materialSampler,float3(input.uv,legacyLayer)).rgb:input.albedo;
+)"
+R"(        s.base=legacyLayer>.5?colorTexture.Sample(materialSampler,float3(input.uv,legacyLayer)).rgb:input.albedo;
         s.metallic=0.0;s.roughness=.86;
     }else{
         float3 texel=sample_material(input.uv,input.textureLayer).rgb;
@@ -429,7 +431,8 @@ float4 sky_pixel_main(SkyVertexOutput input) : SV_TARGET {
     float2 ndc=float2(input.uv.x*2.0-1.0,1.0-input.uv.y*2.0);
     float3 ray=normalize(forward+right*ndc.x/max(dot(right,right),.00001)+up*ndc.y/max(dot(up,up),.00001));
     float rise=saturate(.5-.5*ray.y);
-    float3 color=lerp(float3(.075,.21,.43),float3(.43,.70,.85),rise);
+)"
+R"(    float3 color=lerp(float3(.075,.21,.43),float3(.43,.70,.85),rise);
     float horizon=exp(-ray.y*ray.y*25.0);
     color=lerp(color,float3(.72,.79,.77),horizon*.23);
     float alignment=dot(ray,normalize(-sunDirectionIntensity.xyz));

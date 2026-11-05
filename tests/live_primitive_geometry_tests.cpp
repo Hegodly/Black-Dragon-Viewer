@@ -411,6 +411,16 @@ int run_primitive_tests(){
     const auto restored_mesh=world::build_live_mesh_geometry(
         {{777U,alpha_box}}, {},{},assets,128.f,140.f,35.f,10U);
     if(restored_mesh.emitted_triangles!=1U)return 52;
+    // A dense live scene must render beyond the old 18k/24k preview cap,
+    // while respecting the caller's explicit quality budget.
+    auto dense_root=close_mesh;dense_root.x=128;dense_root.y=140;dense_root.z=35;
+    dense_root.default_texture_asset_id.clear();
+    protocol::mesh::LOD dense_lod;dense_lod.triangles.assign(30000U,triangle);
+    const auto expanded_mesh=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,dense_lod}},128,140,35,28000U);
+    if(expanded_mesh.emitted_triangles!=28000U||expanded_mesh.scene.vertices.size()!=84000U)return 53;
+    dense_root.reflection_probe=true;
+    const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
+    if(invisible_probe.emitted_triangles!=0U)return 54;
     return 0;
 }
 
@@ -420,4 +430,5 @@ int main(){
         "KAMI prim/material regression failed: check %d\n",code);
     return code;
 }
+
 

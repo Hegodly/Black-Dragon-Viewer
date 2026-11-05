@@ -89,6 +89,17 @@ int main(){
     if(!sim::decode_region_metadata(region,snapshot)||
        !snapshot.verified||snapshot.name!="Test"||
        snapshot.water_height!=water)return 12;
+    // Four detail IDs and SW/NW/SE/NE heights follow the base texture IDs.
+    constexpr std::size_t detail=31U+4U+4U+16U+64U;
+    region.body[detail]=0x12;region.body[detail+15U]=0x34;
+    const std::array<float,4> starts{0,10,20,30},ranges{0,20,40,60};
+    std::memcpy(region.body.data()+detail+64U,starts.data(),16U);
+    std::memcpy(region.body.data()+detail+80U,ranges.data(),16U);
+    if(!sim::decode_region_metadata(region,snapshot)||!snapshot.terrain_metadata||
+       snapshot.terrain_assets[0]!="12000000-0000-0000-0000-000000000034"||
+       snapshot.terrain_start!=starts||snapshot.terrain_range!=ranges)return 70;
+    const float bad_range=-1;std::memcpy(region.body.data()+detail+80U,&bad_range,4U);
+    if(!sim::decode_region_metadata(region,snapshot)||snapshot.terrain_metadata)return 71;
     region.body[12]=0x0a;
     if(sim::decode_region_metadata(region,snapshot)||snapshot.verified)
         return 13;
@@ -174,3 +185,4 @@ int main(){
         return 30;
     return 0;
 }
+

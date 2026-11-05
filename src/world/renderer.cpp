@@ -794,7 +794,7 @@ bool Renderer::set_verified_live_terrain(
     // supported simple primitives get actual finite solid geometry.
     std::map<std::uint32_t,protocol::objectspatial::Transform> bounds;
     for(const auto& [id,root]:circuit.decoded_spatial_objects()){
-        if(root.primitive==protocol::objectspatial::PrimitiveKind::Unknown)
+        if(!root.reflection_probe&&root.primitive==protocol::objectspatial::PrimitiveKind::Unknown)
             bounds.emplace(id,root);
     }
     const auto proxies=build_live_object_spatial_proxies(
@@ -870,7 +870,9 @@ bool Renderer::set_verified_live_terrain(
     const auto primitives=build_live_primitive_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z,128U,circuit.known_avatar_roots(),
+        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?1024U:
+            graphics_.preset==graphics::Preset::Balanced?512U:
+            graphics_.preset==graphics::Preset::Performance?256U:128U,circuit.known_avatar_roots(),
         live_texture_layers_,pbr_table.faces);
     const auto new_primitive_vertices=primitives.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
@@ -942,10 +944,18 @@ bool Renderer::set_verified_live_terrain(
         live_region_origin_=stable_origin;
         live_region_origin_valid_=true;
     }
-    environment_server_probes_.clear();
-    for(const auto& [id,t]:circuit.decoded_spatial_objects())if(t.reflection_probe&&environment_server_probes_.size()<64U)
-        environment_server_probes_.emplace(id,t);
-    environment_dirty_=true;
+    std::map<std::uint32_t,protocol::objectspatial::Transform> probes;
+    for(const auto& [id,t]:circuit.decoded_spatial_objects())if(t.reflection_probe&&probes.size()<64U)
+        probes.emplace(id,t);
+    bool probes_changed=probes.size()!=environment_server_probes_.size();
+    if(!probes_changed)for(const auto& [id,t]:probes){
+        const auto old=environment_server_probes_.find(id);
+        if(old==environment_server_probes_.end()||!protocol::objectspatial::same_spatial_transform(t,old->second)){
+            probes_changed=true;break;
+        }
+    }
+    environment_server_probes_=std::move(probes);
+    environment_dirty_=environment_dirty_||!unchanged||probes_changed;
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;
     uploaded_linked_primitive_shapes_=primitives.linked_shapes;
