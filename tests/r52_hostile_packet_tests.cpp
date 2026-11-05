@@ -17,7 +17,7 @@
 int main(){
     using namespace kami::protocol;
     std::uint32_t seed=0xc0ffee25U;
-    const auto next=[&]() mutable -> std::uint32_t {
+    auto next=[&]() -> std::uint32_t {
         seed=1664525U*seed+1013904223U;
         return seed;
     };
