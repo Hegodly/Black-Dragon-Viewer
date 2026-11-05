@@ -22,6 +22,12 @@ int main(){
     if(!decode_base(faces,parsed)||parsed.red!=1.f||
        parsed.green!=1.f||parsed.alpha!=1.f||
        parsed.image_id[0]!=0x10U)return 2;
+    if(!parsed.face_image_override[7U]||
+       parsed.face_image_override[8U]||
+       kami::protocol::texture::face_image_uuid(parsed,7U)!=
+          "a0a0a0a0-a0a0-a0a0-a0a0-a0a0a0a0a0a0"||
+       kami::protocol::texture::face_image_uuid(parsed,8U)!=
+          "10101010-1010-1010-1010-101010101010")return 10;
     auto invalid=faces;
     invalid[16]=0x80U;invalid[17]=0x80U;
     if(decode_base(invalid,parsed))return 3;
