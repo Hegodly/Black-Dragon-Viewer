@@ -28,6 +28,26 @@ int main(){
        !std::isfinite(preview.pose().z)||
        !std::isfinite(preview.pose().heading)||
        preview.pose().x>131.99f||preview.pose().z>126.99f)return 9;
+    // R52: a 12-meter DX12 world rebase must not make the avatar or
+    // follow camera jump relative to the buildings.
+    world::LiveAvatarPreview centered{};
+    if(!centered.reset({100.f,100.f,30.f,true}))return 14;
+    centered.step(.1f,avatar::Controls{1.f,0.f,0.f,false,false});
+    const auto prior_local=centered.pose();
+    if(!centered.rebase({109.f,108.f,32.f,true}))return 15;
+    if(std::abs((100.f+prior_local.x)-(109.f+centered.pose().x))>.001f||
+       std::abs((100.f+prior_local.z)-(108.f+centered.pose().z))>.001f||
+       std::abs((30.f+prior_local.y)-(32.f+centered.pose().y))>.001f)
+        return 16;
+    const auto before_invalid=centered.pose();
+    if(centered.rebase({400.f,108.f,32.f,true})||
+       std::abs(centered.pose().x-before_invalid.x)>.001f)return 17;
+    // A long-distance teleport invalidates local dead reckoning and
+    // snaps the marker back to the new authenticated region position.
+    if(!centered.rebase({210.f,210.f,55.f,true})||
+       std::abs(centered.pose().x)>.001f||
+       std::abs(centered.pose().z)>.001f||
+       std::abs(centered.pose().y+1.f)>.001f)return 18;
     preview.clear();
     if(preview.active())return 10;
     const auto mesh=world::build_live_avatar_placeholder();
