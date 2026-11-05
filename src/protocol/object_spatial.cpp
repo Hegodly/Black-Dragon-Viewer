@@ -59,6 +59,7 @@ struct CompressedVolume {
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
     bool base_tint_present=false,default_texture_present=false;
+    std::string default_texture_asset_id;
     float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
     std::uint32_t extra_records=0,sculpt_records=0;
     bool legacy_particles=false;
@@ -153,6 +154,7 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
             texture::Base tint{};
             if(texture::decode_base(te,tint)){
                 out.base_tint_present=true;
+                out.default_texture_asset_id=texture::default_image_uuid(tint);
                 out.base_r=tint.red;out.base_g=tint.green;
                 out.base_b=tint.blue;out.base_a=tint.alpha;
                 out.default_texture_present=
@@ -219,6 +221,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.primitive=shape.primitive;
         t.volume_params_seen=shape.shape;
         t.default_texture_present=shape.default_texture_present;
+        t.default_texture_asset_id=shape.default_texture_asset_id;
         t.base_tint_present=shape.base_tint_present;
         t.base_r=shape.base_r;t.base_g=shape.base_g;
         t.base_b=shape.base_b;t.base_a=shape.base_a;
@@ -257,6 +260,7 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.primitive==b.primitive&&a.mesh_asset_id==b.mesh_asset_id&&
         a.volume_params_seen==b.volume_params_seen&&
         a.default_texture_present==b.default_texture_present&&
+        a.default_texture_asset_id==b.default_texture_asset_id&&
         a.base_tint_present==b.base_tint_present&&
         a.base_r==b.base_r&&a.base_g==b.base_g&&
         a.base_b==b.base_b&&a.base_a==b.base_a;
@@ -274,6 +278,9 @@ Transform merge_compressed_transform(
     }
     merged.default_texture_present=
         merged.default_texture_present||previous.default_texture_present;
+    if(merged.default_texture_asset_id.empty()&&
+       !incoming.base_tint_present)
+        merged.default_texture_asset_id=previous.default_texture_asset_id;
     if(!incoming.base_tint_present&&previous.base_tint_present){
         merged.base_tint_present=true;
         merged.base_r=previous.base_r;merged.base_g=previous.base_g;
