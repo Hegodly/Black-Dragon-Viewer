@@ -11,7 +11,8 @@ A live property can retain many Second Life mesh references and show partially d
 1. **Full four-level static LOD recovery.** The previous loader considered only medium_lod and high_lod and rejected assets with valid lower geometry. Prefer medium then high, followed by low_lod and lowest_lod. Missing/zero-sized LOD blocks are skipped. Every populated candidate is independently validated with the existing LLSD, zlib/gzip, offsets, bounds, face and vertex checks. Malformed nonzero block metadata still fails; a corrupt higher-detail data block may be skipped only when a fully validated lower-detail block is available. Never invent a proxy mesh or accept arbitrary bytes.
 2. **Valid larger meshes.** Raise the per-decoded static LOD triangle ceiling from 20,000 to 60,000 while retaining the existing 8 MB decompression bound and the shared 4-million decoded-triangle session limit, 1-million-triangle Quality rendering budget and original 4-million-vertex DX12 scene cap.
 3. **Four bounded concurrent mesh workers.** The previous live mesh path ran one HTTP fetch+decode future at a time, despite the authenticated scheduler supporting up to eight. Run at most four independent off-thread workers; drain their completions individually and preserve scheduler priorities, per-launch throttling, 4xx/5xx retry policy, and independent shutdown joins. No DX12 calls happen on worker threads.
-4. Preserve R66 diagnostics and 2,048-primitive Quality fallback; no increases to world root retention, texture atlas or network-object recovery requests.
+4. **Correct linked-object streaming positions.** Previously the mesh, texture and PBR schedulers tested only the root anchor of a linked object, whereas the actual renderer composes that child's transform through its verified parent chain. In a long property linkset, a nearby visible child could be omitted from streaming because the root is distant. R67 shares a bounded, cycle-safe, finite 3D hierarchy resolver for interest and mesh-cache retention, reusing the same local-to-region rotation order as DX12 geometry. Root anchors no longer suppress legitimately nearby linked mesh, JPEG2000 and PBR references.
+5. Preserve R66 diagnostics and 2,048-primitive Quality fallback; no increases to world root retention, texture atlas or network-object recovery requests.
 
 ## Regression tests
 
@@ -19,6 +20,7 @@ A live property can retain many Second Life mesh references and show partially d
 - A valid 20,001-triangle static LOD decodes; oversized 60,001-triangle LOD remains rejected and cannot mutate the last valid output.
 - Existing malformed/missing medium fallback, invalid offset/deflate, UV, vertex-bound and DX12 scene tests remain intact.
 - Four-worker cap is compile-time checked against the shared scheduler's eight-active upper bound.
+- Linked transforms test a nearby child of a root beyond the streaming radius, full 90-degree parent rotation, nested child rotation/translation, missing parent, hierarchy cycle, invalid quaternion and avatar root rejection.
 - Native Windows CTest and Microsoft WARP forced DX12/PBR pixel checks must pass before downloading.
 
 ## Limitations
