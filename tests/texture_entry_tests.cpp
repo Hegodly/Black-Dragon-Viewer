@@ -33,5 +33,12 @@ int main(){
     invalid.push_back(0x80U); // unterminated face mask
     if(decode_base(invalid,parsed))return 6;
     if(decode_base({},parsed))return 7;
+    Base id{};
+    for(unsigned i=0;i<16U;++i)
+        id.image_id[i]=static_cast<std::uint8_t>(i+1U);
+    if(kami::protocol::texture::default_image_uuid(id)!=
+       "01020304-0506-0708-090a-0b0c0d0e0f10")return 8;
+    id={};
+    if(!kami::protocol::texture::default_image_uuid(id).empty())return 9;
     return 0;
 }
