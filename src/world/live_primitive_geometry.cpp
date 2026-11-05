@@ -256,13 +256,15 @@ PrimitiveBatch build_live_primitive_geometry(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     float agent_x,float agent_y,float agent_z,std::size_t limit,
     const std::set<std::uint32_t>& avatar_roots,
-    const std::map<std::string,std::uint16_t>& texture_layers,const PBRFaceIndices& pbr_faces){
+    const std::map<std::string,std::uint16_t>& texture_layers,const PBRFaceIndices& pbr_faces,
+    std::size_t max_vertices){
     PrimitiveBatch result{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return result;
-    // R32: larger closest-first batch with an upper bound on the DX12
-    // vertex workload. Mesh asset geometry remains a separate pipeline.
-    limit=std::min<std::size_t>(limit,2048U);
+    // R62: allow up to 4,080 real primitive shapes while keeping the
+    // shared DX12 vertex upload bounded even in sphere-heavy regions.
+    limit=std::min<std::size_t>(limit,kMaxQualityPrimitiveShapes);
+    max_vertices=std::min<std::size_t>(max_vertices,4000000U);
     struct Draw {const Transform* item;Pose pose;bool child;float distance;};
     std::vector<Draw> chosen;
     chosen.reserve(roots.size()+children.size());
@@ -321,8 +323,24 @@ PrimitiveBatch build_live_primitive_geometry(
         chosen.resize(limit);
     }
     auto& vertices=result.scene.vertices;
-    vertices.reserve(chosen.size()*1200U);
+    // Reserve for common low-poly shapes, not the 1,200-vertex sphere
+    // worst case multiplied by 4,080. Grow only when actually needed.
+    vertices.reserve(std::min(max_vertices,chosen.size()*120U));
     for(const auto& item:chosen){
+        std::size_t max_shape_vertices=0U;
+        switch(item.item->primitive){
+        case Kind::Box:max_shape_vertices=36U;break;
+        case Kind::Cylinder:max_shape_vertices=240U;break;
+        case Kind::Prism:max_shape_vertices=24U;break;
+        case Kind::Sphere:max_shape_vertices=1200U;break;
+        default:continue;
+        }
+        // Keep the previously validated scene alive instead of exceeding
+        // its DX12 vertex ceiling when many high-poly spheres arrive.
+        if(max_shape_vertices>max_vertices-vertices.size()){
+            ++result.budget_deferred_shapes;
+            continue;
+        }
         if(emit(vertices,*item.item,item.pose,origin,
                 texture_layers,result.textured_triangles,pbr_faces)){
             if(item.child)++result.linked_shapes;
