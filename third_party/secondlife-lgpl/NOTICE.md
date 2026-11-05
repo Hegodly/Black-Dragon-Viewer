@@ -65,3 +65,28 @@ the existing KAMI LLUDP circuit. It is not Linden Lab's full
 `LLMessageSystem`, simulator session, LLSD, EventQueue, object or asset
 handling. The full official networking backend remains unimplemented.
 
+
+## Active official LLNetworkData ExtraParams type compatibility DLL
+
+`KAMI_SL_ExtraParams.dll` is an LGPL 2.1 ONLY adapter for the official
+Linden Lab `LLNetworkData` type codes and `LLNetworkData::isValid`
+payload-size contracts from `indra/llprimitive/llprimitive.h` and
+`indra/llprimitive/llprimitive.cpp` in `secondlife/viewer`.
+The standalone parser adds strict framing/bounds validation and a simple
+fixed-size C ABI, but **does not copy or replace the full LLPrimitive,
+LLVolume, LLMessageSystem or asset loading implementations**.
+
+Copyright for the original type/length rules belongs to Linden Research,
+Inc.; the adapter code and bounds checks are contributed under the same
+LGPL 2.1 ONLY license. Upstream source: https://github.com/secondlife/viewer
+
+Release users must be able to inspect, replace and relink this DLL as the
+LGPL requires. The prototype archive includes
+`src/sl_reference/official_extra_params.cpp` and
+`include/kami/protocol/official_extra_params.h` (in `Source/lludp`).
+
+The adapter distinguishes genuine `0x30` sculpt mesh IDs from:
+`0x70` extended mesh flags, `0x80` PBR render-material metadata, and
+`0x90` reflection-probe metadata. It **does not** download those
+assets or implement PBR rendering; KAMI's full official SL backend remains
+incomplete.
