@@ -8,6 +8,7 @@
 #include "kami/protocol/avatar_appearance.hpp"
 #include "kami/protocol/load_scheduler.hpp"
 #include "kami/protocol/mesh_lod.hpp"
+#include "kami/protocol/texture_decode.hpp"
 #include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
 #include <winsock2.h>
@@ -109,6 +110,26 @@ public:
     }
     [[nodiscard]] const std::map<std::string,mesh::LOD>&
     decoded_mesh_assets() const noexcept {return loaded_meshes_;}
+    [[nodiscard]] bool set_texture_capability(std::wstring capability) noexcept;
+    [[nodiscard]] bool texture_capability_ready() const noexcept {
+        return !texture_capability_url_.empty();
+    }
+    // Authenticated JPEG2000 textures decoded on a background worker.
+    // CPU-ready does NOT mean uploaded to DX12 or bound to a face.
+    [[nodiscard]] const std::map<std::string,texture::DecodedTexture>&
+    decoded_texture_assets() const noexcept {return decoded_textures_;}
+    [[nodiscard]] std::size_t decoded_texture_count() const noexcept {
+        return decoded_textures_.size();
+    }
+    [[nodiscard]] std::size_t texture_download_count() const noexcept {
+        return texture_download_count_;
+    }
+    [[nodiscard]] std::size_t texture_failure_count() const noexcept {
+        return texture_failure_count_;
+    }
+    [[nodiscard]] load::Stats texture_asset_stats() const noexcept {
+        return texture_scheduler_.statistics();
+    }
     [[nodiscard]] std::size_t mesh_object_count() const noexcept {
         std::size_t count=0U;
         for(const auto& [id,obj]:spatial_objects_){
@@ -199,6 +220,9 @@ private:
     void maybe_send_agent_update() noexcept;
     void maybe_send_missing_object_requests() noexcept;
     void maybe_fetch_mesh() noexcept;
+    void maybe_fetch_texture() noexcept;
+    void schedule_visible_textures() noexcept;
+    void prune_decoded_textures() noexcept;
     void schedule_visible_meshes() noexcept;
     void prune_unreferenced_meshes() noexcept;
     [[nodiscard]] const objectspatial::Transform* world_mesh_anchor(
@@ -239,6 +263,26 @@ private:
     std::set<std::uint32_t> avatar_root_ids_; // known, never rendered
     std::uint32_t own_avatar_local_id_=0U; // verified against login UUID
     load::Scheduler mesh_scheduler_{};
+    load::Scheduler texture_scheduler_{};
+    std::wstring texture_capability_url_; // authenticated ViewerAsset bearer
+    struct TextureResult {
+        std::string id;
+        unsigned http_status=0U;
+        std::uint32_t bytes=0U;
+        bool fetched=false,decoded=false;
+        texture::DecodedTexture image{};
+    };
+    std::future<TextureResult> texture_worker_;
+    static constexpr std::size_t kMaxDecodedTextureAssets=24U;
+    static constexpr std::size_t kMaxDecodedTextureBytes=48U*1024U*1024U;
+    std::map<std::string,texture::DecodedTexture> decoded_textures_;
+    std::size_t decoded_texture_bytes_=0U;
+    std::size_t texture_download_count_=0U,texture_failure_count_=0U;
+    std::chrono::steady_clock::time_point texture_last_start_{};
+    std::uint64_t texture_scan_revision_=~std::uint64_t{0};
+    float texture_last_scan_x_=0.f,texture_last_scan_y_=0.f,
+          texture_last_scan_z_=0.f;
+    bool texture_last_scan_position_valid_=false;
     std::wstring mesh_capability_url_; // in-memory bearer only
     struct MeshResult {
         std::string id;
