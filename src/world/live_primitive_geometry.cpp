@@ -156,14 +156,7 @@ struct Emitter {
     }
 };
 void build_box(Emitter& e) {
-    const std::array<V,8> p={{
-      {-.5f,-.5f,-.5f},{.5f,-.5f,-.5f},
-      {.5f,.5f,-.5f},{-.5f,.5f,-.5f},
-      {-.5f,-.5f,.5f},{.5f,-.5f,.5f}
-    }};
-    // 6 independently addressable planar SL diffuse faces.
-    const std::array<V,2> top_left{{{-.5f,.5f,.5f},{.5f,.5f,.5f}}};
-    (void)top_left;
+    // Six independently addressable planar diffuse faces.
     const V z0{-.5f,-.5f,-.5f},z1{.5f,-.5f,-.5f},
             z2{.5f,.5f,-.5f},z3{-.5f,.5f,-.5f},
             z4{-.5f,-.5f,.5f},z5{.5f,-.5f,.5f},
@@ -534,19 +527,28 @@ MeshBatch build_live_mesh_geometry(
             for(unsigned v=0U;v<3U;++v){
                 const auto& p=points[v];
                 const auto& t=*item.transform;
-                const float red=t.base_tint_present?
+                float red=t.base_tint_present?
                     std::clamp(t.base_r,0.f,1.f):.80f;
-                const float green=t.base_tint_present?
+                float green=t.base_tint_present?
                     std::clamp(t.base_g,0.f,1.f):.87f;
-                const float blue=t.base_tint_present?
+                float blue=t.base_tint_present?
                     std::clamp(t.base_b,0.f,1.f):.96f;
+                if(face<t.face_rgba.size()&&t.face_rgba_present){
+                    red=t.face_rgba[face][0];
+                    green=t.face_rgba[face][1];
+                    blue=t.face_rgba[face][2];
+                }
                 const auto oi=original_index[v];
+                const auto tex_uv=triangle.has_uv?
+                    transform_diffuse_uv(triangle.uv[2U*oi],
+                        triangle.uv[2U*oi+1U],
+                        face<t.face_uv.size()?
+                        t.face_uv[face]:protocol::texture::UVTransform{}):
+                    UV{0.f,0.f};
                 verts.push_back({p.x,p.y,p.z,normal.x,normal.y,normal.z,
-                                 red,green,blue,.04f,.82f,
-                                 triangle.has_uv?triangle.uv[2U*oi]:0.f,
-                                 triangle.has_uv?triangle.uv[2U*oi+1U]:0.f,
-                                 0.f,0U,0U,
-                                 textured?static_cast<float>(selected_layer):0.f});
+                    red,green,blue,.04f,.82f,tex_uv[0],tex_uv[1],
+                    0.f,0U,0U,
+                    textured?static_cast<float>(selected_layer):0.f});
             }
             ++object_triangles;
             ++batch.emitted_triangles;
