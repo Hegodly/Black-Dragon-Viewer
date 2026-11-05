@@ -163,6 +163,26 @@ int main(){
         {{texture_id,7U}});
     if(no_uv.textured_triangles!=0U||
        no_uv.scene.vertices[0].texture_layer!=0.f)return 22;
+    // A face-specific override must take precedence over the default
+    // image UUID. Unloaded overrides safely fall back to layer zero.
+    roots[77U].face_texture_override[0]=true;
+    roots[77U].face_texture_asset_ids[0]="12345678-90ab-4cde-8fab-000000000098";
+    const auto per_face=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U,
+        {{texture_id,7U},{roots[77U].face_texture_asset_ids[0],11U}});
+    if(per_face.textured_triangles!=1U ||
+       per_face.scene.vertices[0].texture_layer!=11.f)return 23;
+    const auto missing_face=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U,
+        {{texture_id,7U}});
+    if(missing_face.textured_triangles!=0U||
+       missing_face.scene.vertices[0].texture_layer!=0.f)return 24;
+    roots[77U].face_texture_asset_ids[0].clear();
+    const auto null_face=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U,
+        {{texture_id,7U}});
+    if(null_face.textured_triangles!=0U||
+       null_face.scene.vertices[0].texture_layer!=0.f)return 25;
     roots[77U].mesh_asset_id.clear();
     Transform mesh_child_t{88U,1.f,0.f,0.f,1.f,1.f,1.f};
     mesh_child_t.parent_id=77U;
