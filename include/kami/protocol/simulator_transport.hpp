@@ -43,6 +43,17 @@ namespace detail {
     if(attempts_a!=attempts_b)return attempts_a<attempts_b;
     return sent_a<sent_b;
 }
+// Recovery priority is parent > cached object > speculative terse pose.
+// Preserve old attempt/backoff preference within each priority class.
+[[nodiscard]] inline bool prefer_parent_missing_request(
+    bool parent_a,bool important_a,unsigned attempts_a,
+    std::chrono::steady_clock::time_point sent_a,
+    bool parent_b,bool important_b,unsigned attempts_b,
+    std::chrono::steady_clock::time_point sent_b) noexcept {
+    if(parent_a!=parent_b)return parent_a;
+    return prefer_missing_request(important_a,attempts_a,sent_a,
+                                  important_b,attempts_b,sent_b);
+}
 [[nodiscard]] inline bool reclaim_missing_request(
     unsigned attempts,std::chrono::steady_clock::time_point sent_at,
     std::chrono::steady_clock::time_point now) noexcept {
@@ -58,10 +69,10 @@ public:
     // R63: 4,080 individually rooted primitives must reach the renderer.
     static constexpr std::size_t kMaxRootObjects=4096U;
     static constexpr std::size_t kMaxLinkedObjects=8192U;
-    // R65: 256 queued cache misses was exhausted on decorated regions.
-    // Retain more authenticated missing IDs, while each outbound packet
-    // remains strictly capped at 16 and transmission rate-limited.
-    static constexpr std::size_t kMaxMissingObjectRequests=1024U;
+    // R68: a decorated-region test saturated all 1,024 pending IDs.
+    // This is only a memory-bound tracking limit, NOT network batch size.
+    // Outbound RequestMultipleObjects remains <=16 IDs per 400ms.
+    static constexpr std::size_t kMaxMissingObjectRequests=4096U;
     // Bound HTTP mesh concurrency even though the shared scheduler can
     // track more downloads. Decode remains off the DX12 frame thread.
     static constexpr std::size_t kMaxConcurrentMeshWorkers=4U;
@@ -282,7 +293,8 @@ private:
     void prune_decoded_textures() noexcept;
     void schedule_visible_meshes() noexcept;
     void prune_unreferenced_meshes() noexcept;
-    void remember_missing_object(std::uint32_t id,bool important=true) noexcept;
+    void remember_missing_object(std::uint32_t id,bool important=true,
+                                 bool parent=false) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
     void retry_unacknowledged() noexcept;
@@ -391,6 +403,7 @@ private:
         // Missing cached objects and unresolved linkset roots take priority
         // over speculative requests from unknown terse movement packets.
         bool important=true;
+        bool parent=false; // unresolved linked-object hierarchy anchor
     };
     std::map<std::uint32_t,MissingObject> missing_objects_;
     std::uint32_t requested_object_ids_=0,cached_object_ids_=0;
