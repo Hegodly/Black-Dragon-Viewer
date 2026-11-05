@@ -35,6 +35,8 @@ struct Transform {
     // translucent material pass. No texture image is implied to be loaded.
     bool base_tint_present=false;
     float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
+    std::array<std::string,32U> face_material_ids{};
+    bool material_params_seen=false;
 };
 // Apply a compressed update without incorrectly restoring stale mesh and
 // primitive metadata from an earlier full update. Offline unit-testable.
@@ -105,3 +107,4 @@ struct TersePose {
 [[nodiscard]] bool decode_killed_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
 } // namespace kami::protocol::objectspatial
+

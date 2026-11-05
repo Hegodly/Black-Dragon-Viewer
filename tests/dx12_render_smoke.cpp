@@ -18,6 +18,19 @@
 // with synthetic pixels. No account, bearer token or network is involved.
 namespace kami::world {
 struct RendererPixelTestAccess {
+    static bool pbr_images(Renderer& r,const std::map<std::string,protocol::texture::DecodedTexture>& images,
+                           const std::map<std::string,std::uint16_t>& layers){
+        r.wait_for_gpu();const auto previous=r.live_texture_layers_;
+        r.live_texture_layers_=layers;
+        return r.make_material_texture(&images,&previous)==TextureUploadStatus::Committed;
+    }
+    static bool pbr_material(Renderer& r,const protocol::pbr::Material& material){
+        r.wait_for_gpu();
+        protocol::objectspatial::Transform t;t.local_id=1U;t.face_material_ids[0]="material";
+        const auto table=build_pbr_table({{1U,t}},{},{{"material",material}},{},r.live_texture_layers_);
+        r.pbr_rows_=table.rows;return r.make_material_records(r.pbr_rows_);
+    }
+    static bool blend_active(const Renderer& r){return !r.transparent_vertices_.empty();}
     static bool shadow_writes(Renderer& r,std::size_t& writes) {
         r.wait_for_gpu();
         auto* device=r.device_.native_device();
@@ -78,7 +91,8 @@ struct RendererPixelTestAccess {
 };
 }
 namespace {
-bool count_magenta(const std::wstring& file,std::size_t& result) {
+bool count_magenta(const std::wstring& file,std::size_t& result,
+    std::uint64_t* hash=nullptr,std::array<std::uint64_t,3>* sums=nullptr) {
     Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
     Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
     Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
@@ -96,13 +110,99 @@ bool count_magenta(const std::wstring& file,std::size_t& result) {
     std::vector<std::uint8_t> rgba(std::size_t(w)*h*4U);
     if(FAILED(converter->CopyPixels(nullptr,w*4U,
         static_cast<UINT>(rgba.size()),rgba.data())))return false;
-    result=0U;
-    for(std::size_t at=0U;at<rgba.size();at+=4U)
+    result=0U;if(hash)*hash=1469598103934665603ULL;if(sums)*sums={};
+    for(std::size_t at=0U;at<rgba.size();at+=4U){
+        for(unsigned channel=0U;channel<3U;++channel){
+            if(hash)*hash=(*hash^rgba[at+channel])*1099511628211ULL;
+            if(sums)(*sums)[channel]+=rgba[at+channel];
+        }
         if(rgba[at]>40U&&rgba[at+2U]>40U&&
            unsigned(rgba[at])>unsigned(rgba[at+1U])+40U&&
            unsigned(rgba[at+2U])>unsigned(rgba[at+1U])+40U)++result;
+    }
     return true;
 }
+
+bool check_pbr_pixels(kami::world::Renderer& renderer) {
+    using namespace kami;
+    graphics::Settings graphics;graphics.pbr=true;graphics.shadows=false;
+    graphics.animate_avatar=false;graphics.vsync=false;graphics.fps_limit=0U;
+    graphics.contact_ambient=false;graphics.diamond_glints=false;graphics.atmosphere_haze=false;
+    renderer.set_graphics(graphics);
+    camera::Settings camera;camera.head_tracking=false;camera.smoothing=0U;camera.collision=false;
+    renderer.set_camera_settings(camera);
+    std::array<std::string,8> ids;
+    for(unsigned i=0U;i<ids.size();++i)ids[i]="12345678-90ab-4cde-8fab-00000000000"+std::to_string(i+1U);
+    const auto image=[](std::array<std::uint8_t,4> pixel){
+        protocol::texture::DecodedTexture t;t.width=t.height=1U;
+        t.rgba.assign(pixel.begin(),pixel.end());return t;
+    };
+    std::map<std::string,protocol::texture::DecodedTexture> images{
+        {ids[0],image({255U,0U,255U,0U})},{ids[1],image({255U,0U,255U,255U})},
+        {ids[2],image({255U,64U,0U,255U})},{ids[3],image({255U,128U,128U,255U})},
+        {ids[4],image({0U,255U,0U,255U})},{ids[5],image({0U,255U,255U,255U})},
+        {ids[6],image({128U,128U,128U,255U})}};
+    protocol::texture::DecodedTexture pattern;pattern.width=pattern.height=2U;
+    pattern.rgba={255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
+    images.emplace(ids[7],pattern);
+    std::map<std::string,std::uint16_t> layers;
+    for(unsigned i=0U;i<ids.size();++i)layers.emplace(ids[i],static_cast<std::uint16_t>(i+1U));
+    if(!world::RendererPixelTestAccess::pbr_images(renderer,images,layers))return false;
+    auto scene=world::build_test_scene(8);scene.terrain_count=scene.vertices.size();scene.avatar_count=0U;
+    for(auto& v:scene.vertices){
+        v.pbr_material=1U;v.texture_layer=0.f;v.r=0.f;v.g=1.f;v.b=0.f;
+        v.bone_weights=0U;v.body_region=0.f;v.metallic=0.f;
+    }
+    wchar_t folder[MAX_PATH]{};if(!GetTempPathW(MAX_PATH,folder))return false;
+    const std::wstring target=std::wstring(folder)+L"KAMI-PBR-Pixel-Test.png";
+    struct Result {std::size_t magenta=0U;std::uint64_t hash=0U;std::array<std::uint64_t,3> sum{};};
+    const auto render=[&](const protocol::pbr::Material& material,Result& out){
+        if(!world::RendererPixelTestAccess::pbr_material(renderer,material)||
+           !renderer.set_creator_preview(scene)||!renderer.capture_png(target))return false;
+        renderer.draw();
+        const bool ok=renderer.ready()&&renderer.capture_status()==world::CaptureStatus::Saved&&
+            count_magenta(target,out.magenta,&out.hash,&out.sum);
+        std::error_code ignored;std::filesystem::remove(target,ignored);return ok;
+    };
+    protocol::pbr::Material m;m.double_sided=true;m.unlit=true;m.images[0]=ids[0];
+    Result opaque,mask,full,half,empty;
+    // OPAQUE must ignore image alpha. A green legacy tint must not replace
+    // the PBR material's magenta base map.
+    if(!render(m,opaque)||opaque.magenta<64U)return false;
+    m.alpha=1U;m.cutoff=.5f;
+    if(!render(m,mask)||mask.magenta!=0U)return false;
+    m.images[0]=ids[1];m.base[3]=.5f;m.cutoff=.75f;
+    if(!render(m,mask)||mask.magenta!=0U)return false;
+    m.cutoff=.25f;if(!render(m,full)||full.magenta<64U)return false;
+    m.alpha=2U;m.base[3]=0.f;
+    if(!render(m,empty)||empty.magenta!=0U||!world::RendererPixelTestAccess::blend_active(renderer))return false;
+    m.base[3]=1.f;if(!render(m,full))return false;
+    m.base[3]=.5f;if(!render(m,half))return false;
+    if(!(empty.sum[0]<half.sum[0]&&half.sum[0]<full.sum[0]))return false;
+    m.alpha=0U;m.base[3]=1.f;m.images[0]=ids[7];
+    Result uv0,uv1;if(!render(m,uv0))return false;
+    m.uv[0].scale={2.f,3.f};m.uv[0].offset={.23f,.41f};m.uv[0].rotation=.3f;
+    if(!render(m,uv1)||uv0.hash==uv1.hash)return false;
+    // Repeat the baseline to prove animation/camera drift cannot make a
+    // missing map appear to pass these pixel-difference checks.
+    m=protocol::pbr::Material{};m.double_sided=true;m.base={.8f,.5f,.3f,1.f};
+    m.metallic=.8f;m.roughness=.5f;
+    Result baseline,repeated,orm,normal,ao,emission,off;
+    if(!render(m,baseline)||!render(m,repeated)||baseline.hash!=repeated.hash)return false;
+    m.images[2]=ids[2];if(!render(m,orm)||orm.hash==baseline.hash)return false;
+    m.images[2].clear();m.images[1]=ids[3];
+    if(!render(m,normal)||normal.hash==baseline.hash)return false;
+    m.images[1].clear();m.images[4]=ids[5];
+    if(!render(m,ao)||ao.hash==baseline.hash)return false;
+    m.images[4].clear();m.emissive={0.f,1.f,0.f};m.images[3]=ids[4];
+    if(!render(m,emission)||emission.sum[1]<=baseline.sum[1])return false;
+    graphics.pbr=false;renderer.set_graphics(graphics);
+    if(!render(m,off)||off.hash==emission.hash)return false;
+    renderer.clear_creator_preview();
+    std::wcout<<L"KAMI PBR PIXELS VERIFIED: base color, transforms, normal, ORM, AO, emissive, OPAQUE/MASK/BLEND and PBR toggle\n";
+    return true;
+}
+
 bool check_sampled_pixels(kami::world::Renderer& renderer) {
     auto graphics=kami::graphics::Settings{};
     graphics.pbr=false;graphics.shadows=true;graphics.animate_avatar=false;
@@ -448,6 +548,7 @@ int main(int argc,char** argv) {
                     }
                 }
                 if(!result&&!check_sampled_pixels(renderer))result=32;
+                if(!result&&!check_pbr_pixels(renderer)){std::wcerr<<L"PBR pixel regression failed\n";result=33;}
                 if(!result) std::wcout
                     <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":L"KAMI DX12 SMOKE PASS")
                     <<L" - adapter: "<<renderer.adapter_name()

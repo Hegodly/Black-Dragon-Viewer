@@ -621,6 +621,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               L"/"+std::to_wstring(protocol::texture::kGPUImageLayers)+
               L" | textured triangles "+std::to_wstring(
                   world_renderer_.uploaded_textured_triangles())+
+              L" | PBR assets "+std::to_wstring(sl_circuit_.decoded_materials().size())+
+              L" faces "+std::to_wstring(world_renderer_.bound_pbr_faces())+
+              L" failures "+std::to_wstring(sl_circuit_.material_failures())+
               L" | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
@@ -2349,3 +2352,4 @@ void Window::click(float x, float y) {
     }
 }
 } // namespace kami::app
+

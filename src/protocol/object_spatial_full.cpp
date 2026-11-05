@@ -1,4 +1,5 @@
 #include "kami/protocol/object_spatial.hpp"
+#include "kami/protocol/pbr_material.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
 #include "kami/protocol/texture_entry.hpp"
@@ -245,7 +246,10 @@ bool decode_full_transforms(const lludp::Packet& packet,
         }
         // A corrupt sculpt envelope may conceal mesh topology. Never
         // render a guessed primitive for such an object.
-        if(extras_valid)t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+        if(extras_valid){
+            t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
+            t.material_params_seen=pbr::decode_face_ids(extras,t.face_material_ids);
+        }
         else t.primitive=PrimitiveKind::Unknown;
         if(!t.mesh_asset_id.empty()){
             t.primitive=PrimitiveKind::Unknown;
@@ -335,3 +339,4 @@ bool decode_full_transforms(const lludp::Packet& packet,
     return true;
 }
 } // namespace kami::protocol::objectspatial
+

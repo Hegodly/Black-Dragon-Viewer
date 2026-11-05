@@ -110,7 +110,9 @@ struct MeshReply {
     std::span<const std::uint8_t> bytes) noexcept;
 [[nodiscard]] MeshReply fetch_texture_asset(std::wstring capability_url,
                                             std::string texture_id);
+[[nodiscard]] MeshReply fetch_material_asset(std::wstring capability_url,std::string material_id);
 [[nodiscard]] SeedResponse request_seed(std::wstring seed_url);
 [[nodiscard]] PollResponse probe_event_queue_once(
     std::wstring queue_url,const QueueCursor& previous={});
 }
+

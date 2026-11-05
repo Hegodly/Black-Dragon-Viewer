@@ -14,6 +14,7 @@ struct Vertex {
     std::uint32_t bone_indices=0;
     std::uint32_t bone_weights=0; // packed normalized UNORM8 x4; zero=unrigged
     float texture_layer=0.f; // 0=original procedural fallback, >0=validated SL albedo
+    std::uint32_t pbr_material=0U; // structured material record; zero is legacy TE
 };
 struct SceneMesh {
     std::vector<Vertex> vertices;
@@ -35,3 +36,4 @@ struct SceneMesh {
     float relative_water_y,float agent_x,float agent_y);
 [[nodiscard]] float sample_test_terrain_height(float x, float z) noexcept;
 } // namespace kami::world
+

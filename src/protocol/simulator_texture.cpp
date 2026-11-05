@@ -93,9 +93,14 @@ void Circuit::schedule_visible_textures() noexcept {
                 // UVs and overridden defaults must not occupy the cache.
                 for(unsigned face=0U;face<32U;++face)
                     if(mask&(std::uint32_t{1}<<face))
-                        record(t.face_texture_override[face]?
-                            t.face_texture_asset_ids[face]:
-                            t.default_texture_asset_id,distance);
+                    {
+                        pbr::Material material;
+                        if(pbr::effective(t.face_material_ids[face],t.local_id,face,
+                            loaded_materials_,material_overrides_,material)){
+                            for(const auto& image:material.images)record(image,distance);
+                        }else record(t.face_texture_override[face]?
+                            t.face_texture_asset_ids[face]:t.default_texture_asset_id,distance);
+                    }
             }
         };
         scan(spatial_objects_);
@@ -242,3 +247,4 @@ void Circuit::maybe_fetch_texture() noexcept {
     }
 }
 } // namespace kami::protocol::sim
+

@@ -4,6 +4,7 @@
 #include "kami/protocol/mesh_lod.hpp"
 #include "kami/protocol/texture_decode.hpp"
 #include "kami/world/scene.hpp"
+#include "kami/world/pbr_material_table.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -34,7 +35,8 @@ struct PrimitiveBatch {
     float agent_x,float agent_y,float agent_z,
     std::size_t limit=128U,
     const std::set<std::uint32_t>& avatar_roots={},
-    const std::map<std::string,std::uint16_t>& texture_layers={});
+    const std::map<std::string,std::uint16_t>& texture_layers={},
+    const PBRFaceIndices& pbr_faces={});
 // Select decoded JPEG2000 image IDs actually used by visible static mesh
 // AND supported simple prim faces. Prioritize distance, not UUID ordering of
 // the CPU cache. Preserve existing DX12 array slice numbers when possible
@@ -48,7 +50,8 @@ select_visible_mesh_texture_layers(
     const std::map<std::string,protocol::texture::DecodedTexture>& decoded,
     float agent_x,float agent_y,float agent_z,
     std::size_t max_layers=protocol::texture::kGPUImageLayers,
-    const std::map<std::string,std::uint16_t>& previous={});
+    const std::map<std::string,std::uint16_t>& previous={},
+    const protocol::pbr::Materials& materials={},const protocol::pbr::Overrides& overrides={});
 
 struct MeshBatch {
     SceneMesh scene{};
@@ -65,5 +68,7 @@ struct MeshBatch {
     const std::map<std::string,protocol::mesh::LOD>& loaded,
     float agent_x,float agent_y,float agent_z,
     std::size_t max_triangles=18000U,
-    const std::map<std::string,std::uint16_t>& texture_layers={});
+    const std::map<std::string,std::uint16_t>& texture_layers={},
+    const PBRFaceIndices& pbr_faces={});
 } // namespace kami::world
+

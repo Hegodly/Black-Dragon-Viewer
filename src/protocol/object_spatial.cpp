@@ -1,4 +1,5 @@
 #include "kami/protocol/object_spatial.hpp"
+#include "kami/protocol/pbr_material.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
 #include "kami/protocol/texture_entry.hpp"
@@ -55,6 +56,8 @@ bool sane_child(const Transform& p) noexcept {
 // This conservative reader declines unknown variable-sized particle fields
 // rather than scanning for a UUID pattern (which could invent a mesh).
 struct CompressedVolume {
+    std::array<std::string,32U> face_material_ids{};
+    bool material_params_seen=false;
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
@@ -136,6 +139,7 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     out.extra_records=summary.records;
     out.sculpt_records=summary.sculpt;
     out.extras=true;
+    out.material_params_seen=pbr::decode_face_ids(extras,out.face_material_ids);
     out.mesh=mesh::mesh_asset_from_extras(extras);
     // LLViewerObject processes sound and NV fields BEFORE
     // LLVOVolume::unpackVolumeParams() consumes 23 shape bytes.
@@ -233,6 +237,8 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.parent_id=parent;
         const auto shape=decode_volume_tail(data,cursor,special);
         t.mesh_asset_id=shape.mesh;
+        t.face_material_ids=shape.face_material_ids;
+        t.material_params_seen=shape.material_params_seen;
         t.primitive=shape.primitive;
         t.volume_params_seen=shape.shape;
         t.default_texture_present=shape.default_texture_present;
@@ -283,6 +289,7 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.default_texture_asset_id==b.default_texture_asset_id&&
         a.face_texture_asset_ids==b.face_texture_asset_ids&&
         a.face_texture_override==b.face_texture_override&&
+        a.face_material_ids==b.face_material_ids&&a.material_params_seen==b.material_params_seen&&
         a.face_uv==b.face_uv&&a.face_rgba==b.face_rgba&&
         a.face_rgba_present==b.face_rgba_present&&
         a.base_tint_present==b.base_tint_present&&
@@ -299,6 +306,10 @@ Transform merge_compressed_transform(
         if(merged.mesh_asset_id.empty())
             merged.mesh_asset_id=previous.mesh_asset_id;
         merged.volume_params_seen=previous.volume_params_seen;
+    }
+    if(!incoming.material_params_seen){
+        merged.face_material_ids=previous.face_material_ids;
+        merged.material_params_seen=previous.material_params_seen;
     }
     merged.default_texture_present=
         merged.default_texture_present||previous.default_texture_present;
@@ -356,3 +367,4 @@ bool decode_killed_ids(const lludp::Packet& packet,
     return true;
 }
 } // namespace kami::protocol::objectspatial
+

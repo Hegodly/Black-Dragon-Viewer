@@ -9,6 +9,7 @@
 #include "kami/protocol/load_scheduler.hpp"
 #include "kami/protocol/mesh_lod.hpp"
 #include "kami/protocol/texture_decode.hpp"
+#include "kami/protocol/pbr_material.hpp"
 #include "kami/protocol/texture_budget.hpp"
 #include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
@@ -138,6 +139,9 @@ public:
     [[nodiscard]] bool texture_capability_ready() const noexcept {
         return !texture_capability_url_.empty();
     }
+    [[nodiscard]] const pbr::Materials& decoded_materials() const noexcept {return loaded_materials_;}
+    [[nodiscard]] const pbr::Overrides& material_overrides() const noexcept {return material_overrides_;}
+    [[nodiscard]] std::size_t material_failures() const noexcept {return material_failures_;}
     // Authenticated JPEG2000 textures decoded on a background worker.
     // CPU-ready does NOT mean uploaded to DX12 or bound to a face.
     [[nodiscard]] const std::map<std::string,texture::DecodedTexture>&
@@ -250,6 +254,7 @@ private:
     void maybe_send_agent_update() noexcept;
     void maybe_send_missing_object_requests() noexcept;
     void maybe_fetch_mesh() noexcept;
+    void maybe_fetch_material() noexcept;
     void maybe_fetch_texture() noexcept;
     void schedule_visible_textures() noexcept;
     void prune_decoded_textures() noexcept;
@@ -295,6 +300,17 @@ private:
     std::uint64_t dropped_root_updates_=0U,dropped_linked_updates_=0U;
     load::Scheduler mesh_scheduler_{};
     load::Scheduler texture_scheduler_{};
+    pbr::Materials loaded_materials_;
+    pbr::Overrides material_overrides_;
+    struct MaterialResult {
+        std::string id;unsigned status=0U;bool fetched=false,decoded=false;
+        pbr::Material material{};
+    };
+    std::future<MaterialResult> material_worker_;
+    struct MaterialAttempt {unsigned tries=0U;std::chrono::steady_clock::time_point next{};};
+    std::map<std::string,MaterialAttempt> material_attempts_;
+    std::size_t material_failures_=0U;
+    std::chrono::steady_clock::time_point material_last_scan_{};
     std::wstring texture_capability_url_; // authenticated ViewerAsset bearer
     struct TextureResult {
         std::string id;
@@ -370,3 +386,4 @@ private:
     std::chrono::steady_clock::time_point started_{};
 };
 } // namespace kami::protocol::sim
+

@@ -10,6 +10,7 @@
 #include "kami/features/rig_diagnostics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
+#include "kami/world/pbr_material_table.hpp"
 #include "kami/protocol/texture_decode.hpp"
 #include "kami/protocol/texture_budget.hpp"
 #include "kami/world/region_geometry.hpp"
@@ -147,6 +148,7 @@ public:
     [[nodiscard]] std::size_t bound_sl_texture_assets() const noexcept {
         return region_mesh_?live_texture_layers_.size():0U;
     }
+    [[nodiscard]] std::size_t bound_pbr_faces() const noexcept {return region_mesh_?bound_pbr_faces_:0U;}
     [[nodiscard]] std::size_t uploaded_textured_triangles() const noexcept {
         return region_mesh_?uploaded_textured_triangles_:0U;
     }
@@ -214,7 +216,7 @@ public:
     }
     [[nodiscard]] const std::wstring& error() const noexcept { return error_; }
     [[nodiscard]] std::size_t vertex_count() const noexcept {
-        return terrain_count_ + avatar_count_;
+        return terrain_count_ + avatar_count_ + transparent_vertices_.size();
     }
 
 private:
@@ -231,6 +233,8 @@ private:
     [[nodiscard]] TextureUploadStatus make_material_texture(
         const std::map<std::string,protocol::texture::DecodedTexture>* images=nullptr,
         const std::map<std::string,std::uint16_t>* previous_layers=nullptr);
+    [[nodiscard]] bool make_material_records(const std::vector<PBRRow>& rows);
+    [[nodiscard]] bool sort_blended_geometry(float x,float y,float z);
     [[nodiscard]] bool make_skin_palette();
     [[nodiscard]] bool update_skin_palette() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
@@ -265,6 +269,9 @@ private:
     std::size_t uploaded_mesh_triangles_=0;
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
+    std::vector<PBRRow> pbr_rows_=std::vector<PBRRow>(protocol::pbr::kRows);
+    std::size_t bound_pbr_faces_=0U;
+    std::vector<Vertex> transparent_vertices_;
     bool texture_upload_pending_=false;
     static constexpr UINT kLiveTextureLayers=protocol::texture::kGPUImageLayers;
     static constexpr UINT kLiveTextureSize=protocol::texture::kPreviewExtent;
@@ -300,8 +307,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> material_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> material_upload_;
     Microsoft::WRL::ComPtr<ID3D12Resource> skin_palette_buffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> material_records_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> shadow_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator_;

@@ -97,6 +97,7 @@ struct Emitter {
     V half;
     V origin;
     std::size_t& textured_triangles;
+    const PBRFaceIndices& pbr_faces;
     float red=.78f,green=.83f,blue=.92f;
     V transform(V v) const noexcept {
         return add(pose.pos,rotate(pose.rot,
@@ -123,8 +124,10 @@ struct Emitter {
         if(len<1.e-6f||!std::isfinite(len))return;
         normal=scale(normal,1.f/len);
         if(!finite(a)||!finite(b)||!finite(c))return;
-        // A fully invisible SL face must neither occlude nor cast shadows.
-        if(material.face_rgba_present&&face<material.face_rgba.size()&&
+        const auto pbr=pbr_faces.find(pbr_face_key(material.local_id,face));
+        const auto material_index=pbr==pbr_faces.end()?0U:pbr->second;
+        // Legacy face opacity does not replace glTF material alpha.
+        if(material_index==0U&&material.face_rgba_present&&face<material.face_rgba.size()&&
            material.face_rgba[face][3]<=0.f)return;
         const auto& name=face<material.face_texture_override.size()&&
                            material.face_texture_override[face]?
@@ -145,10 +148,10 @@ struct Emitter {
             bl=material.face_rgba[face][2];
         }
         for(unsigned i=0U;i<3U;++i){
-            const auto uv=transform_diffuse_uv(coords[i][0],coords[i][1],uv_param);
+            const auto uv=material_index?coords[i]:transform_diffuse_uv(coords[i][0],coords[i][1],uv_param);
             out.push_back({positions[i].x,positions[i].y,positions[i].z,
                 normal.x,normal.y,normal.z,r,g,bl,.06f,.79f,
-                uv[0],uv[1],0.f,0U,0U,static_cast<float>(layer)});
+                uv[0],uv[1],0.f,0U,0U,static_cast<float>(layer),material_index});
         }
         if(layer>0U)++textured_triangles;
     }
@@ -227,12 +230,12 @@ void build_sphere(Emitter& e){
 }
 bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
           const std::map<std::string,std::uint16_t>& layers,
-          std::size_t& textured_triangles){
+          std::size_t& textured_triangles,const PBRFaceIndices& pbr_faces){
     if(t.primitive==Kind::Unknown||!valid_quat(p.rot)||!finite(p.pos))
         return false;
     const std::size_t start=out.size();
     Emitter e{out,t,layers,p,
-              {t.sx*.5f,t.sy*.5f,t.sz*.5f},origin,textured_triangles};
+              {t.sx*.5f,t.sy*.5f,t.sz*.5f},origin,textured_triangles,pbr_faces};
     if(t.base_tint_present){
         e.red=std::clamp(t.base_r,0.f,1.f);
         e.green=std::clamp(t.base_g,0.f,1.f);
@@ -253,7 +256,7 @@ PrimitiveBatch build_live_primitive_geometry(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     float agent_x,float agent_y,float agent_z,std::size_t limit,
     const std::set<std::uint32_t>& avatar_roots,
-    const std::map<std::string,std::uint16_t>& texture_layers){
+    const std::map<std::string,std::uint16_t>& texture_layers,const PBRFaceIndices& pbr_faces){
     PrimitiveBatch result{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return result;
@@ -321,7 +324,7 @@ PrimitiveBatch build_live_primitive_geometry(
     vertices.reserve(chosen.size()*1200U);
     for(const auto& item:chosen){
         if(emit(vertices,*item.item,item.pose,origin,
-                texture_layers,result.textured_triangles)){
+                texture_layers,result.textured_triangles,pbr_faces)){
             if(item.child)++result.linked_shapes;
             else ++result.root_shapes;
         }
@@ -338,7 +341,8 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     const std::map<std::string,protocol::texture::DecodedTexture>& decoded,
     float agent_x,float agent_y,float agent_z,
     std::size_t max_layers,
-    const std::map<std::string,std::uint16_t>& previous) {
+    const std::map<std::string,std::uint16_t>& previous,
+    const protocol::pbr::Materials& materials,const protocol::pbr::Overrides& overrides) {
     // Keep the original single-draw DX12 array budget (slice 0 is the
     // procedural fallback). Never select textures based on UUID sorting.
     max_layers=std::min<std::size_t>(max_layers,protocol::texture::kGPUImageLayers);
@@ -384,8 +388,12 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
         if(mask==0U)return;
         for(unsigned f=0U;f<32U;++f){
             if((mask&(std::uint32_t{1}<<f))==0U)continue;
-            const auto& uuid=t.face_texture_override[f]?
-                t.face_texture_asset_ids[f]:t.default_texture_asset_id;
+            protocol::pbr::Material material;
+            const bool gltf=protocol::pbr::effective(t.face_material_ids[f],t.local_id,f,materials,overrides,material);
+            std::vector<std::string> demand;
+            if(gltf)demand.assign(material.images.begin(),material.images.end());
+            else demand.push_back(t.face_texture_override[f]?t.face_texture_asset_ids[f]:t.default_texture_asset_id);
+            for(const auto& uuid:demand){
             if(uuid.empty())continue; // explicit null UUID is not default
             const auto image=decoded.find(uuid);
             if(image==decoded.end())continue;
@@ -396,6 +404,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
                bitmap.rgba.size()!=pixels*4U)continue;
             const auto [it,inserted]=nearest.try_emplace(uuid,distance);
             if(!inserted)it->second=std::min(it->second,distance);
+            }
         }
     };
     for(const auto& [id,root]:roots){
@@ -451,7 +460,7 @@ MeshBatch build_live_mesh_geometry(
     const std::set<std::uint32_t>& avatar_roots,
     const std::map<std::string,protocol::mesh::LOD>& loaded,
     float agent_x,float agent_y,float agent_z,std::size_t max_triangles,
-    const std::map<std::string,std::uint16_t>& texture_layers){
+    const std::map<std::string,std::uint16_t>& texture_layers,const PBRFaceIndices& pbr_faces){
     MeshBatch batch{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return batch;
@@ -499,7 +508,9 @@ MeshBatch build_live_mesh_geometry(
             // explicit null override must never fall back to its parent.
             const unsigned face=triangle.face_index;
             const auto& obj=*item.transform;
-            if(obj.face_rgba_present&&face<obj.face_rgba.size()&&
+            const auto pbr=pbr_faces.find(pbr_face_key(obj.local_id,face));
+            const auto material_index=pbr==pbr_faces.end()?0U:pbr->second;
+            if(material_index==0U&&obj.face_rgba_present&&face<obj.face_rgba.size()&&
                obj.face_rgba[face][3]<=0.f)continue;
             const std::string& texture_id=
                 face<obj.face_texture_override.size()&&
@@ -548,7 +559,8 @@ MeshBatch build_live_mesh_geometry(
                     blue=t.face_rgba[face][2];
                 }
                 const auto oi=original_index[v];
-                const auto tex_uv=triangle.has_uv?
+                const auto tex_uv=material_index&&triangle.has_uv?
+                    UV{triangle.uv[2U*oi],triangle.uv[2U*oi+1U]}:triangle.has_uv?
                     transform_diffuse_uv(triangle.uv[2U*oi],
                         triangle.uv[2U*oi+1U],
                         face<t.face_uv.size()?
@@ -557,7 +569,7 @@ MeshBatch build_live_mesh_geometry(
                 verts.push_back({p.x,p.y,p.z,normal.x,normal.y,normal.z,
                     red,green,blue,.04f,.82f,tex_uv[0],tex_uv[1],
                     0.f,0U,0U,
-                    textured?static_cast<float>(selected_layer):0.f});
+                    textured?static_cast<float>(selected_layer):0.f,material_index});
             }
             ++object_triangles;
             ++batch.emitted_triangles;

@@ -32,7 +32,7 @@ bool known_size_valid(std::uint16_t type,std::uint32_t size) noexcept {
     case PARAMS_MESH: return size==17U;
     case PARAMS_LIGHT_IMAGE: return size==28U;
     case PARAMS_EXTENDED_MESH: return size==4U;
-    case PARAMS_RENDER_MATERIAL: return size>1U;
+    case PARAMS_RENDER_MATERIAL: return size>=1U;
     case PARAMS_REFLECTION_PROBE: return size==9U;
     default:return true; // forward compatibility for opaque records
     }
@@ -102,3 +102,4 @@ kami_sl_decode_extra_params_v1(const std::uint8_t* bytes,
     *output=tmp;
     return 1;
 }
+

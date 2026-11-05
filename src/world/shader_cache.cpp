@@ -129,7 +129,7 @@ bool root_signature(ID3D12Device* device,
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_DESCRIPTOR_RANGE shadow_range{};
     shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    shadow_range.NumDescriptors=3;
+    shadow_range.NumDescriptors=4;
     shadow_range.BaseShaderRegister=0;
     shadow_range.OffsetInDescriptorsFromTableStart=D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     D3D12_ROOT_PARAMETER parameters[2]{};
@@ -178,12 +178,12 @@ bool root_signature(ID3D12Device* device,
 D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc(
     ID3D12RootSignature* root,
     const std::vector<char>& vs,const std::vector<char>& ps,
-    const D3D12_INPUT_ELEMENT_DESC* input) {
+    const D3D12_INPUT_ELEMENT_DESC* input,bool blend) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature=root;
     desc.VS={vs.data(),vs.size()};
     desc.PS={ps.data(),ps.size()};
-    desc.InputLayout={input,9};
+    desc.InputLayout={input,10};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.FrontCounterClockwise=FALSE;
@@ -198,6 +198,13 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc(
     desc.RTVFormats[0]=kColorFormat;
     desc.DSVFormat=kDepthFormat;
     desc.SampleDesc.Count=1;
+    if(blend){
+        auto& target=desc.BlendState.RenderTarget[0];target.BlendEnable=TRUE;
+        target.SrcBlend=D3D12_BLEND_SRC_ALPHA;target.DestBlend=D3D12_BLEND_INV_SRC_ALPHA;
+        target.BlendOp=D3D12_BLEND_OP_ADD;target.SrcBlendAlpha=D3D12_BLEND_ONE;
+        target.DestBlendAlpha=D3D12_BLEND_INV_SRC_ALPHA;target.BlendOpAlpha=D3D12_BLEND_OP_ADD;
+        desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO;
+    }
     return desc;
 }
 } // namespace
@@ -211,7 +218,7 @@ bool ShaderCache::prepare(
     ID3D12Device* device,
     Microsoft::WRL::ComPtr<ID3D12RootSignature>& signature,
     Microsoft::WRL::ComPtr<ID3D12PipelineState>& pipeline,
-    ShaderPreparation& report,const Progress& progress) {
+    ShaderPreparation& report,const Progress& progress,bool blend) {
     report={};
     if(!device) { report.error=L"No DirectX 12 device";return false; }
     auto notify=[&](unsigned percent,const wchar_t* label) {
@@ -222,7 +229,7 @@ bool ShaderCache::prepare(
     if(report.gpu_name.empty()) report.gpu_name=L"DirectX 12 device";
     const auto vs_path=dir.empty()?fs::path{}:dir/L"vertex.cso";
     const auto ps_path=dir.empty()?fs::path{}:dir/L"pixel.cso";
-    const auto pso_path=dir.empty()?fs::path{}:dir/L"scene.pso";
+    const auto pso_path=dir.empty()?fs::path{}:dir/(blend?L"scene_blend.pso":L"scene.pso");
 
     if(!root_signature(device,signature)) {
         report.error=L"Could not create DX12 scene root signature";
@@ -256,9 +263,18 @@ bool ShaderCache::prepare(
         {"BLENDWEIGHT",0,DXGI_FORMAT_R32_UINT,0,60,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"TEXCOORD",2,DXGI_FORMAT_R32_FLOAT,0,64,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",3,DXGI_FORMAT_R32_UINT,0,68,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
-    auto desc=pipeline_desc(signature.Get(),vs,ps,input);
+    auto desc=pipeline_desc(signature.Get(),vs,ps,input,blend);
+    if(blend){
+        auto& target=desc.BlendState.RenderTarget[0];target.BlendEnable=TRUE;
+        target.SrcBlend=D3D12_BLEND_SRC_ALPHA;target.DestBlend=D3D12_BLEND_INV_SRC_ALPHA;
+        target.BlendOp=D3D12_BLEND_OP_ADD;target.SrcBlendAlpha=D3D12_BLEND_ONE;
+        target.DestBlendAlpha=D3D12_BLEND_INV_SRC_ALPHA;target.BlendOpAlpha=D3D12_BLEND_OP_ADD;
+        desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO;
+    }
     notify(71,L"Preparing hardware-optimized graphics pipeline");
     std::vector<char> cached=dir.empty()?std::vector<char>{}:read(pso_path,kMaxPipelineBytes);
     if(!cached.empty()) {
@@ -283,7 +299,7 @@ bool ShaderCache::prepare(
         if(has_vs || has_ps) {
             if(!compile("vertex_main","vs_5_0",vs,report.error) ||
                !compile("pixel_main","ps_5_0",ps,report.error)) return false;
-            desc=pipeline_desc(signature.Get(),vs,ps,input);
+            desc=pipeline_desc(signature.Get(),vs,ps,input,blend);
             if(FAILED(device->CreateGraphicsPipelineState(
                 &desc,IID_PPV_ARGS(pipeline.ReleaseAndGetAddressOf())))) {
                 report.error=L"DirectX 12 graphics pipeline compilation failed";
@@ -350,13 +366,15 @@ bool ShaderCache::prepare_shadow(
         {"BLENDWEIGHT",0,DXGI_FORMAT_R32_UINT,0,60,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"TEXCOORD",2,DXGI_FORMAT_R32_FLOAT,0,64,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",3,DXGI_FORMAT_R32_UINT,0,68,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature=signature;
     desc.VS={vs.data(),vs.size()};
     desc.PS={ps.data(),ps.size()};
-    desc.InputLayout={input,9};
+    desc.InputLayout={input,10};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.DepthClipEnable=TRUE;
