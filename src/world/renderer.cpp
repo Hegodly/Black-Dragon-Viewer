@@ -174,7 +174,17 @@ bool Renderer::make_material_texture(
     constexpr UINT tw=kLiveTextureSize,th=kLiveTextureSize;
     constexpr UINT slices=kLiveTextureLayers+1U;
     auto* dev=device_.native_device();
-    if(!dev||!shadow_srv_heap_||!allocator_||!commands_)return false;
+    if(!dev||!shadow_srv_heap_||!texture_copy_allocator_||
+       !texture_copy_commands_||!fence_)return false;
+    // Never reset a copy command allocator while the GPU still uses it.
+    // The normal draw loop fences after presenting, so this branch only
+    // defers an unusually rapid second texture update, without stalling.
+    if(texture_copy_submitted_fence_!=0U){
+        if(fence_->GetCompletedValue()<texture_copy_submitted_fence_)
+            return false;
+        material_upload_.Reset();
+        texture_copy_submitted_fence_=0U;
+    }
     const bool incremental=material_texture_&&previous_layers;
     std::vector<std::uint16_t> dirty;
     if(incremental)
@@ -270,14 +280,16 @@ bool Renderer::make_material_texture(
     }
     const D3D12_RANGE written{0,static_cast<SIZE_T>(upload_size)};
     staging->Unmap(0,&written);
-    if(FAILED(allocator_->Reset())||
-       FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get())))
+    if(FAILED(texture_copy_allocator_->Reset())||
+       FAILED(texture_copy_commands_->Reset(
+           texture_copy_allocator_.Get(),nullptr)))
        return false;
+    auto* copy=texture_copy_commands_.Get();
     if(incremental){
         const auto copying=barrier(image_gpu.Get(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_COPY_DEST);
-        commands_->ResourceBarrier(1,&copying);
+        copy->ResourceBarrier(1,&copying);
     }
     for(std::size_t index=0U;index<dirty.size();++index){
         const UINT layer=dirty[index];
@@ -290,18 +302,27 @@ bool Renderer::make_material_texture(
         src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src.PlacedFootprint=footprint;
         src.PlacedFootprint.Offset=UINT64(index)*one_size;
-        commands_->CopyTextureRegion(&dest,0,0,0,&src,nullptr);
+        copy->CopyTextureRegion(&dest,0,0,0,&src,nullptr);
     }
     const auto ready=barrier(image_gpu.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    commands_->ResourceBarrier(1,&ready);
-    if(FAILED(commands_->Close()))return false;
-    ID3D12CommandList* lists[]={commands_.Get()};
+    copy->ResourceBarrier(1,&ready);
+    if(FAILED(copy->Close()))return false;
+    ID3D12CommandList* lists[]={copy};
+    // Copy and graphics draw use the SAME ordered queue. No CPU wait is
+    // required here: the following draw sees the updated texture state.
     device_.graphics_queue()->ExecuteCommandLists(1,lists);
-    // Fence the staging upload. Existing SRV remains valid when doing a
-    // partial update, so other textures and descriptor handles are stable.
-    wait_for_gpu();
+    // Hold the upload heap until the copy fence completes. Do not free
+    // it at function scope or reuse the allocator before that fence.
+    material_upload_=std::move(staging);
+    const auto signal=++fence_counter_;
+    if(FAILED(device_.graphics_queue()->Signal(fence_.Get(),signal))){
+        ready_=false;
+        error_=L"DX12 texture copy fence signal failed";
+        return false;
+    }
+    texture_copy_submitted_fence_=signal;
     if(!incremental){
         D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
         srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -315,7 +336,6 @@ bool Renderer::make_material_texture(
         dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
         material_texture_=std::move(image_gpu);
     }
-    material_upload_.Reset();
     return true;
 }
 
