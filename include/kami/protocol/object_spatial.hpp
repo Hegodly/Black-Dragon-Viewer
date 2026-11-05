@@ -29,6 +29,7 @@ struct Transform {
     // Authentic SL diffuse TextureEntry parameters per numbered face.
     std::array<texture::UVTransform,32U> face_uv{};
     std::array<std::array<float,4U>,32U> face_rgba{};
+    bool face_rgba_present=false;
     // Authentic default TextureEntry tint (per-face overrides unavailable).
     // RGB is baked into DX12 untextured preview; alpha retained for future
     // translucent material pass. No texture image is implied to be loaded.
