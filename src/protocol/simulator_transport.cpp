@@ -858,7 +858,8 @@ void Circuit::poll(unsigned budget) noexcept {
 void Circuit::stop() noexcept {
     if(material_worker_.valid()){try{(void)material_worker_.get();}catch(...){}}
     loaded_materials_.clear();material_overrides_.clear();material_attempts_.clear();
-    material_failures_=0U;material_last_scan_={};
+    material_failures_=material_http_failures_=material_decode_failures_=0U;
+    material_last_http_=0U;material_last_bytes_=0U;material_last_decode_error_=pbr::DecodeError::None;material_last_scan_={};
     if(texture_worker_.valid()){
         try{(void)texture_worker_.get();}catch(...){}
     }

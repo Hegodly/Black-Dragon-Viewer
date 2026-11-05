@@ -11,11 +11,20 @@ void Circuit::maybe_fetch_material() noexcept {
             if(material_worker_.wait_for(std::chrono::seconds(0))!=std::future_status::ready)return;
             auto result=material_worker_.get();
             auto& attempt=material_attempts_[result.id];
+            const bool terrain=std::find(region_metadata_.terrain_assets.begin(),region_metadata_.terrain_assets.end(),result.id)!=region_metadata_.terrain_assets.end();
+            // Legacy terrain IDs intentionally probe both asset types. Do
+            // not replace an object's failure reason with an expected 404.
+            if(!terrain||result.decoded){
+                material_last_http_=result.status;material_last_bytes_=result.bytes;
+                material_last_decode_error_=result.error;
+                if(!result.decoded){
+                    if(result.fetched)++material_decode_failures_;else ++material_http_failures_;
+                }
+            }
             if(result.decoded){
                 loaded_materials_.insert_or_assign(result.id,std::move(result.material));
                 ++spatial_object_revision_;texture_scan_revision_=~std::uint64_t{0};
             }else{
-                const bool terrain=std::find(region_metadata_.terrain_assets.begin(),region_metadata_.terrain_assets.end(),result.id)!=region_metadata_.terrain_assets.end();
                 if(!terrain||result.status==0U||result.status>=500U)++material_failures_;
                 const auto s=result.status;
                 const bool transient=!result.fetched&&(s==0U||s==408U||s==429U||s==500U||s==502U||s==503U||s==504U);
@@ -64,8 +73,8 @@ void Circuit::maybe_fetch_material() noexcept {
                 MaterialResult out;out.id=id;
                 const auto response=caps::fetch_material_asset(url,id);
                 if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
-                out.status=response.status;out.fetched=response.fetched;
-                out.decoded=response.fetched&&pbr::decode_asset(response.bytes,out.material);return out;
+                out.status=response.status;out.fetched=response.fetched;out.bytes=response.bytes.size();
+                out.decoded=response.fetched&&pbr::decode_asset(response.bytes,out.material,&out.error);return out;
             });
             break;
         }

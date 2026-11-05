@@ -2,6 +2,7 @@
 #include "kami/world/pbr_material_table.hpp"
 #include "kami/world/live_primitive_geometry.hpp"
 #include <cstdio>
+#include <algorithm>
 #include <cstring>
 #include "kami/world/environment.hpp"
 using namespace kami;
@@ -27,6 +28,34 @@ int run(){
        m.images[2]!=image||m.images[3]!=image||m.images[4]!=image||m.base[2]!=.8f||
        m.metallic!=.7f||m.roughness!=.2f||m.alpha!=1U||m.cutoff!=.25f||
        !m.double_sided||m.normal_scale!=.6f||m.occlusion_strength!=.4f||m.uv[0].scale[1]!=3.f)return 1;
+    const auto bare=asset(json);
+    const std::string official_header="<? LLSD/Binary ?>\n";
+    auto canonical=bare;canonical.insert(canonical.begin(),official_header.begin(),official_header.end());
+    Material from_official;
+    if(!decode_asset(canonical,from_official)||from_official!=m)return 25;
+    DecodeError decode_error=DecodeError::GLTF;
+    for(const std::string header:{"<? LLSD/Binary ?>\r\n","<?llsd/binary?>\n","  <? lLsD/bInArY ?>\n","<? LLSD/Binary ?>"}){
+        auto bytes=bare;bytes.insert(bytes.begin(),header.begin(),header.end());bytes.push_back('\n');
+        if(!decode_asset(bytes,from_official,&decode_error)||decode_error!=DecodeError::None||from_official!=m)return 26;
+    }
+    const auto check_bad=[&](std::vector<std::uint8_t> bytes,DecodeError expected){
+        auto unchanged=m;auto error=DecodeError::None;
+        return !decode_asset(bytes,unchanged,&error)&&error==expected&&unchanged==m;
+    };
+    for(const std::string header:std::vector<std::string>{"<? LLSD/XML ?>\n","<? LLSD/Notation ?>\n","<? arbitrary ?>\n","<? LLSD/Binary ",std::string(80,' ')}){
+        auto bytes=bare;bytes.insert(bytes.begin(),header.begin(),header.end());
+        if(!check_bad(bytes,DecodeError::Envelope))return 27;
+    }
+    auto trailing=canonical;trailing.push_back('x');
+    if(!check_bad(trailing,DecodeError::Envelope)||!check_bad({},DecodeError::Size))return 28;
+    auto version_bad=asset(json);const std::string version="1.1";
+    const auto where=std::search(version_bad.begin(),version_bad.end(),version.begin(),version.end());
+    if(where==version_bad.end())return 29;*where='2';
+    if(!check_bad(version_bad,DecodeError::Version))return 30;
+    auto type_bad=asset(json);const std::string type="GLTF 2.0";
+    const auto type_at=std::search(type_bad.begin(),type_bad.end(),type.begin(),type.end());
+    if(type_at==type_bad.end())return 31;*type_at='x';
+    if(!check_bad(type_bad,DecodeError::Type)||!check_bad(asset("not json"),DecodeError::GLTF))return 32;
     const auto prior=m;auto truncated=asset(json);truncated.pop_back();
     if(decode_asset(truncated,m)||m!=prior)return 2;
     auto remote=json;remote.replace(remote.find(image),image.size(),"https://example.com/image.png");

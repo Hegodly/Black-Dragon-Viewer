@@ -555,9 +555,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     sl_circuit_.requested_object_ids());
             }
             if(i==1U){
-                detail=L"Live terrain | texture layers "+std::to_wstring(world_renderer_.terrain_texture_layers())+
-                    L" / PBR layers "+std::to_wstring(world_renderer_.terrain_pbr_layers())+
-                    L" | HDR probe updates "+std::to_wstring(world_renderer_.environment_updates());
+                detail=L"Live terrain | textures "+std::to_wstring(world_renderer_.terrain_texture_layers())+
+                    L" / PBR "+std::to_wstring(world_renderer_.terrain_pbr_layers())+
+                    L" | IBL "+std::to_wstring(world_renderer_.environment_updates())+
+                    L" | material HTTP "+std::to_wstring(sl_circuit_.material_last_http())+
+                    L" / "+std::to_wstring(sl_circuit_.material_last_bytes())+L" bytes / "+
+                    (sl_circuit_.material_last_http()==200U&&sl_circuit_.material_last_bytes()>0U?
+                        protocol::pbr::decode_error_label(sl_circuit_.material_last_decode_error()):L"not decoded")+
+                    L" | failed HTTP "+std::to_wstring(sl_circuit_.material_http_failures())+
+                    L" / decode "+std::to_wstring(sl_circuit_.material_decode_failures());
             }
             if(i==3U && sl_circuit_.state()==
                protocol::sim::CircuitState::MovementConfirmed){

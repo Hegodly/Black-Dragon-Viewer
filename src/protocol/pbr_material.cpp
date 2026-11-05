@@ -240,21 +240,47 @@ bool decode_json(std::string_view json,Material& output) noexcept {
         output=std::move(m);return true;
     }catch(...){return false;}
 }
-bool decode_asset(std::span<const std::uint8_t> b,Material& output) noexcept {
+bool decode_asset(std::span<const std::uint8_t> b,Material& output,DecodeError* error) noexcept {
+    DecodeError stage=DecodeError::Size;
+    const auto fail=[&](DecodeError reason){if(error)*error=reason;return false;};
     try{
-        if(b.empty()||b.size()>1024U*1024U+4096U)return false;
-        std::size_t at=0U;constexpr std::string_view prefix="<?llsd/binary?>";
-        if(b.size()>=prefix.size()&&std::memcmp(b.data(),prefix.data(),prefix.size())==0){at=prefix.size();
-            if(at<b.size()&&b[at]=='\r')++at;if(at<b.size()&&b[at]=='\n')++at;}
-        if(at==b.size()||b[at++]!='{')return false;const auto n=be32(b,at);if(n>16U)return false;
+        if(b.empty()||b.size()>1024U*1024U+4096U)return fail(stage);
+        stage=DecodeError::Envelope;
+        std::size_t at=0U;
+        const auto whitespace=[](std::uint8_t c){return c==' '||c=='\r'||c=='\n'||c=='\t';};
+        // LLSDSerialize emits "<? LLSD/Binary ?>\n". Its deserializer
+        // trims the declaration and compares the format case-insensitively.
+        while(at<b.size()&&at<64U&&whitespace(b[at]))++at;
+        if(at+2U<=b.size()&&b[at]=='<'&&b[at+1U]=='?'){
+            const auto begin=at+2U;auto end=begin;
+            while(end+1U<b.size()&&end-begin<64U&&!(b[end]=='?'&&b[end+1U]=='>'))++end;
+            if(end+1U>=b.size()||end-begin>=64U)return fail(stage);
+            auto first=begin,last=end;
+            while(first<last&&whitespace(b[first]))++first;
+            while(last>first&&whitespace(b[last-1U]))--last;
+            constexpr std::string_view format="llsd/binary";
+            if(last-first!=format.size())return fail(stage);
+            for(std::size_t i=0U;i<format.size();++i){auto c=b[first+i];
+                if(c>='A'&&c<='Z')c=std::uint8_t(c-'A'+'a');
+                if(c!=std::uint8_t(format[i]))return fail(stage);
+            }
+            at=end+2U;while(at<b.size()&&whitespace(b[at]))++at;
+        }
+        if(at==b.size()||b[at++]!='{')return fail(stage);
+        const auto n=be32(b,at);if(n>16U)return fail(stage);
         std::map<std::string,std::string> fields;
-        for(unsigned i=0;i<n;++i){if(at==b.size()||b[at++]!='k')return false;const auto key=str(b,at);
-            if(at==b.size()||b[at++]!='s')return false;const auto value=str(b,at);
-            if(!fields.emplace(key,value).second)return false;}
-        if(at==b.size()||b[at++]!='}'||at!=b.size())return false;
-        if((fields["version"]!="1.0"&&fields["version"]!="1.1")||fields["type"]!="GLTF 2.0")return false;
-        return decode_json(fields["data"],output);
-    }catch(...){return false;}
+        for(unsigned i=0;i<n;++i){if(at==b.size()||b[at++]!='k')return fail(stage);const auto key=str(b,at);
+            if(at==b.size()||b[at++]!='s')return fail(stage);const auto value=str(b,at);
+            if(!fields.emplace(key,value).second)return fail(stage);}
+        if(at==b.size()||b[at++]!='}')return fail(stage);
+        while(at<b.size()&&whitespace(b[at]))++at;
+        if(at!=b.size())return fail(stage);
+        if(fields["version"]!="1.0"&&fields["version"]!="1.1")return fail(DecodeError::Version);
+        if(fields["type"]!="GLTF 2.0")return fail(DecodeError::Type);
+        stage=DecodeError::GLTF;
+        if(!decode_json(fields["data"],output))return fail(stage);
+        if(error)*error=DecodeError::None;return true;
+    }catch(...){return fail(stage);}
 }
 bool decode_override(std::span<const std::uint8_t> b,std::uint32_t& object,std::map<unsigned,Override>& out) noexcept {
     try{
