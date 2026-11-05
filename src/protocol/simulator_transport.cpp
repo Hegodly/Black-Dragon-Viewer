@@ -351,7 +351,8 @@ void Circuit::maybe_send_agent_update() noexcept {
         last_agent_update_=now;
     }
 }
-void Circuit::remember_missing_object(std::uint32_t id,bool important) noexcept {
+void Circuit::remember_missing_object(std::uint32_t id,bool important,
+                                     bool parent) noexcept {
     if(id==0U||avatar_root_ids_.contains(id)||
        spatial_objects_.contains(id)||linked_objects_.contains(id))return;
     const auto old=missing_objects_.find(id);
@@ -359,6 +360,7 @@ void Circuit::remember_missing_object(std::uint32_t id,bool important) noexcept 
         // A cached object or missing parent can promote a prior low-priority
         // speculative terse request without creating a duplicate request.
         old->second.important=old->second.important||important;
+        old->second.parent=old->second.parent||parent;
         return;
     }
     if(missing_objects_.size()>=kMaxMissingObjectRequests){
@@ -369,18 +371,24 @@ void Circuit::remember_missing_object(std::uint32_t id,bool important) noexcept 
                 it=missing_objects_.erase(it);
             else ++it;
         }
-        // Never allow unknown terse movements to permanently displace
-        // a verified cache-miss or the root of a visible linked building.
+        // Preserve unresolved parent IDs even when 4,096 slots are full:
+        // replace speculative terse requests first, then cached-only
+        // requests if a verified linked-object parent is still missing.
+        // Neither path increases the outgoing simulator request rate.
         if(missing_objects_.size()>=kMaxMissingObjectRequests&&important){
-            const auto speculative=std::find_if(
+            auto victim=std::find_if(
                 missing_objects_.begin(),missing_objects_.end(),
                 [](const auto& item){return !item.second.important;});
-            if(speculative!=missing_objects_.end())
-                missing_objects_.erase(speculative);
+            if(victim==missing_objects_.end()&&parent)
+                victim=std::find_if(
+                    missing_objects_.begin(),missing_objects_.end(),
+                    [](const auto& item){return !item.second.parent;});
+            if(victim!=missing_objects_.end())
+                missing_objects_.erase(victim);
         }
         if(missing_objects_.size()>=kMaxMissingObjectRequests)return;
     }
-    missing_objects_.try_emplace(id,MissingObject{0U,{},important});
+    missing_objects_.try_emplace(id,MissingObject{0U,{},important,parent});
 }
 void Circuit::maybe_send_missing_object_requests() noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -417,11 +425,11 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     if(ready.empty())return;
     std::sort(ready.begin(),ready.end(),[](const auto& a,const auto& b){
         const auto& x=*a.second;const auto& y=*b.second;
-        if(x.important!=y.important||x.attempts!=y.attempts||
-           x.sent_at!=y.sent_at)
-            return detail::prefer_missing_request(
-                x.important,x.attempts,x.sent_at,
-                y.important,y.attempts,y.sent_at);
+        if(x.parent!=y.parent||x.important!=y.important||
+           x.attempts!=y.attempts||x.sent_at!=y.sent_at)
+            return detail::prefer_parent_missing_request(
+                x.parent,x.important,x.attempts,x.sent_at,
+                y.parent,y.important,y.attempts,y.sent_at);
         return a.first<b.first;
     });
     std::vector<std::uint32_t> ids;
@@ -601,7 +609,8 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                             missing_objects_.erase(id);
                         }
                     }
-                    for(auto id:parent_ids)remember_missing_object(id);
+                    for(auto id:parent_ids)
+                        remember_missing_object(id,true,true);
                     for(const auto& child:linked){
                         if(linked_objects_.size()>=kMaxLinkedObjects&&
                             !linked_objects_.contains(child.local_id)){
@@ -653,7 +662,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         frame.legacy_particle_blocks;
                     ++spatial_object_frames_;
                     for(const auto& child:linked){
-                        remember_missing_object(child.parent_id);
+                        remember_missing_object(child.parent_id,true,true);
                         if(linked_objects_.size()>=kMaxLinkedObjects&&
                             !linked_objects_.contains(child.local_id)){
                             ++dropped_linked_updates_;continue;
