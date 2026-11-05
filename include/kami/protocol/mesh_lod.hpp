@@ -8,7 +8,8 @@
 namespace kami::protocol::mesh {
 struct Triangle {
     std::array<float,9> pos{}; // 3 SL local XYZ positions
-    std::array<float,6> uv{};  // 3 UV pairs (untextured for now)
+    std::array<float,6> uv{};  // three SL UV pairs, flipped for DX12 texture origin
+    bool has_uv=false;        // only sample an asset when UVs were present
 };
 struct LOD {
     std::vector<Triangle> triangles;
