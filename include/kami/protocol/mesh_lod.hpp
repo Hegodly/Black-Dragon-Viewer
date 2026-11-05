@@ -10,6 +10,7 @@ struct Triangle {
     std::array<float,9> pos{}; // 3 SL local XYZ positions
     std::array<float,6> uv{};  // three SL UV pairs, flipped for DX12 texture origin
     bool has_uv=false;        // only sample an asset when UVs were present
+    std::uint8_t face_index=0U; // LLSD LOD face/material index, max 31
 };
 struct LOD {
     std::vector<Triangle> triangles;
