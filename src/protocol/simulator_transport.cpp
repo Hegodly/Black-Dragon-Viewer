@@ -218,12 +218,13 @@ void Circuit::maybe_fetch_mesh() noexcept {
            std::future_status::ready)return;
         try{
             auto result=mesh_worker_.get();
-            (void)mesh_scheduler_.download_finished(
+            const bool accepted=mesh_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
-            if(result.fetched){
+            if(result.fetched&&accepted){
                 ++mesh_download_count_;
-                const auto item=mesh_scheduler_.next_decode();
-                if(item&&item->id==result.id){
+                // The async decoder has already completed this exact UUID.
+                // Never pop an unrelated decode job by scheduler priority.
+                if(mesh_scheduler_.begin_decode(result.id)){
                     const auto old=loaded_meshes_.find(result.id);
                     const auto prior=old==loaded_meshes_.end()?0U:
                         old->second.triangles.size();
