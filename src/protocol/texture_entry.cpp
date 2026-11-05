@@ -5,6 +5,20 @@
 #include <limits>
 
 namespace kami::protocol::texture {
+std::string default_image_uuid(const Base& entry) {
+    const auto& id=entry.image_id;
+    if(std::all_of(id.begin(),id.end(),
+                   [](std::uint8_t byte){return byte==0U;}))return {};
+    constexpr char hex[]="0123456789abcdef";
+    std::string result;
+    result.reserve(36U);
+    for(std::size_t i=0;i<id.size();++i){
+        if(i==4U||i==6U||i==8U||i==10U)result.push_back('-');
+        result.push_back(hex[id[i]>>4U]);
+        result.push_back(hex[id[i]&0x0fU]);
+    }
+    return result;
+}
 bool decode_base(std::span<const std::uint8_t> bytes,Base& out) noexcept {
     if(bytes.size()<21U||bytes.size()>4096U)return false;
     Base parsed{};
