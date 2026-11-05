@@ -1991,8 +1991,8 @@ void Window::update_sl_connection() {
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
        world_renderer_.ready()&&land_revision>0U&&
        (land_revision!=live_land_uploaded_revision_||
-        (spatial_revision!=live_spatial_uploaded_revision_||
-         scene_rebase))&&
+        spatial_revision!=live_spatial_uploaded_revision_||
+        scene_rebase||world_renderer_.texture_upload_pending())&&
        (live_land_last_upload_==std::chrono::steady_clock::time_point{}||
         now-live_land_last_upload_>=std::chrono::milliseconds(800))){
         live_land_last_upload_=now;
@@ -2002,7 +2002,9 @@ void Window::update_sl_connection() {
             live_scene_uploaded_origin_={
                 scene_agent.x,scene_agent.y,scene_agent.z};
             live_scene_origin_valid_=scene_agent.verified;
-            live_water_status_=L"R51 DX12 coalesced land and mesh world";
+            live_water_status_=world_renderer_.texture_upload_pending()?
+                L"R52 DX12 atlas update deferred until GPU copy completes":
+                L"R52 DX12 coalesced land and mesh world";
         }else{
             live_water_status_=L"R12 land geometry could not be uploaded";
         }
