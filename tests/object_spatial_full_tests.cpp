@@ -249,5 +249,37 @@ int main(){
     if(!objectspatial::decode_full_transforms(
            packet({block(112U,0U,9U,128.f,{},malformed_te)}),out,&audit)||
        out.size()!=1U||out[0].base_tint_present)return 25;
+    auto avatar_block=block(901U,0U,47U,201.f);
+    for(unsigned i=0;i<16U;++i)
+        avatar_block[5U+i]=static_cast<Byte>(i+1U);
+    std::vector<std::uint32_t> known_avatar_ids;
+    std::vector<objectspatial::AvatarFullPose> full_avatar_poses;
+    if(!objectspatial::decode_full_transforms(packet({avatar_block}),
+           out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
+       !out.empty()||known_avatar_ids.size()!=1U||
+       known_avatar_ids[0]!=901U||full_avatar_poses.size()!=1U||
+       full_avatar_poses[0].local_id!=901U||
+       full_avatar_poses[0].full_id[0]!=1U||
+       full_avatar_poses[0].full_id[15]!=16U||
+       full_avatar_poses[0].x!=201.f||
+       full_avatar_poses[0].y!=140.f||
+       full_avatar_poses[0].z!=35.f)return 26;
+    // Avatar ObjectData may be prefixed by a 16-byte collision plane.
+    // It must not shift the region pose or confuse the authenticated UUID.
+    avatar_block[40U]=76U;
+    avatar_block.insert(avatar_block.begin()+41U,16U,0U);
+    if(!objectspatial::decode_full_transforms(packet({avatar_block}),
+           out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
+       full_avatar_poses.size()!=1U||
+       full_avatar_poses[0].x!=201.f)return 27;
+    // Reject a non-finite avatar position without fabricating origin.
+    const float bad_pos=std::nanf("");
+    std::uint32_t bits=0U;
+    std::memcpy(&bits,&bad_pos,sizeof(bits));
+    for(unsigned i=0;i<4U;++i)
+        avatar_block[57U+i]=static_cast<Byte>(bits>>(8U*i));
+    if(!objectspatial::decode_full_transforms(packet({avatar_block}),
+           out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
+       !full_avatar_poses.empty()||known_avatar_ids.size()!=1U)return 28;
     return 0;
 }
