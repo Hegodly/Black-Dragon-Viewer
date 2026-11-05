@@ -30,7 +30,16 @@ void Circuit::prune_decoded_textures() noexcept {
         const auto check=[&](const auto& objects){
             for(const auto& [id,t]:objects){
                 (void)id;
-                if(t.default_texture_asset_id!=asset)continue;
+                bool referenced=(t.default_texture_asset_id==asset);
+                if(!referenced){
+                    for(unsigned face=0U;face<t.face_texture_override.size();++face){
+                        if(t.face_texture_override[face]&&
+                           t.face_texture_asset_ids[face]==asset){
+                            referenced=true;break;
+                        }
+                    }
+                }
+                if(!referenced)continue;
                 const auto* anchor=world_mesh_anchor(t);
                 if(anchor&&within_retention(*anchor))return true;
             }
@@ -72,16 +81,23 @@ void Circuit::schedule_visible_textures() noexcept {
     const auto schedule=[&](const auto& objects){
         for(const auto& [id,t]:objects){
             (void)id;
-            if(t.default_texture_asset_id.empty())continue;
             const auto* anchor=world_mesh_anchor(t);
             if(!anchor||!near_enough(*anchor))continue;
             const float distance=std::hypot(std::hypot(
                 anchor->x-movement_position_.x,
                 anchor->y-movement_position_.y),
                 anchor->z-movement_position_.z);
-            (void)texture_scheduler_.request(
-                t.default_texture_asset_id,load::Kind::VisibleTexture,
-                distance,true,0U);
+            const auto request=[&](const std::string& image){
+                if(image.empty())return;
+                (void)texture_scheduler_.request(
+                    image,load::Kind::VisibleTexture,distance,true,0U);
+            };
+            // TE default plus explicitly specified face overrides. The
+            // load scheduler deduplicates shared IDs across mesh instances.
+            request(t.default_texture_asset_id);
+            for(unsigned face=0U;face<t.face_texture_override.size();++face)
+                if(t.face_texture_override[face])
+                    request(t.face_texture_asset_ids[face]);
         }
     };
     schedule(spatial_objects_);
