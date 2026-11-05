@@ -338,7 +338,7 @@ bool decode_mesh_lod(std::span<const std::uint8_t> asset,LOD& out) noexcept {
         // bounded and fully decoded asset block if a populated higher
         // LOD has invalid or unsupported geometry.
         constexpr std::array<const char*,4U> levels{
-            "medium_lod","high_lod","low_lod","lowest_lod"
+            "high_lod","medium_lod","low_lod","lowest_lod"
         };
         for(const char* name:levels){
             const Value* block=header.get(name);
