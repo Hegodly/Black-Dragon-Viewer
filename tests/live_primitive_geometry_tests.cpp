@@ -427,6 +427,44 @@ int run_primitive_tests(){
         const auto quality=world::build_live_mesh_geometry(instances, {}, {},{{asset_id,shared}},128,140,35,550000U);
         if(quality.emitted_triangles!=550000U||quality.scene.vertices.size()!=1650000U)return 55;
     }
+    // R62: Quality may draw 4,080 verified primitive boxes, but the
+    // internal cap still defers additional eligible shapes.
+    {
+        std::map<std::uint32_t,Transform> crowded;
+        for(std::uint32_t i=0U;i<4200U;++i){
+            Transform shape{5000U+i,
+                static_cast<float>(i%70U)*2.f-70.f,
+                static_cast<float>(i/70U)*2.f-60.f,
+                0.f,1.f,1.f,1.f};
+            shape.primitive=Kind::Box;
+            crowded.emplace(shape.local_id,shape);
+        }
+        const auto quality=world::build_live_primitive_geometry(
+            crowded,{},0.f,0.f,0.f,9000U);
+        if(!valid(quality)||quality.root_shapes!=4080U||
+           quality.eligible_shapes!=4200U||
+           quality.budget_deferred_shapes!=120U||
+           quality.scene.vertices.size()!=4080U*36U)return 56;
+        const auto balanced=world::build_live_primitive_geometry(
+            crowded,{},0.f,0.f,0.f,512U);
+        if(!valid(balanced)||balanced.root_shapes!=512U||
+           balanced.budget_deferred_shapes!=3688U)return 57;
+    }
+    // Enforce the *remaining scene* vertex budget for worst-case sphere
+    // geometry, without failing the entire terrain upload.
+    {
+        std::map<std::uint32_t,Transform> spheres;
+        for(std::uint32_t i=0U;i<5U;++i){
+            Transform shape{9000U+i,static_cast<float>(i),0.f,0.f,1.f,1.f,1.f};
+            shape.primitive=Kind::Sphere;
+            spheres.emplace(shape.local_id,shape);
+        }
+        const auto capped=world::build_live_primitive_geometry(
+            spheres,{},0.f,0.f,0.f,5U,{},{},{},2410U);
+        if(!valid(capped)||capped.root_shapes!=2U||
+           capped.budget_deferred_shapes!=3U||
+           capped.scene.vertices.size()>2410U)return 58;
+    }
     dense_root.reflection_probe=true;
     const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
     if(invisible_probe.emitted_triangles!=0U)return 54;
