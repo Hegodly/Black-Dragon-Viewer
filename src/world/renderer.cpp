@@ -434,7 +434,8 @@ bool Renderer::make_geometry() {
 }
 
 bool Renderer::initialize(HWND window,UINT width,UINT height,
-                          bool allow_software_dx12) {
+                          bool allow_software_dx12,
+                          bool force_software_dx12) {
     if(ready_) return true;
     if(!window || !width || !height) { error_=L"Invalid viewport dimensions"; return false; }
     window_=window;
@@ -444,7 +445,8 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     client_height_=height;
     width_=scaled(width,graphics_.render_scale_percent);
     height_=scaled(height,graphics_.render_scale_percent);
-    if(device_.initialize(allow_software_dx12)==DeviceStatus::Unavailable) {
+    if(device_.initialize(allow_software_dx12,force_software_dx12)==
+       DeviceStatus::Unavailable) {
         error_=L"No DirectX 12 device available";
         return false;
     }
