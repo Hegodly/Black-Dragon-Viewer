@@ -321,6 +321,24 @@ int exercise(){
     const auto unsafe_action=observe_event_queue_response(invalid_action);
     if(!unsafe_action.safe_to_ack||unsafe_action.handled_events!=0U||
        unsafe_action.unsupported_events!=1U)return 44;
+    // Official ViewerAsset handles both mesh_id and texture_id. Mesh-only
+    // GetMesh2 does NOT authorize a texture fetch; avoid arbitrary hosts.
+    std::wstring texture_cap;
+    const auto texture_seed=
+        "<llsd><map><key>ViewerAsset</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/assets</uri>"
+        "<key>GetMesh2</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/mesh</uri>"
+        "</map></llsd>";
+    if(!parse_seed_llsd(texture_seed,cap,&mesh_cap,nullptr,&texture_cap)||
+       texture_cap!=L"https://simhost-123.agni.secondlife.io/cap/assets"||
+       mesh_cap!=texture_cap)return 45;
+    if(!parse_seed_llsd(alternate,cap,&mesh_cap,nullptr,&texture_cap)||
+       !texture_cap.empty()||
+       mesh_cap!=L"https://simhost-123.agni.secondlife.io/cap/new")
+       return 46;
+    if(!parse_seed_llsd(optional_bad,cap,&mesh_cap,nullptr,&texture_cap)||
+       !texture_cap.empty())return 47;
     return 0;
 }
 }
