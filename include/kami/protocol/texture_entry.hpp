@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string>
 
 namespace kami::protocol::texture {
 struct Base {
@@ -16,4 +17,7 @@ struct Base {
 // then inverted RGBA default + subsequent per-face color exceptions.
 [[nodiscard]] bool decode_base(std::span<const std::uint8_t> bytes,
                                Base& out) noexcept;
+// SL network UUID ordering, canonical lowercase format. All-zero UUID
+// denotes no image. The transport must not fetch zero or malformed IDs.
+[[nodiscard]] std::string default_image_uuid(const Base& entry);
 } // namespace kami::protocol::texture
