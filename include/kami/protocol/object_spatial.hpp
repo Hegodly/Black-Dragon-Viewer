@@ -1,5 +1,6 @@
 #pragma once
 #include "kami/protocol/lludp.hpp"
+#include "kami/protocol/texture_entry.hpp"
 #include <array>
 #include <cstdint>
 #include <string>
@@ -25,6 +26,9 @@ struct Transform {
     std::string default_texture_asset_id; // UUID from verified server TE
     std::array<std::string,32U> face_texture_asset_ids{}; // face-specific TE UUIDs
     std::array<bool,32U> face_texture_override{}; // explicit null distinct from default
+    // Authentic SL diffuse TextureEntry parameters per numbered face.
+    std::array<texture::UVTransform,32U> face_uv{};
+    std::array<std::array<float,4U>,32U> face_rgba{};
     // Authentic default TextureEntry tint (per-face overrides unavailable).
     // RGB is baked into DX12 untextured preview; alpha retained for future
     // translucent material pass. No texture image is implied to be loaded.
