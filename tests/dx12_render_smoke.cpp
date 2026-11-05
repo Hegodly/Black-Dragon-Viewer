@@ -306,7 +306,7 @@ int main(int argc,char** argv) {
                     }
                 }
                 if(!result) std::wcout
-                    <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":"KAMI DX12 SMOKE PASS")
+                    <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":L"KAMI DX12 SMOKE PASS")
                     <<L" - adapter: "<<renderer.adapter_name()
                     <<L"; drawn="<<renderer.vertex_count()
                     <<L" vertices; PBR, shadows, texture upload, resize, FPS presentation path\n";
