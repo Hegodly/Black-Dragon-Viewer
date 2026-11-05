@@ -116,26 +116,6 @@ bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
     mesh_last_scan_x_=mesh_last_scan_y_=mesh_last_scan_z_=0.f;
     return true;
 }
-const objectspatial::Transform* Circuit::world_mesh_anchor(
-    const objectspatial::Transform& item) const noexcept {
-    if(item.parent_id==0U)return &item;
-    std::array<std::uint32_t,16U> seen{};
-    std::size_t depth=0U;
-    auto parent=item.parent_id;
-    while(parent!=0U&&depth<seen.size()){
-        if(avatar_root_ids_.contains(parent)||
-           std::find(seen.begin(),seen.begin()+depth,parent)!=
-               seen.begin()+depth)return nullptr;
-        seen[depth++]=parent;
-        const auto root=spatial_objects_.find(parent);
-        if(root!=spatial_objects_.end())
-            return root->second.parent_id==0U?&root->second:nullptr;
-        const auto linked=linked_objects_.find(parent);
-        if(linked==linked_objects_.end())return nullptr;
-        parent=linked->second.parent_id;
-    }
-    return nullptr;
-}
 void Circuit::prune_unreferenced_meshes() noexcept {
     if(loaded_meshes_.empty())return;
     // Hysteresis (176m vs 144m load radius) avoids thrashing across a
