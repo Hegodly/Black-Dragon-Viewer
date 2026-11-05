@@ -141,19 +141,22 @@ void Circuit::prune_unreferenced_meshes() noexcept {
     // Hysteresis (176m vs 144m load radius) avoids thrashing across a
     // visibility boundary. Drop no-longer-needed CPU mesh data and its
     // finished scheduler entry; do not cancel an active fetch.
-    const auto within_retention_radius=[&](const objectspatial::Transform& t) noexcept {
-        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
-            std::abs(t.x-movement_position_.x)<=176.f&&
-            std::abs(t.y-movement_position_.y)<=176.f&&
-            std::abs(t.z-movement_position_.z)<=128.f;
+    const auto within_retention_radius=[&](
+        const std::array<float,3>& p) noexcept {
+        return std::abs(p[0]-movement_position_.x)<=176.f&&
+            std::abs(p[1]-movement_position_.y)<=176.f&&
+            std::abs(p[2]-movement_position_.z)<=128.f;
     };
     const auto needed=[&](std::string_view asset) noexcept {
         const auto uses=[&](const auto& objects) noexcept {
             for(const auto& [id,t]:objects){
                 (void)id;
                 if(t.mesh_asset_id!=asset)continue;
-                const auto* anchor=world_mesh_anchor(t);
-                if(anchor&&within_retention_radius(*anchor))return true;
+                std::array<float,3> position{};
+                if(objectspatial::resolve_world_position(
+                       t,spatial_objects_,linked_objects_,avatar_root_ids_,
+                       position)&&within_retention_radius(position))
+                    return true;
             }
             return false;
         };
@@ -188,22 +191,24 @@ void Circuit::schedule_visible_meshes() noexcept {
     mesh_last_scan_y_=movement_position_.y;
     mesh_last_scan_z_=movement_position_.z;
     mesh_last_scan_position_valid_=true;
-    const auto close_to_agent=[&](const objectspatial::Transform& t) noexcept {
-        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
-            std::abs(t.x-movement_position_.x)<=144.f&&
-            std::abs(t.y-movement_position_.y)<=144.f&&
-            std::abs(t.z-movement_position_.z)<=96.f;
+    const auto close_to_agent=[&](
+        const std::array<float,3>& p) noexcept {
+        return std::abs(p[0]-movement_position_.x)<=144.f&&
+            std::abs(p[1]-movement_position_.y)<=144.f&&
+            std::abs(p[2]-movement_position_.z)<=96.f;
     };
     const auto schedule=[&](const auto& objects) noexcept {
         for(const auto& [id,t]:objects){
             (void)id;
             if(t.mesh_asset_id.empty())continue;
-            const auto* anchor=world_mesh_anchor(t);
-            if(!anchor||!close_to_agent(*anchor))continue;
+            std::array<float,3> position{};
+            if(!objectspatial::resolve_world_position(
+                   t,spatial_objects_,linked_objects_,avatar_root_ids_,
+                   position)||!close_to_agent(position))continue;
             const float d=std::hypot(
-                std::hypot(anchor->x-movement_position_.x,
-                           anchor->y-movement_position_.y),
-                anchor->z-movement_position_.z);
+                std::hypot(position[0]-movement_position_.x,
+                           position[1]-movement_position_.y),
+                position[2]-movement_position_.z);
             (void)mesh_scheduler_.request(t.mesh_asset_id,
                                          load::Kind::VisibleMesh,d,true,0U);
         }
