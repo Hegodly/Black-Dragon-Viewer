@@ -1781,15 +1781,22 @@ void Window::begin_sl_login() {
         return;
     }
     if(caps_seed_future_.valid()){
-        auto previous=caps_seed_future_.get();
-        if(!previous.mesh_capability_url.empty())
-            SecureZeroMemory(previous.mesh_capability_url.data(),
-                 previous.mesh_capability_url.size()*sizeof(wchar_t));
-        if(!previous.event_queue_url.empty())
-            SecureZeroMemory(previous.event_queue_url.data(),
-                 previous.event_queue_url.size()*sizeof(wchar_t));
+        try{
+            auto previous=caps_seed_future_.get();
+            if(!previous.mesh_capability_url.empty())
+                SecureZeroMemory(previous.mesh_capability_url.data(),
+                     previous.mesh_capability_url.size()*sizeof(wchar_t));
+            if(!previous.event_queue_url.empty())
+                SecureZeroMemory(previous.event_queue_url.data(),
+                     previous.event_queue_url.size()*sizeof(wchar_t));
+        }catch(...){
+            // A failed previous CAPS worker cannot crash a new login.
+            caps_status_=L"Previous CAPS seed worker failed";
+        }
     }
-    if(caps_poll_future_.valid())(void)caps_poll_future_.get();
+    if(caps_poll_future_.valid()){
+        try{(void)caps_poll_future_.get();}catch(...){}
+    }
     if(!caps_seed_url_.empty())
         SecureZeroMemory(caps_seed_url_.data(),
                           caps_seed_url_.size()*sizeof(wchar_t));
@@ -1808,6 +1815,7 @@ void Window::begin_sl_login() {
     caps_consecutive_failures_=0;
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
+    caps_seed_retry_after_={};
     caps_status_.clear();
     caps_seed_summary_.clear();
     caps_recent_types_.clear();
@@ -1907,7 +1915,7 @@ void Window::start_caps_poll() {
     if(!caps_poll_started_||caps_dispatch_blocked_||
        caps_event_queue_url_.empty()||caps_poll_future_.valid()||
        sl_login_status_!=protocol::LoginStatus::Accepted||
-       !sl_circuit_.movement_seen()||
+       sl_circuit_.state()!=protocol::sim::CircuitState::MovementConfirmed||
        std::chrono::steady_clock::now()<caps_next_poll_)
         return;
     auto url=caps_event_queue_url_; // keep trusted URL only for this session
@@ -2044,23 +2052,37 @@ void Window::update_sl_connection() {
        // one-shot seed fetch then could discard a successful grant before
        // Circuit reaches MovementConfirmed, leaving CAP NO indefinitely.
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
-       !caps_seed_started_&&!caps_seed_url_.empty()){
-        caps_seed_started_=true;
+       !caps_seed_started_&&!caps_seed_url_.empty()&&
+       std::chrono::steady_clock::now()>=caps_seed_retry_after_){
         caps_status_=L"CAPS: requesting region seed over HTTPS...";
-        auto url=std::move(caps_seed_url_);
-        caps_seed_url_.clear();
-        caps_seed_future_=std::async(std::launch::async,
-            [url=std::move(url)]()mutable {
-                const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
-                protocol::caps::SeedResponse response{};
-                if(SUCCEEDED(init)){
-                    response=protocol::caps::request_seed(url);
-                    CoUninitialize();
-                }else response.diagnostic=L"CAPS COM initialization failed";
-                if(!url.empty())
-                    SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
-                return response;
-            });
+        // Preserve the trusted seed URL until worker launch succeeds.
+        // Thread creation may fail; dropping the only seed URL then
+        // permanently leaves the session on CAP NO.
+        auto url=caps_seed_url_;
+        try{
+            caps_seed_future_=std::async(std::launch::async,
+                [url=std::move(url)]()mutable {
+                    const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+                    protocol::caps::SeedResponse response{};
+                    if(SUCCEEDED(init)){
+                        response=protocol::caps::request_seed(url);
+                        CoUninitialize();
+                    }else response.diagnostic=L"CAPS COM initialization failed";
+                    if(!url.empty())
+                        SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+                    return response;
+                });
+            caps_seed_started_=true;
+            if(!caps_seed_url_.empty())
+                SecureZeroMemory(caps_seed_url_.data(),
+                    caps_seed_url_.size()*sizeof(wchar_t));
+            caps_seed_url_.clear();
+        }catch(...){
+            caps_seed_started_=false;
+            caps_seed_retry_after_=std::chrono::steady_clock::now()+
+                std::chrono::seconds(3);
+            caps_status_=L"CAPS: Windows worker unavailable; retrying seed";
+        }
     }
     if(caps_seed_started_&&caps_seed_future_.valid()&&
        caps_seed_future_.wait_for(std::chrono::seconds(0))==
