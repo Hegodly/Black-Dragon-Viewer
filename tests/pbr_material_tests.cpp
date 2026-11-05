@@ -61,6 +61,14 @@ int run(){
     protocol::texture::DecodedTexture bitmap;bitmap.width=bitmap.height=1U;bitmap.rgba={255,255,255,255};
     const auto layers=world::select_visible_mesh_texture_layers(roots,{}, {},{},{{image,bitmap}},128.f,128.f,35.f,192U,{},materials,{});
     if(!layers.contains(image))return 16;
+    // SL emits undefined placeholders for unchanged earlier texture slots.
+    // LLSD Integer is signed; local object IDs retain their U32 bit pattern.
+    const auto sparse=packet("{'id':i-1,'te':[i2],'od':[{'tex':[!,u12345678-90ab-4cde-8fab-000000000001],'ti':[!,{'s':[r2,r3]}]}]}");
+    if(!decode_override(sparse,object,overrides)||object!=0xffffffffU)return 17;
+    Overrides sparse_live{{object,overrides}};
+    if(!effective(id,object,2U,materials,sparse_live,applied)||
+       applied.images[0]!=prior.images[0]||applied.images[1]!=image||
+       applied.uv[1].scale[1]!=3.f)return 18;
     return 0;
 }
 }

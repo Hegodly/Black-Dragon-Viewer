@@ -13,7 +13,7 @@ constexpr std::uint32_t BC=1U,EC=2U,MF=4U,RF=8U,AM=16U,AC=32U,DS=64U;
 const J* get(const J& j,const char* key){
     if(!j.is<picojson::object>())return nullptr;
     const auto& o=j.get<picojson::object>();const auto i=o.find(key);
-    return i==o.end()?nullptr:&i->second;
+    return i==o.end()||i->second.is<picojson::null>()?nullptr:&i->second;
 }
 float real(const J& j,float lo,float hi){
     if(!j.is<double>())throw std::runtime_error("number");
@@ -131,6 +131,7 @@ public:
     bool done(){ws();return at==s.size();}
 };
 Override override_value(const J& j){
+    if(j.is<picojson::null>())return {};
     if(!j.is<picojson::object>())throw std::runtime_error("override");Override o;
     const auto vec=[&](const char* key,auto& dest,std::uint32_t bit){if(const auto* v=get(j,key)){array(*v,dest,0.f,1.f);o.fields|=bit;}};
     vec("bc",o.value.base,BC);vec("ec",o.value.emissive,EC);
@@ -141,6 +142,7 @@ Override override_value(const J& j){
     if(const auto* v=get(j,"tex")){
         if(!v->is<picojson::array>()||v->get<picojson::array>().size()>4U)throw std::runtime_error("images");
         for(unsigned i=0;i<v->get<picojson::array>().size();++i){const auto& id=v->get<picojson::array>()[i];
+            if(id.is<picojson::null>())continue;
             if(!id.is<std::string>())throw std::runtime_error("uuid");
             const auto name=uuid(id.get<std::string>(),true);
             if(!name.empty()){o.image_mask|=1U<<i;o.value.images[i]=name=="clear"?"":name;}
@@ -245,12 +247,12 @@ bool decode_override(std::span<const std::uint8_t> b,std::uint32_t& object,std::
         const auto* id=get(root,"id"),*te=get(root,"te"),*od=get(root,"od");
         if(!id||!te||!od||!te->is<picojson::array>()||!od->is<picojson::array>())return false;
         const double num=id->is<double>()?id->get<double>():0.;
-        if(num<1.||num>4294967295.||std::floor(num)!=num)return false;
+        if(num==0.||num< -2147483648.||num>4294967295.||std::floor(num)!=num)return false;
         const auto& faces=te->get<picojson::array>();const auto& values=od->get<picojson::array>();
         if(faces.size()>32U||faces.size()!=values.size())return false;
         std::map<unsigned,Override> decoded;
         for(unsigned i=0;i<faces.size();++i)if(!decoded.emplace(index(faces[i],32U),override_value(values[i])).second)return false;
-        object=static_cast<std::uint32_t>(num);out=std::move(decoded);return true;
+        object=static_cast<std::uint32_t>(num<0.?num+4294967296.:num);out=std::move(decoded);return true;
     }catch(...){return false;}
 }
 bool effective(std::string_view id,std::uint32_t object,unsigned face,const Materials& cache,const Overrides& overrides,Material& out){
