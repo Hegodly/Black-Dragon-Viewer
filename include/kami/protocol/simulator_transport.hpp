@@ -201,6 +201,8 @@ private:
     void maybe_fetch_mesh() noexcept;
     void schedule_visible_meshes() noexcept;
     void prune_unreferenced_meshes() noexcept;
+    [[nodiscard]] const objectspatial::Transform* world_mesh_anchor(
+        const objectspatial::Transform& item) const noexcept;
     void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
@@ -256,6 +258,11 @@ private:
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
     std::uint64_t mesh_scan_revision_=~std::uint64_t{0};
+    // Asset discovery must refresh when the camera avatar walks, even if
+    // object data has not changed; otherwise mesh loading freezes on move.
+    float mesh_last_scan_x_=0.f,mesh_last_scan_y_=0.f,
+          mesh_last_scan_z_=0.f;
+    bool mesh_last_scan_position_valid_=false;
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};
