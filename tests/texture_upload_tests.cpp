@@ -1,6 +1,10 @@
 #include "kami/world/device.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include "kami/world/scene.hpp"
+#include <array>
+static_assert(sizeof(kami::world::Vertex)==68U,
+    "DX12 mesh texture layer must fit the vertex input layout");
 
 int main() {
     kami::world::Device device;
