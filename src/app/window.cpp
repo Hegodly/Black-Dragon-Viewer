@@ -611,9 +611,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"JPEG2000 CPU decoded "+std::to_wstring(
+        // GPU atlas != CPU JPEG2000 cache. Keep the numbers separate
+        // so test screenshots reveal when decoded images still cannot bind.
+        label(L"J2C CPU "+std::to_wstring(
                   sl_circuit_.decoded_texture_count())+
-              L" assets; DX12 mesh default/per-face texture preview active (max 24) | avatar partial",
+              L" | DX12 GPU "+std::to_wstring(
+                  world_renderer_.bound_sl_texture_assets())+
+              L"/24 | textured triangles "+std::to_wstring(
+                  world_renderer_.uploaded_textured_triangles())+
+              L" | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
