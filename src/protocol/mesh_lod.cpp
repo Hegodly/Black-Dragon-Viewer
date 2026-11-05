@@ -174,6 +174,26 @@ bool position_domain(const Value& node,std::array<float,3>& lo,
     for(unsigned i=0;i<3U;++i)if(hi[i]<lo[i])return false;
     return true;
 }
+bool uv_domain(const Value& face,std::array<float,2>& lo,
+               std::array<float,2>& hi) noexcept {
+    lo={0.f,0.f};hi={1.f,1.f};
+    const auto* domain=face.get("TexCoord0Domain");
+    if(!domain)return true;
+    if(domain->kind!=Value::Kind::Map)return false;
+    const auto* lower=domain->get("Min");
+    const auto* upper=domain->get("Max");
+    if(!lower||!upper||lower->kind!=Value::Kind::Array||
+       upper->kind!=Value::Kind::Array||lower->list.size()!=2U||
+       upper->list.size()!=2U)return false;
+    for(unsigned i=0;i<2U;++i){
+        double a=0.,b=0.;
+        if(!number(&lower->list[i],a)||!number(&upper->list[i],b)||
+           a<-4096.||b>4096.||a>b)return false;
+        lo[i]=static_cast<float>(a);
+        hi[i]=static_cast<float>(b);
+    }
+    return true;
+}
 std::uint16_t le16(const std::vector<std::uint8_t>& b,std::size_t at) noexcept {
     return std::uint16_t(b[at])|(std::uint16_t(b[at+1U])<<8U);
 }
@@ -237,12 +257,18 @@ bool decode_faces(const Value& root,LOD& out) {
            triangles->kind!=Value::Kind::Binary)return false;
         const auto& points=position->bytes;
         const auto& indices=triangles->bytes;
+        const auto* texcoords=face.get("TexCoord0");
+        if(texcoords&&texcoords->kind!=Value::Kind::Binary)return false;
         if(points.size()<18U||points.size()%6U!=0U||
            points.size()/6U>65535U||
            indices.size()<6U||indices.size()%6U!=0U||
            indices.size()/6U>20000U)return false;
         std::array<float,3> lo{},hi{};
         if(!position_domain(face,lo,hi))return false;
+        std::array<float,2> uv_lo{},uv_hi{};
+        if(texcoords&&
+           (texcoords->bytes.size()!=points.size()/6U*4U||
+            !uv_domain(face,uv_lo,uv_hi)))return false;
         const std::size_t total=indices.size()/6U;
         if(total+result.triangles.size()>20000U)return false;
         std::vector<std::array<float,3>> positions;
@@ -256,6 +282,19 @@ bool decode_faces(const Value& root,LOD& out) {
             }
             positions.push_back(point);
         }
+        std::vector<std::array<float,2>> uv_points;
+        if(texcoords){
+            uv_points.reserve(points.size()/6U);
+            for(std::size_t i=0;i<texcoords->bytes.size();i+=4U){
+                const auto u=le16(texcoords->bytes,i);
+                const auto v=le16(texcoords->bytes,i+2U);
+                const float uu=uv_lo[0]+(uv_hi[0]-uv_lo[0])*
+                    (float(u)/65535.f);
+                const float vv=uv_lo[1]+(uv_hi[1]-uv_lo[1])*
+                    (float(v)/65535.f);
+                uv_points.push_back({uu,1.f-vv});
+            }
+        }
         for(std::size_t i=0;i<indices.size();i+=6U){
             const auto a=le16(indices,i),b=le16(indices,i+2U),
                        c=le16(indices,i+4U);
@@ -266,6 +305,12 @@ bool decode_faces(const Value& root,LOD& out) {
                 const auto& point=positions[idx==0U?a:idx==1U?b:c];
                 for(unsigned axis=0;axis<3U;++axis)
                     triangle.pos[3U*idx+axis]=point[axis];
+                if(texcoords){
+                    const auto& uv=uv_points[idx==0U?a:idx==1U?b:c];
+                    triangle.uv[2U*idx]=uv[0];
+                    triangle.uv[2U*idx+1U]=uv[1];
+                    triangle.has_uv=true;
+                }
             }
             result.triangles.push_back(triangle);
         }
