@@ -161,12 +161,14 @@ void build_box(Emitter& e) {
             z2{.5f,.5f,-.5f},z3{-.5f,.5f,-.5f},
             z4{-.5f,-.5f,.5f},z5{.5f,-.5f,.5f},
             z6{.5f,.5f,.5f},z7{-.5f,.5f,.5f};
+    // Official SL box face order: 0 top +Z, 1 -Y, 2 +X,
+    // 3 +Y, 4 -X, 5 bottom -Z. Never derive it from loop order.
     e.quad(z4,z5,z6,z7,0U);
-    e.quad(z1,z0,z3,z2,1U);
-    e.quad(z0,z4,z7,z3,2U);
-    e.quad(z5,z1,z2,z6,3U);
-    e.quad(z3,z7,z6,z2,4U);
-    e.quad(z0,z1,z5,z4,5U);
+    e.quad(z0,z1,z5,z4,1U);
+    e.quad(z5,z1,z2,z6,2U);
+    e.quad(z3,z7,z6,z2,3U);
+    e.quad(z0,z4,z7,z3,4U);
+    e.quad(z1,z0,z3,z2,5U);
 }
 void build_cylinder(Emitter& e){
     constexpr unsigned kSides=20U;
@@ -179,9 +181,9 @@ void build_cylinder(Emitter& e){
         const V lon{std::cos(b)*.5f,std::sin(b)*.5f,-.5f};
         const V hin{lon.x,lon.y,.5f};
         const float u0=float(i)/kSides,u1=float(i+1U)/kSides;
-        e.quad(lo,lon,hin,hi,0U,{u0,1.f},{u1,1.f},
+        e.quad(lo,lon,hin,hi,1U,{u0,1.f},{u1,1.f},
                {u1,0.f},{u0,0.f});
-        e.tri({0,0,.5f},hi,hin,1U,
+        e.tri({0,0,.5f},hi,hin,0U,
               {.5f,.5f},{hi.x+.5f,1.f-(hi.y+.5f)},
               {hin.x+.5f,1.f-(hin.y+.5f)});
         e.tri({0,0,-.5f},lon,lo,2U,
@@ -193,11 +195,12 @@ void build_prism(Emitter& e){
     constexpr float y=-0.2886751346f;
     const V a{-.5f,y,-.5f}, b{.5f,y,-.5f},c{0.f,-2.f*y,-.5f};
     const V d{a.x,a.y,.5f},f{b.x,b.y,.5f},g{c.x,c.y,.5f};
-    e.tri(a,c,b,0U,{0.f,1.f},{.5f,0.f},{1.f,1.f});
-    e.tri(d,f,g,1U,{0.f,1.f},{1.f,1.f},{.5f,0.f});
-    e.quad(a,b,f,d,2U);
-    e.quad(b,c,g,f,3U);
-    e.quad(c,a,d,g,4U);
+    // Official SL prism order: top, +Y, -X, -Y, bottom.
+    e.tri(d,f,g,0U,{0.f,1.f},{1.f,1.f},{.5f,0.f});
+    e.quad(b,c,g,f,1U);
+    e.quad(c,a,d,g,2U);
+    e.quad(a,b,f,d,3U);
+    e.tri(a,c,b,4U,{0.f,1.f},{.5f,0.f},{1.f,1.f});
 }
 void build_sphere(Emitter& e){
     constexpr unsigned lat=10U,lon=20U;
