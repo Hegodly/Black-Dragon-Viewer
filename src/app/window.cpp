@@ -554,6 +554,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Requested "+std::to_wstring(
                     sl_circuit_.requested_object_ids());
             }
+            if(i==1U){
+                detail=L"Live terrain | texture layers "+std::to_wstring(world_renderer_.terrain_texture_layers())+
+                    L" / PBR layers "+std::to_wstring(world_renderer_.terrain_pbr_layers())+
+                    L" | HDR probe updates "+std::to_wstring(world_renderer_.environment_updates());
+            }
             if(i==3U && sl_circuit_.state()==
                protocol::sim::CircuitState::MovementConfirmed){
                 detail=L"AgentUpdate packets "+
@@ -624,6 +629,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               L" | PBR assets "+std::to_wstring(sl_circuit_.decoded_materials().size())+
               L" faces "+std::to_wstring(world_renderer_.bound_pbr_faces())+
               L" failures "+std::to_wstring(sl_circuit_.material_failures())+
+              L" | IBL "+std::to_wstring(world_renderer_.environment_updates())+
+              L" | land "+std::to_wstring(world_renderer_.terrain_texture_layers())+
+              L"/"+std::to_wstring(world_renderer_.terrain_pbr_layers())+
               L" | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);

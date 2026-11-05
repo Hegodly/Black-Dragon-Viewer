@@ -24,6 +24,11 @@ StructuredBuffer<float4> skinRows : register(t2);
 SamplerState materialSampler : register(s1);
 StructuredBuffer<float4> materialRows : register(t3);
 Texture2DArray<float4> colorTexture : register(t4);
+TextureCube<float4> capturedRadiance : register(t5);
+TextureCube<float4> filteredRadiance : register(t6);
+TextureCube<float4> diffuseIrradiance : register(t7);
+Texture2D<float4> environmentBRDF : register(t8);
+StructuredBuffer<float4> environmentProbe : register(t9);
 struct VertexIn {
     float3 position : POSITION;
     float3 normal : NORMAL;
@@ -188,7 +193,7 @@ float4 pbr_base(float2 uv,uint offset,bool front) {
 }
 void shadow_pixel_main(ShadowInterpolant input,bool front:SV_IsFrontFace) {
     uint offset=material_offset(input.pbrMaterial);
-    if(offset>0U)pbr_base(input.uv,offset,front);
+    if(offset>0U){if(materialRows[offset+4U].x>=0.0)pbr_base(input.uv,offset,front);}
     else sample_material(input.uv,input.textureLayer);
 }
 float3 mapped_normal(float3 N,float3 position,float2 uv,uint offset) {
@@ -237,32 +242,103 @@ float ggx_distribution(float NdotH, float r) {
 float smith_visibility(float NdotX, float k) {
     return NdotX/(NdotX*(1.0-k)+k);
 }
-float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
-    uint offset=material_offset(input.pbrMaterial);
-    float3 N=normalize(input.normal);
-    float4 surface=float4(0.0,0.0,0.0,1.0);
-    float metallic=saturate(input.material.x),roughness=clamp(input.material.y,0.07,1.0);
-    float occlusion=1.0;float3 emissive=float3(0.0,0.0,0.0);float opacity=1.0;
-    bool unlit=false;
+float3 probe_direction(float3 position,float3 ray) {
+    float3 center=environmentProbe[0].xyz,extent=environmentProbe[1].xyz;
+    float3 p=position-center;
+    if(environmentProbe[2].x>0.5){
+        float3 ax=environmentProbe[3].xyz,ay=environmentProbe[4].xyz,az=environmentProbe[5].xyz;
+        float3 local=float3(dot(p,ax),dot(p,ay),dot(p,az));
+        float3 direction=float3(dot(ray,ax),dot(ray,ay),dot(ray,az));
+        direction=float3(abs(direction.x)<0.00001?0.00001:direction.x,
+                         abs(direction.y)<0.00001?0.00001:direction.y,
+                         abs(direction.z)<0.00001?0.00001:direction.z);
+        float3 hit=(sign(direction)*extent-local)/direction;
+        float distance=min(hit.x,min(hit.y,hit.z));
+        if(distance>0.0)return normalize(p+distance*ray);
+    }else{
+        float radius=max(extent.x,max(extent.y,extent.z));
+        float a=dot(p,ray),disc=a*a-dot(p,p)+radius*radius;
+        if(disc>0.0){float t=-a+sqrt(disc);if(t>0.0)return normalize(p+t*ray);}
+    }return ray;
+}
+float3 environment_light(float3 position,float3 N,float3 V,float3 base,
+                         float metallic,float roughness,float occlusion){
+    float nv=max(dot(N,V),0.001);float3 f0=lerp(float3(.04,.04,.04),base,metallic);
+    float3 f=f0+(max(float3(1.0-roughness,1.0-roughness,1.0-roughness),f0)-f0)*pow(1.0-nv,5.0);
+    float3 irradiance=diffuseIrradiance.SampleLevel(materialSampler,N,0.0).rgb;
+    float3 direction=probe_direction(position,reflect(-V,N));
+    float3 radiance=filteredRadiance.SampleLevel(materialSampler,direction,roughness*6.0).rgb;
+    float2 brdf=environmentBRDF.SampleLevel(materialSampler,
+        clamp(float2(nv,roughness),0.5/64.0,1.0-0.5/64.0),0.0).rg;
+    float ambiance=max(environmentProbe[1].w,0.0);
+    float3 diffuse=(1.0-f)*(1.0-metallic)*base*irradiance/3.14159265359*ambiance;
+    float3 specular=radiance*(f0*brdf.x+brdf.y);
+    return (diffuse+specular+base*.075*max(1.0-ambiance,0.0))*occlusion;
+}
+struct Surface {
+    float3 normal,base,emissive;
+    float metallic,roughness,occlusion,opacity,unlit;
+};
+Surface load_surface(Interpolant input,bool front,uint offset,bool terrain,float legacyLayer){
+    Surface s;s.normal=normalize(input.normal);s.base=input.albedo;s.emissive=float3(0,0,0);
+    s.metallic=saturate(input.material.x);s.roughness=clamp(input.material.y,.07,1.0);
+    s.occlusion=1.0;s.opacity=1.0;s.unlit=0.0;
     if(offset>0U){
-        surface=pbr_base(input.uv,offset,front);
-        float4 flags=materialRows[offset+4U];unlit=flags.z>0.5;
-        if(!front)N=-N;
-        float4 factors=materialRows[offset+2U];
-        float4 layers=materialRows[offset+3U];
-        metallic=factors.x;roughness=factors.y;
-        if(frame.z>0.5&&!unlit){
+        float4 flags=materialRows[offset+4U];float4 factors=materialRows[offset+2U];float4 layers=materialRows[offset+3U];
+        float4 base;
+        if(terrain){base=materialRows[offset];base.rgb*=pbr_texel(input.uv,offset,0U,layers.x).rgb;}
+        else base=pbr_base(input.uv,offset,front);
+        s.base=base.rgb;s.unlit=flags.z>0.5?1.0:0.0;
+        if(!terrain&&!front)s.normal=-s.normal;
+        s.metallic=factors.x;s.roughness=factors.y;
+        if(frame.z>0.5&&s.unlit<.5){
             float3 orm=pbr_texel(input.uv,offset,2U,layers.z).rgb;
-            metallic*=orm.b;roughness*=orm.g;
-            float ao=flags.w>0.5?pbr_texel(input.uv,offset,4U,flags.w).r:orm.r;
-            occlusion=lerp(1.0,ao,factors.z);
-            N=mapped_normal(N,input.position,input.uv,offset);
+            s.metallic*=orm.b;s.roughness*=orm.g;
+            float ao=flags.w>.5?pbr_texel(input.uv,offset,4U,flags.w).r:orm.r;
+            s.occlusion=lerp(1.0,ao,factors.z);
+            s.normal=mapped_normal(s.normal,input.position,input.uv,offset);
         }
-        roughness=clamp(roughness,0.07,1.0);
-        emissive=materialRows[offset+1U].rgb*
-            pbr_texel(input.uv,offset,3U,layers.w).rgb;
-        opacity=flags.x>1.5?surface.a:1.0;
-    }
+        s.roughness=clamp(s.roughness,.07,1.0);
+        s.emissive=materialRows[offset+1U].rgb*pbr_texel(input.uv,offset,3U,layers.w).rgb;
+        s.opacity=!terrain&&flags.x>1.5?base.a:1.0;
+    }else if(terrain){
+        s.base=legacyLayer>.5?colorTexture.Sample(materialSampler,float3(input.uv,legacyLayer)).rgb:input.albedo;
+        s.metallic=0.0;s.roughness=.86;
+    }else{
+        float3 texel=sample_material(input.uv,input.textureLayer).rgb;
+        s.base=input.textureLayer<.5?saturate(input.albedo*lerp(.72,1.12,texel)):saturate(input.albedo*texel);
+    }return s;
+}
+float corner_blend(float4 corners,float2 uv){return lerp(lerp(corners.x,corners.z,uv.x),lerp(corners.y,corners.w,uv.x),uv.y);}
+float terrain_noise(float2 p){
+    float2 grid=floor(p),f=frac(p);f=f*f*(3.0-2.0*f);
+    float4 hash=frac(sin(float4(dot(grid,float2(127.1,311.7)),dot(grid+float2(1,0),float2(127.1,311.7)),
+        dot(grid+float2(0,1),float2(127.1,311.7)),dot(grid+float2(1,1),float2(127.1,311.7))))*43758.5453);
+    return lerp(lerp(hash.x,hash.y,f.x),lerp(hash.z,hash.w,f.x),f.y)*2.0-1.0;
+}
+float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
+    uint offset=material_offset(input.pbrMaterial);Surface surface;
+    if(offset>0U&&materialRows[offset+4U].x<-.5){
+        float3 absolute=input.position+materialRows[offset+4U].yzw;
+        float2 position=saturate(absolute.xz/256.0);
+        float start=corner_blend(materialRows[offset+2U],position);
+        float range=max(corner_blend(materialRows[offset+3U],position),.01);
+        float level=clamp((absolute.y+terrain_noise(absolute.xz/16.0)*6.5-start)*4.0/range,0.0,3.0);
+        float4 weights=saturate(1.0-abs(float4(0,1,2,3)-level));
+        surface.normal=float3(0,0,0);surface.base=float3(0,0,0);surface.emissive=float3(0,0,0);
+        surface.metallic=0.0;surface.roughness=0.0;surface.occlusion=0.0;surface.opacity=1.0;surface.unlit=0.0;
+        [unroll]for(uint i=0U;i<4U;++i){
+            uint layer=material_offset((uint)round(materialRows[offset][i]));
+            Surface s=load_surface(input,true,layer,true,materialRows[offset+1U][i]);
+            surface.normal+=s.normal*weights[i];surface.base+=s.base*weights[i];surface.emissive+=s.emissive*weights[i];
+            surface.metallic+=s.metallic*weights[i];surface.roughness+=s.roughness*weights[i];
+            surface.occlusion+=s.occlusion*weights[i];surface.unlit+=s.unlit*weights[i];
+        }
+        surface.normal=normalize(surface.normal);
+    }else surface=load_surface(input,front,offset,false,0.0);
+    float3 N=surface.normal,base=surface.base,emissive=surface.emissive;
+    float metallic=surface.metallic,roughness=surface.roughness,occlusion=surface.occlusion,opacity=surface.opacity;
+    bool unlit=surface.unlit>.999;
     float3 L=normalize(-sunDirectionIntensity.xyz);
     float3 V=normalize(cameraWorldPosition.xyz-input.position);
     float3 H=normalize(L+V);
@@ -270,13 +346,6 @@ float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
     float NdotV=max(saturate(dot(N,V)),0.001);
     float NdotH=saturate(dot(N,H));
     float VdotH=saturate(dot(V,H));
-    float3 base;
-    if(offset>0U)base=surface.rgb;
-    else {
-        float3 texel=sample_material(input.uv,input.textureLayer).rgb;
-        base=input.textureLayer<0.5?saturate(input.albedo*lerp(0.72,1.12,texel)):
-            saturate(input.albedo*texel);
-    }
     float visibility=shadow_factor(input.position,N);
     float3 radiance=float3(1.25,1.18,1.08)*sunDirectionIntensity.w;
     float3 color;
@@ -292,7 +361,10 @@ float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
         float D=ggx_distribution(NdotH,roughness);
         float3 specular=D*G*F/max(4.0*NdotV*NdotL,0.001);
         float3 diffuse=(1.0-F)*(1.0-metallic)*base/PI;
-        color=base*0.075*occlusion+(diffuse+specular)*radiance*NdotL*visibility;
+        float3 ambient=base*.075*occlusion;
+        if(offset>0U&&environmentProbe[0].w>0.5&&photoViewport.z>=-0.5)
+            ambient=environment_light(input.position,N,V,base,metallic,roughness,occlusion);
+        color=ambient+(diffuse+specular)*radiance*NdotL*visibility;
     }
     color+=emissive;
     // Original KAMI material-space contact shading. This uses existing per-pixel
@@ -329,6 +401,8 @@ float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
         const float radius=dot(centered,centered)*0.5;
         color*=1.0-saturate(radius)*photoGrade.w;
     }
+    // Probe captures store scene-linear HDR and exclude IBL feedback.
+    if(photoViewport.z<-.5)return float4(max(color,0.0),opacity);
     // Basic filmic output mapping while maintaining SDR UNORM compatibility.
     color=color/(color+float3(1.0,1.0,1.0));
     // The sRGB render-target view encodes output and blends in linear space.
@@ -349,31 +423,74 @@ SkyVertexOutput sky_vertex_main(uint id : SV_VertexID) {
 }
 // KAMI-generated atmosphere preview, not the simulator's EEP sky.
 float4 sky_pixel_main(SkyVertexOutput input) : SV_TARGET {
-    const float y=saturate(input.uv.y);
-    const float rise=smoothstep(0.0,0.91,y);
-    float3 color=lerp(float3(.075,.21,.43),
-                      float3(.43,.70,.85),rise);
-    const float band=(y-.61)*5.3;
-    const float horizon=exp(-band*band);
+    float3 right=float3(viewProjection[0][0],viewProjection[1][0],viewProjection[2][0]);
+    float3 up=float3(viewProjection[0][1],viewProjection[1][1],viewProjection[2][1]);
+    float3 forward=float3(viewProjection[0][3],viewProjection[1][3],viewProjection[2][3]);
+    float2 ndc=float2(input.uv.x*2.0-1.0,1.0-input.uv.y*2.0);
+    float3 ray=normalize(forward+right*ndc.x/max(dot(right,right),.00001)+up*ndc.y/max(dot(up,up),.00001));
+    float rise=saturate(.5-.5*ray.y);
+    float3 color=lerp(float3(.075,.21,.43),float3(.43,.70,.85),rise);
+    float horizon=exp(-ray.y*ray.y*25.0);
     color=lerp(color,float3(.72,.79,.77),horizon*.23);
-    const float3 sunWorld=cameraWorldPosition.xyz-
-                          sunDirectionIntensity.xyz*80.0;
-    const float4 sunClip=mul(float4(sunWorld,1.0),viewProjection);
-    if(sunClip.w>0.001) {
-        const float2 sunUv=float2(
-            .5+.5*sunClip.x/sunClip.w,
-            .5-.5*sunClip.y/sunClip.w);
-        const float aspect=max(photoViewport.x,1.0)/
-                           max(photoViewport.y,1.0);
-        const float2 delta=(input.uv-sunUv)*float2(aspect,1.0);
-        const float dist=length(delta);
-        const float sunDisc=1.0-smoothstep(.012,.020,dist);
-        const float corona=exp(-dist*22.0);
-        color+=float3(1.0,.76,.42)*(.36*corona+
-               .55*sunDisc)*saturate(sunDirectionIntensity.w);
-    }
+    float alignment=dot(ray,normalize(-sunDirectionIntensity.xyz));
+    float distance=sqrt(max(2.0*(1.0-alignment),0.0));
+    float disc=1.0-smoothstep(.012,.020,distance),corona=exp(-distance*22.0);
+    color+=float3(1.0,.76,.42)*(.36*corona+.55*disc)*saturate(sunDirectionIntensity.w);
+    if(photoViewport.z<-.5)return float4(max(color,0.0),1.0);
     color=color/(1.0+color);
     return float4(saturate(color),1.0);
+}
+
+float2 sequence_sample(uint i,uint count){return float2(float(i)/float(count),float(reversebits(i))*2.3283064365386963e-10);}
+float3 tangent_direction(float3 local,float3 N){
+    float3 up=abs(N.z)<.999?float3(0,0,1):float3(1,0,0);
+    float3 T=normalize(cross(up,N)),B=cross(N,T);
+    return normalize(T*local.x+B*local.y+N*local.z);
+}
+float3 ggx_sample(float2 xi,float3 N,float roughness){
+    float a=roughness*roughness;
+    float co=sqrt((1.0-xi.y)/max(1.0+(a*a-1.0)*xi.y,0.000001));
+    float si=sqrt(max(1.0-co*co,0.0)),phi=6.28318530718*xi.x;
+    return tangent_direction(float3(cos(phi)*si,sin(phi)*si,co),N);
+}
+float3 cube_direction(float2 uv,uint face){
+    float2 p=uv*2.0-1.0;
+    if(face==0U)return normalize(float3(1,-p.y,-p.x));
+    if(face==1U)return normalize(float3(-1,-p.y,p.x));
+    if(face==2U)return normalize(float3(p.x,1,p.y));
+    if(face==3U)return normalize(float3(p.x,-1,-p.y));
+    if(face==4U)return normalize(float3(p.x,-p.y,1));
+    return normalize(float3(-p.x,-p.y,-1));
+}
+float4 environment_filter_pixel(SkyVertexOutput input):SV_TARGET {
+    uint mode=(uint)round(photoGrade.x),face=(uint)round(photoGrade.z);
+    if(mode==2U){
+        float nv=clamp(input.uv.x,.001,.999),roughness=clamp(input.uv.y,.001,1.0);
+        float3 N=float3(0,0,1),V=float3(sqrt(1.0-nv*nv),0,nv);float2 sum=float2(0,0);
+        [loop]for(uint i=0U;i<128U;++i){
+            float3 H=ggx_sample(sequence_sample(i,128U),N,roughness);
+            float3 L=normalize(2.0*dot(V,H)*H-V);
+            float nl=saturate(L.z),nh=saturate(H.z),vh=saturate(dot(V,H));
+            if(nl>0.0){
+                float k=roughness*roughness*.5;
+                float g=(nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k));
+                float visibility=g*vh/max(nh*nv,.00001),f=pow(1.0-vh,5.0);
+                sum+=float2(1.0-f,f)*visibility;
+            }
+        }return float4(sum/128.0,0,1);
+    }
+    float3 N=cube_direction(input.uv,face),sum=float3(0,0,0);float total=0.0;
+    float roughness=photoGrade.y;
+    if(mode==0U&&roughness<.001)return capturedRadiance.SampleLevel(materialSampler,N,0.0);
+    [loop]for(uint i=0U;i<64U;++i){
+        float2 xi=sequence_sample(i,64U);float3 L;
+        if(mode==1U){float r=sqrt(xi.y),phi=6.28318530718*xi.x;
+            L=tangent_direction(float3(cos(phi)*r,sin(phi)*r,sqrt(1.0-xi.y)),N);}
+        else {float3 H=ggx_sample(xi,N,roughness);L=normalize(2.0*dot(N,H)*H-N);}
+        float weight=mode==1U?1.0:max(dot(N,L),0.0);
+        sum+=capturedRadiance.SampleLevel(materialSampler,L,0.0).rgb*weight;total+=weight;
+    }
+    return float4(sum/max(total,.00001)*(mode==1U?3.14159265359:1.0),1.0);
 }
 )";
 }

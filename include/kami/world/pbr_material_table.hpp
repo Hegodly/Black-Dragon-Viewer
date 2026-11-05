@@ -16,7 +16,8 @@ inline PBRTable build_pbr_table(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     const protocol::pbr::Materials& materials,const protocol::pbr::Overrides& overrides,
-    const std::map<std::string,std::uint16_t>& images){
+    const std::map<std::string,std::uint16_t>& images,
+    const std::array<std::string,4>& terrain_assets={}){
     PBRTable table;
     using Record=std::array<PBRRow,protocol::pbr::kRows>;
     std::map<Record,std::uint32_t> records;
@@ -36,7 +37,7 @@ inline PBRTable build_pbr_table(
             }
             auto it=records.find(record);
             if(it==records.end()){
-                if(records.size()>=protocol::pbr::kMaxGPURecords)continue;
+                if(records.size()>=protocol::pbr::kMaxGPURecords-1U)continue;
                 const auto index=static_cast<std::uint32_t>(records.size()+1U);
                 it=records.emplace(record,index).first;
                 table.rows.insert(table.rows.end(),record.begin(),record.end());
@@ -44,6 +45,10 @@ inline PBRTable build_pbr_table(
             table.faces.emplace(pbr_face_key(id,f),it->second);
         }
     };
-    scan(roots);scan(children);return table;
+    scan(roots);scan(children);
+    protocol::objectspatial::Transform land;
+    for(unsigned i=0U;i<4U;++i)land.face_material_ids[i]=terrain_assets[i];
+    scan(std::map<std::uint32_t,protocol::objectspatial::Transform>{{0U,land}});
+    return table;
 }
 }

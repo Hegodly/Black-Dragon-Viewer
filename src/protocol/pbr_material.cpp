@@ -180,6 +180,27 @@ bool decode_face_ids(std::span<const std::uint8_t> b,std::array<std::string,32>&
         }if(at!=b.size())return false;output=std::move(ids);return true;
     }catch(...){return false;}
 }
+bool decode_probe(std::span<const std::uint8_t> b,bool& found,float& ambiance,float& clip,std::uint8_t& flags) noexcept {
+    try{
+        bool present=false;float a=1.f,c=.1f;std::uint8_t f=0U;
+        if(b.empty()){found=false;return true;}
+        std::size_t at=1U;if(b[0]>32U)return false;
+        for(unsigned i=0;i<b[0];++i){
+            if(b.size()-at<6U)return false;
+            const unsigned type=b[at]|(unsigned(b[at+1U])<<8U);
+            const auto n=std::uint32_t(b[at+2U])|(std::uint32_t(b[at+3U])<<8U)|
+                (std::uint32_t(b[at+4U])<<16U)|(std::uint32_t(b[at+5U])<<24U);at+=6U;
+            if(n>b.size()-at)return false;
+            if(type==0x90U){
+                if(present||n!=9U)return false;present=true;
+                std::memcpy(&a,b.data()+at,4U);std::memcpy(&c,b.data()+at+4U,4U);f=b[at+8U];
+                if(!std::isfinite(a)||!std::isfinite(c)||a<0.f||a>100.f||c<0.f||c>1024.f)return false;
+            }at+=n;
+        }
+        if(at!=b.size())return false;
+        found=present;ambiance=a;clip=c;flags=f;return true;
+    }catch(...){return false;}
+}
 bool decode_json(std::string_view json,Material& output) noexcept {
     try{
         if(json.empty()||json.size()>1024U*1024U)return false;

@@ -19,6 +19,9 @@ struct RegionMetadata {
     std::string name;
     float water_height=0.f; // SL region absolute Z in meters
     bool verified=false;
+    std::array<std::string,4> terrain_assets{};
+    std::array<float,4> terrain_start{},terrain_range{20.f,20.f,20.f,20.f};
+    bool terrain_metadata=false;
 };
 struct AgentPosition {
     float x=0.f,y=0.f,z=0.f; // SL axes, Z is elevation
@@ -83,3 +86,4 @@ inline constexpr std::uint32_t kAllowedMovement=
 [[nodiscard]] bool movement_complete_identifies(
     const lludp::Packet& packet,const LoginResult& authorized_login) noexcept;
 } // namespace kami::protocol::sim
+

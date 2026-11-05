@@ -1,4 +1,5 @@
 #include "kami/world/renderer.hpp"
+#include "kami/world/live_primitive_geometry.hpp"
 #include "kami/protocol/bootstrap.hpp"
 #include "kami/features/creator_studio.hpp"
 #include "kami/graphics/settings.hpp"
@@ -28,6 +29,21 @@ struct RendererPixelTestAccess {
         r.wait_for_gpu();
         protocol::objectspatial::Transform t;t.local_id=1U;t.face_material_ids[0]="material";
         const auto table=build_pbr_table({{1U,t}},{},{{"material",material}},{},r.live_texture_layers_);
+        r.pbr_rows_=table.rows;return r.make_material_records(r.pbr_rows_);
+    }
+    static void environment(Renderer& r,bool capture,bool frozen){
+        r.wait_for_gpu();r.environment_test_=capture;r.environment_frozen_=frozen;
+        if(capture&&!frozen){r.environment_ready_=false;r.environment_updates_=0U;r.environment_face_=0U;
+            r.environment_capture_probe_=EnvironmentProbe{};r.write_environment_probe();}
+    }
+    static bool terrain(Renderer& r,float start){
+        r.wait_for_gpu();protocol::pbr::Material red,green;red.unlit=green.unlit=true;
+        red.base={1,0,0,1};green.base={0,1,0,1};
+        protocol::objectspatial::Transform t;t.face_material_ids[0]="red";t.face_material_ids[1]="green";
+        auto table=build_pbr_table({{1U,t}}, {}, {{"red",red},{"green",green}}, {}, {});
+        std::array<PBRRow,protocol::pbr::kRows> marker{};
+        marker[0]={1,1,2,2};marker[2]={start,start,start,start};marker[3]={1,1,1,1};marker[4]={-1,0,0,0};
+        table.rows.insert(table.rows.end(),marker.begin(),marker.end());
         r.pbr_rows_=table.rows;return r.make_material_records(r.pbr_rows_);
     }
     static bool blend_active(const Renderer& r){return !r.transparent_vertices_.empty();}
@@ -200,6 +216,48 @@ bool check_pbr_pixels(kami::world::Renderer& renderer) {
     if(!render(m,off)||off.hash==emission.hash){std::wcerr<<L"PBR pixel check failed at line "<<__LINE__<<L"\n";return false;}
     renderer.clear_creator_preview();
     std::wcout<<L"KAMI PBR PIXELS VERIFIED: base color, transforms, normal, ORM, AO, emissive, OPAQUE/MASK/BLEND and PBR toggle\n";
+    return true;
+}
+
+bool check_environment_pixels(kami::world::Renderer& renderer){
+    using namespace kami;using Access=world::RendererPixelTestAccess;
+    graphics::Settings graphics;graphics.pbr=true;graphics.shadows=false;graphics.animate_avatar=false;
+    graphics.vsync=false;graphics.fps_limit=0;graphics.contact_ambient=false;graphics.diamond_glints=false;
+    renderer.set_graphics(graphics);
+    protocol::objectspatial::Transform enclosure;enclosure.local_id=1;enclosure.x=enclosure.y=enclosure.z=0;
+    enclosure.sx=enclosure.sy=enclosure.sz=40;enclosure.primitive=protocol::objectspatial::PrimitiveKind::Box;
+    auto room=world::build_live_primitive_geometry({{1U,enclosure}}, {},0,0,0).scene;
+    for(auto& v:room.vertices)v.pbr_material=1;
+    protocol::pbr::Material green;green.base={0,1,0,1};green.unlit=true;green.double_sided=true;
+    if(!Access::pbr_material(renderer,green)||!renderer.set_creator_preview(room))return false;
+    Access::environment(renderer,true,false);
+    for(unsigned i=0;i<6;++i)renderer.draw();
+    if(!renderer.ready()||!renderer.environment_lighting_ready()||renderer.environment_updates()!=1U)return false;
+    Access::environment(renderer,true,true);
+    auto scene=world::build_test_scene(8);scene.terrain_count=scene.vertices.size();scene.avatar_count=0;
+    for(auto& v:scene.vertices){v.pbr_material=1;v.bone_weights=0;v.body_region=0;}
+    protocol::pbr::Material metal;metal.metallic=1;metal.roughness=.08f;metal.double_sided=true;
+    if(!Access::pbr_material(renderer,metal)||!renderer.set_creator_preview(scene))return false;
+    wchar_t folder[MAX_PATH]{};if(!GetTempPathW(MAX_PATH,folder))return false;
+    const std::wstring target=std::wstring(folder)+L"KAMI-IBL-Terrain-Test.png";
+    const auto capture=[&](std::array<std::uint64_t,3>& sum){
+        std::size_t count=0;if(!renderer.capture_png(target))return false;renderer.draw();
+        const bool ok=renderer.ready()&&renderer.capture_status()==world::CaptureStatus::Saved&&count_magenta(target,count,nullptr,&sum);
+        std::error_code ignored;std::filesystem::remove(target,ignored);return ok;
+    };
+    std::array<std::uint64_t,3> reflected{},disabled{},red{},land_green{};
+    if(!capture(reflected))return false;
+    graphics.pbr=false;renderer.set_graphics(graphics);if(!capture(disabled))return false;
+    std::wcout<<L"IBL channels on="<<reflected[0]<<L","<<reflected[1]<<L","<<reflected[2]
+        <<L" off="<<disabled[0]<<L","<<disabled[1]<<L","<<disabled[2]<<L"\n";
+    if(reflected[1]<=reflected[0]+10000U||reflected[1]<=disabled[1])return false;
+    graphics.pbr=true;renderer.set_graphics(graphics);
+    for(auto& v:scene.vertices)v.pbr_material=3;
+    if(!Access::terrain(renderer,10000)||!renderer.set_creator_preview(scene)||!capture(red))return false;
+    if(!Access::terrain(renderer,-10000)||!capture(land_green))return false;
+    if(red[0]<=red[1]+10000U||land_green[1]<=land_green[0]+10000U)return false;
+    Access::environment(renderer,false,true);renderer.clear_creator_preview();
+    std::wcout<<L"KAMI PBR ENVIRONMENT TERRAIN PIXELS VERIFIED: captured geometry, GGX IBL and height-selected terrain materials\n";
     return true;
 }
 
@@ -549,6 +607,7 @@ int main(int argc,char** argv) {
                 }
                 if(!result&&!check_sampled_pixels(renderer))result=32;
                 if(!result&&!check_pbr_pixels(renderer)){std::wcerr<<L"PBR pixel regression failed\n";result=33;}
+                if(!result&&!check_environment_pixels(renderer)){std::wcerr<<L"Environment/terrain pixel regression failed\n";result=34;}
                 if(!result) std::wcout
                     <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":L"KAMI DX12 SMOKE PASS")
                     <<L" - adapter: "<<renderer.adapter_name()

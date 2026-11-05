@@ -26,6 +26,14 @@ struct Settings {
         }
         return 32;
     }
+    [[nodiscard]] unsigned mesh_triangles() const noexcept {
+        switch(preset){
+        case Preset::Potato:return 24000U;
+        case Preset::Performance:return 80000U;
+        case Preset::Balanced:return 180000U;
+        case Preset::Quality:return 500000U;
+        }return 180000U;
+    }
     [[nodiscard]] float sun_strength() const noexcept {
         switch(preset) {
         case Preset::Potato: return 0.28f;
@@ -42,3 +50,4 @@ struct Settings {
 void save(Settings value) noexcept;
 [[nodiscard]] const wchar_t* preset_label(Preset preset) noexcept;
 }
+

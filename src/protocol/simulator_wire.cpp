@@ -252,6 +252,25 @@ bool decode_region_metadata(const lludp::Packet& packet,
     out.name=std::move(name);
     out.water_height=water;
     out.verified=true;
+    // RegionHandshake: BillableFactor, CacheID, TerrainBase[4], Detail[4],
+    // then four corner start heights and four corner ranges.
+    const auto detail=water_at+4U+4U+16U+64U;
+    if(detail<=bytes.size()&&bytes.size()-detail>=96U){
+        constexpr char hex[]="0123456789abcdef";
+        bool valid=true;
+        for(unsigned i=0U;i<4U;++i){
+            std::string id;bool any=false;
+            for(unsigned n=0;n<16U;++n){const auto ch=bytes[detail+i*16U+n];any=any||ch!=0U;
+                if(n==4U||n==6U||n==8U||n==10U)id+='-';id+=hex[ch>>4U];id+=hex[ch&15U];}
+            out.terrain_assets[i]=any?id:"";
+            std::memcpy(&out.terrain_start[i],bytes.data()+detail+64U+i*4U,4U);
+            std::memcpy(&out.terrain_range[i],bytes.data()+detail+80U+i*4U,4U);
+            valid=valid&&std::isfinite(out.terrain_start[i])&&std::isfinite(out.terrain_range[i])&&
+                out.terrain_start[i]>=-4096.f&&out.terrain_start[i]<=8192.f&&
+                out.terrain_range[i]>=0.f&&out.terrain_range[i]<=8192.f;
+        }
+        out.terrain_metadata=valid;
+    }
     return true;
 }
 bool decode_agent_movement_position(const lludp::Packet& packet,
@@ -287,3 +306,4 @@ bool movement_complete_identifies(const lludp::Packet& packet,
            std::equal(session.begin(),session.end(),packet.body.begin()+20);
 }
 } // namespace kami::protocol::sim
+

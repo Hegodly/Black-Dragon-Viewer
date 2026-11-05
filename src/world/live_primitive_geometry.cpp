@@ -342,7 +342,8 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     float agent_x,float agent_y,float agent_z,
     std::size_t max_layers,
     const std::map<std::string,std::uint16_t>& previous,
-    const protocol::pbr::Materials& materials,const protocol::pbr::Overrides& overrides) {
+    const protocol::pbr::Materials& materials,const protocol::pbr::Overrides& overrides,
+    const std::vector<std::string>& extra_images) {
     // Keep the original single-draw DX12 array budget (slice 0 is the
     // procedural fallback). Never select textures based on UUID sorting.
     max_layers=std::min<std::size_t>(max_layers,protocol::texture::kGPUImageLayers);
@@ -407,6 +408,13 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
             }
         }
     };
+    for(const auto& uuid:extra_images){
+        const auto image=decoded.find(uuid);
+        if(image!=decoded.end()&&image->second.width&&image->second.height&&
+           image->second.width<=2048U&&image->second.height<=2048U&&
+           image->second.rgba.size()==std::uint64_t(image->second.width)*image->second.height*4U)
+            nearest.insert_or_assign(uuid,-1.f);
+    }
     for(const auto& [id,root]:roots){
         (void)id;
         if(root.parent_id==0U&&
@@ -464,7 +472,7 @@ MeshBatch build_live_mesh_geometry(
     MeshBatch batch{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return batch;
-    max_triangles=std::min<std::size_t>(max_triangles,24000U);
+    max_triangles=std::min<std::size_t>(max_triangles,500000U);
     struct Item {
         const Transform* transform;
         const protocol::mesh::LOD* lod;

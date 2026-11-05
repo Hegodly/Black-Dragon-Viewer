@@ -58,6 +58,7 @@ bool sane_child(const Transform& p) noexcept {
 struct CompressedVolume {
     std::array<std::string,32U> face_material_ids{};
     bool material_params_seen=false;
+    bool reflection_probe=false;float probe_ambiance=1.f,probe_clip=.1f;std::uint8_t probe_flags=0U;
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
@@ -140,6 +141,7 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     out.sculpt_records=summary.sculpt;
     out.extras=true;
     out.material_params_seen=pbr::decode_face_ids(extras,out.face_material_ids);
+    (void)pbr::decode_probe(extras,out.reflection_probe,out.probe_ambiance,out.probe_clip,out.probe_flags);
     out.mesh=mesh::mesh_asset_from_extras(extras);
     // LLViewerObject processes sound and NV fields BEFORE
     // LLVOVolume::unpackVolumeParams() consumes 23 shape bytes.
@@ -239,6 +241,8 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.mesh_asset_id=shape.mesh;
         t.face_material_ids=shape.face_material_ids;
         t.material_params_seen=shape.material_params_seen;
+        t.reflection_probe=shape.reflection_probe;t.probe_ambiance=shape.probe_ambiance;
+        t.probe_clip=shape.probe_clip;t.probe_flags=shape.probe_flags;
         t.primitive=shape.primitive;
         t.volume_params_seen=shape.shape;
         t.default_texture_present=shape.default_texture_present;
@@ -290,6 +294,8 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.face_texture_asset_ids==b.face_texture_asset_ids&&
         a.face_texture_override==b.face_texture_override&&
         a.face_material_ids==b.face_material_ids&&a.material_params_seen==b.material_params_seen&&
+        a.reflection_probe==b.reflection_probe&&a.probe_ambiance==b.probe_ambiance&&
+        a.probe_clip==b.probe_clip&&a.probe_flags==b.probe_flags&&
         a.face_uv==b.face_uv&&a.face_rgba==b.face_rgba&&
         a.face_rgba_present==b.face_rgba_present&&
         a.base_tint_present==b.base_tint_present&&
@@ -310,6 +316,8 @@ Transform merge_compressed_transform(
     if(!incoming.material_params_seen){
         merged.face_material_ids=previous.face_material_ids;
         merged.material_params_seen=previous.material_params_seen;
+        merged.reflection_probe=previous.reflection_probe;merged.probe_ambiance=previous.probe_ambiance;
+        merged.probe_clip=previous.probe_clip;merged.probe_flags=previous.probe_flags;
     }
     merged.default_texture_present=
         merged.default_texture_present||previous.default_texture_present;

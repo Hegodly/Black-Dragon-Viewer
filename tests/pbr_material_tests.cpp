@@ -2,6 +2,8 @@
 #include "kami/world/pbr_material_table.hpp"
 #include "kami/world/live_primitive_geometry.hpp"
 #include <cstdio>
+#include <cstring>
+#include "kami/world/environment.hpp"
 using namespace kami;
 namespace {
 void be(std::vector<std::uint8_t>& b,std::uint32_t n){for(int s=24;s>=0;s-=8)b.push_back((n>>s)&255U);}
@@ -69,6 +71,20 @@ int run(){
     if(!effective(id,object,2U,materials,sparse_live,applied)||
        applied.images[0]!=prior.images[0]||applied.images[1]!=image||
        applied.uv[1].scale[1]!=3.f)return 18;
+    // Terrain material IDs occupy four independent virtual faces.
+    const auto land=world::build_pbr_table({}, {}, materials, {}, {{image,1U}}, {id,id,id,id});
+    if(land.faces.size()!=4U||!land.faces.contains(world::pbr_face_key(0U,3U)))return 19;
+    const auto land_images=world::select_visible_mesh_texture_layers({}, {}, {}, {}, {{image,bitmap}},0,0,0,1U,{}, {}, {},{image});
+    if(!land_images.contains(image))return 20;
+    std::vector<std::uint8_t> probe{1,0x90,0,9,0,0,0,0,0,0,0,0,0,0,0,1};
+    bool found=false;float ambiance=-1,clip=-1;std::uint8_t flags=0;
+    if(!decode_probe(probe,found,ambiance,clip,flags)||!found||ambiance!=0||clip!=0||flags!=1)return 21;
+    probe.pop_back();if(decode_probe(probe,found,ambiance,clip,flags))return 22;
+    auto volume=prim;volume.reflection_probe=true;volume.probe_flags=1;volume.sx=volume.sy=volume.sz=20;
+    const auto selected=world::select_environment_probe({{77U,volume}},{128,128,35},{0,0,0});
+    if(!selected.server||!selected.box||selected.center!=std::array<float,3>{0,0,0})return 23;
+    const auto fallback=world::select_environment_probe({{77U,volume}},{0,0,0},{1000,0,0});
+    if(fallback.server||fallback.center[0]!=1000)return 24;
     return 0;
 }
 }
