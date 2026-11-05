@@ -427,7 +427,7 @@ int run_primitive_tests(){
         const auto quality=world::build_live_mesh_geometry(instances, {}, {},{{asset_id,shared}},128,140,35,550000U);
         if(quality.emitted_triangles!=550000U||quality.scene.vertices.size()!=1650000U)return 55;
     }
-    // R62: Quality may draw 4,080 verified primitive boxes, but the
+    // R65: Quality falls back to 2,048 verified primitive boxes, but the
     // internal cap still defers additional eligible shapes.
     {
         std::map<std::uint32_t,Transform> crowded;
@@ -441,10 +441,10 @@ int run_primitive_tests(){
         }
         const auto quality=world::build_live_primitive_geometry(
             crowded,{},0.f,0.f,0.f,9000U);
-        if(!valid(quality)||quality.root_shapes!=4080U||
+        if(!valid(quality)||quality.root_shapes!=2048U||
            quality.eligible_shapes!=4200U||
-           quality.budget_deferred_shapes!=120U||
-           quality.scene.vertices.size()!=4080U*36U)return 56;
+           quality.budget_deferred_shapes!=2152U||
+           quality.scene.vertices.size()!=2048U*36U)return 56;
         const auto balanced=world::build_live_primitive_geometry(
             crowded,{},0.f,0.f,0.f,512U);
         if(!valid(balanced)||balanced.root_shapes!=512U||
@@ -465,7 +465,7 @@ int run_primitive_tests(){
            capped.budget_deferred_shapes!=3U||
            capped.scene.vertices.size()>2410U)return 58;
     }
-    // R64 regression: render mesh assets first when 4,080 primitives
+    // R64/R65 regression: render mesh assets first when dense primitives
     // compete for the same bounded DX12 world buffer. A prim-first
     // allocator could fill the buffer and leave NO visible mesh.
     {
