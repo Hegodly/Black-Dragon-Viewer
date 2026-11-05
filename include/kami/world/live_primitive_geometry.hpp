@@ -71,6 +71,14 @@ struct MeshBatch {
     std::size_t root_meshes=0,linked_meshes=0;
     std::size_t emitted_triangles=0,waiting_for_parent=0;
     std::size_t textured_triangles=0; // authentic default TE + decoded mesh UV
+    // R66: mutually exclusive classifications for authenticated mesh
+    // instances. These metrics distinguish interest/LOD/culling problems
+    // from DX12 vertex-budget exhaustion without changing what is drawn.
+    std::size_t eligible_instances=0;
+    std::size_t missing_lod_instances=0;
+    std::size_t out_of_range_instances=0;
+    std::size_t invalid_pose_instances=0;
+    std::size_t undrawn_eligible_instances=0;
 };
 // Render ONLY vertices decoded from real mesh assets (no surrogate boxes).
 // Shared SL-to-DX12 transforms with the validated prim hierarchy builder.
