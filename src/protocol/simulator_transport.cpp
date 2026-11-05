@@ -473,10 +473,31 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 std::vector<objectspatial::Transform> linked;
                 std::vector<std::uint32_t> parent_ids;
                 std::vector<std::uint32_t> avatar_ids;
+                std::vector<objectspatial::AvatarFullPose> avatar_poses;
                 objectspatial::FullDecodeAudit frame{};
                 if(objectspatial::decode_full_transforms(
                        incoming,objects,&frame,&parent_ids,&linked,
-                       &avatar_ids)){
+                       &avatar_ids,&avatar_poses)){
+                    // Only the authenticated login AgentID can define our
+                    // own avatar local ID and authoritative world origin.
+                    std::array<std::uint8_t,16U> own_uuid{};
+                    if(parse_uuid(login_.handoff.agent_id,own_uuid)){
+                        for(const auto& avatar:avatar_poses){
+                            if(avatar.full_id!=own_uuid)continue;
+                            own_avatar_local_id_=avatar.local_id;
+                            const float moved=std::hypot(std::hypot(
+                                avatar.x-movement_position_.x,
+                                avatar.y-movement_position_.y),
+                                avatar.z-movement_position_.z);
+                            if(moved>=.04f){
+                                movement_position_.x=avatar.x;
+                                movement_position_.y=avatar.y;
+                                movement_position_.z=avatar.z;
+                                ++spatial_object_revision_;
+                            }
+                            break;
+                        }
+                    }
                     ++spatial_object_frames_;
                     ++decoded_full_spatial_frames_;
                     full_decode_audit_.volume+=frame.volume;
@@ -613,8 +634,29 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 std::vector<objectspatial::TersePose> poses;
                 if(objectspatial::decode_terse_poses(incoming,poses)){
                     for(const auto& pose:poses){
+                        if(own_avatar_local_id_!=0U&&
+                           pose.local_id==own_avatar_local_id_){
+                            // Server-confirmed own avatar pose; update
+                            // region-relative scene origin and allow new
+                            // nearby mesh assets to become eligible.
+                            if(pose.x>=0.f&&pose.x<256.f&&
+                               pose.y>=0.f&&pose.y<256.f&&
+                               pose.z>=-4096.f&&pose.z<8192.f){
+                                const float moved=std::hypot(std::hypot(
+                                    pose.x-movement_position_.x,
+                                    pose.y-movement_position_.y),
+                                    pose.z-movement_position_.z);
+                                if(moved>=.04f){
+                                    movement_position_.x=pose.x;
+                                    movement_position_.y=pose.y;
+                                    movement_position_.z=pose.z;
+                                    ++spatial_object_revision_;
+                                }
+                            }
+                            continue;
+                        }
                         if(avatar_root_ids_.contains(pose.local_id))
-                            continue; // no skeleton or appearance guesswork
+                            continue; // never guess another avatar's pose
                         const auto root=spatial_objects_.find(pose.local_id);
                         if(root!=spatial_objects_.end()){
                             if(objectspatial::apply_terse_pose(
@@ -644,6 +686,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 if(objectspatial::decode_killed_ids(incoming,ids))
                     for(const auto id:ids){
                         missing_objects_.erase(id);
+                        if(id==own_avatar_local_id_)own_avatar_local_id_=0U;
                         if(avatar_root_ids_.erase(id)>0U)
                             ++spatial_object_revision_;
                         if(spatial_objects_.erase(id)>0U)
@@ -788,6 +831,7 @@ void Circuit::stop() noexcept {
     spatial_objects_.clear();
     linked_objects_.clear();
     avatar_root_ids_.clear();
+    own_avatar_local_id_=0U;
     mesh_scheduler_.set_online(false);
     missing_objects_.clear();
     requested_object_ids_=cached_object_ids_=0U;
