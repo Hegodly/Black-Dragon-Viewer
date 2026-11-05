@@ -262,7 +262,7 @@ PrimitiveBatch build_live_primitive_geometry(
     if(!finite(origin))return result;
     // R32: larger closest-first batch with an upper bound on the DX12
     // vertex workload. Mesh asset geometry remains a separate pipeline.
-    limit=std::min<std::size_t>(limit,1024U);
+    limit=std::min<std::size_t>(limit,2048U);
     struct Draw {const Transform* item;Pose pose;bool child;float distance;};
     std::vector<Draw> chosen;
     chosen.reserve(roots.size()+children.size());
@@ -472,7 +472,7 @@ MeshBatch build_live_mesh_geometry(
     MeshBatch batch{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return batch;
-    max_triangles=std::min<std::size_t>(max_triangles,500000U);
+    max_triangles=std::min<std::size_t>(max_triangles,1000000U);
     struct Item {
         const Transform* transform;
         const protocol::mesh::LOD* lod;

@@ -31,7 +31,7 @@ struct Settings {
         case Preset::Potato:return 24000U;
         case Preset::Performance:return 80000U;
         case Preset::Balanced:return 180000U;
-        case Preset::Quality:return 500000U;
+        case Preset::Quality:return 1000000U;
         }return 180000U;
     }
     [[nodiscard]] float sun_strength() const noexcept {

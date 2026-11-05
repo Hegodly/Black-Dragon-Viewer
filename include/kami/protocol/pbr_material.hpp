@@ -32,19 +32,38 @@ using Overrides=std::map<std::uint32_t,std::map<unsigned,Override>>;
 inline constexpr unsigned kMaxMaterials=256U,kMaxGPURecords=1024U,kRows=15U;
 // SL PARAMS_RENDER_MATERIAL (0x80), count + face/U8 + material/UUID.
 bool decode_face_ids(std::span<const std::uint8_t>,std::array<std::string,32>&) noexcept;
-enum class DecodeError { None, Size, Envelope, Version, Type, GLTF };
+enum class AssetFormat { Unknown, Binary, XML, Notation, Gzip, Zlib };
+AssetFormat asset_format(std::span<const std::uint8_t>) noexcept;
+inline const wchar_t* asset_format_label(AssetFormat format) noexcept {
+    switch(format){
+    case AssetFormat::Binary:return L"binary";
+    case AssetFormat::XML:return L"XML";
+    case AssetFormat::Notation:return L"notation";
+    case AssetFormat::Gzip:return L"gzip";
+    case AssetFormat::Zlib:return L"zlib";
+    default:return L"unknown";
+    }
+}
+enum class DecodeError { None, Size, Envelope, Header, Map, Key, Value, Trailing, XML, Notation, Compressed, Version, Type, GLTF };
 inline const wchar_t* decode_error_label(DecodeError error) noexcept {
     switch(error){
     case DecodeError::None:return L"OK";
     case DecodeError::Size:return L"size";
     case DecodeError::Envelope:return L"LLSD envelope";
+    case DecodeError::Header:return L"format header";
+    case DecodeError::Map:return L"binary map";
+    case DecodeError::Key:return L"binary key";
+    case DecodeError::Value:return L"binary value";
+    case DecodeError::Trailing:return L"trailing bytes";
+    case DecodeError::XML:return L"XML map";
+    case DecodeError::Notation:return L"notation map";
+    case DecodeError::Compressed:return L"compressed payload";
     case DecodeError::Version:return L"asset version";
     case DecodeError::Type:return L"asset type";
     case DecodeError::GLTF:return L"glTF data";
     }return L"unknown";
 }
-// Native SL binary LLSD, with the official spaced/case-insensitive header,
-// its compact historical spelling, or an unframed binary map.
+// Native SL binary, XML and notation LLSD material envelopes.
 // Never modifies output on failure; errors expose no downloaded contents.
 bool decode_asset(std::span<const std::uint8_t>,Material&,DecodeError* error=nullptr) noexcept;
 bool decode_probe(std::span<const std::uint8_t>,bool&,float&,float&,std::uint8_t&) noexcept;

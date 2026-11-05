@@ -63,6 +63,7 @@ bool Window::create(HINSTANCE instance, int show) {
     camera_settings_ = camera::load();
     photo_settings_ = photo::load();
     world_renderer_.set_graphics(graphics_);
+    sl_circuit_.set_maximum_world_detail(graphics_.preset==graphics::Preset::Quality);
     world_renderer_.set_camera_settings(camera_settings_);
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
                                   factory_.ReleaseAndGetAddressOf()))) return false;
@@ -490,7 +491,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     }
     label(L"7 SYSTEMS TEST [F9]",box(41,height-93,200,25),
           small_font_.Get(),p.accent);
-    label(L"ORIGINAL CORE / v0.1",box(42,height-65,189,25),small_font_.Get(),p.muted);
+    label(L"ORIGINAL CORE / R61",box(42,height-65,189,25),small_font_.Get(),p.muted);
 
     const float contentX = 279.f;
     const float contentWidth = width - 305.f;
@@ -559,7 +560,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" / PBR "+std::to_wstring(world_renderer_.terrain_pbr_layers())+
                     L" | IBL "+std::to_wstring(world_renderer_.environment_updates())+
                     L" | material HTTP "+std::to_wstring(sl_circuit_.material_last_http())+
-                    L" / "+std::to_wstring(sl_circuit_.material_last_bytes())+L" bytes / "+
+                    L" / "+std::to_wstring(sl_circuit_.material_last_bytes())+L"B / "+protocol::pbr::asset_format_label(sl_circuit_.material_last_format())+L" / "+
                     (sl_circuit_.material_last_http()==200U&&sl_circuit_.material_last_bytes()>0U?
                         protocol::pbr::decode_error_label(sl_circuit_.material_last_decode_error()):L"not decoded")+
                     L" | failed HTTP "+std::to_wstring(sl_circuit_.material_http_failures())+
@@ -1355,28 +1356,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
        sl_circuit_.movement_seen()){
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
-        label(world_renderer_.live_water_preview_active()?
-              (world_renderer_.region_geometry_active()?
-               (L"R12 LIVE LAND DX12 | Patches "+
-                std::to_wstring(sl_circuit_.decoded_land_patches().size())+
-                L" | Obj Full "+std::to_wstring(
-                    sl_circuit_.full_object_packets())+L" objects NOT RENDERED"):
-               (L"R12 DECODE | Land "+
-                std::to_wstring(sl_circuit_.terrain_packets())+
-                L" | Patches "+
-                std::to_wstring(sl_circuit_.decoded_land_patches().size())+
-                L" | Bad "+std::to_wstring(
-                    sl_circuit_.rejected_land_packets())+
-                L" | Obj Full "+std::to_wstring(
-                    sl_circuit_.full_object_packets())+
-                L" NOT RENDERED")):
-              (L"R12 STREAM | Land "+
-               std::to_wstring(sl_circuit_.terrain_packets())+
-               L" | Patches "+
-               std::to_wstring(sl_circuit_.decoded_land_patches().size())+
-               L" | Obj Full "+std::to_wstring(
-                   sl_circuit_.full_object_packets())+
-               L" NOT RENDERED"),
+        label(L"R61 LIVE | Land patches "+std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+              L" | meshes drawn "+std::to_wstring(world_renderer_.uploaded_live_meshes())+
+              L" | primitives drawn "+std::to_wstring(world_renderer_.uploaded_root_primitive_shapes()+
+                  world_renderer_.uploaded_linked_primitive_shapes())+
+              L" | PBR faces "+std::to_wstring(world_renderer_.bound_pbr_faces()),
               box(contentX,height-35,contentWidth,23),
               small_font_.Get(),p.muted);
     }else{
@@ -1493,6 +1477,7 @@ void Window::tick() {
         if(adaptive_.sample(graphics_,static_cast<float>(fps_display_),
                             static_cast<float>(elapsed))) {
             world_renderer_.set_graphics(graphics_);
+    sl_circuit_.set_maximum_world_detail(graphics_.preset==graphics::Preset::Quality);
             world_ready_=world_renderer_.ready();
             next_frame_={};
         }
@@ -1552,6 +1537,7 @@ void Window::advance_graphics(unsigned row) {
     graphics_=graphics::normalize(graphics_);
     graphics::save(graphics_);
     world_renderer_.set_graphics(graphics_);
+    sl_circuit_.set_maximum_world_detail(graphics_.preset==graphics::Preset::Quality);
     world_ready_=!world_initialized_ || world_renderer_.ready();
     next_frame_={};
     InvalidateRect(hwnd_,nullptr,FALSE);
@@ -1575,6 +1561,7 @@ void Window::advance_graphics_effects(unsigned row) {
     graphics_=graphics::normalize(graphics_);
     graphics::save(graphics_);
     world_renderer_.set_graphics(graphics_);
+    sl_circuit_.set_maximum_world_detail(graphics_.preset==graphics::Preset::Quality);
     world_ready_=!world_initialized_ || world_renderer_.ready();
     InvalidateRect(hwnd_,nullptr,FALSE);
 }

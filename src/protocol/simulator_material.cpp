@@ -15,7 +15,7 @@ void Circuit::maybe_fetch_material() noexcept {
             // Legacy terrain IDs intentionally probe both asset types. Do
             // not replace an object's failure reason with an expected 404.
             if(!terrain||result.decoded){
-                material_last_http_=result.status;material_last_bytes_=result.bytes;
+                material_last_format_=result.format;material_last_http_=result.status;material_last_bytes_=result.bytes;
                 material_last_decode_error_=result.error;
                 if(!result.decoded){
                     if(result.fetched)++material_decode_failures_;else ++material_http_failures_;
@@ -34,7 +34,7 @@ void Circuit::maybe_fetch_material() noexcept {
         }
         const auto scan_now=std::chrono::steady_clock::now();
         if(material_last_scan_!=std::chrono::steady_clock::time_point{}&&
-           scan_now-material_last_scan_<std::chrono::milliseconds(250))return;
+           scan_now-material_last_scan_<std::chrono::milliseconds(maximum_world_detail_?50:250))return;
         material_last_scan_=scan_now;
         std::map<std::string,float> wanted;
         const auto scan=[&](const auto& objects){
@@ -73,7 +73,7 @@ void Circuit::maybe_fetch_material() noexcept {
                 MaterialResult out;out.id=id;
                 const auto response=caps::fetch_material_asset(url,id);
                 if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
-                out.status=response.status;out.fetched=response.fetched;out.bytes=response.bytes.size();
+                out.status=response.status;out.fetched=response.fetched;out.bytes=response.bytes.size();out.format=pbr::asset_format(response.bytes);
                 out.decoded=response.fetched&&pbr::decode_asset(response.bytes,out.material,&out.error);return out;
             });
             break;

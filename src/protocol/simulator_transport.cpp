@@ -285,7 +285,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
     if(mesh_worker_.valid()||mesh_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
     if(mesh_last_start_!=std::chrono::steady_clock::time_point{}&&
-       now-mesh_last_start_<std::chrono::milliseconds(350))return;
+       now-mesh_last_start_<std::chrono::milliseconds(maximum_world_detail_?50:350))return;
     if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
        loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles)return;
     auto selected=mesh_scheduler_.next_download();
@@ -859,7 +859,7 @@ void Circuit::stop() noexcept {
     if(material_worker_.valid()){try{(void)material_worker_.get();}catch(...){}}
     loaded_materials_.clear();material_overrides_.clear();material_attempts_.clear();
     material_failures_=material_http_failures_=material_decode_failures_=0U;
-    material_last_http_=0U;material_last_bytes_=0U;material_last_decode_error_=pbr::DecodeError::None;material_last_scan_={};
+    material_last_format_=pbr::AssetFormat::Unknown;material_last_http_=0U;material_last_bytes_=0U;material_last_decode_error_=pbr::DecodeError::None;material_last_scan_={};
     if(texture_worker_.valid()){
         try{(void)texture_worker_.get();}catch(...){}
     }

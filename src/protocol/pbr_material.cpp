@@ -1,5 +1,6 @@
 #include "kami/protocol/pbr_material.hpp"
 #include "picojson.h"
+#include "tinyxml2.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -113,6 +114,20 @@ public:
                 else a.push_back(parse(depth+1U));
                 const auto next=take();if(next==end)break;if(next!=',')throw std::runtime_error("comma");
             }return c=='{'?J(o):J(a);
+        }
+        if(c=='s'){
+            ++at;if(at==s.size()||s[at++]!='(')throw std::runtime_error("string length");
+            std::size_t length=0U;unsigned digits=0U;
+            while(at<s.size()&&s[at]>='0'&&s[at]<='9'){
+                if(++digits>7U)throw std::runtime_error("string length");
+                length=length*10U+std::size_t(s[at++]-'0');
+                if(length>1024U*1024U)throw std::runtime_error("string length");
+            }
+            if(!digits||at==s.size()||s[at++]!=')'||at==s.size())throw std::runtime_error("string length");
+            const char quote=s[at++];if(quote!='\''&&quote!='"')throw std::runtime_error("quote");
+            if(length>s.size()-at)throw std::runtime_error("string length");
+            const std::string value(s.substr(at,length));at+=length;
+            if(at==s.size()||s[at++]!=quote)throw std::runtime_error("quote");return J(value);
         }
         if(c=='\''||c=='"')return J(quoted());
         if(c=='!'){++at;return J();}
@@ -240,45 +255,114 @@ bool decode_json(std::string_view json,Material& output) noexcept {
         output=std::move(m);return true;
     }catch(...){return false;}
 }
+namespace {
+bool space(std::uint8_t c){return c==' '||c=='\r'||c=='\n'||c=='\t';}
+std::size_t envelope_start(std::span<const std::uint8_t> b){
+    std::size_t at=b.size()>=3U&&b[0]==0xef&&b[1]==0xbb&&b[2]==0xbf?3U:0U;
+    while(at<b.size()&&space(b[at]))++at;return at;
+}
+std::string header_name(std::span<const std::uint8_t> b,std::size_t at,std::size_t& after){
+    after=at;
+    if(at+2U>b.size()||b[at]!='<'||b[at+1U]!='?')return {};
+    const auto begin=at+2U;auto end=begin;
+    while(end+1U<b.size()&&end-begin<64U&&!(b[end]=='?'&&b[end+1U]=='>'))++end;
+    if(end+1U>=b.size()||end-begin>=64U)return {};
+    auto first=begin,last=end;while(first<last&&space(b[first]))++first;
+    while(last>first&&space(b[last-1U]))--last;
+    std::string name;for(auto i=first;i<last;++i){auto c=b[i];if(c>='A'&&c<='Z')c=c-'A'+'a';name+=char(c);}
+    after=end+2U;return name;
+}
+bool xml_fields(std::span<const std::uint8_t> b,std::map<std::string,std::string>& fields){
+    tinyxml2::XMLDocument document;
+    if(document.Parse(reinterpret_cast<const char*>(b.data()),b.size())!=tinyxml2::XML_SUCCESS)return false;
+    const auto* root=document.RootElement();
+    if(!root||std::strcmp(root->Name(),"llsd")||root->NextSiblingElement())return false;
+    // TinyXML2 never resolves external resources; also reject DTD/unknown
+    // nodes rather than accepting external-entity declarations as data.
+    const auto blank=[](const tinyxml2::XMLNode* n){
+        if(n->ToComment())return true;
+        const auto* text=n->ToText();if(!text)return false;
+        for(const auto* c=text->Value();*c;++c)if(!space(std::uint8_t(*c)))return false;
+        return true;
+    };
+    for(const auto* n=document.FirstChild();n;n=n->NextSibling())
+        if(n!=root&&!n->ToDeclaration()&&!blank(n))return false;
+    const auto* map=root->FirstChildElement();
+    if(!map||std::strcmp(map->Name(),"map")||map->NextSiblingElement())return false;
+    for(const auto* n=root->FirstChild();n;n=n->NextSibling())if(n!=map&&!blank(n))return false;
+    const auto content=[](const tinyxml2::XMLElement* element,std::string& value){
+        for(const auto* n=element->FirstChild();n;n=n->NextSibling()){
+            if(n->ToComment())continue;const auto* text=n->ToText();if(!text)return false;
+            value+=text->Value();if(value.size()>1024U*1024U)return false;
+        }return true;
+    };
+    for(const auto* n=map->FirstChild();n;){
+        if(blank(n)){n=n->NextSibling();continue;}
+        const auto* key=n->ToElement();if(!key||std::strcmp(key->Name(),"key"))return false;
+        std::string name,value;if(!content(key,name)||name.size()>64U)return false;
+        n=n->NextSibling();while(n&&blank(n))n=n->NextSibling();
+        const auto* string=n?n->ToElement():nullptr;
+        if(!string||std::strcmp(string->Name(),"string")||!content(string,value)||fields.size()>=16U||
+            !fields.emplace(name,value).second)return false;
+        n=n->NextSibling();
+    }return true;
+}
+}
+AssetFormat asset_format(std::span<const std::uint8_t> b) noexcept {
+    try{
+        if(b.size()>=2U&&b[0]==0x1f&&b[1]==0x8b)return AssetFormat::Gzip;
+        if(b.size()>=2U&&(b[0]&15U)==8U&&((unsigned(b[0])<<8U)|b[1])%31U==0U)return AssetFormat::Zlib;
+        const auto at=envelope_start(b);std::size_t after=at;const auto name=header_name(b,at,after);
+        if(name=="llsd/binary")return AssetFormat::Binary;
+        if(name=="llsd/xml"||name.starts_with("xml "))return AssetFormat::XML;
+        if(name=="llsd/notation")return AssetFormat::Notation;
+        if(at==b.size())return AssetFormat::Unknown;
+        if(b[at]=='<')return AssetFormat::XML;
+        if(b[at]=='{'){
+            if(b.size()-at>=2U&&b[at+1U]==0U)return AssetFormat::Binary;
+            return AssetFormat::Notation;
+        }return AssetFormat::Unknown;
+    }catch(...){return AssetFormat::Unknown;}
+}
 bool decode_asset(std::span<const std::uint8_t> b,Material& output,DecodeError* error) noexcept {
     DecodeError stage=DecodeError::Size;
     const auto fail=[&](DecodeError reason){if(error)*error=reason;return false;};
     try{
         if(b.empty()||b.size()>1024U*1024U+4096U)return fail(stage);
-        stage=DecodeError::Envelope;
-        std::size_t at=0U;
-        const auto whitespace=[](std::uint8_t c){return c==' '||c=='\r'||c=='\n'||c=='\t';};
-        // LLSDSerialize emits "<? LLSD/Binary ?>\n". Its deserializer
-        // trims the declaration and compares the format case-insensitively.
-        while(at<b.size()&&at<64U&&whitespace(b[at]))++at;
+        const auto format=asset_format(b);
+        if(format==AssetFormat::Gzip||format==AssetFormat::Zlib)return fail(DecodeError::Compressed);
+        stage=DecodeError::Header;auto at=envelope_start(b);std::size_t after=at;
+        const auto header=header_name(b,at,after);
         if(at+2U<=b.size()&&b[at]=='<'&&b[at+1U]=='?'){
-            const auto begin=at+2U;auto end=begin;
-            while(end+1U<b.size()&&end-begin<64U&&!(b[end]=='?'&&b[end+1U]=='>'))++end;
-            if(end+1U>=b.size()||end-begin>=64U)return fail(stage);
-            auto first=begin,last=end;
-            while(first<last&&whitespace(b[first]))++first;
-            while(last>first&&whitespace(b[last-1U]))--last;
-            constexpr std::string_view format="llsd/binary";
-            if(last-first!=format.size())return fail(stage);
-            for(std::size_t i=0U;i<format.size();++i){auto c=b[first+i];
-                if(c>='A'&&c<='Z')c=std::uint8_t(c-'A'+'a');
-                if(c!=std::uint8_t(format[i]))return fail(stage);
-            }
-            at=end+2U;while(at<b.size()&&whitespace(b[at]))++at;
+            if(header=="llsd/binary"||header=="llsd/xml"||header=="llsd/notation"){
+                at=after;while(at<b.size()&&space(b[at]))++at;
+            }else if(!header.starts_with("xml "))return fail(stage);
         }
-        if(at==b.size()||b[at++]!='{')return fail(stage);
-        const auto n=be32(b,at);if(n>16U)return fail(stage);
         std::map<std::string,std::string> fields;
-        for(unsigned i=0;i<n;++i){if(at==b.size()||b[at++]!='k')return fail(stage);const auto key=str(b,at);
-            if(at==b.size()||b[at++]!='s')return fail(stage);const auto value=str(b,at);
-            if(!fields.emplace(key,value).second)return fail(stage);}
-        if(at==b.size()||b[at++]!='}')return fail(stage);
-        while(at<b.size()&&whitespace(b[at]))++at;
-        if(at!=b.size())return fail(stage);
+        if(format==AssetFormat::XML){
+            stage=DecodeError::XML;if(!xml_fields(b.subspan(at),fields))return fail(stage);
+        }else if(format==AssetFormat::Notation){
+            stage=DecodeError::Notation;
+            const std::string_view text(reinterpret_cast<const char*>(b.data()+at),b.size()-at);
+            Notation reader(text);const auto map=reader.parse();
+            if(!reader.done()||!map.is<picojson::object>()||map.get<picojson::object>().size()>16U)return fail(stage);
+            for(const auto& [key,value]:map.get<picojson::object>()){
+                if(!value.is<std::string>()||key.size()>64U)return fail(stage);fields.emplace(key,value.get<std::string>());
+            }
+        }else if(format==AssetFormat::Binary){
+            stage=DecodeError::Map;if(at==b.size()||b[at++]!='{')return fail(stage);
+            const auto n=be32(b,at);if(n>16U)return fail(stage);
+            for(unsigned i=0;i<n;++i){stage=DecodeError::Key;
+                if(at==b.size()||b[at++]!='k')return fail(stage);const auto key=str(b,at);
+                stage=DecodeError::Value;if(at==b.size()||b[at++]!='s')return fail(stage);const auto value=str(b,at);
+                if(!fields.emplace(key,value).second)return fail(stage);
+            }
+            stage=DecodeError::Trailing;if(at==b.size()||b[at++]!='}')return fail(stage);
+            while(at<b.size()&&space(b[at]))++at;if(at!=b.size())return fail(stage);
+        }else return fail(DecodeError::Envelope);
         if(fields["version"]!="1.0"&&fields["version"]!="1.1")return fail(DecodeError::Version);
         if(fields["type"]!="GLTF 2.0")return fail(DecodeError::Type);
-        stage=DecodeError::GLTF;
-        if(!decode_json(fields["data"],output))return fail(stage);
+        stage=DecodeError::GLTF;if(!decode_json(fields["data"],output))return fail(stage);
         if(error)*error=DecodeError::None;return true;
     }catch(...){return fail(stage);}
 }

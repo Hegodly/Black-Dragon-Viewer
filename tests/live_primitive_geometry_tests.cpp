@@ -418,6 +418,15 @@ int run_primitive_tests(){
     protocol::mesh::LOD dense_lod;dense_lod.triangles.assign(30000U,triangle);
     const auto expanded_mesh=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,dense_lod}},128,140,35,28000U);
     if(expanded_mesh.emitted_triangles!=28000U||expanded_mesh.scene.vertices.size()!=84000U)return 53;
+    {
+        // Many nearby instances sharing a modest real LOD can exceed the
+        // previous 500k cap. The explicit caller limit must still win.
+        protocol::mesh::LOD shared;shared.triangles.assign(1000U,triangle);
+        std::map<std::uint32_t,Transform> instances;
+        for(std::uint32_t i=0;i<600U;++i){auto t=dense_root;t.local_id=1000U+i;instances.emplace(t.local_id,t);}
+        const auto quality=world::build_live_mesh_geometry(instances, {}, {},{{asset_id,shared}},128,140,35,550000U);
+        if(quality.emitted_triangles!=550000U||quality.scene.vertices.size()!=1650000U)return 55;
+    }
     dense_root.reflection_probe=true;
     const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
     if(invisible_probe.emitted_triangles!=0U)return 54;

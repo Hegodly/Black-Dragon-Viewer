@@ -219,7 +219,7 @@ void Circuit::maybe_fetch_texture() noexcept {
     if(texture_worker_.valid()||texture_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
     if(texture_last_start_!=std::chrono::steady_clock::time_point{}&&
-       now-texture_last_start_<std::chrono::milliseconds(250))
+       now-texture_last_start_<std::chrono::milliseconds(maximum_world_detail_?35:250))
         return;
     if(decoded_textures_.size()>=kMaxDecodedTextureAssets||
        decoded_texture_bytes_>=kMaxDecodedTextureBytes)return;
