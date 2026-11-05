@@ -35,6 +35,13 @@ enum class CircuitState : std::uint8_t {
 namespace detail {
 // Expired missing-object requests must not permanently occupy the
 // bounded parent-recovery queue. The simulator gets five attempts first.
+[[nodiscard]] inline bool prefer_missing_request(
+    bool important_a,unsigned attempts_a,std::chrono::steady_clock::time_point sent_a,
+    bool important_b,unsigned attempts_b,std::chrono::steady_clock::time_point sent_b) noexcept {
+    if(important_a!=important_b)return important_a;
+    if(attempts_a!=attempts_b)return attempts_a<attempts_b;
+    return sent_a<sent_b;
+}
 [[nodiscard]] inline bool reclaim_missing_request(
     unsigned attempts,std::chrono::steady_clock::time_point sent_at,
     std::chrono::steady_clock::time_point now) noexcept {
@@ -273,7 +280,7 @@ private:
     void prune_unreferenced_meshes() noexcept;
     [[nodiscard]] const objectspatial::Transform* world_mesh_anchor(
         const objectspatial::Transform& item) const noexcept;
-    void remember_missing_object(std::uint32_t id) noexcept;
+    void remember_missing_object(std::uint32_t id,bool important=true) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
     void retry_unacknowledged() noexcept;
@@ -379,6 +386,9 @@ private:
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};
+        // Missing cached objects and unresolved linkset roots take priority
+        // over speculative requests from unknown terse movement packets.
+        bool important=true;
     };
     std::map<std::uint32_t,MissingObject> missing_objects_;
     std::uint32_t requested_object_ids_=0,cached_object_ids_=0;
