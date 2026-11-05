@@ -1,4 +1,5 @@
 #include "kami/world/live_primitive_geometry.hpp"
+#include "kami/world/texture_uv.hpp"
 #include <cmath>
 #include <cstdint>
 #include <map>
@@ -313,5 +314,40 @@ int main(){
         visible,{}, {},assets,bitmaps,128.f,140.f,35.f,2U);
     if(invalid_image.contains(close_id)||!invalid_image.contains(far_id))
         return 30;
+    // LLFace::xform legacy rotation is not a glTF-style KHR texture
+    // transform. Verify the exact signs in V-down GPU coordinates.
+    protocol::texture::UVTransform rot{};
+    rot.rotation=1.5707963267948966f;
+    const auto rotated=world::transform_diffuse_uv(1.f,0.f,rot);
+    if(std::abs(rotated[0]-1.f)>1.e-4f||
+       std::abs(rotated[1]-1.f)>1.e-4f)return 39;
+    rot.rotation=0.f;rot.repeat_u=2.f;rot.repeat_v=.5f;
+    rot.offset_u=.25f;rot.offset_v=-.25f;
+    const auto scaled_uv=world::transform_diffuse_uv(0.f,1.f,rot);
+    if(std::abs(scaled_uv[0]+.25f)>1.e-4f||
+       std::abs(scaled_uv[1]-1.f)>1.e-4f)return 40;
+    // R53 atlas: supported primitive objects must compete fairly with
+    // actual mesh for residency and keep previous array-layer slots.
+    Transform close_prim{305U,128.f,140.f,35.f,2.f,2.f,2.f};
+    close_prim.primitive=Kind::Box;
+    close_prim.default_texture_asset_id=close_id;
+    const std::map<std::uint32_t,Transform> just_prim{{305U,close_prim}};
+    bitmaps[close_id]=one_pixel;
+    const auto prim_resident=world::select_visible_mesh_texture_layers(
+        just_prim,{}, {},assets,bitmaps,128.f,140.f,35.f,48U);
+    if(!prim_resident.contains(close_id)||
+       prim_resident.at(close_id)!=1U)return 41;
+    close_prim.face_texture_override[3]=true;
+    close_prim.face_texture_asset_ids[3]=far_id;
+    const auto prim_face=world::select_visible_mesh_texture_layers(
+        {{305U,close_prim}}, {},{},assets,bitmaps,
+        128.f,140.f,35.f,48U,prim_resident);
+    if(!prim_face.contains(far_id)||prim_face.at(close_id)!=1U)
+        return 42;
+    // Shipped 48-image GPU residency is still bounded.
+    const auto bounded=world::select_visible_mesh_texture_layers(
+        {{305U,close_prim}}, {},{},assets,bitmaps,
+        128.f,140.f,35.f,48U);
+    if(bounded.size()>48U)return 43;
     return 0;
 }
