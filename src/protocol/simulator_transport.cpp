@@ -112,87 +112,103 @@ bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
        state_!=CircuitState::MovementConfirmed)return false;
     mesh_capability_url_=std::move(capability);
     mesh_scan_revision_=~std::uint64_t{0};
+    mesh_last_scan_position_valid_=false;
+    mesh_last_scan_x_=mesh_last_scan_y_=mesh_last_scan_z_=0.f;
     return true;
+}
+const objectspatial::Transform* Circuit::world_mesh_anchor(
+    const objectspatial::Transform& item) const noexcept {
+    if(item.parent_id==0U)return &item;
+    std::array<std::uint32_t,16U> seen{};
+    std::size_t depth=0U;
+    auto parent=item.parent_id;
+    while(parent!=0U&&depth<seen.size()){
+        if(avatar_root_ids_.contains(parent)||
+           std::find(seen.begin(),seen.begin()+depth,parent)!=
+               seen.begin()+depth)return nullptr;
+        seen[depth++]=parent;
+        const auto root=spatial_objects_.find(parent);
+        if(root!=spatial_objects_.end())
+            return root->second.parent_id==0U?&root->second:nullptr;
+        const auto linked=linked_objects_.find(parent);
+        if(linked==linked_objects_.end())return nullptr;
+        parent=linked->second.parent_id;
+    }
+    return nullptr;
 }
 void Circuit::prune_unreferenced_meshes() noexcept {
     if(loaded_meshes_.empty())return;
-    // Preserve only meshes referenced by current authenticated world
-    // objects. This releases CPU geometry and permits later re-downloads
-    // after a sim changes its object set or a linkset is deleted.
-    std::set<std::string_view> still_used;
-    for(const auto& [id,t]:spatial_objects_){
-        (void)id;
-        if(!t.mesh_asset_id.empty())still_used.insert(t.mesh_asset_id);
-    }
-    for(const auto& [id,t]:linked_objects_){
-        (void)id;
-        if(!t.mesh_asset_id.empty())still_used.insert(t.mesh_asset_id);
-    }
+    // Hysteresis (176m vs 144m load radius) avoids thrashing across a
+    // visibility boundary. Drop no-longer-needed CPU mesh data and its
+    // finished scheduler entry; do not cancel an active fetch.
+    const auto near=[&](const objectspatial::Transform& t) noexcept {
+        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
+            std::abs(t.x-movement_position_.x)<=176.f&&
+            std::abs(t.y-movement_position_.y)<=176.f&&
+            std::abs(t.z-movement_position_.z)<=128.f;
+    };
+    const auto needed=[&](std::string_view asset) noexcept {
+        const auto uses=[&](const auto& objects) noexcept {
+            for(const auto& [id,t]:objects){
+                (void)id;
+                if(t.mesh_asset_id!=asset)continue;
+                const auto* anchor=world_mesh_anchor(t);
+                if(anchor&&near(*anchor))return true;
+            }
+            return false;
+        };
+        return uses(spatial_objects_)||uses(linked_objects_);
+    };
     for(auto it=loaded_meshes_.begin();it!=loaded_meshes_.end();){
-        if(still_used.contains(std::string_view(it->first))){++it;continue;}
-        const auto vertices=it->second.triangles.size();
+        if(needed(it->first)){++it;continue;}
+        const auto triangles=it->second.triangles.size();
         loaded_mesh_triangle_count_=
-            vertices>loaded_mesh_triangle_count_?0U:
-                loaded_mesh_triangle_count_-vertices;
+            triangles>loaded_mesh_triangle_count_?0U:
+                loaded_mesh_triangle_count_-triangles;
         (void)mesh_scheduler_.forget_finished(it->first);
         it=loaded_meshes_.erase(it);
         ++spatial_object_revision_;
     }
 }
 void Circuit::schedule_visible_meshes() noexcept {
-    if(mesh_capability_url_.empty()||
-       mesh_scan_revision_==spatial_object_revision_||
-       !movement_position_.verified)return;
+    if(mesh_capability_url_.empty()||!movement_position_.verified)return;
+    // Spatial-object revision alone is insufficient: walking from one
+    // house to another must discover newly visible mesh assets even if
+    // the simulator sends no full ObjectUpdate messages.
+    const bool moved=!mesh_last_scan_position_valid_||
+        std::hypot(std::hypot(
+            movement_position_.x-mesh_last_scan_x_,
+            movement_position_.y-mesh_last_scan_y_),
+            movement_position_.z-mesh_last_scan_z_)>=12.f;
+    if(mesh_scan_revision_==spatial_object_revision_&&!moved)return;
     prune_unreferenced_meshes();
     mesh_scan_revision_=spatial_object_revision_;
-    const auto close_to_agent=[&](float x,float y,float z){
-        return std::isfinite(x)&&std::isfinite(y)&&std::isfinite(z)&&
-            std::abs(x-movement_position_.x)<=144.f&&
-            std::abs(y-movement_position_.y)<=144.f&&
-            std::abs(z-movement_position_.z)<=96.f;
+    mesh_last_scan_x_=movement_position_.x;
+    mesh_last_scan_y_=movement_position_.y;
+    mesh_last_scan_z_=movement_position_.z;
+    mesh_last_scan_position_valid_=true;
+    const auto close_to_agent=[&](const objectspatial::Transform& t) noexcept {
+        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
+            std::abs(t.x-movement_position_.x)<=144.f&&
+            std::abs(t.y-movement_position_.y)<=144.f&&
+            std::abs(t.z-movement_position_.z)<=96.f;
     };
-    for(const auto& [id,t]:spatial_objects_){
-        (void)id;
-        if(t.mesh_asset_id.empty()||!close_to_agent(t.x,t.y,t.z))
-            continue;
-        const float d=std::hypot(
-            std::hypot(t.x-movement_position_.x,
-                       t.y-movement_position_.y),
-            t.z-movement_position_.z);
-        (void)mesh_scheduler_.request(t.mesh_asset_id,
-                                     load::Kind::VisibleMesh,d,true,0U);
-    }
-    // Only download linked mesh shapes with a verified world root.
-    // Avatar attachments are intentionally deferred until the rig is ready.
-    for(const auto& [id,t]:linked_objects_){
-        (void)id;
-        if(t.mesh_asset_id.empty())continue;
-        auto parent=t.parent_id;
-        std::array<std::uint32_t,16> seen{};
-        std::size_t depth=0;
-        const objectspatial::Transform* root=nullptr;
-        while(parent!=0U&&depth<seen.size()){
-            if(avatar_root_ids_.contains(parent))break;
-            if(std::find(seen.begin(),seen.begin()+depth,parent)!=
-               seen.begin()+depth)break;
-            seen[depth++]=parent;
-            const auto r=spatial_objects_.find(parent);
-            if(r!=spatial_objects_.end()){
-                if(r->second.parent_id==0U)root=&r->second;
-                break;
-            }
-            const auto c=linked_objects_.find(parent);
-            if(c==linked_objects_.end())break;
-            parent=c->second.parent_id;
+    const auto schedule=[&](const auto& objects) noexcept {
+        for(const auto& [id,t]:objects){
+            (void)id;
+            if(t.mesh_asset_id.empty())continue;
+            const auto* anchor=world_mesh_anchor(t);
+            if(!anchor||!close_to_agent(*anchor))continue;
+            const float d=std::hypot(
+                std::hypot(anchor->x-movement_position_.x,
+                           anchor->y-movement_position_.y),
+                anchor->z-movement_position_.z);
+            (void)mesh_scheduler_.request(t.mesh_asset_id,
+                                         load::Kind::VisibleMesh,d,true,0U);
         }
-        if(!root||!close_to_agent(root->x,root->y,root->z))continue;
-        const float d=std::hypot(
-            std::hypot(root->x-movement_position_.x,
-                       root->y-movement_position_.y),
-            root->z-movement_position_.z);
-        (void)mesh_scheduler_.request(t.mesh_asset_id,
-                                     load::Kind::VisibleMesh,d,true,0U);
-    }
+    };
+    schedule(spatial_objects_);
+    schedule(linked_objects_);
 }
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
