@@ -202,7 +202,8 @@ int run_primitive_tests(){
     const auto attachment=world::build_live_mesh_geometry(
         {},children,mesh_avatar_parents,assets,128.f,140.f,35.f,10U);
     if(attachment.root_meshes||attachment.linked_meshes||
-       attachment.emitted_triangles||attachment.waiting_for_parent==0U)
+       attachment.emitted_triangles||attachment.waiting_for_parent==0U||
+       attachment.parent_avatar_instances==0U)
        return 17;
     // R53: simple SL primitives must use the exact same decoded-J2C
     // GPU array as mesh LODs, with independently numbered material faces.
@@ -406,7 +407,8 @@ int run_primitive_tests(){
     alpha_box.primitive=Kind::Unknown;
     const auto invisible_mesh=world::build_live_mesh_geometry(
         {{777U,alpha_box}}, {},{},assets,128.f,140.f,35.f,10U);
-    if(invisible_mesh.emitted_triangles!=0U)return 51;
+    if(invisible_mesh.emitted_triangles!=0U||
+       invisible_mesh.undrawn_transparent_instances!=1U)return 51;
     for(auto& color:alpha_box.face_rgba)color[3]=1.f;
     const auto restored_mesh=world::build_live_mesh_geometry(
         {{777U,alpha_box}}, {},{},assets,128.f,140.f,35.f,10U);
@@ -522,7 +524,9 @@ int run_primitive_tests(){
            sample.out_of_range_instances!=1U||
            sample.invalid_pose_instances!=1U||
            sample.waiting_for_parent!=1U||
+           sample.parent_missing_instances!=1U||
            sample.undrawn_eligible_instances!=1U||
+           sample.undrawn_budget_instances!=1U||
            sample.emitted_triangles!=0U)return 64;
         const auto drawn=world::build_live_mesh_geometry(
             {{near.local_id,near}}, {}, {}, {{asset_id,lod}},
@@ -531,6 +535,28 @@ int run_primitive_tests(){
            drawn.undrawn_eligible_instances!=0U||
            drawn.root_meshes!=1U||
            drawn.emitted_triangles!=1U)return 65;
+        // Degenerate but decoded triangle geometry must not count as a
+        // budget failure or missing parent.
+        auto degenerate=lod;
+        if(degenerate.triangles.empty())return 66;
+        degenerate.triangles[0].pos.fill(0.f);
+        const auto bad_geometry=world::build_live_mesh_geometry(
+            {{near.local_id,near}}, {}, {}, {{asset_id,degenerate}},
+            128.f,140.f,35.f,10U);
+        if(bad_geometry.emitted_triangles!=0U||
+           bad_geometry.undrawn_bad_geometry_instances!=1U||
+           bad_geometry.undrawn_budget_instances!=0U)return 67;
+        // Every reported parent failure must be classified exactly
+        // once, including cycles that a larger missing queue cannot fix.
+        auto self_parent=orphan;
+        self_parent.local_id=70006U;
+        self_parent.parent_id=self_parent.local_id;
+        const auto cycle=world::build_live_mesh_geometry(
+            {},{{self_parent.local_id,self_parent}}, {},
+            {{asset_id,lod}},128.f,140.f,35.f,10U);
+        if(cycle.waiting_for_parent!=1U||
+           cycle.parent_cycle_instances!=1U||
+           cycle.parent_missing_instances!=0U)return 68;
     }
     dense_root.reflection_probe=true;
     const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
