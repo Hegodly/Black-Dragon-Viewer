@@ -1877,7 +1877,8 @@ void Window::begin_sl_login() {
     sl_login_response_kind_.clear();
     sl_login_message_=L"Authenticating with Second Life over HTTPS...";
     sl_login_pending_=true;
-    sl_login_future_=std::async(std::launch::async,
+    try{
+        sl_login_future_=std::async(std::launch::async,
         [req=std::move(request),password=std::move(password)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             protocol::LoginResult answer{};
@@ -1892,6 +1893,13 @@ void Window::begin_sl_login() {
                                  password.size()*sizeof(wchar_t));
             return answer;
         });
+    }catch(...){
+        // Creating a worker can fail when Windows is out of threads or
+        // address space. Never leave the account stuck in LOGIN PENDING.
+        sl_login_pending_=false;
+        sl_login_status_=protocol::LoginStatus::NetworkError;
+        sl_login_message_=L"Windows could not start the SL login worker";
+    }
     (void)SetTimer(hwnd_,203,100,nullptr);
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
@@ -1911,7 +1919,8 @@ void Window::start_caps_poll() {
         L" notices delivered";
     if(!caps_recent_types_.empty())
         caps_status_+=L" ("+caps_recent_types_+L")";
-    caps_poll_future_=std::async(std::launch::async,
+    try{
+        caps_poll_future_=std::async(std::launch::async,
         [url=std::move(url),ack=std::move(ack)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             protocol::caps::PollResponse response{};
@@ -1925,6 +1934,13 @@ void Window::start_caps_poll() {
                 SecureZeroMemory(ack.token.data(),ack.token.size());
             return response;
         });
+    }catch(...){
+        // No future was created. Preserve the authoritative EventQueue URL
+        // and ACK cursor, then retry at a restrained interval.
+        caps_next_poll_=std::chrono::steady_clock::now()+
+            std::chrono::seconds(2);
+        caps_status_=L"CAPS: Windows worker unavailable; retrying poll";
+    }
 }
 void Window::update_sl_connection() {
     if(sl_login_pending_&&sl_login_future_.valid()&&
