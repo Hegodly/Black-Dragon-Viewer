@@ -39,9 +39,15 @@ void Circuit::maybe_fetch_material() noexcept {
         std::map<std::string,float> wanted;
         const auto scan=[&](const auto& objects){
             for(const auto& [id,t]:objects){
-                (void)id;const auto* anchor=world_mesh_anchor(t);if(!anchor)continue;
-                const float distance=std::hypot(std::hypot(anchor->x-movement_position_.x,
-                    anchor->y-movement_position_.y),anchor->z-movement_position_.z);
+                (void)id;
+                std::array<float,3> position{};
+                if(!objectspatial::resolve_world_position(
+                        t,spatial_objects_,linked_objects_,avatar_root_ids_,
+                        position))continue;
+                const float distance=std::hypot(
+                    std::hypot(position[0]-movement_position_.x,
+                               position[1]-movement_position_.y),
+                    position[2]-movement_position_.z);
                 if(!std::isfinite(distance)||distance>220.f)continue;
                 for(const auto& material:t.face_material_ids){
                     if(material.empty())continue;
