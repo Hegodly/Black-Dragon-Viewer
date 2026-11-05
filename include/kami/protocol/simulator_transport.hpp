@@ -239,10 +239,15 @@ private:
     struct MeshResult {
         std::string id;
         std::uint32_t bytes=0;
+        unsigned http_status=0;
         bool fetched=false,decoded=false;
         mesh::LOD lod;
     };
     std::future<MeshResult> mesh_worker_;
+    // At most one delayed retry per unique mesh UUID; no packet or
+    // signed capability URLs are kept in these retry records.
+    std::map<std::string,std::chrono::steady_clock::time_point>
+        mesh_retry_after_;
     std::map<std::string,mesh::LOD> loaded_meshes_;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
