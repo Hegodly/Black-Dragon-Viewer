@@ -80,7 +80,12 @@ kami_sl_decode_extra_params_v1(const std::uint8_t* bytes,
         case PARAMS_LIGHT:++tmp.light;break;
         case PARAMS_LIGHT_IMAGE:++tmp.light_image;break;
         case PARAMS_EXTENDED_MESH:++tmp.extended_mesh;break;
-        case PARAMS_RENDER_MATERIAL:++tmp.render_material;break;
+        case PARAMS_RENDER_MATERIAL:
+            // A one-byte payload is valid only for count==0 (clear).
+            // Nonempty envelopes remain opaque here; KAMI validates their
+            // complete face/UUID entries before using material references.
+            if(length==1U&&data[0]!=0U)return 0;
+            ++tmp.render_material;break;
         case PARAMS_REFLECTION_PROBE:++tmp.reflection_probe;break;
         case PARAMS_SCULPT:
         case PARAMS_MESH:{

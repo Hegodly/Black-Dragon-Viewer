@@ -102,5 +102,13 @@ int main(){
             static_cast<std::uint32_t>(bad_alias.size()),&summary))
        return 15;
 
+    Bytes clear{1U};extra(clear,0x80U,Bytes{0U});
+    summary.struct_size=sizeof(summary);
+    if(!kami_sl_decode_extra_params_v1(clear.data(),static_cast<std::uint32_t>(clear.size()),&summary)||
+       summary.render_material!=1U||summary.mesh_sculpt!=0U)return 16;
+    Bytes empty{1U};extra(empty,0x80U,Bytes{});
+    summary.struct_size=sizeof(summary);
+    if(kami_sl_decode_extra_params_v1(empty.data(),static_cast<std::uint32_t>(empty.size()),&summary))return 17;
     return 0;
 }
+
