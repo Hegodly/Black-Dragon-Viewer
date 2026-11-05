@@ -51,6 +51,7 @@ void Circuit::schedule_visible_textures() noexcept {
             const auto [it,inserted]=nearest.try_emplace(id,distance);
             if(!inserted)it->second=std::min(it->second,distance);
         };
+        std::map<std::string,std::uint32_t> drawable_faces;
         const auto scan=[&](const auto& objects){
             for(const auto& [id,t]:objects){
                 (void)id;
@@ -69,15 +70,32 @@ void Circuit::schedule_visible_textures() noexcept {
                     anchor->x-movement_position_.x,
                     anchor->y-movement_position_.y),
                     anchor->z-movement_position_.z);
-                record(t.default_texture_asset_id,distance);
-                const unsigned face_count=t.mesh_asset_id.empty()?
-                    (t.primitive==objectspatial::PrimitiveKind::Box?6U:
-                     t.primitive==objectspatial::PrimitiveKind::Cylinder?3U:
-                     t.primitive==objectspatial::PrimitiveKind::Prism?5U:1U):
-                    static_cast<unsigned>(t.face_texture_override.size());
-                for(unsigned face=0U;face<face_count;++face)
-                    if(t.face_texture_override[face])
-                        record(t.face_texture_asset_ids[face],distance);
+                std::uint32_t mask=0U;
+                if(!t.mesh_asset_id.empty()){
+                    const auto loaded=loaded_meshes_.find(t.mesh_asset_id);
+                    if(loaded==loaded_meshes_.end())continue;
+                    const auto [it,inserted]=drawable_faces.try_emplace(
+                        t.mesh_asset_id,0U);
+                    if(inserted){
+                        for(const auto& triangle:loaded->second.triangles)
+                            if(triangle.has_uv&&triangle.face_index<32U)
+                                it->second|=std::uint32_t{1}<<triangle.face_index;
+                    }
+                    mask=it->second;
+                }else{
+                    const unsigned faces=
+                        t.primitive==objectspatial::PrimitiveKind::Box?6U:
+                        t.primitive==objectspatial::PrimitiveKind::Cylinder?3U:
+                        t.primitive==objectspatial::PrimitiveKind::Prism?5U:1U;
+                    mask=(std::uint32_t{1}<<faces)-1U;
+                }
+                // Match GPU material demand: missing meshes, faces without
+                // UVs and overridden defaults must not occupy the cache.
+                for(unsigned face=0U;face<32U;++face)
+                    if(mask&(std::uint32_t{1}<<face))
+                        record(t.face_texture_override[face]?
+                            t.face_texture_asset_ids[face]:
+                            t.default_texture_asset_id,distance);
             }
         };
         scan(spatial_objects_);
