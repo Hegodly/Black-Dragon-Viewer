@@ -134,7 +134,8 @@ bool decode_full_transforms(const lludp::Packet& packet,
                             FullDecodeAudit* audit,
                             std::vector<std::uint32_t>* parent_references,
                             std::vector<Transform>* child_transforms,
-                            std::vector<std::uint32_t>* avatar_root_ids) noexcept {
+                            std::vector<std::uint32_t>* avatar_root_ids,
+                            std::vector<AvatarFullPose>* avatar_poses) noexcept {
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -148,14 +149,17 @@ bool decode_full_transforms(const lludp::Packet& packet,
     FullDecodeAudit frame{};
     std::vector<std::uint32_t> parents;
     std::vector<std::uint32_t> avatars;
+    std::vector<AvatarFullPose> decoded_avatar_poses;
     for(unsigned n=0U;n<info.blocks;++n){
         Transform t{};
         std::uint8_t pcode=0U;
         std::uint32_t parent=0U;
         std::span<const std::uint8_t> movement{};
+        std::span<const std::uint8_t> full_id{};
         // ID U32, State U8, FullID UUID, CRC U32, PCode U8,
         // Material U8, ClickAction U8, Scale LLVector3.
-        if(!cur.u32(t.local_id)||!cur.skip(1U+16U+4U)||
+        if(!cur.u32(t.local_id)||!cur.skip(1U)||
+           !cur.take(16U,full_id)||!cur.skip(4U)||
            !cur.u8(pcode)||!cur.skip(2U)||
            !cur.f32(t.sx)||!cur.f32(t.sy)||!cur.f32(t.sz)||
            !cur.variable(1U,movement)||
@@ -184,8 +188,35 @@ bool decode_full_transforms(const lludp::Packet& packet,
         if(pcode!=9U){
             ++frame.non_volume;
             // PCode 47 is an avatar root, NOT a volume to place in-world.
-            if(pcode==47U&&parent==0U&&t.local_id!=0U)
+            if(pcode==47U&&parent==0U&&t.local_id!=0U){
                 avatars.push_back(t.local_id);
+                const std::size_t offset=
+                    movement.size()==76U||movement.size()==140U?16U:0U;
+                if(movement.size()==60U||movement.size()==76U||
+                   movement.size()==124U||movement.size()==140U){
+                    AvatarFullPose pose{};
+                    pose.local_id=t.local_id;
+                    std::copy_n(full_id.begin(),16U,pose.full_id.begin());
+                    const auto read=[&](std::size_t at,float& v) noexcept {
+                        if(at+4U>movement.size())return false;
+                        std::uint32_t bits=
+                            std::uint32_t(movement[at])|
+                            (std::uint32_t(movement[at+1U])<<8U)|
+                            (std::uint32_t(movement[at+2U])<<16U)|
+                            (std::uint32_t(movement[at+3U])<<24U);
+                        std::memcpy(&v,&bits,sizeof(v));
+                        return true;
+                    };
+                    if(read(offset,pose.x)&&read(offset+4U,pose.y)&&
+                       read(offset+8U,pose.z)&&
+                       std::isfinite(pose.x)&&std::isfinite(pose.y)&&
+                       std::isfinite(pose.z)&&
+                       pose.x>=0.f&&pose.x<256.f&&
+                       pose.y>=0.f&&pose.y<256.f&&
+                       pose.z>=-4096.f&&pose.z<8192.f)
+                        decoded_avatar_poses.push_back(pose);
+                }
+            }
             continue;
         }
         ++frame.volume;
@@ -289,6 +320,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     if(audit)*audit=frame; // publish only after full frame validation
     if(parent_references)*parent_references=std::move(parents);
     if(avatar_root_ids)*avatar_root_ids=std::move(avatars);
+    if(avatar_poses)*avatar_poses=std::move(decoded_avatar_poses);
     if(child_transforms)*child_transforms=std::move(children);
     return true;
 }
