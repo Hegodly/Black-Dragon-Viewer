@@ -25,11 +25,16 @@ void clear_login(LoginResult& result) noexcept {
     result={};
 }
 bool send_all(SOCKET sock,const lludp::Packet& packet) noexcept {
-    std::vector<std::uint8_t> bytes;
-    if(!lludp::encode(packet,bytes)||bytes.empty()||
-       bytes.size()>static_cast<std::size_t>(INT_MAX))return false;
-    return send(sock,reinterpret_cast<const char*>(bytes.data()),
-                static_cast<int>(bytes.size()),0)==static_cast<int>(bytes.size());
+    // LLUDP encoder constructs several bounded heap vectors. An
+    // allocation failure in a noexcept send path must return failure,
+    // not invoke std::terminate and kill the viewer.
+    try{
+        std::vector<std::uint8_t> bytes;
+        if(!lludp::encode(packet,bytes)||bytes.empty()||
+           bytes.size()>static_cast<std::size_t>(INT_MAX))return false;
+        return send(sock,reinterpret_cast<const char*>(bytes.data()),
+                    static_cast<int>(bytes.size()),0)==static_cast<int>(bytes.size());
+    }catch(...){return false;}
 }
 std::uint32_t get_le32(const std::vector<std::uint8_t>& body,std::size_t at) noexcept {
     return static_cast<std::uint32_t>(body[at])|
@@ -50,6 +55,7 @@ bool Circuit::send_packet(lludp::Packet packet) noexcept {
     return send_all(socket_,packet);
 }
 bool Circuit::send_startup_messages() noexcept {
+    try{
     if(socket_==INVALID_SOCKET||!login_.accepted())return false;
     lludp::Packet use,movement;
     if(!use_circuit_code(login_,1U,use)||
@@ -64,8 +70,10 @@ bool Circuit::send_startup_messages() noexcept {
     ++attempts_;
     last_retry_=std::chrono::steady_clock::now();
     return true;
+    }catch(...){return false;}
 }
 bool Circuit::start(const LoginResult& accepted_login) noexcept {
+    try{
     stop();
     if(!accepted_login.accepted()||!valid_handoff(accepted_login.handoff)||
        accepted_login.circuit_code==0)return false;
@@ -106,6 +114,11 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
         stop();state_=CircuitState::Failed;return false;
     }
     return true;
+    }catch(...){
+        stop();
+        state_=CircuitState::Failed;
+        return false;
+    }
 }
 bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
     if(!caps::trusted_mesh_caps_url(capability)||!mesh_capability_url_.empty()||
@@ -172,6 +185,7 @@ void Circuit::prune_unreferenced_meshes() noexcept {
 }
 void Circuit::schedule_visible_meshes() noexcept {
     if(mesh_capability_url_.empty()||!movement_position_.verified)return;
+    try{
     // Spatial-object revision alone is insufficient: walking from one
     // house to another must discover newly visible mesh assets even if
     // the simulator sends no full ObjectUpdate messages.
@@ -193,7 +207,7 @@ void Circuit::schedule_visible_meshes() noexcept {
             std::abs(t.y-movement_position_.y)<=144.f&&
             std::abs(t.z-movement_position_.z)<=96.f;
     };
-    const auto schedule=[&](const auto& objects) noexcept {
+    const auto schedule=[&](const auto& objects) {
         for(const auto& [id,t]:objects){
             (void)id;
             if(t.mesh_asset_id.empty())continue;
@@ -209,6 +223,9 @@ void Circuit::schedule_visible_meshes() noexcept {
     };
     schedule(spatial_objects_);
     schedule(linked_objects_);
+    }catch(...){
+        mesh_scan_revision_=~std::uint64_t{0};
+    }
 }
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
@@ -283,6 +300,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
     auto selected=mesh_scheduler_.next_download();
     if(!selected)return;
     mesh_last_start_=now;
+    try{
     auto cap=mesh_capability_url_;
     mesh_worker_=std::async(std::launch::async,
        [url=std::move(cap),id=selected->id]()mutable{
@@ -296,8 +314,13 @@ void Circuit::maybe_fetch_mesh() noexcept {
             result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
         return result;
     });
+    }catch(...){
+        (void)mesh_scheduler_.download_finished(selected->id,0U,false);
+        ++mesh_failure_count_;
+    }
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
+    try{
     if(state_!=CircuitState::MovementConfirmed||
        !region_metadata_.verified||!movement_position_.verified||
        socket_==INVALID_SOCKET)return false;
@@ -312,12 +335,14 @@ bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     last_chat_sent_=now;
     // No local bubble: packet send is NOT server delivery confirmation.
     return true;
+    }catch(...){return false;} // preserve retry and no false delivery receipt
 }
 void Circuit::set_requested_controls(std::uint32_t flags) noexcept {
     requested_controls_=(flags&kAllowedMovement);
     last_controls_at_=std::chrono::steady_clock::now();
 }
 void Circuit::maybe_send_agent_update() noexcept {
+    try{
     if(state_!=CircuitState::MovementConfirmed||
        !movement_position_.verified||socket_==INVALID_SOCKET)return;
     const auto now=std::chrono::steady_clock::now();
@@ -338,6 +363,7 @@ void Circuit::maybe_send_agent_update() noexcept {
             ++movement_control_packets_sent_;
         last_agent_update_=now;
     }
+    }catch(...){ /* retry on the next frame instead of aborting */ }
 }
 void Circuit::remember_missing_object(std::uint32_t id) noexcept {
     if(id==0U||avatar_root_ids_.contains(id)||
@@ -355,7 +381,8 @@ void Circuit::remember_missing_object(std::uint32_t id) noexcept {
         }
         if(missing_objects_.size()>=kMaxMissingObjectRequests)return;
     }
-    missing_objects_.try_emplace(id);
+    try{missing_objects_.try_emplace(id);}
+    catch(...){ /* best-effort recovery: never terminate UDP polling */ }
 }
 void Circuit::maybe_send_missing_object_requests() noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -364,6 +391,7 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     const auto now=std::chrono::steady_clock::now();
     if(last_object_request_!=std::chrono::steady_clock::time_point{}&&
        now-last_object_request_<std::chrono::milliseconds(400))return;
+    try{
     std::vector<std::uint32_t> ids;
     ids.reserve(16U);
     for(const auto& [id,state]:missing_objects_){
@@ -394,8 +422,14 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
         }
         requested_object_ids_+=static_cast<std::uint32_t>(ids.size());
     }
+    }catch(...){
+        // If the best-effort request vector cannot be allocated,
+        // recover normally on the next tick, never terminate the viewer.
+        last_object_request_={};
+    }
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
+    try{
     ++packets_received_;
     // Acknowledge all outbound packet sequences, not only the two login
     // handshake packets. Appended LLUDP ACKs and PacketAck blocks may
@@ -761,6 +795,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         texture_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+    }catch(...){
+        // Malformed/large simulator payloads may stress allocations.
+        // An individual packet must not terminate the entire app.
+        ++invalid_world_packets_;
+    }
 }
 void Circuit::retry_unacknowledged() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed)return;
@@ -802,9 +841,16 @@ void Circuit::poll(unsigned budget) noexcept {
         }
         if(got<=0)break;
         lludp::Packet packet{};
-        if(lludp::decode(
-            std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
-            packet))handle_packet(packet);
+        try{
+            if(lludp::decode(
+                std::span<const std::uint8_t>(bytes.data(),
+                                              static_cast<std::size_t>(got)),
+                packet))handle_packet(packet);
+        }catch(...){
+            // A single malformed or huge incoming packet must never
+            // terminate the viewer's noexcept network polling thread.
+            ++invalid_world_packets_;
+        }
     }
     retry_unacknowledged();
     maybe_retry();

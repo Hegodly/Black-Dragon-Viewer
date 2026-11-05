@@ -136,6 +136,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
                             std::vector<Transform>* child_transforms,
                             std::vector<std::uint32_t>* avatar_root_ids,
                             std::vector<AvatarFullPose>* avatar_poses) noexcept {
+    try{
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -329,5 +330,6 @@ bool decode_full_transforms(const lludp::Packet& packet,
     if(avatar_poses)*avatar_poses=std::move(decoded_avatar_poses);
     if(child_transforms)*child_transforms=std::move(children);
     return true;
+    }catch(...){return false;}
 }
 } // namespace kami::protocol::objectspatial

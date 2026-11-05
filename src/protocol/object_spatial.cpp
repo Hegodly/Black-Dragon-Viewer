@@ -179,6 +179,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
                                   std::vector<Transform>& out,
                                   std::vector<Transform>* child_transforms,
                                   CompressedDecodeAudit* audit) noexcept {
+    try{
     // High 13: ObjectUpdateCompressed. All blocks must have bounded
     // framing before any untrusted fields are read.
     if(worldwire::inspect(packet).kind!=worldwire::Kind::ObjectCompressed ||
@@ -260,6 +261,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     if(child_transforms)*child_transforms=std::move(linked);
     if(audit)*audit=frame;
     return true;
+    }catch(...){return false;}
 }
 bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
     return a.local_id==b.local_id&&a.parent_id==b.parent_id&&
@@ -309,6 +311,7 @@ Transform merge_compressed_transform(
 }
 bool decode_cached_ids(const lludp::Packet& packet,
                        std::vector<std::uint32_t>& out) noexcept {
+    try{
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectCached||!info.complete_frame)
         return false;
@@ -323,9 +326,11 @@ bool decode_cached_ids(const lludp::Packet& packet,
     }
     out=std::move(ids);
     return true;
+    }catch(...){return false;}
 }
 bool decode_killed_ids(const lludp::Packet& packet,
                        std::vector<std::uint32_t>& out) noexcept {
+    try{
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectKilled||!info.complete_frame)
         return false;
@@ -338,5 +343,6 @@ bool decode_killed_ids(const lludp::Packet& packet,
     }
     out=std::move(tmp);
     return true;
+    }catch(...){return false;}
 }
 } // namespace kami::protocol::objectspatial

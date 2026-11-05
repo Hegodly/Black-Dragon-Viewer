@@ -670,6 +670,11 @@ bool Renderer::set_verified_live_terrain(
         error_=L"R12 terrain needs verified SL simulator and decoded land";
         return false;
     }
+    if(texture_upload_busy()){
+        // The caller will retry without committing its revision. Do not
+        // mutate scene/atlas state while the previous GPU copy is pending.
+        return false;
+    }
     // Work in local meters relative to the verified avatar, mapping
     // the simulator's Z-up coordinate system to DX12's Y-up scene.
     std::vector<const protocol::terrain::Patch*> nearest;
@@ -759,7 +764,8 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_mesh_assets(),
         circuit.decoded_texture_assets(),
         agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_);
-    if(next_layers!=live_texture_layers_){
+    const bool atlas_changed=next_layers!=live_texture_layers_;
+    if(atlas_changed){
         auto previous=std::move(live_texture_layers_);
         live_texture_layers_=std::move(next_layers);
         if(ready_){
@@ -811,9 +817,22 @@ bool Renderer::set_verified_live_terrain(
         // require waiting for the independent texture-copy queue.
         if(ready_&&!make_geometry()){
             region_mesh_=std::move(previous);
-            error_=L"R12 DX12 land mesh upload failed";
+            // The GPU atlas might have been updated already while the
+            // old world vertex buffer still references previous layer
+            // indices. Never present mismatched geometry and materials.
+            if(atlas_changed)ready_=false;
+            error_=L"R52 DX12 scene upload failed; renderer stopped to prevent mixed world/texture state";
             return false;
         }
+    }
+    // The local marker and camera must be in the exact same region-
+    // relative coordinate system as the successfully uploaded geometry.
+    // Before R52, a 12m scene rebase shifted the entire rendered world
+    // without shifting the preview avatar/camera, causing apparent jumps.
+    if(!first_live_land&&!live_avatar_preview_.rebase(agent)){
+        ready_=false;
+        error_=L"R52 could not align avatar origin with verified SL scene";
+        return false;
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;

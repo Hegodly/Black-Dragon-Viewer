@@ -23,6 +23,33 @@ public:
         pose_.y=-1.f; // estimated feet offset, not a server terrain height
         return true;
     }
+    // Keep the predicted avatar and camera in the same local coordinate
+    // space as re-centered DX12 terrain. A teleport has no trustworthy
+    // prediction, so snap the marker back to the verified region position.
+    // Return false without mutation on malformed/unverified server poses.
+    [[nodiscard]] bool rebase(const protocol::sim::AgentPosition& next) noexcept {
+        if(!valid_||!next.verified||!std::isfinite(next.x)||
+           !std::isfinite(next.y)||!std::isfinite(next.z)||
+           next.x<0.f||next.x>=256.f||next.y<0.f||
+           next.y>=256.f||next.z< -4096.f||next.z>8192.f)return false;
+        const float dx=next.x-origin_.x;
+        const float dy=next.y-origin_.y;
+        const float dz=next.z-origin_.z;
+        if(!std::isfinite(dx)||!std::isfinite(dy)||!std::isfinite(dz))
+            return false;
+        if(std::hypot(dx,dy)>64.f||std::abs(dz)>24.f){
+            // Long-range reposition/teleport: don't preserve dead-reckoned
+            // walking from the previous location.
+            pose_.x=0.f;pose_.y=-1.f;pose_.z=0.f;
+            pose_.moving=false;
+        }else{
+            pose_.x-=dx;
+            pose_.y-=dz;
+            pose_.z-=dy;
+        }
+        origin_=next;
+        return true;
+    }
     void clear() noexcept { valid_=false;origin_={};pose_={}; }
     [[nodiscard]] bool active() const noexcept {return valid_;}
     [[nodiscard]] const AvatarMarkerPose& pose() const noexcept {return pose_;}

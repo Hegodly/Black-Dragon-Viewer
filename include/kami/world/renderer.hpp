@@ -137,6 +137,13 @@ public:
     [[nodiscard]] std::size_t uploaded_mesh_triangles() const noexcept {
         return region_mesh_?uploaded_mesh_triangles_:0U;
     }
+    // A texture copy is submitted to the ordered DX12 queue but its upload
+    // heap cannot be recycled until the fence completes. Deferring the
+    // next world refresh is normal, not a texture failure.
+    [[nodiscard]] bool texture_upload_busy() const noexcept {
+        return texture_copy_submitted_fence_!=0U&&fence_&&
+            fence_->GetCompletedValue()<texture_copy_submitted_fence_;
+    }
     [[nodiscard]] std::size_t bound_sl_texture_assets() const noexcept {
         return region_mesh_?live_texture_layers_.size():0U;
     }
