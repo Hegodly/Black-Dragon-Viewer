@@ -143,6 +143,24 @@ public:
     [[nodiscard]] std::size_t uploaded_mesh_triangles() const noexcept {
         return region_mesh_?uploaded_mesh_triangles_:0U;
     }
+    [[nodiscard]] std::size_t mesh_eligible_instances() const noexcept {
+        return region_mesh_?mesh_eligible_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_missing_lod_instances() const noexcept {
+        return region_mesh_?mesh_missing_lod_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_waiting_for_parent() const noexcept {
+        return region_mesh_?mesh_waiting_for_parent_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_out_of_range_instances() const noexcept {
+        return region_mesh_?mesh_out_of_range_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_invalid_pose_instances() const noexcept {
+        return region_mesh_?mesh_invalid_pose_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_undrawn_instances() const noexcept {
+        return region_mesh_?mesh_undrawn_instances_:0U;
+    }
     [[nodiscard]] bool texture_upload_pending() const noexcept {
         return texture_upload_pending_;
     }
@@ -275,6 +293,9 @@ private:
     std::size_t uploaded_primitive_vertices_=0;
     std::size_t uploaded_mesh_vertices_=0,uploaded_mesh_shapes_=0;
     std::size_t uploaded_mesh_triangles_=0;
+    std::size_t mesh_eligible_instances_=0,mesh_missing_lod_instances_=0;
+    std::size_t mesh_waiting_for_parent_=0,mesh_out_of_range_instances_=0;
+    std::size_t mesh_invalid_pose_instances_=0,mesh_undrawn_instances_=0;
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
     std::vector<PBRRow> pbr_rows_=std::vector<PBRRow>(protocol::pbr::kRows);
