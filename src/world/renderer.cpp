@@ -170,7 +170,7 @@ TextureUploadStatus Renderer::make_material_texture(
     const std::map<std::string,protocol::texture::DecodedTexture>* images,
     const std::map<std::string,std::uint16_t>* previous_layers) {
     // R50: retain the GPU Texture2DArray and SRV. Only upload layers whose
-    // UUID changed; the old path rebuilt all 25 slices (6.25 MiB), allocated
+    // UUID changed; the old path rebuilt all 49 slices (12.25 MiB), allocated
     // a new GPU texture, and stalled the graphics queue on each new J2C.
     constexpr UINT tw=kLiveTextureSize,th=kLiveTextureSize;
     constexpr UINT slices=kLiveTextureLayers+1U;
