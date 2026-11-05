@@ -163,87 +163,141 @@ bool Renderer::update_skin_palette() noexcept {
     return true;
 }
 
-bool Renderer::make_material_texture() {
-    // First GPU image is a KAMI-authored procedural 64x64 albedo texture.
-    // This creates the real DX12 upload + shader-resource path required
-    // later for independently decoded external assets.
-    constexpr UINT tw=64,th=64;
+
+bool Renderer::make_material_texture(
+    const std::map<std::string,protocol::texture::DecodedTexture>* images) {
+    // One bounded DX12 texture array avoids expensive descriptor-set
+    // rebinding for every mesh face, preserving the FPS-first draw path.
+    // Slice zero is the original KAMI-authored procedural material.
+    // Slices 1..24 contain validated CPU-decoded SL default TE assets.
+    constexpr UINT tw=kLiveTextureSize,th=kLiveTextureSize;
+    constexpr UINT slices=kLiveTextureLayers+1U;
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     desc.Width=tw;
     desc.Height=th;
-    desc.DepthOrArraySize=1;
+    desc.DepthOrArraySize=static_cast<UINT16>(slices);
     desc.MipLevels=1;
     desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
     desc.SampleDesc.Count=1;
     desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
+    const auto* dev=device_.native_device();
+    if(!dev||!shadow_srv_heap_||!allocator_||!commands_)return false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> image_gpu,staging;
     const auto heap_default=heap(D3D12_HEAP_TYPE_DEFAULT);
-    if(FAILED(device_.native_device()->CreateCommittedResource(
-            &heap_default,D3D12_HEAP_FLAG_NONE,&desc,
-            D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
-            IID_PPV_ARGS(material_texture_.ReleaseAndGetAddressOf()))))
-        return false;
+    if(FAILED(dev->CreateCommittedResource(
+        &heap_default,D3D12_HEAP_FLAG_NONE,&desc,
+        D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
+        IID_PPV_ARGS(image_gpu.GetAddressOf()))))return false;
 
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
-    UINT rows=0;
-    UINT64 rowBytes=0,uploadSize=0;
-    device_.native_device()->GetCopyableFootprints(
-        &desc,0,1,0,&footprint,&rows,&rowBytes,&uploadSize);
-    if(rows!=th || rowBytes!=tw*4U || uploadSize==0) return false;
-    const auto upload_desc=buffer_desc(uploadSize);
+    std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT,slices> footprints{};
+    std::array<UINT,slices> rows{};
+    std::array<UINT64,slices> row_bytes{};
+    UINT64 upload_size=0U;
+    dev->GetCopyableFootprints(&desc,0,slices,0,footprints.data(),
+                              rows.data(),row_bytes.data(),&upload_size);
+    if(upload_size==0U||upload_size>16U*1024U*1024U)return false;
+    for(UINT i=0;i<slices;++i)
+        if(rows[i]!=th||row_bytes[i]!=tw*4U)return false;
+
+    const auto upload_desc=buffer_desc(upload_size);
     const auto heap_upload=heap(D3D12_HEAP_TYPE_UPLOAD);
-    if(FAILED(device_.native_device()->CreateCommittedResource(
-            &heap_upload,D3D12_HEAP_FLAG_NONE,&upload_desc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
-            IID_PPV_ARGS(material_upload_.ReleaseAndGetAddressOf()))))
-        return false;
+    if(FAILED(dev->CreateCommittedResource(
+        &heap_upload,D3D12_HEAP_FLAG_NONE,&upload_desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+        IID_PPV_ARGS(staging.GetAddressOf()))))return false;
 
-    void* mapped=nullptr;
-    if(FAILED(material_upload_->Map(0,nullptr,&mapped))) return false;
-    std::memset(mapped,0,static_cast<std::size_t>(uploadSize));
-    auto* pixels=static_cast<std::uint8_t*>(mapped);
-    for(UINT y=0;y<th;++y) for(UINT x=0;x<tw;++x) {
-        auto* pixel=pixels+static_cast<std::size_t>(y)*footprint.Footprint.RowPitch+
-                     static_cast<std::size_t>(x)*4;
-        const bool tile=((x/8U+y/8U)%2U)==0U;
-        pixel[0]=tile?220:128;
-        pixel[1]=tile?205:160;
-        pixel[2]=tile?180:215;
-        pixel[3]=255;
+    std::array<const protocol::texture::DecodedTexture*,slices> decoded{};
+    if(images){
+        for(const auto& [id,layer]:live_texture_layers_){
+            if(layer==0U||layer>=slices)continue;
+            const auto it=images->find(id);
+            if(it==images->end())continue;
+            const auto& sample=it->second;
+            const auto pixels=static_cast<std::uint64_t>(sample.width)*
+                              static_cast<std::uint64_t>(sample.height);
+            if(sample.width==0U||sample.height==0U||
+               sample.width>2048U||sample.height>2048U||
+               pixels>4U*1024U*1024U||
+               pixels*4U!=sample.rgba.size())continue;
+            decoded[layer]=&sample;
+        }
     }
-    material_upload_->Unmap(0,nullptr);
+    std::uint8_t* mapped=nullptr;
+    const D3D12_RANGE no_read{0,0};
+    if(FAILED(staging->Map(0,&no_read,
+       reinterpret_cast<void**>(&mapped)))||!mapped)return false;
+    std::memset(mapped,0,static_cast<std::size_t>(upload_size));
+    for(UINT layer=0;layer<slices;++layer){
+        const auto* source=decoded[layer];
+        const auto& layout=footprints[layer];
+        auto* dest=mapped+static_cast<std::size_t>(layout.Offset);
+        for(UINT y=0;y<th;++y){
+            auto* row=dest+static_cast<std::size_t>(y)*
+                layout.Footprint.RowPitch;
+            for(UINT x=0;x<tw;++x){
+                auto* pixel=row+static_cast<std::size_t>(x)*4U;
+                if(source){
+                    // Deterministic nearest-neighbor preview: never sample
+                    // beyond a decoded JPEG2000 buffer; no GPU decompressor.
+                    const auto sx=static_cast<std::size_t>(
+                        (static_cast<std::uint64_t>(x)*source->width)/tw);
+                    const auto sy=static_cast<std::size_t>(
+                        (static_cast<std::uint64_t>(y)*source->height)/th);
+                    const auto at=4U*(sy*source->width+sx);
+                    std::memcpy(pixel,source->rgba.data()+at,4U);
+                }else{
+                    const bool tile=((x/32U+y/32U)%2U)==0U;
+                    pixel[0]=tile?220U:128U;
+                    pixel[1]=tile?205U:160U;
+                    pixel[2]=tile?180U:215U;
+                    pixel[3]=255U;
+                }
+            }
+        }
+    }
+    const D3D12_RANGE written{0,static_cast<SIZE_T>(upload_size)};
+    staging->Unmap(0,&written);
 
-    D3D12_TEXTURE_COPY_LOCATION dest{};
-    dest.pResource=material_texture_.Get();
-    dest.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dest.SubresourceIndex=0;
-    D3D12_TEXTURE_COPY_LOCATION source{};
-    source.pResource=material_upload_.Get();
-    source.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    source.PlacedFootprint=footprint;
-    if(FAILED(allocator_->Reset()) ||
+    if(FAILED(allocator_->Reset())||
        FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get())))
-        return false;
-    commands_->CopyTextureRegion(&dest,0,0,0,&source,nullptr);
-    const auto ready=barrier(material_texture_.Get(),
-        D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+       return false;
+    for(UINT layer=0;layer<slices;++layer){
+        D3D12_TEXTURE_COPY_LOCATION dest{};
+        dest.pResource=image_gpu.Get();
+        dest.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        dest.SubresourceIndex=layer;
+        D3D12_TEXTURE_COPY_LOCATION src{};
+        src.pResource=staging.Get();
+        src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        src.PlacedFootprint=footprints[layer];
+        commands_->CopyTextureRegion(&dest,0,0,0,&src,nullptr);
+    }
+    const auto ready=barrier(image_gpu.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     commands_->ResourceBarrier(1,&ready);
-    if(FAILED(commands_->Close())) return false;
-    ID3D12CommandList* list[]={commands_.Get()};
-    device_.graphics_queue()->ExecuteCommandLists(1,list);
+    if(FAILED(commands_->Close()))return false;
+    ID3D12CommandList* lists[]={commands_.Get()};
+    device_.graphics_queue()->ExecuteCommandLists(1,lists);
+    // GPU must finish reading the old texture before SRV replacement,
+    // and finish reading this staging resource before it is destroyed.
     wait_for_gpu();
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
     srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
-    srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
     srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv.Texture2D.MipLevels=1;
+    srv.Texture2DArray.MipLevels=1;
+    srv.Texture2DArray.ArraySize=slices;
     auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
-    handle.ptr+=device_.native_device()->GetDescriptorHandleIncrementSize(
+    handle.ptr+=dev->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    device_.native_device()->CreateShaderResourceView(
-        material_texture_.Get(),&srv,handle);
+    dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
+    material_texture_=std::move(image_gpu);
+    // Upload data is no longer needed after the GPU fence.
+    material_upload_.Reset();
     return true;
 }
 
