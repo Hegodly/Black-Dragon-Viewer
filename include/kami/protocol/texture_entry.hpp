@@ -11,6 +11,7 @@ struct UVTransform {
     float repeat_u=1.f,repeat_v=1.f;
     float offset_u=0.f,offset_v=0.f;
     float rotation=0.f; // radians, SL's V-up convention
+    bool operator==(const UVTransform&) const = default;
 };
 struct Base {
     std::array<std::uint8_t,16U> image_id{};
