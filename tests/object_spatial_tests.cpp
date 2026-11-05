@@ -242,5 +242,23 @@ int main(){
            compressed(legacy),out,&children,&legacy_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
        legacy_audit.mesh_references!=0U)return 30;
+    // High 13 compressed frames must also recognize 0x60, without
+    // changing the bounded frame layout or treating 0x70 as a UUID.
+    auto mesh_alias=meshblock;
+    mesh_alias[mesh_alias.size()-23U-17U-6U]=0x60U;
+    objectspatial::CompressedDecodeAudit alias_audit{};
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(mesh_alias),out,&children,&alias_audit)||
+       children.size()!=1U||
+       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       alias_audit.mesh_references!=1U||alias_audit.sculpt_records!=1U)
+        return 40;
+    mesh_alias[mesh_alias.size()-23U-17U-6U]=0x70U;
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(mesh_alias),out,&children,&alias_audit)||
+       children.size()!=1U||!children[0].mesh_asset_id.empty()||
+       alias_audit.mesh_references!=0U)
+        return 41;
+
     return 0;
 }
