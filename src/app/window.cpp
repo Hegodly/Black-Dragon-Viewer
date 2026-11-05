@@ -1780,47 +1780,6 @@ void Window::begin_sl_login() {
         InvalidateRect(hwnd_,nullptr,FALSE);
         return;
     }
-    if(caps_seed_future_.valid()){
-        try{
-            auto previous=caps_seed_future_.get();
-            if(!previous.mesh_capability_url.empty())
-                SecureZeroMemory(previous.mesh_capability_url.data(),
-                     previous.mesh_capability_url.size()*sizeof(wchar_t));
-            if(!previous.event_queue_url.empty())
-                SecureZeroMemory(previous.event_queue_url.data(),
-                     previous.event_queue_url.size()*sizeof(wchar_t));
-        }catch(...){
-            // A failed previous CAPS worker cannot crash a new login.
-            caps_status_=L"Previous CAPS seed worker failed";
-        }
-    }
-    if(caps_poll_future_.valid()){
-        try{(void)caps_poll_future_.get();}catch(...){}
-    }
-    if(!caps_seed_url_.empty())
-        SecureZeroMemory(caps_seed_url_.data(),
-                          caps_seed_url_.size()*sizeof(wchar_t));
-    if(!caps_event_queue_url_.empty())
-        SecureZeroMemory(caps_event_queue_url_.data(),
-                         caps_event_queue_url_.size()*sizeof(wchar_t));
-    if(!caps_ack_.token.empty())
-        SecureZeroMemory(caps_ack_.token.data(),caps_ack_.token.size());
-    caps_seed_url_.clear();
-    caps_event_queue_url_.clear();
-    caps_ack_={};
-    caps_completed_polls_=0;
-    caps_events_observed_=caps_events_unsupported_=0;
-    caps_notifications_handled_=0;
-    caps_last_notice_.clear();
-    caps_consecutive_failures_=0;
-    caps_dispatch_blocked_=false;
-    caps_next_poll_={};
-    caps_seed_retry_after_={};
-    caps_seed_attempts_=0U;
-    caps_status_.clear();
-    caps_seed_summary_.clear();
-    caps_recent_types_.clear();
-    caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
     // Explicit acceptance and Windows native credential input only.
     const int choice=MessageBoxW(hwnd_,
@@ -1873,6 +1832,50 @@ void Window::begin_sl_login() {
     std::wstring password=secret.data();
     SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
     SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
+    // Only end the existing CAPS session AFTER the user has accepted
+    // the Terms and supplied replacement credentials. Cancelling either
+    // dialog must never destroy a working Second Life session.
+    if(caps_seed_future_.valid()){
+        try{
+            auto previous=caps_seed_future_.get();
+            if(!previous.mesh_capability_url.empty())
+                SecureZeroMemory(previous.mesh_capability_url.data(),
+                     previous.mesh_capability_url.size()*sizeof(wchar_t));
+            if(!previous.event_queue_url.empty())
+                SecureZeroMemory(previous.event_queue_url.data(),
+                     previous.event_queue_url.size()*sizeof(wchar_t));
+        }catch(...){
+            // A failed previous CAPS worker cannot crash a new login.
+            caps_status_=L"Previous CAPS seed worker failed";
+        }
+    }
+    if(caps_poll_future_.valid()){
+        try{(void)caps_poll_future_.get();}catch(...){}
+    }
+    if(!caps_seed_url_.empty())
+        SecureZeroMemory(caps_seed_url_.data(),
+                          caps_seed_url_.size()*sizeof(wchar_t));
+    if(!caps_event_queue_url_.empty())
+        SecureZeroMemory(caps_event_queue_url_.data(),
+                         caps_event_queue_url_.size()*sizeof(wchar_t));
+    if(!caps_ack_.token.empty())
+        SecureZeroMemory(caps_ack_.token.data(),caps_ack_.token.size());
+    caps_seed_url_.clear();
+    caps_event_queue_url_.clear();
+    caps_ack_={};
+    caps_completed_polls_=0;
+    caps_events_observed_=caps_events_unsupported_=0;
+    caps_notifications_handled_=0;
+    caps_last_notice_.clear();
+    caps_consecutive_failures_=0;
+    caps_dispatch_blocked_=false;
+    caps_next_poll_={};
+    caps_seed_retry_after_={};
+    caps_seed_attempts_=0U;
+    caps_status_.clear();
+    caps_seed_summary_.clear();
+    caps_recent_types_.clear();
+    caps_seed_started_=caps_poll_started_=false;
     sl_circuit_.stop();
     world_renderer_.clear_decoded_region_geometry();
     world_renderer_.clear_live_water_preview();
