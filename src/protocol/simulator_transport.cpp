@@ -357,13 +357,17 @@ void Circuit::maybe_send_agent_update() noexcept {
         last_agent_update_=now;
     }
 }
-void Circuit::remember_missing_object(std::uint32_t id) noexcept {
+void Circuit::remember_missing_object(std::uint32_t id,bool important) noexcept {
     if(id==0U||avatar_root_ids_.contains(id)||
-       spatial_objects_.contains(id)||linked_objects_.contains(id)||
-       missing_objects_.contains(id))return;
+       spatial_objects_.contains(id)||linked_objects_.contains(id))return;
+    const auto old=missing_objects_.find(id);
+    if(old!=missing_objects_.end()){
+        // A cached object or missing parent can promote a prior low-priority
+        // speculative terse request without creating a duplicate request.
+        old->second.important=old->second.important||important;
+        return;
+    }
     if(missing_objects_.size()>=kMaxMissingObjectRequests){
-        // Recover capacity after the final unanswered request has aged
-        // out; previously 256 exhausted entries could block every new root.
         const auto now=std::chrono::steady_clock::now();
         for(auto it=missing_objects_.begin();it!=missing_objects_.end();){
             if(detail::reclaim_missing_request(
@@ -371,9 +375,18 @@ void Circuit::remember_missing_object(std::uint32_t id) noexcept {
                 it=missing_objects_.erase(it);
             else ++it;
         }
+        // Never allow unknown terse movements to permanently displace
+        // a verified cache-miss or the root of a visible linked building.
+        if(missing_objects_.size()>=kMaxMissingObjectRequests&&important){
+            const auto speculative=std::find_if(
+                missing_objects_.begin(),missing_objects_.end(),
+                [](const auto& item){return !item.second.important;});
+            if(speculative!=missing_objects_.end())
+                missing_objects_.erase(speculative);
+        }
         if(missing_objects_.size()>=kMaxMissingObjectRequests)return;
     }
-    missing_objects_.try_emplace(id);
+    missing_objects_.try_emplace(id,MissingObject{0U,{},important});
 }
 void Circuit::maybe_send_missing_object_requests() noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -382,22 +395,35 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     const auto now=std::chrono::steady_clock::now();
     if(last_object_request_!=std::chrono::steady_clock::time_point{}&&
        now-last_object_request_<std::chrono::milliseconds(400))return;
-    std::vector<std::uint32_t> ids;
-    ids.reserve(16U);
+    // Prioritize explicit simulator cache misses and unresolved linkset
+    // anchors, then freshest untried objects; keep 16 IDs per packet.
+    // Neither the queue size nor any R65 Quality change raises the
+    // outgoing simulator request rate.
+    std::vector<std::pair<std::uint32_t,const MissingObject*>> ready;
+    ready.reserve(missing_objects_.size());
     for(const auto& [id,state]:missing_objects_){
-        // Lost cached-root responses used to strand entire linked sets.
-        // Bound retries to five, with a growing quiet period to avoid
-        // flooding simulators if an object can never be recovered.
         if(state.attempts>=5U)continue;
         const auto quiet=std::chrono::seconds(8+4*state.attempts);
         if(state.sent_at!=std::chrono::steady_clock::time_point{}&&
            now-state.sent_at<quiet)continue;
         if(spatial_objects_.contains(id)||linked_objects_.contains(id))
             continue;
-        ids.push_back(id);
-        if(ids.size()==16U)break;
+        ready.emplace_back(id,&state);
     }
-    if(ids.empty())return;
+    if(ready.empty())return;
+    std::sort(ready.begin(),ready.end(),[](const auto& a,const auto& b){
+        const auto& x=*a.second;const auto& y=*b.second;
+        if(x.important!=y.important||x.attempts!=y.attempts||
+           x.sent_at!=y.sent_at)
+            return detail::prefer_missing_request(
+                x.important,x.attempts,x.sent_at,
+                y.important,y.attempts,y.sent_at);
+        return a.first<b.first;
+    });
+    std::vector<std::uint32_t> ids;
+    ids.reserve(16U);
+    for(std::size_t i=0U;i<std::min<std::size_t>(16U,ready.size());++i)
+        ids.push_back(ready[i].first);
     lludp::Packet pkt{};
     if(!request_missing_objects(login_,ids,sequence_,pkt))return;
     if(send_packet(std::move(pkt))){
@@ -724,7 +750,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         }
                         // Missing full update: ask for a verified object
                         // rather than inventing mesh geometry from a pose.
-                        remember_missing_object(pose.local_id);
+                        remember_missing_object(pose.local_id,false);
                     }
                 }
             }
