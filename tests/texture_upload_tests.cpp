@@ -5,6 +5,7 @@
 #include "kami/world/texture_atlas.hpp"
 #include "kami/world/scene_diff.hpp"
 #include <array>
+#include <limits>
 static_assert(sizeof(kami::world::Vertex)==68U,
     "DX12 mesh texture layer must fit the vertex input layout");
 
@@ -45,6 +46,22 @@ int main() {
     scene_b.avatar_count=0U;
     scene_b.vertices.push_back(vertex);
     if(same_scene_geometry(scene_a,scene_b))return 16;
+    // Updating an authenticated own-avatar position by centimeters must
+    // not rebuild the whole world. A real 12-meter movement must still
+    // request a new region-relative scene/interest set.
+    using kami::world::world_scene_rebase_due;
+    constexpr std::array<float,3> previous_pose{64.f,96.f,32.f};
+    if(world_scene_rebase_due({64.04f,96.f,32.f},previous_pose,true))
+        return 17;
+    if(world_scene_rebase_due({75.99f,96.f,32.f},previous_pose,true))
+        return 18;
+    if(!world_scene_rebase_due({76.f,96.f,32.f},previous_pose,true))
+        return 19;
+    if(!world_scene_rebase_due({64.f,96.f,32.f},previous_pose,false))
+        return 20;
+    if(world_scene_rebase_due(
+           {std::numeric_limits<float>::infinity(),96.f,32.f},
+           previous_pose,true))return 21;
     kami::world::Device device;
     if(device.initialize(true)==kami::world::DeviceStatus::Unavailable)
         return 0; // The hosted VM may not have a DX12 adapter.
