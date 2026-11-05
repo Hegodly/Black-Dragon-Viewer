@@ -25,11 +25,16 @@ void clear_login(LoginResult& result) noexcept {
     result={};
 }
 bool send_all(SOCKET sock,const lludp::Packet& packet) noexcept {
-    std::vector<std::uint8_t> bytes;
-    if(!lludp::encode(packet,bytes)||bytes.empty()||
-       bytes.size()>static_cast<std::size_t>(INT_MAX))return false;
-    return send(sock,reinterpret_cast<const char*>(bytes.data()),
-                static_cast<int>(bytes.size()),0)==static_cast<int>(bytes.size());
+    // LLUDP encoder constructs several bounded heap vectors. An
+    // allocation failure in a noexcept send path must return failure,
+    // not invoke std::terminate and kill the viewer.
+    try{
+        std::vector<std::uint8_t> bytes;
+        if(!lludp::encode(packet,bytes)||bytes.empty()||
+           bytes.size()>static_cast<std::size_t>(INT_MAX))return false;
+        return send(sock,reinterpret_cast<const char*>(bytes.data()),
+                    static_cast<int>(bytes.size()),0)==static_cast<int>(bytes.size());
+    }catch(...){return false;}
 }
 std::uint32_t get_le32(const std::vector<std::uint8_t>& body,std::size_t at) noexcept {
     return static_cast<std::uint32_t>(body[at])|
