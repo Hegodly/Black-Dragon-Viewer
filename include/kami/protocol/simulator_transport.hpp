@@ -14,6 +14,7 @@
 #include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
 #include <winsock2.h>
+#include <array>
 #include <cstddef>
 #include <chrono>
 #include <cstdint>
@@ -61,6 +62,9 @@ public:
     // Retain more authenticated missing IDs, while each outbound packet
     // remains strictly capped at 16 and transmission rate-limited.
     static constexpr std::size_t kMaxMissingObjectRequests=1024U;
+    // Bound HTTP mesh concurrency even though the shared scheduler can
+    // track more downloads. Decode remains off the DX12 frame thread.
+    static constexpr std::size_t kMaxConcurrentMeshWorkers=4U;
     Circuit()=default;
     Circuit(const Circuit&)=delete;
     Circuit& operator=(const Circuit&)=delete;
@@ -365,7 +369,7 @@ private:
         bool fetched=false,decoded=false;
         mesh::LOD lod;
     };
-    std::future<MeshResult> mesh_worker_;
+    std::array<std::future<MeshResult>,kMaxConcurrentMeshWorkers> mesh_workers_{};
     // At most one delayed retry per unique mesh UUID; no packet or
     // signed capability URLs are kept in these retry records.
     std::map<std::string,std::chrono::steady_clock::time_point>
