@@ -205,6 +205,9 @@ public:
 
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     [[nodiscard]] ID3D12Device* native_device() const noexcept {return device_.native_device();}
+    [[nodiscard]] bool software_dx12_active() const noexcept {
+        return device_.status()==DeviceStatus::ReadySoftware;
+    }
     [[nodiscard]] const std::wstring& adapter_name() const noexcept {
         return device_.adapter_name();
     }
