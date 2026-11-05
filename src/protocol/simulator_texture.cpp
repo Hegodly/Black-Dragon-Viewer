@@ -60,16 +60,17 @@ void Circuit::schedule_visible_textures() noexcept {
                 // Unknown cuts/sculpts remain intentionally unrendered.
                 if(t.mesh_asset_id.empty()&&
                    t.primitive==objectspatial::PrimitiveKind::Unknown)continue;
-                const auto* anchor=world_mesh_anchor(t);
-                if(!anchor||!std::isfinite(anchor->x)||
-                   !std::isfinite(anchor->y)||!std::isfinite(anchor->z)||
-                   std::abs(anchor->x-movement_position_.x)>144.f||
-                   std::abs(anchor->y-movement_position_.y)>144.f||
-                   std::abs(anchor->z-movement_position_.z)>96.f)continue;
+                std::array<float,3> position{};
+                if(!objectspatial::resolve_world_position(
+                        t,spatial_objects_,linked_objects_,avatar_root_ids_,
+                        position)|| 
+                   std::abs(position[0]-movement_position_.x)>144.f||
+                   std::abs(position[1]-movement_position_.y)>144.f||
+                   std::abs(position[2]-movement_position_.z)>96.f)continue;
                 const float distance=std::hypot(std::hypot(
-                    anchor->x-movement_position_.x,
-                    anchor->y-movement_position_.y),
-                    anchor->z-movement_position_.z);
+                    position[0]-movement_position_.x,
+                    position[1]-movement_position_.y),
+                    position[2]-movement_position_.z);
                 std::uint32_t mask=0U;
                 if(!t.mesh_asset_id.empty()){
                     const auto loaded=loaded_meshes_.find(t.mesh_asset_id);
