@@ -46,6 +46,14 @@ int main() {
        sim::detail::reclaim_missing_request(5U,{},now)||
        !sim::detail::reclaim_missing_request(5U,stale,now))
         return 27;
+    // R65: the full queue in decorated regions must not let a speculative
+    // terse update take precedence over a verified cache miss/linkset root.
+    if(!sim::detail::prefer_missing_request(true,4U,stale,false,0U,recent)||
+       sim::detail::prefer_missing_request(false,0U,recent,true,4U,stale)||
+       !sim::detail::prefer_missing_request(true,0U,recent,true,1U,stale)||
+       sim::detail::prefer_missing_request(true,2U,recent,true,1U,stale)||
+       !sim::detail::prefer_missing_request(true,1U,stale,true,1U,recent))
+        return 28;
     WSADATA wsa{};
     if(WSAStartup(MAKEWORD(2,2),&wsa)!=0)return 1;
     const SOCKET server=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
