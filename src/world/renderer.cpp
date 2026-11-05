@@ -4,6 +4,7 @@
 #include "kami/world/object_proxies.hpp"
 #include "kami/world/live_primitive_geometry.hpp"
 #include "kami/world/texture_atlas.hpp"
+#include "kami/world/scene_diff.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
@@ -762,7 +763,8 @@ bool Renderer::set_verified_live_terrain(
         auto previous=std::move(live_texture_layers_);
         live_texture_layers_=std::move(next_layers);
         if(ready_){
-            wait_for_gpu();
+            // The copy list is independent and the graphics queue orders
+            // transfers before the next draw. No redundant UI-thread wait.
             if(!make_material_texture(&circuit.decoded_texture_assets(),
                                      &previous)){
                 live_texture_layers_=std::move(previous);
@@ -795,13 +797,23 @@ bool Renderer::set_verified_live_terrain(
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
-    if(ready_)wait_for_gpu();
-    auto previous=std::move(region_mesh_);
-    region_mesh_=std::move(scene);
-    if(ready_&&!make_geometry()){
-        region_mesh_=std::move(previous);
-        error_=L"R12 DX12 land mesh upload failed";
-        return false;
+    // Revisions include frequent simulator interest-list packets and
+    // decoded images which may never become drawable. Build a finite
+    // candidate once, but skip the DX12 vertex buffer allocation, copy,
+    // and associated GPU synchronization if its actual content is equal.
+    // This also preserves the previous known-good resource on failure.
+    const bool unchanged=region_mesh_&&same_scene_geometry(*region_mesh_,scene);
+    if(!unchanged){
+        auto previous=std::move(region_mesh_);
+        region_mesh_=std::move(scene);
+        // draw() already synchronizes the previous frame. New buffers are
+        // immutable upload resources: replacing the pointer does not
+        // require waiting for the independent texture-copy queue.
+        if(ready_&&!make_geometry()){
+            region_mesh_=std::move(previous);
+            error_=L"R12 DX12 land mesh upload failed";
+            return false;
+        }
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;
@@ -1279,6 +1291,9 @@ void Renderer::shutdown() noexcept {
     geometry_.Reset();
     commands_.Reset();
     allocator_.Reset();
+    texture_copy_commands_.Reset();
+    texture_copy_allocator_.Reset();
+    texture_copy_submitted_fence_=0U;
     pipeline_.Reset();
     shadow_pipeline_.Reset();
     sky_pipeline_.Reset();
