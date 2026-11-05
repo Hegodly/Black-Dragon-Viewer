@@ -654,26 +654,39 @@ PollResponse observe_event_queue_response(std::string_view xml) {
     return result;
 }
 
-MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
+bool jpeg2000_codestream_header(
+    std::span<const std::uint8_t> bytes) noexcept {
+    // Raw J2C codestream SOC marker (FF4F) or standard JP2 signature box.
+    // This is an untrusted-byte precheck, NOT successful image decoding.
+    return (bytes.size()>=2U&&bytes[0]==0xffU&&bytes[1]==0x4fU)||
+        (bytes.size()>=12U&&bytes[0]==0U&&bytes[1]==0U&&
+         bytes[2]==0U&&bytes[3]==12U&&bytes[4]==0x6aU&&
+         bytes[5]==0x50U&&bytes[6]==0x20U&&bytes[7]==0x20U&&
+         bytes[8]==0x0dU&&bytes[9]==0x0aU&&
+         bytes[10]==0x87U&&bytes[11]==0x0aU);
+}
+static MeshReply fetch_asset_with_field(
+    std::wstring capability_url,std::string asset_id,
+    std::wstring_view field,std::size_t max_bytes) {
     MeshReply response{};
     // The mesh endpoint comes from authenticated seed LLSD. Most
     // capabilities are HTTPS; legacy Linden-owned mesh CDN roots can
     // use HTTP with no bearer path/query. Their mesh asset bytes are
     // unencrypted and unauthenticated: limit size and validate decode.
     // Never use the plaintext exception for seed/EventQueue requests.
-    if(!valid_uuid(mesh_id)||mesh_id.size()!=36U||
+    if(!valid_uuid(asset_id)||asset_id.size()!=36U||
        !trusted_mesh_caps_url(capability_url))return response;
     std::wstring suffix;
-    suffix.reserve(mesh_id.size());
-    for(char ch:mesh_id)suffix.push_back(static_cast<wchar_t>(ch));
+    suffix.reserve(asset_id.size());
+    for(char ch:asset_id)suffix.push_back(static_cast<wchar_t>(ch));
     // Match the official Second Life mesh repository URL convention.
     // The capability URL is authenticated and never logged.
     const bool query=capability_url.find(L'?')!=std::wstring::npos;
-    if(query)capability_url+=L"&mesh_id=";
+    if(query)capability_url+=L"&"+std::wstring(field)+L"=";
     else {
         if(!capability_url.empty()&&capability_url.back()!=L'/')
             capability_url.push_back(L'/');
-        capability_url+=L"?mesh_id=";
+        capability_url+=L"?"+std::wstring(field)+L"=";
     }
     capability_url+=suffix;
     Parts target{};
@@ -704,7 +717,7 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
         WINHTTP_NO_HEADER_INDEX))return response;
     response.status=status;
     if(status!=200U)return response;
-    constexpr std::size_t max_bytes=8U*1024U*1024U;
+
     std::array<std::uint8_t,8192> buffer{};
     for(;;){
         DWORD count=0U;
@@ -720,6 +733,20 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
                               buffer.begin(),buffer.begin()+count);
     }
     response.fetched=!response.bytes.empty();
+    return response;
+}
+MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
+    return fetch_asset_with_field(std::move(capability_url),
+        std::move(mesh_id),L"mesh_id",8U*1024U*1024U);
+}
+MeshReply fetch_texture_asset(std::wstring capability_url,
+                              std::string texture_id){
+    auto response=fetch_asset_with_field(std::move(capability_url),
+        std::move(texture_id),L"texture_id",6U*1024U*1024U);
+    if(response.fetched&&!jpeg2000_codestream_header(response.bytes)){
+        response.fetched=false;
+        response.bytes.clear();
+    }
     return response;
 }
 SeedResponse request_seed(std::wstring seed_url) {
