@@ -1989,7 +1989,11 @@ void Window::update_sl_connection() {
     // decoded elevations and never block the UI on every network packet.
     if(sl_login_status_==protocol::LoginStatus::Accepted&&
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
-       world_renderer_.ready()&&land_revision>0U&&
+       world_renderer_.ready()&&
+       // A texture-copy fence still in flight is a temporary backpressure
+       // condition. Leave revisions uncommitted and retry next UI tick,
+       // rather than treating it as a permanent DX12 texture failure.
+       !world_renderer_.texture_upload_busy()&&land_revision>0U&&
        (land_revision!=live_land_uploaded_revision_||
         (spatial_revision!=live_spatial_uploaded_revision_||
          scene_rebase))&&
