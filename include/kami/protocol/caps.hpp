@@ -3,6 +3,7 @@
 #include <string_view>
 #include <cstdint>
 #include <vector>
+#include <span>
 
 namespace kami::protocol::caps {
 // CAPS event intake: bounded observations plus a narrow, explicitly
@@ -12,11 +13,13 @@ struct SeedResponse {
     bool granted=false;
     bool event_queue_granted=false;
     bool mesh_granted=false;
+    bool texture_granted=false;
     bool mesh_named=false;  // grant mentioned but absent or invalid
     bool mesh_rejected=false; // grant violates URL allowlist
     unsigned http_status=0;
     std::wstring event_queue_url; // secret bearer capability; do not log
     std::wstring mesh_capability_url; // ViewerAsset or GetMesh, never logged
+    std::wstring texture_capability_url; // ViewerAsset only, never logged
     std::wstring diagnostic;      // contains no URLs or response content
 };
 struct QueueCursor {
@@ -65,7 +68,8 @@ struct SeedParseReport {
 [[nodiscard]] bool parse_seed_llsd(std::string_view xml,
                                    std::wstring& event_queue_url,
     std::wstring* mesh_capability_url=nullptr,
-    SeedParseReport* report=nullptr);
+    SeedParseReport* report=nullptr,
+    std::wstring* texture_capability_url=nullptr);
 [[nodiscard]] bool parse_event_queue_llsd(std::string_view xml,
                                           unsigned& event_count);
 // Full bounded event queue: parses a sanitized TeleportFailed reason only.
@@ -91,6 +95,13 @@ struct MeshReply {
 // Runs on a separate std::async worker, never inside the DX12 frame loop.
 [[nodiscard]] MeshReply fetch_mesh_asset(std::wstring capability_url,
                                          std::string mesh_id);
+// JPEG2000 texture codestream fetched via authenticated ViewerAsset
+// ?texture_id= UUID query, separately from mesh_id. No decode or GPU
+// upload is claimed by HTTP success.
+[[nodiscard]] bool jpeg2000_codestream_header(
+    std::span<const std::uint8_t> bytes) noexcept;
+[[nodiscard]] MeshReply fetch_texture_asset(std::wstring capability_url,
+                                            std::string texture_id);
 [[nodiscard]] SeedResponse request_seed(std::wstring seed_url);
 [[nodiscard]] PollResponse probe_event_queue_once(
     std::wstring queue_url,const QueueCursor& previous={});
