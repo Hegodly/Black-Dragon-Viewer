@@ -90,3 +90,35 @@ The adapter distinguishes genuine `0x30` sculpt mesh IDs from:
 `0x90` reflection-probe metadata. It **does not** download those
 assets or implement PBR rendering; KAMI's full official SL backend remains
 incomplete.
+
+## R54: official LLPrimitive TextureEntry compatibility DLL
+
+`KAMI_SL_TextureEntry.dll` is a separately buildable/replaceable
+**LGPL 2.1 ONLY** compatibility port of Linden Lab's
+`LLPrimitive::unpack_TEField` and `LLPrimitive::parseTEMessage` handling
+from the official viewer's `indra/llprimitive/llprimitive.cpp` (source
+repository: `secondlife/viewer`, pinned `develop` commit
+`bb143726c780303e8302bfd7699d3d2d95935c39`,
+file blob `fd755e35dd94926c5be3781af68c1ce2f8f17810`).
+
+This module performs the actual official packed wire-field sequence:
+default UUID and per-face exceptions; inverted RGBA; S/T repeat; S/T
+offset; rotation; bump/shiny/fullbright; media/texgen; glow; and optional
+legacy material IDs. The C ABI includes explicit byte length, face
+count, versioned output size and transactional malformed-input checks.
+It does **not** implement PBR/glTF material rendering or Linden Lab's
+OpenGL draw pipeline.
+
+The adapter source `src/sl_reference/official_texture_entry.cpp`,
+`include/kami/protocol/official_texture_entry.h`, this notice and
+`LICENSE.LGPL-2.1.txt` accompany the DLL inside the KAMI portable ZIP.
+The adapter is a derivative LGPL-covered work, and must remain under
+LGPL 2.1 with appropriate notices and opportunities to replace/relink
+the module. The independent KAMI DX12 renderer remains separately
+authored. Review the applicable Third-Party Viewer Policy and all
+licenses before public redistribution.
+
+R53's original **short synthetic** primitive TE fixtures remain in
+`src/protocol/texture_entry.cpp` solely to keep backwards test
+compatibility; real complete simulator TE packets are passed to this
+official-format bridge and fail closed on invalid field sequences.
