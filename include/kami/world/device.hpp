@@ -19,7 +19,8 @@ class Device final {
 public:
     // Hardware DX12 is the shipped viewer default. WARP remains an explicit
     // DX12-only option for diagnostics and CI, never an OpenGL fallback.
-    [[nodiscard]] DeviceStatus initialize(bool allow_software_fallback = false) noexcept;
+    [[nodiscard]] DeviceStatus initialize(bool allow_software_fallback = false,
+                                          bool force_software=false) noexcept;
     [[nodiscard]] DeviceStatus status() const noexcept { return status_; }
     [[nodiscard]] bool is_ready() const noexcept {
         return status_ == DeviceStatus::ReadyHardware ||
