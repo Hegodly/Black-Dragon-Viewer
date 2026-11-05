@@ -5,12 +5,22 @@
 #include <string>
 
 namespace kami::protocol::texture {
+// Per-face Blinn-Phong TextureEntry settings, not glTF/PBR transforms.
+// Defaults match the Second Life viewer's primitive texture defaults.
+struct UVTransform {
+    float repeat_u=1.f,repeat_v=1.f;
+    float offset_u=0.f,offset_v=0.f;
+    float rotation=0.f; // radians, SL's V-up convention
+};
 struct Base {
     std::array<std::uint8_t,16U> image_id{};
     // Sparse original SL TE face-image exceptions (0..44).
     std::array<std::array<std::uint8_t,16U>,45U> face_image_ids{};
     std::array<bool,45U> face_image_override{};
     float red=1.f,green=1.f,blue=1.f,alpha=1.f;
+    std::array<UVTransform,45U> uv{};
+    // Every face inherits the default until a typed TE override appears.
+    std::array<std::array<float,4U>,45U> rgba{};
 };
 // Decode the default image ID and default RGBA tint in an SL TextureEntry.
 // Face-specific overrides and PBR material textures are intentionally not
