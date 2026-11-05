@@ -46,5 +46,44 @@ int main(){
        "01020304-0506-0708-090a-0b0c0d0e0f10")return 8;
     id={};
     if(!kami::protocol::texture::default_image_uuid(id).empty())return 9;
+    // Authentic TE field order (packTEField in official Second Life):
+    // UUID, inverted color, scale S/T F32, offset S/T S16, rot S16.
+    // A zero 7-bit face mask separates each field, and an exception
+    // modifies only its numbered face rather than all other surfaces.
+    std::vector<std::uint8_t> mapped(16U,0x31U);
+    const auto add=[&](std::initializer_list<std::uint8_t> x){
+        mapped.insert(mapped.end(),x.begin(),x.end());
+    };
+    add({0U});                  // image UUID exceptions end
+    add({0U,0U,0U,0U});         // white/opaque default
+    add({0U});                  // color exceptions end
+    add({0U,0U,0U,0x40U});      // scale U = 2.0
+    add({0x04U});               // face 2 override
+    add({0U,0U,0x80U,0x3fU});   // scale U for face 2 = 1.0
+    add({0U});                  // end scale U
+    add({0U,0U,0x00U,0x3fU});   // scale V = .5
+    add({0U});
+    add({0U,0x20U});            // U offset = 8192/32767
+    add({0U});
+    add({0U,0xc0U});            // V offset = -16384/32767
+    add({0U});
+    add({0U,0x20U});            // rotation = +pi/2
+    add({0U});
+    if(!decode_base(mapped,parsed)||
+       std::abs(parsed.uv[0].repeat_u-2.f)>1.e-5f||
+       std::abs(parsed.uv[1].repeat_u-2.f)>1.e-5f||
+       std::abs(parsed.uv[2].repeat_u-1.f)>1.e-5f||
+       std::abs(parsed.uv[0].repeat_v-.5f)>1.e-5f||
+       std::abs(parsed.uv[0].offset_u-.2500076f)>1.e-4f||
+       std::abs(parsed.uv[0].offset_v+.5000153f)>1.e-4f||
+       std::abs(parsed.uv[0].rotation-1.5707963f)>1.e-4f||
+       parsed.rgba[0][0]!=1.f)return 11;
+    auto truncated=mapped;
+    truncated.pop_back(); // missing final TE rotation mask
+    if(decode_base(truncated,parsed))return 12;
+    // Keep the original output unchanged on an invalid TE decode.
+    const float original_repeat=parsed.uv[2].repeat_u;
+    if(decode_base(truncated,parsed)||
+       parsed.uv[2].repeat_u!=original_repeat)return 13;
     return 0;
 }
