@@ -18,7 +18,8 @@ void blob(Bytes& b,const Bytes& data) {
     b.push_back('b');be32(b,static_cast<std::uint32_t>(data.size()));
     b.insert(b.end(),data.begin(),data.end());
 }
-Bytes mesh_fixture(std::uint32_t vertices,const Bytes& indices) {
+Bytes mesh_fixture(std::uint32_t vertices,const Bytes& indices,
+                   const char* lod_name="high_lod") {
     Bytes points(vertices*6U,0U);
     if(vertices>1U)points[6]=points[7]=255U;
     if(vertices>2U)points[(vertices-1U)*6U+2U]=
@@ -42,7 +43,7 @@ Bytes mesh_fixture(std::uint32_t vertices,const Bytes& indices) {
     for(const auto byte:lod){a=(a+byte)%65521U;b=(b+a)%65521U;}
     be32(zipped,(b<<16U)|a);
     Bytes asset{'{',0,0,0,1};
-    key(asset,"high_lod");asset.insert(asset.end(),{'{',0,0,0,2});
+    key(asset,lod_name);asset.insert(asset.end(),{'{',0,0,0,2});
     key(asset,"offset");asset.push_back('i');be32(asset,0);
     key(asset,"size");asset.push_back('i');
     be32(asset,static_cast<std::uint32_t>(zipped.size()));
@@ -171,5 +172,33 @@ int main() {
     if(!decode_mesh_lod(mesh_fixture(65536U,{0,0,1,0,255,255}),good)||
        good.triangles.size()!=1U)return 20;
     if(decode_mesh_lod(mesh_fixture(65537U,{0,0,1,0,255,255}),good))return 21;
+    // R67: four official LOD keys. A mesh with no high/medium block
+    // still has legitimate static geometry at low or lowest detail.
+    const Bytes single_face{0,0,1,0,2,0};
+    auto low_only=mesh_fixture(3U,single_face,"low_lod");
+    auto lowest_only=mesh_fixture(3U,single_face,"lowest_lod");
+    if(!decode_mesh_lod(low_only,good)||good.triangles.size()!=1U||
+       !decode_mesh_lod(lowest_only,good)||good.triangles.size()!=1U)
+        return 22;
+    // Do not regress a present valid medium LOD.
+    auto medium_only=mesh_fixture(3U,single_face,"medium_lod");
+    if(!decode_mesh_lod(medium_only,good)||good.triangles.size()!=1U)
+        return 23;
+    // The earlier 20k-triangle per-LOD cutoff rejected supported mesh
+    // content even though its checked 16-bit indices and 8MB inflation
+    // buffer were valid. Keep the new ceiling strictly bounded at 60k.
+    Bytes twenty_k_plus;twenty_k_plus.reserve(20001U*6U);
+    for(unsigned i=0;i<20001U;++i)
+        twenty_k_plus.insert(twenty_k_plus.end(),single_face.begin(),single_face.end());
+    auto dense_lod=mesh_fixture(3U,twenty_k_plus,"medium_lod");
+    if(!decode_mesh_lod(dense_lod,good)||good.triangles.size()!=20001U)
+        return 24;
+    // Still reject offsets, invalid vertex indices and oversized LODs.
+    Bytes oversized;oversized.reserve(60001U*6U);
+    for(unsigned i=0;i<60001U;++i)
+        oversized.insert(oversized.end(),single_face.begin(),single_face.end());
+    const auto too_dense=mesh_fixture(3U,oversized,"medium_lod");
+    if(decode_mesh_lod(too_dense,good)||good.triangles.size()!=20001U)
+        return 25;
     return 0;
 }
