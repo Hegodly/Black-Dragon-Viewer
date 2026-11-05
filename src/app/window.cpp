@@ -1304,9 +1304,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   L"CAPS negotiation not started":caps_status_,
                   box(contentX+252,y+54,contentWidth-269,24.f),
                   small_font_.Get(),p.muted);
-            label(caps_seed_summary_.empty()?
-                  L"Seed: waiting for CAPS response":
-                  L"Seed: "+caps_seed_summary_,
+            label(!caps_last_notice_.empty()?caps_last_notice_:
+                  (caps_seed_summary_.empty()?
+                   L"Seed: waiting for CAPS response":
+                   L"Seed: "+caps_seed_summary_),
                   box(contentX+252,y+78,contentWidth-269,23.f),
                   small_font_.Get(),p.muted);
         }else{
@@ -1787,6 +1788,8 @@ void Window::begin_sl_login() {
     caps_ack_={};
     caps_completed_polls_=0;
     caps_events_observed_=caps_events_unsupported_=0;
+    caps_notifications_handled_=0;
+    caps_last_notice_.clear();
     caps_consecutive_failures_=0;
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
@@ -1889,7 +1892,8 @@ void Window::start_caps_poll() {
     caps_status_=L"R9 CAPS polling: "+
         std::to_wstring(caps_events_observed_)+
         L" observed / "+std::to_wstring(caps_events_unsupported_)+
-        L" NOT applied";
+        L" unsupported / "+std::to_wstring(caps_notifications_handled_)+
+        L" notices delivered";
     if(!caps_recent_types_.empty())
         caps_status_+=L" ("+caps_recent_types_+L")";
     caps_poll_future_=std::async(std::launch::async,
@@ -2053,6 +2057,13 @@ void Window::update_sl_connection() {
                 caps_consecutive_failures_=0;
                 caps_events_observed_+=result.event_count;
                 caps_events_unsupported_+=result.unsupported_events;
+                caps_notifications_handled_+=result.handled_events;
+                // Only the bounded TeleportFailed notice has a defined
+                // UI handler. Never show arbitrary CAPS event bodies.
+                if(!result.notifications.empty()){
+                    const auto& safe=result.notifications.back();
+                    caps_last_notice_.assign(safe.begin(),safe.end());
+                }
                 if(!caps_ack_.token.empty())
                     SecureZeroMemory(caps_ack_.token.data(),
                                      caps_ack_.token.size());
@@ -2062,7 +2073,8 @@ void Window::update_sl_connection() {
                         std::to_wstring(caps_events_observed_)+
                         L" observed; "+
                         std::to_wstring(caps_events_unsupported_)+
-                        L" actions NOT applied";
+                        L" unsupported; "+std::to_wstring(
+                            caps_notifications_handled_)+L" notices";
                     caps_recent_types_.clear();
                     if(!result.event_types.empty()){
                         for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){
