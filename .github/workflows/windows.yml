@@ -56,6 +56,7 @@ on:
       - fix/kami-r51-gpu-synchronization-geometry-coalescing-20261105
       - fix/kami-r52-cross-system-audit-20261105
       - test/kami-r52-forced-warp-virtual-gpu-20261105
+      - feature/kami-r53-prim-material-dx12-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -186,9 +187,9 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R52-Cross-System-Correctness-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R53-Prim-Diffuse-Materials-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R52-Cross-System-Correctness-DX12
-          path: dist/KAMI-R52-Cross-System-Correctness-DX12.zip
+          name: KAMI-R53-Prim-Diffuse-Materials-DX12
+          path: dist/KAMI-R53-Prim-Diffuse-Materials-DX12.zip
           retention-days: 14
