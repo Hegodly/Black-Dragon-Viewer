@@ -261,7 +261,7 @@ bool decode_faces(const Value& root,LOD& out) {
         const auto* texcoords=face.get("TexCoord0");
         if(texcoords&&texcoords->kind!=Value::Kind::Binary)return false;
         if(points.size()<18U||points.size()%6U!=0U||
-           points.size()/6U>65535U||
+           points.size()/6U>65536U||
            indices.size()<6U||indices.size()%6U!=0U||
            indices.size()/6U>20000U)return false;
         std::array<float,3> lo{},hi{};
@@ -300,7 +300,10 @@ bool decode_faces(const Value& root,LOD& out) {
             const auto a=le16(indices,i),b=le16(indices,i+2U),
                        c=le16(indices,i+4U);
             if(a>=positions.size()||b>=positions.size()||
-               c>=positions.size()||a==b||a==c||b==c)return false;
+               c>=positions.size())return false;
+            // Collapsed triangles occur in reduced LODs. They contribute no
+            // surface; retain the other valid triangles in this mesh.
+            if(a==b||a==c||b==c)continue;
             Triangle triangle{};
             triangle.face_index=static_cast<std::uint8_t>(face_number);
             for(unsigned idx=0;idx<3U;++idx){

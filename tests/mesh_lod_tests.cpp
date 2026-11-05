@@ -4,6 +4,53 @@
 #include <cstdint>
 #include <vector>
 
+
+namespace {
+using Bytes=std::vector<std::uint8_t>;
+void be32(Bytes& b,std::uint32_t n) {
+    for(int shift=24;shift>=0;shift-=8)b.push_back((n>>shift)&255U);
+}
+void key(Bytes& b,const char* s) {
+    b.push_back('k');std::uint32_t n=0;while(s[n])++n;
+    be32(b,n);b.insert(b.end(),s,s+n);
+}
+void blob(Bytes& b,const Bytes& data) {
+    b.push_back('b');be32(b,static_cast<std::uint32_t>(data.size()));
+    b.insert(b.end(),data.begin(),data.end());
+}
+Bytes mesh_fixture(std::uint32_t vertices,const Bytes& indices) {
+    Bytes points(vertices*6U,0U);
+    if(vertices>1U)points[6]=points[7]=255U;
+    if(vertices>2U)points[(vertices-1U)*6U+2U]=
+        points[(vertices-1U)*6U+3U]=255U;
+    Bytes lod{'[',0,0,0,1,'{',0,0,0,2};
+    key(lod,"Position");blob(lod,points);
+    key(lod,"TriangleList");blob(lod,indices);
+    lod.push_back('}');lod.push_back(']');
+    // RFC 1950 zlib wrapper with stored DEFLATE blocks, avoiding a new
+    // compression dependency in this parser regression test.
+    Bytes zipped{0x78,0x01};
+    for(std::size_t at=0;at<lod.size();) {
+        const auto n=std::min<std::size_t>(65535U,lod.size()-at);
+        zipped.push_back(at+n==lod.size()?1U:0U);
+        zipped.push_back(n&255U);zipped.push_back((n>>8U)&255U);
+        const auto inverse=static_cast<std::uint16_t>(~n);
+        zipped.push_back(inverse&255U);zipped.push_back(inverse>>8U);
+        zipped.insert(zipped.end(),lod.begin()+at,lod.begin()+at+n);at+=n;
+    }
+    std::uint32_t a=1,b=0;
+    for(const auto byte:lod){a=(a+byte)%65521U;b=(b+a)%65521U;}
+    be32(zipped,(b<<16U)|a);
+    Bytes asset{'{',0,0,0,1};
+    key(asset,"high_lod");asset.insert(asset.end(),{'{',0,0,0,2});
+    key(asset,"offset");asset.push_back('i');be32(asset,0);
+    key(asset,"size");asset.push_back('i');
+    be32(asset,static_cast<std::uint32_t>(zipped.size()));
+    asset.push_back('}');asset.push_back('}');
+    asset.insert(asset.end(),zipped.begin(),zipped.end());return asset;
+}
+}
+
 // Deterministic tiny SECOND LIFE-shaped binary LLSD mesh asset:
 // binary header with high_lod(offset=0,size=79), zlib payload containing
 // one submesh with three quantized positions and indices [0,1,2].
@@ -112,5 +159,17 @@ int main() {
     // A valid mesh lacking UV is still renderable via fallback layer zero.
     if(!decode_mesh_lod(bytes,good)||good.triangles[0].has_uv)
         return 16;
+    // One collapsed triangle must not discard the following valid face.
+    auto mixed=mesh_fixture(3U,{0,0,0,0,1,0,0,0,1,0,2,0});
+    if(!decode_mesh_lod(mixed,good)||good.triangles.size()!=1U)return 17;
+    // Invalid references remain hard failures, with output unchanged.
+    const auto prior=good.triangles[0].pos;
+    if(decode_mesh_lod(mesh_fixture(3U,{0,0,1,0,3,0}),good)||
+       good.triangles.size()!=1U||good.triangles[0].pos!=prior)return 18;
+    if(decode_mesh_lod(mesh_fixture(3U,{0,0,0,0,1,0}),good))return 19;
+    // An unsigned 16-bit index addresses 65536 vertices, including 65535.
+    if(!decode_mesh_lod(mesh_fixture(65536U,{0,0,1,0,255,255}),good)||
+       good.triangles.size()!=1U)return 20;
+    if(decode_mesh_lod(mesh_fixture(65537U,{0,0,1,0,255,255}),good))return 21;
     return 0;
 }

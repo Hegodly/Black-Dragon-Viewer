@@ -58,6 +58,7 @@ on:
       - test/kami-r52-forced-warp-virtual-gpu-20261105
       - feature/kami-r53-prim-material-dx12-20261105
       - feature/kami-r54-official-llprimitive-material-bridge-20261105
+      - fix/kami-r55-mesh-lod-recovery-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -150,7 +151,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KAMI-R54-Forced-WARP-Materials-Result
+          name: KAMI-R55-Forced-WARP-Mesh-Recovery-Result
           path: warp-gpu-result.txt
           retention-days: 14
       - name: Package test executable
@@ -191,9 +192,9 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R54-Official-SL-Material-Bridge-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R55-Mesh-LOD-Recovery-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R54-Official-SL-Material-Bridge-DX12
-          path: dist/KAMI-R54-Official-SL-Material-Bridge-DX12.zip
+          name: KAMI-R55-Mesh-LOD-Recovery-DX12
+          path: dist/KAMI-R55-Mesh-LOD-Recovery-DX12.zip
           retention-days: 14
