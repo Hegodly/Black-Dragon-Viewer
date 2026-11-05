@@ -39,7 +39,14 @@ std::uint32_t get_le32(const std::vector<std::uint8_t>& body,std::size_t at) noe
 }
 }
 bool Circuit::send_packet(lludp::Packet packet) noexcept {
-    if(socket_==INVALID_SOCKET)return false;
+    if(socket_==INVALID_SOCKET||!reliable_window_.can_send(packet))
+        return false;
+    // Track the original reliable sequence, including a transient failed
+    // nonblocking send. The bounded retry queue will transmit it again.
+    try {
+        if(!reliable_window_.record_sent(packet,
+                   reliable::Window::Clock::now()))return false;
+    }catch(...){return false;}
     return send_all(socket_,packet);
 }
 bool Circuit::send_startup_messages() noexcept {
@@ -297,6 +304,30 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     ++packets_received_;
+    // Acknowledge all outbound packet sequences, not only the two login
+    // handshake packets. Appended LLUDP ACKs and PacketAck blocks may
+    // arrive together, including on retransmitted frames.
+    const auto confirmed=[this](std::uint32_t ack) noexcept {
+        reliable_window_.acknowledge(ack);
+        if(ack==1U)use_acked_=true;
+        if(ack==2U)move_acked_=true;
+    };
+    for(const auto ack:incoming.appended_acks)confirmed(ack);
+    const auto type=classify(incoming);
+    if(type==Inbound::PacketAck){
+        for(std::size_t i=5;i+4<=incoming.body.size();i+=4)
+            confirmed(get_le32(incoming.body,i));
+    }
+    // ACK before replay suppression: a simulator may resend a packet
+    // because our first ACK was lost. Do not decode the world twice.
+    if(incoming.flags&lludp::kReliable){
+        lludp::Packet acknowledgment{};
+        const std::array<std::uint32_t,1> seq={incoming.sequence};
+        if(packet_ack(seq,sequence_++,acknowledgment))
+            (void)send_packet(std::move(acknowledgment));
+        if(!reliable_window_.accept_incoming(incoming.sequence))
+            return;
+    }
     // These are bounded packet/framing observations from the actual
     // authenticated simulator UDP circuit. No geometry is synthesized.
     const auto world=worldwire::inspect(incoming);
@@ -523,24 +554,6 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     }
     if(state_==CircuitState::WaitingForSimulator)
         state_=CircuitState::SimulatorResponded;
-    // Inspect ACKs before dispatching received messages.
-    for(std::uint32_t ack:incoming.appended_acks){
-        if(ack==1U)use_acked_=true;
-        if(ack==2U)move_acked_=true;
-    }
-    auto type=classify(incoming);
-    if(type==Inbound::PacketAck){
-        for(std::size_t i=5;i+4<=incoming.body.size();i+=4){
-            const auto ack=get_le32(incoming.body,i);
-            if(ack==1U)use_acked_=true;
-            if(ack==2U)move_acked_=true;
-        }
-    }
-    if(incoming.flags&lludp::kReliable) {
-        lludp::Packet ack{};
-        const std::array<std::uint32_t,1> seq={incoming.sequence};
-        if(packet_ack(seq,sequence_++,ack))(void)send_packet(std::move(ack));
-    }
     if(type==Inbound::StartPing){
         lludp::Packet reply{};
         if(complete_ping(incoming.body[1],sequence_++,reply))
@@ -571,6 +584,18 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         mesh_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+}
+void Circuit::retry_unacknowledged() noexcept {
+    if(socket_==INVALID_SOCKET||state_==CircuitState::Failed)return;
+    // At most four retransmits per frame: no unbounded send/CPU spikes.
+    try {
+        const auto retries=reliable_window_.due(
+            reliable::Window::Clock::now(),4U);
+        for(const auto& packet:retries)
+            (void)send_all(socket_,packet);
+    }catch(...){
+        // An allocation failure must not terminate the viewer frame loop.
+    }
 }
 void Circuit::maybe_retry() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed||
@@ -604,6 +629,7 @@ void Circuit::poll(unsigned budget) noexcept {
             std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
             packet))handle_packet(packet);
     }
+    retry_unacknowledged();
     maybe_retry();
     maybe_send_agent_update();
     maybe_send_missing_object_requests();
@@ -618,6 +644,7 @@ void Circuit::stop() noexcept {
                          mesh_capability_url_.size()*sizeof(wchar_t));
         mesh_capability_url_.clear();
     }
+    reliable_window_.clear();
     loaded_meshes_.clear();
     mesh_download_count_=mesh_failure_count_=0U;
     mesh_last_start_={};
