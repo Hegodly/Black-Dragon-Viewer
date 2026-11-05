@@ -60,6 +60,7 @@ on:
       - feature/kami-r54-official-llprimitive-material-bridge-20261105
       - fix/kami-r55-mesh-lod-recovery-20261105
       - fix/kami-r56-texture-coverage-recovery-20261105
+      - fix/kami-r57-texture-alpha-pixel-verification-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -152,7 +153,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KAMI-R56-Forced-WARP-Texture-Coverage-Result
+          name: KAMI-R57-Forced-WARP-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
       - name: Package test executable
@@ -194,9 +195,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R56-Texture-Coverage-Recovery-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R57-Texture-Alpha-Pixel-Verified-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R56-Texture-Coverage-Recovery-DX12
-          path: dist/KAMI-R56-Texture-Coverage-Recovery-DX12.zip
+          name: KAMI-R57-Texture-Alpha-Pixel-Verified-DX12
+          path: dist/KAMI-R57-Texture-Alpha-Pixel-Verified-DX12.zip
           retention-days: 14
+
