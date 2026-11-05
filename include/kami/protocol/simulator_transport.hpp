@@ -237,6 +237,7 @@ private:
     // is confirmed. Avatar attachments stay unresolved and invisible.
     std::map<std::uint32_t,objectspatial::Transform> linked_objects_;
     std::set<std::uint32_t> avatar_root_ids_; // known, never rendered
+    std::uint32_t own_avatar_local_id_=0U; // verified against login UUID
     load::Scheduler mesh_scheduler_{};
     std::wstring mesh_capability_url_; // in-memory bearer only
     struct MeshResult {
