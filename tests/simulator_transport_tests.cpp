@@ -38,6 +38,11 @@ int main() {
     static_assert(sim::Circuit::kMaxRootObjects>=2048U);
     static_assert(sim::Circuit::kMaxLinkedObjects>=8192U);
     static_assert(sim::Circuit::kMaxMissingObjectRequests==1024U);
+    // The mesh fetch pool may never exceed the shared authenticated
+    // scheduler's upper bound on active downloads.
+    static_assert(sim::Circuit::kMaxConcurrentMeshWorkers==4U);
+    static_assert(sim::Circuit::kMaxConcurrentMeshWorkers<=
+                  load::Scheduler::kMaxConcurrentDownloads);
     const auto now=std::chrono::steady_clock::now();
     const auto recent=now-std::chrono::seconds(30);
     const auto stale=now-std::chrono::seconds(95);
