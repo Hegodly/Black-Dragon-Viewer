@@ -114,10 +114,36 @@ bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
     mesh_scan_revision_=~std::uint64_t{0};
     return true;
 }
+void Circuit::prune_unreferenced_meshes() noexcept {
+    if(loaded_meshes_.empty())return;
+    // Preserve only meshes referenced by current authenticated world
+    // objects. This releases CPU geometry and permits later re-downloads
+    // after a sim changes its object set or a linkset is deleted.
+    std::set<std::string_view> still_used;
+    for(const auto& [id,t]:spatial_objects_){
+        (void)id;
+        if(!t.mesh_asset_id.empty())still_used.insert(t.mesh_asset_id);
+    }
+    for(const auto& [id,t]:linked_objects_){
+        (void)id;
+        if(!t.mesh_asset_id.empty())still_used.insert(t.mesh_asset_id);
+    }
+    for(auto it=loaded_meshes_.begin();it!=loaded_meshes_.end();){
+        if(still_used.contains(std::string_view(it->first))){++it;continue;}
+        const auto vertices=it->second.triangles.size();
+        loaded_mesh_triangle_count_=
+            vertices>loaded_mesh_triangle_count_?0U:
+                loaded_mesh_triangle_count_-vertices;
+        (void)mesh_scheduler_.forget_finished(it->first);
+        it=loaded_meshes_.erase(it);
+        ++spatial_object_revision_;
+    }
+}
 void Circuit::schedule_visible_meshes() noexcept {
     if(mesh_capability_url_.empty()||
        mesh_scan_revision_==spatial_object_revision_||
        !movement_position_.verified)return;
+    prune_unreferenced_meshes();
     mesh_scan_revision_=spatial_object_revision_;
     const auto close_to_agent=[&](float x,float y,float z){
         return std::isfinite(x)&&std::isfinite(y)&&std::isfinite(z)&&
@@ -182,11 +208,22 @@ void Circuit::maybe_fetch_mesh() noexcept {
                 ++mesh_download_count_;
                 const auto item=mesh_scheduler_.next_decode();
                 if(item&&item->id==result.id){
-                    const bool room=loaded_meshes_.contains(result.id)||
-                                    loaded_meshes_.size()<32U;
+                    const auto old=loaded_meshes_.find(result.id);
+                    const auto prior=old==loaded_meshes_.end()?0U:
+                        old->second.triangles.size();
+                    const auto used=loaded_mesh_triangle_count_-
+                        std::min(prior,loaded_mesh_triangle_count_);
+                    const bool room=
+                        (old!=loaded_meshes_.end()||
+                         loaded_meshes_.size()<kMaxWorldMeshAssets)&&
+                        used<=kMaxWorldMeshTriangles&&
+                        result.lod.triangles.size()<=
+                            kMaxWorldMeshTriangles-used;
                     const bool ok=result.decoded&&room;
                     (void)mesh_scheduler_.decode_finished(result.id,ok);
                     if(ok){
+                        loaded_mesh_triangle_count_=
+                            used+result.lod.triangles.size();
                         loaded_meshes_.insert_or_assign(
                             result.id,std::move(result.lod));
                         ++spatial_object_revision_;
@@ -225,7 +262,8 @@ void Circuit::maybe_fetch_mesh() noexcept {
     const auto now=std::chrono::steady_clock::now();
     if(mesh_last_start_!=std::chrono::steady_clock::time_point{}&&
        now-mesh_last_start_<std::chrono::milliseconds(350))return;
-    if(loaded_meshes_.size()>=32U)return;
+    if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
+       loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles)return;
     auto selected=mesh_scheduler_.next_download();
     if(!selected)return;
     mesh_last_start_=now;
@@ -703,6 +741,7 @@ void Circuit::stop() noexcept {
     }
     reliable_window_.clear();
     loaded_meshes_.clear();
+    loaded_mesh_triangle_count_=0U;
     mesh_retry_after_.clear();
     mesh_download_count_=mesh_failure_count_=0U;
     mesh_last_start_={};
