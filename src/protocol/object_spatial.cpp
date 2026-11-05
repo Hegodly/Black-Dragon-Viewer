@@ -62,6 +62,8 @@ struct CompressedVolume {
     std::string default_texture_asset_id;
     std::array<std::string,32U> face_texture_asset_ids{};
     std::array<bool,32U> face_texture_override{};
+    std::array<texture::UVTransform,32U> face_uv{};
+    std::array<std::array<float,4U>,32U> face_rgba{};
     float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
     std::uint32_t extra_records=0,sculpt_records=0;
     bool legacy_particles=false;
@@ -164,6 +166,10 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
                 }
                 out.base_r=tint.red;out.base_g=tint.green;
                 out.base_b=tint.blue;out.base_a=tint.alpha;
+                for(unsigned f=0U;f<32U;++f){
+                    out.face_uv[f]=tint.uv[f];
+                    out.face_rgba[f]=tint.rgba[f];
+                }
                 out.default_texture_present=
                     std::any_of(tint.image_id.begin(),tint.image_id.end(),
                                 [](std::uint8_t value){return value!=0U;});
@@ -231,6 +237,8 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.default_texture_asset_id=shape.default_texture_asset_id;
         t.face_texture_asset_ids=shape.face_texture_asset_ids;
         t.face_texture_override=shape.face_texture_override;
+        t.face_uv=shape.face_uv;
+        t.face_rgba=shape.face_rgba;
         t.base_tint_present=shape.base_tint_present;
         t.base_r=shape.base_r;t.base_g=shape.base_g;
         t.base_b=shape.base_b;t.base_a=shape.base_a;
@@ -272,6 +280,7 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.default_texture_asset_id==b.default_texture_asset_id&&
         a.face_texture_asset_ids==b.face_texture_asset_ids&&
         a.face_texture_override==b.face_texture_override&&
+        a.face_uv==b.face_uv&&a.face_rgba==b.face_rgba&&
         a.base_tint_present==b.base_tint_present&&
         a.base_r==b.base_r&&a.base_g==b.base_g&&
         a.base_b==b.base_b&&a.base_a==b.base_a;
@@ -295,6 +304,8 @@ Transform merge_compressed_transform(
     if(!incoming.base_tint_present){
         merged.face_texture_asset_ids=previous.face_texture_asset_ids;
         merged.face_texture_override=previous.face_texture_override;
+        merged.face_uv=previous.face_uv;
+        merged.face_rgba=previous.face_rgba;
     }
     if(!incoming.base_tint_present&&previous.base_tint_present){
         merged.base_tint_present=true;
