@@ -47,5 +47,20 @@ int main(){
     if(!queue.request(c,Kind::OwnAvatar,0.f,true,1U))return 13;
     const auto last=queue.next_download();
     if(!last||last->id!=c)return 14;
+    if(!queue.download_finished(c,0U,false)||queue.retry_failed(a))
+        return 15;
+    // A failed transient download may only be retried explicitly three
+    // times, never requeued automatically or after a malformed decode.
+    for(unsigned retry=1U;retry<=Scheduler::kMaxTransientRetries;++retry){
+        if(!queue.retry_failed(c)||queue.find(c)->retry_count!=retry||
+           queue.find(c)->stage!=Stage::Queued)return 16;
+        const auto attempt=queue.next_download();
+        if(!attempt||attempt->id!=c||
+           !queue.download_finished(c,0U,false))return 17;
+    }
+    if(queue.retry_failed(c)||queue.next_download()||
+       queue.find(c)->stage!=Stage::Failed)return 18;
+    queue.clear();
+    if(queue.find(c)||queue.statistics().queued!=0U)return 19;
     return 0;
 }
