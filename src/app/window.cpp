@@ -1816,6 +1816,7 @@ void Window::begin_sl_login() {
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
     caps_seed_retry_after_={};
+    caps_seed_attempts_=0U;
     caps_status_.clear();
     caps_seed_summary_.clear();
     caps_recent_types_.clear();
@@ -2073,10 +2074,10 @@ void Window::update_sl_connection() {
                     return response;
                 });
             caps_seed_started_=true;
-            if(!caps_seed_url_.empty())
-                SecureZeroMemory(caps_seed_url_.data(),
-                    caps_seed_url_.size()*sizeof(wchar_t));
-            caps_seed_url_.clear();
+            ++caps_seed_attempts_;
+            // Retain the trusted URL for a bounded retry if the HTTPS
+            // worker returns a transient failure. Clear it on success or
+            // permanent rejection, not immediately after thread launch.
         }catch(...){
             caps_seed_started_=false;
             caps_seed_retry_after_=std::chrono::steady_clock::now()+
@@ -2120,6 +2121,21 @@ void Window::update_sl_connection() {
         if(!result.event_queue_url.empty())
             SecureZeroMemory(result.event_queue_url.data(),
                 result.event_queue_url.size()*sizeof(wchar_t));
+        if(!result.granted&&
+           sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
+           protocol::caps::retry_seed_response(
+               result.http_status,caps_seed_attempts_)&&
+           !caps_seed_url_.empty()){
+            caps_seed_started_=false;
+            caps_seed_retry_after_=std::chrono::steady_clock::now()+
+                std::chrono::seconds(1U<<caps_seed_attempts_);
+            caps_status_+=L"; retrying seed";
+        }else{
+            if(!caps_seed_url_.empty())
+                SecureZeroMemory(caps_seed_url_.data(),
+                    caps_seed_url_.size()*sizeof(wchar_t));
+            caps_seed_url_.clear();
+        }
     }
     if(caps_poll_started_&&caps_poll_future_.valid()&&
        caps_poll_future_.wait_for(std::chrono::seconds(0))==
