@@ -1,4 +1,5 @@
 #include "kami/protocol/texture_entry.hpp"
+#include "kami/protocol/official_texture_entry.h"
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -95,6 +96,50 @@ std::string face_image_uuid(const Base& entry,unsigned face){
 }
 bool decode_base(std::span<const std::uint8_t> bytes,Base& out) noexcept {
     if(bytes.size()<21U||bytes.size()>4096U)return false;
+    // Full simulator TextureEntry messages MUST use the separately
+    // replaceable official LGPL LLPrimitive wire decoder, including the
+    // three legacy material flags and optional 16-byte material IDs.
+    // Short synthetic early-development fixtures are retained solely
+    // for historical regression compatibility (minimum real TE=47B).
+    if(bytes.size()>=47U){
+        KamiSlTextureEntryV1 official{};
+        official.struct_size=sizeof(official);
+        if(!kami_sl_decode_texture_entry_v1(
+            bytes.data(),static_cast<std::uint32_t>(bytes.size()),
+            KAMI_SL_TE_MAX_FACES,&official))return false;
+        Base parsed{};
+        std::copy_n(official.default_image_id,16U,parsed.image_id.begin());
+        constexpr float turn=6.28318530717958647692f;
+        for(unsigned f=0U;f<45U;++f){
+            const auto& face=official.faces[f];
+            parsed.face_image_override[f]=face.image_override!=0U;
+            if(face.image_override!=0U)
+                std::copy_n(face.image_id,16U,
+                            parsed.face_image_ids[f].begin());
+            for(unsigned c=0U;c<4U;++c)
+                parsed.rgba[f][c]=
+                    static_cast<float>(255U-face.inverted_rgba[c])/255.f;
+            auto& uv=parsed.uv[f];
+            uv.repeat_u=face.scale_s;uv.repeat_v=face.scale_t;
+            uv.offset_u=static_cast<float>(face.offset_s)/32767.f;
+            uv.offset_v=static_cast<float>(face.offset_t)/32767.f;
+            uv.rotation=static_cast<float>(face.packed_rotation)*
+                       (turn/32768.f);
+            if(!valid_uv(uv))return false;
+        }
+        // Image entry at offset 0 always retains the base default UUID;
+        // a face-0 exception may override its actual rendered image.
+        parsed.red=static_cast<float>(
+            255U-official.default_inverted_rgba[0])/255.f;
+        parsed.green=static_cast<float>(
+            255U-official.default_inverted_rgba[1])/255.f;
+        parsed.blue=static_cast<float>(
+            255U-official.default_inverted_rgba[2])/255.f;
+        parsed.alpha=static_cast<float>(
+            255U-official.default_inverted_rgba[3])/255.f;
+        out=std::move(parsed);
+        return true;
+    }
     Base parsed{};
     std::copy_n(bytes.begin(),16U,parsed.image_id.begin());
     std::size_t at=16U;
