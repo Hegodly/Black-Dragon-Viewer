@@ -136,6 +136,7 @@ jobs:
           Copy-Item src/sl_reference/official_extra_params.cpp dist/KAMI/Source/lludp
           Copy-Item include/kami/protocol/official_extra_params.h dist/KAMI/Source/lludp
           Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
+          Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
