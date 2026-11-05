@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/texture_entry.hpp"
 #include "kami/protocol/official_extra_params.h"
 #include <algorithm>
 #include <cmath>
@@ -224,6 +225,12 @@ bool decode_full_transforms(const lludp::Packet& packet,
                        [](std::uint8_t ch){return ch!=0U;})){
             t.default_texture_present=true;
             ++frame.texture_references;
+        }
+        texture::Base base{};
+        if(texture::decode_base(texture_entry,base)){
+            t.base_tint_present=true;
+            t.base_r=base.red;t.base_g=base.green;
+            t.base_b=base.blue;t.base_a=base.alpha;
         }
         t.parent_id=parent;
         if(parent!=0U){
