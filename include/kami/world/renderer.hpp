@@ -161,6 +161,30 @@ public:
     [[nodiscard]] std::size_t mesh_undrawn_instances() const noexcept {
         return region_mesh_?mesh_undrawn_instances_:0U;
     }
+    [[nodiscard]] std::size_t mesh_parent_missing_instances() const noexcept {
+        return region_mesh_?mesh_parent_missing_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_parent_avatar_instances() const noexcept {
+        return region_mesh_?mesh_parent_avatar_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_parent_cycle_instances() const noexcept {
+        return region_mesh_?mesh_parent_cycle_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_parent_invalid_instances() const noexcept {
+        return region_mesh_?mesh_parent_invalid_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_parent_deep_instances() const noexcept {
+        return region_mesh_?mesh_parent_deep_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_undrawn_transparent_instances() const noexcept {
+        return region_mesh_?mesh_undrawn_transparent_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_undrawn_bad_geometry_instances() const noexcept {
+        return region_mesh_?mesh_undrawn_bad_geometry_instances_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_undrawn_budget_instances() const noexcept {
+        return region_mesh_?mesh_undrawn_budget_instances_:0U;
+    }
     [[nodiscard]] bool texture_upload_pending() const noexcept {
         return texture_upload_pending_;
     }
@@ -296,6 +320,12 @@ private:
     std::size_t mesh_eligible_instances_=0,mesh_missing_lod_instances_=0;
     std::size_t mesh_waiting_for_parent_=0,mesh_out_of_range_instances_=0;
     std::size_t mesh_invalid_pose_instances_=0,mesh_undrawn_instances_=0;
+    std::size_t mesh_parent_missing_instances_=0,mesh_parent_avatar_instances_=0;
+    std::size_t mesh_parent_cycle_instances_=0,mesh_parent_invalid_instances_=0;
+    std::size_t mesh_parent_deep_instances_=0;
+    std::size_t mesh_undrawn_transparent_instances_=0;
+    std::size_t mesh_undrawn_bad_geometry_instances_=0;
+    std::size_t mesh_undrawn_budget_instances_=0;
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
     std::vector<PBRRow> pbr_rows_=std::vector<PBRRow>(protocol::pbr::kRows);
