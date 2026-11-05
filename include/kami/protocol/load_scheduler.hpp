@@ -52,6 +52,9 @@ public:
     // Explicit bounded retry of a failed *transient HTTP* fetch.
     // Caller enforces per-asset backoff; corrupt asset decodes are not retried.
     [[nodiscard]] bool retry_failed(std::string_view uuid) noexcept;
+    // Forget an evicted/despawned asset so future visible use can fetch it
+    // again. Never cancel an in-progress network or decode worker.
+    [[nodiscard]] bool forget_finished(std::string_view uuid) noexcept;
     [[nodiscard]] std::optional<Asset> next_gpu_upload(
         std::uint32_t remaining_upload_budget) const noexcept;
     [[nodiscard]] bool gpu_uploaded(std::string_view uuid) noexcept;
