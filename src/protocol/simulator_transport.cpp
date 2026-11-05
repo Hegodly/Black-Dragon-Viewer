@@ -50,6 +50,7 @@ bool Circuit::send_packet(lludp::Packet packet) noexcept {
     return send_all(socket_,packet);
 }
 bool Circuit::send_startup_messages() noexcept {
+    try{
     if(socket_==INVALID_SOCKET||!login_.accepted())return false;
     lludp::Packet use,movement;
     if(!use_circuit_code(login_,1U,use)||
@@ -64,8 +65,10 @@ bool Circuit::send_startup_messages() noexcept {
     ++attempts_;
     last_retry_=std::chrono::steady_clock::now();
     return true;
+    }catch(...){return false;}
 }
 bool Circuit::start(const LoginResult& accepted_login) noexcept {
+    try{
     stop();
     if(!accepted_login.accepted()||!valid_handoff(accepted_login.handoff)||
        accepted_login.circuit_code==0)return false;
@@ -106,6 +109,11 @@ bool Circuit::start(const LoginResult& accepted_login) noexcept {
         stop();state_=CircuitState::Failed;return false;
     }
     return true;
+    }catch(...){
+        stop();
+        state_=CircuitState::Failed;
+        return false;
+    }
 }
 bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
     if(!caps::trusted_mesh_caps_url(capability)||!mesh_capability_url_.empty()||
@@ -327,6 +335,7 @@ void Circuit::set_requested_controls(std::uint32_t flags) noexcept {
     last_controls_at_=std::chrono::steady_clock::now();
 }
 void Circuit::maybe_send_agent_update() noexcept {
+    try{
     if(state_!=CircuitState::MovementConfirmed||
        !movement_position_.verified||socket_==INVALID_SOCKET)return;
     const auto now=std::chrono::steady_clock::now();
@@ -347,6 +356,7 @@ void Circuit::maybe_send_agent_update() noexcept {
             ++movement_control_packets_sent_;
         last_agent_update_=now;
     }
+    }catch(...){ /* retry on the next frame instead of aborting */ }
 }
 void Circuit::remember_missing_object(std::uint32_t id) noexcept {
     if(id==0U||avatar_root_ids_.contains(id)||
@@ -824,9 +834,16 @@ void Circuit::poll(unsigned budget) noexcept {
         }
         if(got<=0)break;
         lludp::Packet packet{};
-        if(lludp::decode(
-            std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
-            packet))handle_packet(packet);
+        try{
+            if(lludp::decode(
+                std::span<const std::uint8_t>(bytes.data(),
+                                              static_cast<std::size_t>(got)),
+                packet))handle_packet(packet);
+        }catch(...){
+            // A single malformed or huge incoming packet must never
+            // terminate the viewer's noexcept network polling thread.
+            ++invalid_world_packets_;
+        }
     }
     retry_unacknowledged();
     maybe_retry();
