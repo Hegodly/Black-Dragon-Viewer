@@ -147,6 +147,9 @@ jobs:
             throw "WARP software GPU render/resize/texture test failed (exit $LASTEXITCODE)"
           }
           $output = Get-Content warp-gpu-result.txt -Raw
+          if ($output -notmatch "KAMI TEXTURE PIXELS VERIFIED") {
+            throw "The WARP run did not verify sampled texture and shadow pixels"
+          }
           if ($output -notmatch "KAMI WARP VIRTUAL GPU VERIFIED") {
             throw "Smoke did not positively identify the forced WARP adapter"
           }
@@ -178,6 +181,7 @@ jobs:
           Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
+          Copy-Item R57_STATUS.md dist/KAMI
           Copy-Item R56_STATUS.md dist/KAMI
           Copy-Item README.md dist/KAMI
           Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI

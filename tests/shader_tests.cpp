@@ -2,10 +2,11 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <iostream>
+#include <string_view>
 
 int main() {
-    for(const char* entry : {"vertex_main","pixel_main","shadow_vertex_main"}) {
-        const char* target=(entry[0]=='v' || entry[0]=='s') ? "vs_5_0" : "ps_5_0";
+    for(const char* entry : {"vertex_main","pixel_main","shadow_vertex_main","shadow_pixel_main"}) {
+        const char* target=(std::string_view(entry)=="vertex_main" || std::string_view(entry)=="shadow_vertex_main") ? "vs_5_0" : "ps_5_0";
         Microsoft::WRL::ComPtr<ID3DBlob> binary;
         Microsoft::WRL::ComPtr<ID3DBlob> errors;
         const HRESULT hr=D3DCompile(
@@ -22,3 +23,4 @@ int main() {
     }
     return 0;
 }
+
