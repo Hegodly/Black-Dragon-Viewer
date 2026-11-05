@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
-project(KAMI VERSION 0.1.0 LANGUAGES CXX)
+project(KAMI VERSION 0.1.0 LANGUAGES C CXX)
+# Native static OpenJPEG 2.5.4 provides genuine JPEG 2000 J2C decoding.
+# Its BSD 2-Clause license is shipped with the Windows build. KAMI keeps
+# the DirectX12 renderer independent and does not use OpenGL.
+include(FetchContent)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Static OpenJPEG for portable Windows viewer" FORCE)
+set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+set(BUILD_CODEC OFF CACHE BOOL "" FORCE)
+set(BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(openjpeg
+    GIT_REPOSITORY https://github.com/uclouvain/openjpeg.git
+    GIT_TAG v2.5.4
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS FALSE)
+FetchContent_MakeAvailable(openjpeg)
 if(NOT WIN32)
   message(FATAL_ERROR "KAMI Original Core is Windows-only.")
 endif()
@@ -33,10 +49,13 @@ target_compile_definitions(kami_sl_extra_params PRIVATE
     KAMI_SL_EXTRAPARAMS_BUILD UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 set_target_properties(kami_sl_extra_params PROPERTIES
     OUTPUT_NAME "KAMI_SL_ExtraParams")
-add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/reliable_circuit.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/world_wire.cpp src/protocol/object_spatial.cpp src/protocol/object_spatial_full.cpp src/protocol/object_spatial_terse.cpp src/protocol/mesh_reference.cpp src/protocol/texture_entry.cpp src/protocol/mesh_lod.cpp src/protocol/avatar_appearance.cpp src/protocol/live_chat.cpp src/protocol/terrain.cpp src/protocol/login.cpp src/protocol/caps.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/live_terrain.cpp src/world/live_water.cpp src/world/object_proxies.cpp src/world/live_primitive_geometry.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
+add_library(kami_core STATIC src/ui/palette.cpp src/settings/appearance.cpp src/settings/graphics.cpp src/settings/camera.cpp src/camera/system.cpp src/graphics/adaptive.cpp src/features/inventory.cpp src/features/creator.cpp src/features/creator_studio.cpp src/features/photo_studio.cpp src/features/viewer_foundation.cpp src/features/social.cpp src/features/messenger.cpp src/features/navigation.cpp src/features/physics.cpp src/features/avatar_motion.cpp src/features/body_physics.cpp src/features/rig.cpp src/features/rig_physics.cpp src/features/rig_diagnostics.cpp src/features/hotfix.cpp src/features/telemetry.cpp src/protocol/session.cpp src/protocol/transport.cpp src/protocol/bootstrap.cpp src/protocol/services.cpp src/protocol/lludp.cpp src/protocol/reliable_circuit.cpp src/protocol/simulator_wire.cpp src/protocol/simulator_transport.cpp src/protocol/world_wire.cpp src/protocol/object_spatial.cpp src/protocol/object_spatial_full.cpp src/protocol/object_spatial_terse.cpp src/protocol/mesh_reference.cpp src/protocol/texture_entry.cpp src/protocol/texture_decode.cpp src/protocol/mesh_lod.cpp src/protocol/avatar_appearance.cpp src/protocol/live_chat.cpp src/protocol/terrain.cpp src/protocol/login.cpp src/protocol/caps.cpp src/protocol/load_scheduler.cpp src/world/device.cpp src/world/scene.cpp src/world/live_terrain.cpp src/world/live_water.cpp src/world/object_proxies.cpp src/world/live_primitive_geometry.cpp src/world/region_geometry.cpp src/world/renderer.cpp src/world/shader_cache.cpp src/world/warmup.cpp)
+target_include_directories(kami_core PRIVATE
+    ${openjpeg_SOURCE_DIR}/src/lib/openjp2
+    ${openjpeg_BINARY_DIR}/src/lib/openjp2)
 target_include_directories(kami_core PUBLIC include third_party/stb)
 target_compile_definitions(kami_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(kami_core PUBLIC kami_sl_login_identity kami_sl_lludp_codec kami_sl_extra_params d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
+target_link_libraries(kami_core PUBLIC kami_sl_login_identity kami_sl_lludp_codec kami_sl_extra_params openjp2 d2d1 dwrite dwmapi advapi32 d3d12 dxgi d3dcompiler shell32 ole32 winmm winhttp iphlpapi oleaut32 bcrypt psapi windowscodecs comdlg32 ws2_32 credui)
 add_executable(KAMIViewer WIN32 src/app/main.cpp src/app/window.cpp)
 target_include_directories(KAMIViewer PRIVATE include)
 target_link_libraries(KAMIViewer PRIVATE kami_core ole32)
