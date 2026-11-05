@@ -136,6 +136,7 @@ private:
     unsigned caps_consecutive_failures_=0;
     bool caps_dispatch_blocked_=false;
     std::chrono::steady_clock::time_point caps_next_poll_{};
+    std::chrono::steady_clock::time_point caps_seed_retry_after_{};
     bool caps_seed_started_=false;
     bool caps_poll_started_=false;
     std::future<protocol::caps::SeedResponse> caps_seed_future_;
