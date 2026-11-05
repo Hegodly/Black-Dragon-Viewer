@@ -357,8 +357,19 @@ bool decode_asset(std::span<const std::uint8_t> b,Material& output,DecodeError* 
                 stage=DecodeError::Value;if(at==b.size()||b[at++]!='s')return fail(stage);const auto value=str(b,at);
                 if(!fields.emplace(key,value).second)return fail(stage);
             }
-            stage=DecodeError::Trailing;if(at==b.size()||b[at++]!='}')return fail(stage);
-            while(at<b.size()&&space(b[at]))++at;if(at!=b.size())return fail(stage);
+            stage=DecodeError::Trailing;
+            if(at==b.size()||b[at++]!='}')return fail(stage);
+            // Some asset gateways append an ASCII-NUL terminator/padding
+            // after the *complete* LLSD binary map. Accept at most four
+            // NUL bytes only once the root map and all lengths validated.
+            // Reject unrelated trailing payload, another LLSD element,
+            // and unterminated maps; do not silently truncate input.
+            std::size_t padding=0U;
+            while(at<b.size()&&(space(b[at])||b[at]==0U)){
+                if(b[at]==0U&&++padding>4U)return fail(stage);
+                ++at;
+            }
+            if(at!=b.size())return fail(stage);
         }else return fail(DecodeError::Envelope);
         if(fields["version"]!="1.0"&&fields["version"]!="1.1")return fail(DecodeError::Version);
         if(fields["type"]!="GLTF 2.0")return fail(DecodeError::Type);
