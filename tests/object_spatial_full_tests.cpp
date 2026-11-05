@@ -29,7 +29,8 @@ void var2(Bytes& b,const Bytes& data={}) {
     b.insert(b.end(),data.begin(),data.end());
 }
 Bytes block(std::uint32_t id,std::uint32_t parent=0,
-            Byte pcode=9,float x=128.f,const Bytes& extras={}) {
+            Byte pcode=9,float x=128.f,const Bytes& extras={},
+            const Bytes& texture={}) {
     Bytes b;
     u32(b,id); // LocalID
     b.push_back(0U); // State
@@ -44,7 +45,7 @@ Bytes block(std::uint32_t id,std::uint32_t parent=0,
     var1(b,pos);
     u32(b,parent);u32(b,0U); // ParentID and UpdateFlags
     b.insert(b.end(),23U,0U); // Prim path/profile shape
-    var2(b);var1(b);var2(b);var2(b);var1(b);
+    var2(b,texture);var1(b);var2(b);var2(b);var1(b);
     b.insert(b.end(),4U,0U); // TextColor
     var1(b);var1(b);var1(b,extras); // MediaURL, particles, extra
     b.insert(b.end(),66U,0U); // sound + joint data
@@ -233,5 +234,20 @@ int main(){
            packet({malformed_box}),out,&audit)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
        audit.malformed_extra_envelopes!=1U)return 21;
+    // Real High12 TextureEntry: UUID default, exception terminator,
+    // then inverted RGB/A. Do not pretend this is a downloaded texture.
+    Bytes te(16U,0x7fU);
+    te.insert(te.end(),{0U,0U,255U,128U,0U});
+    if(!objectspatial::decode_full_transforms(
+           packet({block(111U,0U,9U,128.f,{},te)}),out,&audit)||
+       out.size()!=1U||!out[0].default_texture_present||
+       !out[0].base_tint_present||
+       out[0].base_r!=1.f||out[0].base_g!=0.f||
+       std::abs(out[0].base_b-127.f/255.f)>.001f||
+       out[0].base_a!=1.f||audit.texture_references!=1U)return 24;
+    Bytes malformed_te=te;malformed_te.resize(19U);
+    if(!objectspatial::decode_full_transforms(
+           packet({block(112U,0U,9U,128.f,{},malformed_te)}),out,&audit)||
+       out.size()!=1U||out[0].base_tint_present)return 25;
     return 0;
 }
