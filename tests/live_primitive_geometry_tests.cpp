@@ -163,6 +163,9 @@ int main(){
         {{texture_id,7U}});
     if(no_uv.textured_triangles!=0U||
        no_uv.scene.vertices[0].texture_layer!=0.f)return 22;
+    // Restore the valid UV before testing the independent material IDs.
+    // The preceding no-UV test intentionally disabled it.
+    assets[asset_id].triangles[0].has_uv=true;
     // A face-specific override must take precedence over the default
     // image UUID. Unloaded overrides safely fall back to layer zero.
     roots[77U].face_texture_override[0]=true;
