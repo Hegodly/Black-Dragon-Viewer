@@ -3,6 +3,7 @@
 #include <dxgi1_6.h>
 #include "kami/world/scene.hpp"
 #include "kami/world/texture_atlas.hpp"
+#include "kami/world/scene_diff.hpp"
 #include <array>
 static_assert(sizeof(kami::world::Vertex)==68U,
     "DX12 mesh texture layer must fit the vertex input layout");
@@ -23,6 +24,27 @@ int main() {
     if(changed_atlas_layers({},before)!=
        std::vector<std::uint16_t>({1U,6U,24U}))return 10;
     if(!changed_atlas_layers(before,after,0U).empty())return 11;
+    // A changed simulator revision is not evidence that the world
+    // vertex buffer changed. Unchanged payloads should not trigger DX12
+    // heap allocation, Map, resource replacement, or GPU fence waits.
+    using kami::world::same_scene_geometry;
+    kami::world::SceneMesh scene_a{},scene_b{};
+    if(!same_scene_geometry(scene_a,scene_b))return 12;
+    kami::world::Vertex vertex{};
+    vertex.px=3.5f;vertex.ny=1.f;
+    vertex.r=0.2f;vertex.g=0.4f;vertex.b=0.6f;
+    scene_a.vertices.push_back(vertex);
+    scene_b=scene_a;
+    scene_a.terrain_count=scene_b.terrain_count=1U;
+    if(!same_scene_geometry(scene_a,scene_b))return 13;
+    scene_b.vertices[0].px=5.5f;
+    if(same_scene_geometry(scene_a,scene_b))return 14;
+    scene_b.vertices[0].px=3.5f;
+    scene_b.avatar_count=1U;
+    if(same_scene_geometry(scene_a,scene_b))return 15;
+    scene_b.avatar_count=0U;
+    scene_b.vertices.push_back(vertex);
+    if(same_scene_geometry(scene_a,scene_b))return 16;
     kami::world::Device device;
     if(device.initialize(true)==kami::world::DeviceStatus::Unavailable)
         return 0; // The hosted VM may not have a DX12 adapter.
