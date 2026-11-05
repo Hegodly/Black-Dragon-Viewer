@@ -689,6 +689,31 @@ bool Renderer::set_verified_live_terrain(
                           primitives.scene.vertices.begin(),
                           primitives.scene.vertices.end());
     scene.terrain_count+=new_primitive_vertices;
+    // Stable 24-slice preview atlas: only successfully authenticated and
+    // CPU-decoded JPEG2000 assets can receive a GPU texture layer. The
+    // default TE UUID binds each mesh object; per-face overrides/PBR await
+    // explicit decoding. Keep procedural layer zero for missing textures.
+    std::map<std::string,std::uint16_t> next_layers;
+    for(const auto& [id,image]:circuit.decoded_texture_assets()){
+        const auto pixels=static_cast<std::uint64_t>(image.width)*image.height;
+        if(next_layers.size()>=kLiveTextureLayers)break;
+        if(!image.width||!image.height||pixels>4U*1024U*1024U||
+           image.rgba.size()!=pixels*4U)continue;
+        next_layers.emplace(id,
+            static_cast<std::uint16_t>(next_layers.size()+1U));
+    }
+    if(next_layers!=live_texture_layers_){
+        auto previous=std::move(live_texture_layers_);
+        live_texture_layers_=std::move(next_layers);
+        if(ready_){
+            wait_for_gpu();
+            if(!make_material_texture(&circuit.decoded_texture_assets())){
+                live_texture_layers_=std::move(previous);
+                error_=L"DX12 could not stage decoded SL texture array";
+                return false;
+            }
+        }
+    }
     // Real mesh asset triangles, decoded off-thread and validated against
     // the session's authenticated object roots/child hierarchy.
     const auto mesh_objects=build_live_mesh_geometry(
@@ -696,7 +721,7 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_linked_objects(),
         circuit.known_avatar_roots(),
         circuit.decoded_mesh_assets(),
-        agent.x,agent.y,agent.z,18000U);
+        agent.x,agent.y,agent.z,18000U,live_texture_layers_);
     const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
         mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
@@ -728,6 +753,7 @@ bool Renderer::set_verified_live_terrain(
     uploaded_mesh_vertices_=new_mesh_vertices;
     uploaded_mesh_shapes_=mesh_objects.root_meshes+mesh_objects.linked_meshes;
     uploaded_mesh_triangles_=mesh_objects.emitted_triangles;
+    uploaded_textured_triangles_=mesh_objects.textured_triangles;
     primitive_eligible_=primitives.eligible_shapes;
     primitive_unresolved_=primitives.unresolved_parent_shapes;
     primitive_missing_anchor_=primitives.missing_anchor_shapes;
@@ -830,6 +856,8 @@ void Renderer::clear_decoded_region_geometry() {
     uploaded_root_primitive_shapes_=0;
     uploaded_linked_primitive_shapes_=0;
     uploaded_primitive_vertices_=0;
+    uploaded_textured_triangles_=0;
+    live_texture_layers_.clear();
     primitive_eligible_=0;
     primitive_unresolved_=0;
     primitive_distant_=0;
