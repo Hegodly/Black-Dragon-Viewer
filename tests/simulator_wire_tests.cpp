@@ -53,8 +53,8 @@ int main(){
     auto movement=lludp::Packet{};
     movement.body={0xff,0xff,0x00,0xfa};
     std::array<std::uint8_t,16> agent{},session{};
-    sim::parse_uuid(login.handoff.agent_id,agent);
-    sim::parse_uuid(login.handoff.session_id,session);
+    if(!sim::parse_uuid(login.handoff.agent_id,agent)||
+       !sim::parse_uuid(login.handoff.session_id,session))return 27;
     movement.body.insert(movement.body.end(),agent.begin(),agent.end());
     movement.body.insert(movement.body.end(),session.begin(),session.end());
     movement.body.insert(movement.body.end(),36U,0);

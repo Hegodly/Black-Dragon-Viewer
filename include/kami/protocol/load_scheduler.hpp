@@ -22,6 +22,7 @@ struct Asset {
     std::uint32_t actual_bytes=0;
     Stage stage=Stage::Queued;
     std::uint64_t queued_order=0;
+    unsigned retry_count=0; // transient fetches only; bounded per asset
 };
 struct Stats {
     std::size_t queued=0,downloading=0,decoding=0,ready_gpu=0,resident=0;
@@ -32,6 +33,7 @@ public:
     static constexpr std::size_t kMaxAssets=8192U;
     static constexpr unsigned kMaxConcurrentDownloads=8U;
     static constexpr unsigned kMaxConcurrentDecodes=4U;
+    static constexpr unsigned kMaxTransientRetries=3U;
     static constexpr std::uint32_t kMaxBytesPerAsset=64U*1024U*1024U;
     static constexpr std::uint32_t kDefaultUploadBudget=4U*1024U*1024U;
     // No authenticated network data? Do not schedule any work.
@@ -47,6 +49,12 @@ public:
                                          bool success) noexcept;
     [[nodiscard]] std::optional<Asset> next_decode();
     [[nodiscard]] bool decode_finished(std::string_view uuid,bool success) noexcept;
+    // Explicit bounded retry of a failed *transient HTTP* fetch.
+    // Caller enforces per-asset backoff; corrupt asset decodes are not retried.
+    [[nodiscard]] bool retry_failed(std::string_view uuid) noexcept;
+    // Forget an evicted/despawned asset so future visible use can fetch it
+    // again. Never cancel an in-progress network or decode worker.
+    [[nodiscard]] bool forget_finished(std::string_view uuid) noexcept;
     [[nodiscard]] std::optional<Asset> next_gpu_upload(
         std::uint32_t remaining_upload_budget) const noexcept;
     [[nodiscard]] bool gpu_uploaded(std::string_view uuid) noexcept;

@@ -1,6 +1,8 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/texture_entry.hpp"
+#include "kami/protocol/official_extra_params.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -132,7 +134,8 @@ bool decode_full_transforms(const lludp::Packet& packet,
                             FullDecodeAudit* audit,
                             std::vector<std::uint32_t>* parent_references,
                             std::vector<Transform>* child_transforms,
-                            std::vector<std::uint32_t>* avatar_root_ids) noexcept {
+                            std::vector<std::uint32_t>* avatar_root_ids,
+                            std::vector<AvatarFullPose>* avatar_poses) noexcept {
     const auto info=worldwire::inspect(packet);
     if(info.kind!=worldwire::Kind::ObjectFull||info.blocks==0U||
        info.blocks>64U)return false;
@@ -146,14 +149,17 @@ bool decode_full_transforms(const lludp::Packet& packet,
     FullDecodeAudit frame{};
     std::vector<std::uint32_t> parents;
     std::vector<std::uint32_t> avatars;
+    std::vector<AvatarFullPose> decoded_avatar_poses;
     for(unsigned n=0U;n<info.blocks;++n){
         Transform t{};
         std::uint8_t pcode=0U;
         std::uint32_t parent=0U;
         std::span<const std::uint8_t> movement{};
+        std::span<const std::uint8_t> full_id{};
         // ID U32, State U8, FullID UUID, CRC U32, PCode U8,
         // Material U8, ClickAction U8, Scale LLVector3.
-        if(!cur.u32(t.local_id)||!cur.skip(1U+16U+4U)||
+        if(!cur.u32(t.local_id)||!cur.skip(1U)||
+           !cur.take(16U,full_id)||!cur.skip(4U)||
            !cur.u8(pcode)||!cur.skip(2U)||
            !cur.f32(t.sx)||!cur.f32(t.sy)||!cur.f32(t.sz)||
            !cur.variable(1U,movement)||
@@ -182,56 +188,60 @@ bool decode_full_transforms(const lludp::Packet& packet,
         if(pcode!=9U){
             ++frame.non_volume;
             // PCode 47 is an avatar root, NOT a volume to place in-world.
-            if(pcode==47U&&parent==0U&&t.local_id!=0U)
+            if(pcode==47U&&parent==0U&&t.local_id!=0U){
                 avatars.push_back(t.local_id);
+                const std::size_t offset=
+                    movement.size()==76U||movement.size()==140U?16U:0U;
+                if(movement.size()==60U||movement.size()==76U||
+                   movement.size()==124U||movement.size()==140U){
+                    AvatarFullPose pose{};
+                    pose.local_id=t.local_id;
+                    std::copy_n(full_id.begin(),16U,pose.full_id.begin());
+                    const auto read=[&](std::size_t at,float& v) noexcept {
+                        if(at+4U>movement.size())return false;
+                        std::uint32_t bits=
+                            std::uint32_t(movement[at])|
+                            (std::uint32_t(movement[at+1U])<<8U)|
+                            (std::uint32_t(movement[at+2U])<<16U)|
+                            (std::uint32_t(movement[at+3U])<<24U);
+                        std::memcpy(&v,&bits,sizeof(v));
+                        return true;
+                    };
+                    if(read(offset,pose.x)&&read(offset+4U,pose.y)&&
+                       read(offset+8U,pose.z)&&
+                       std::isfinite(pose.x)&&std::isfinite(pose.y)&&
+                       std::isfinite(pose.z)&&
+                       pose.x>=0.f&&pose.x<256.f&&
+                       pose.y>=0.f&&pose.y<256.f&&
+                       pose.z>=-4096.f&&pose.z<8192.f)
+                        decoded_avatar_poses.push_back(pose);
+                }
+            }
             continue;
         }
         ++frame.volume;
-        // An observed ExtraParam does not prove it is sculpt/mesh.
-        // Count each wire type without exposing object IDs or asset UUIDs.
-        bool extras_valid=extras.empty();
-        if(!extras.empty()){
-            std::size_t at=1U;
-            const auto count=extras[0];
-            extras_valid=count<=32U;
-            FullDecodeAudit seen{};
-            for(unsigned i=0U;extras_valid&&i<count;++i){
-                if(at>extras.size()||extras.size()-at<6U){
-                    extras_valid=false;break;
-                }
-                const auto type=std::uint16_t(extras[at])|
-                    (std::uint16_t(extras[at+1U])<<8U);
-                const auto length=std::uint32_t(extras[at+2U])|
-                    (std::uint32_t(extras[at+3U])<<8U)|
-                    (std::uint32_t(extras[at+4U])<<16U)|
-                    (std::uint32_t(extras[at+5U])<<24U);
-                at+=6U;
-                if(length>4096U||length>extras.size()-at||
-                   (type==0x30U&&length!=17U)){
-                    extras_valid=false;break;
-                }
-                ++seen.extra_records;
-                if(type==0x10U)++seen.flexible_records;
-                else if(type==0x20U)++seen.light_records;
-                else if(type==0x40U)++seen.projector_records;
-                else if(type==0x30U){
-                    ++seen.sculpt_records;
-                    if((extras[at+16U]&0x3fU)==5U)
-                        ++seen.mesh_sculpt_records;
-                }else ++seen.other_extra_records;
-                at+=length;
-            }
-            if(at!=extras.size())extras_valid=false;
-            if(extras_valid){
-                ++frame.extra_envelopes;
-                frame.extra_records+=seen.extra_records;
-                frame.sculpt_records+=seen.sculpt_records;
-                frame.mesh_sculpt_records+=seen.mesh_sculpt_records;
-                frame.flexible_records+=seen.flexible_records;
-                frame.light_records+=seen.light_records;
-                frame.projector_records+=seen.projector_records;
-                frame.other_extra_records+=seen.other_extra_records;
-            }else ++frame.malformed_extra_envelopes;
+        // The separately replaceable LGPL parser uses the official
+        // Linden Lab LLNetworkData parameter type/length table.
+        // Modern 0x70, 0x80 and 0x90 types are NOT mesh asset UUIDs.
+        KamiSlExtraParamsV1 typed{};
+        typed.struct_size=sizeof(typed);
+        const bool extras_valid=kami_sl_decode_extra_params_v1(
+            extras.empty()?nullptr:extras.data(),
+            static_cast<std::uint32_t>(extras.size()),&typed)!=0;
+        if(extras_valid&&!extras.empty()){
+            ++frame.extra_envelopes;
+            frame.extra_records+=typed.records;
+            frame.sculpt_records+=typed.sculpt;
+            frame.mesh_sculpt_records+=typed.mesh_sculpt;
+            frame.flexible_records+=typed.flexible;
+            frame.light_records+=typed.light;
+            frame.projector_records+=typed.light_image;
+            frame.extended_mesh_records+=typed.extended_mesh;
+            frame.render_material_records+=typed.render_material;
+            frame.reflection_probe_records+=typed.reflection_probe;
+            frame.other_extra_records+=typed.unknown;
+        }else if(!extras_valid){
+            ++frame.malformed_extra_envelopes;
         }
         // A corrupt sculpt envelope may conceal mesh topology. Never
         // render a guessed primitive for such an object.
@@ -246,6 +256,13 @@ bool decode_full_transforms(const lludp::Packet& packet,
                        [](std::uint8_t ch){return ch!=0U;})){
             t.default_texture_present=true;
             ++frame.texture_references;
+        }
+        texture::Base base{};
+        if(texture::decode_base(texture_entry,base)){
+            t.base_tint_present=true;
+            t.default_texture_asset_id=texture::default_image_uuid(base);
+            t.base_r=base.red;t.base_g=base.green;
+            t.base_b=base.blue;t.base_a=base.alpha;
         }
         t.parent_id=parent;
         if(parent!=0U){
@@ -304,6 +321,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
     if(audit)*audit=frame; // publish only after full frame validation
     if(parent_references)*parent_references=std::move(parents);
     if(avatar_root_ids)*avatar_root_ids=std::move(avatars);
+    if(avatar_poses)*avatar_poses=std::move(decoded_avatar_poses);
     if(child_transforms)*child_transforms=std::move(children);
     return true;
 }

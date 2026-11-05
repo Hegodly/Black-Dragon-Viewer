@@ -115,8 +115,8 @@ SceneMesh build_test_scene(unsigned divisions) {
     divisions=std::clamp(divisions,8U,64U);
     const float step=28.f/static_cast<float>(divisions);
     scene.vertices.reserve(divisions*divisions*6+6*36+5*6*10*6);
-    for(int z=0;z<divisions;++z) {
-        for(int x=0;x<divisions;++x) {
+    for(unsigned z=0;z<divisions;++z) {
+        for(unsigned x=0;x<divisions;++x) {
             const float x0=-14.f+x*step,x1=x0+step;
             const float z0=-14.f+z*step,z1=z0+step;
             const P a{x0,height(x0,z0),z0},b{x0,height(x0,z1),z1};

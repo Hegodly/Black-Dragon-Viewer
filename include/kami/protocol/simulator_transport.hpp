@@ -8,6 +8,8 @@
 #include "kami/protocol/avatar_appearance.hpp"
 #include "kami/protocol/load_scheduler.hpp"
 #include "kami/protocol/mesh_lod.hpp"
+#include "kami/protocol/texture_decode.hpp"
+#include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
 #include <winsock2.h>
 #include <chrono>
@@ -108,6 +110,26 @@ public:
     }
     [[nodiscard]] const std::map<std::string,mesh::LOD>&
     decoded_mesh_assets() const noexcept {return loaded_meshes_;}
+    [[nodiscard]] bool set_texture_capability(std::wstring capability) noexcept;
+    [[nodiscard]] bool texture_capability_ready() const noexcept {
+        return !texture_capability_url_.empty();
+    }
+    // Authenticated JPEG2000 textures decoded on a background worker.
+    // CPU-ready does NOT mean uploaded to DX12 or bound to a face.
+    [[nodiscard]] const std::map<std::string,texture::DecodedTexture>&
+    decoded_texture_assets() const noexcept {return decoded_textures_;}
+    [[nodiscard]] std::size_t decoded_texture_count() const noexcept {
+        return decoded_textures_.size();
+    }
+    [[nodiscard]] std::size_t texture_download_count() const noexcept {
+        return texture_download_count_;
+    }
+    [[nodiscard]] std::size_t texture_failure_count() const noexcept {
+        return texture_failure_count_;
+    }
+    [[nodiscard]] load::Stats texture_asset_stats() const noexcept {
+        return texture_scheduler_.statistics();
+    }
     [[nodiscard]] std::size_t mesh_object_count() const noexcept {
         std::size_t count=0U;
         for(const auto& [id,obj]:spatial_objects_){
@@ -151,6 +173,15 @@ public:
     [[nodiscard]] std::size_t pending_object_requests() const noexcept {
         return missing_objects_.size();
     }
+    [[nodiscard]] std::size_t pending_reliable_packets() const noexcept {
+        return reliable_window_.pending();
+    }
+    [[nodiscard]] std::uint64_t reliable_resend_count() const noexcept {
+        return reliable_window_.resent_packets();
+    }
+    [[nodiscard]] std::uint64_t reliable_expired_count() const noexcept {
+        return reliable_window_.expired_packets();
+    }
     [[nodiscard]] std::uint32_t requested_object_ids() const noexcept {
         return requested_object_ids_;
     }
@@ -189,10 +220,18 @@ private:
     void maybe_send_agent_update() noexcept;
     void maybe_send_missing_object_requests() noexcept;
     void maybe_fetch_mesh() noexcept;
+    void maybe_fetch_texture() noexcept;
+    void schedule_visible_textures() noexcept;
+    void prune_decoded_textures() noexcept;
     void schedule_visible_meshes() noexcept;
+    void prune_unreferenced_meshes() noexcept;
+    [[nodiscard]] const objectspatial::Transform* world_mesh_anchor(
+        const objectspatial::Transform& item) const noexcept;
     void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
+    void retry_unacknowledged() noexcept;
+    reliable::Window reliable_window_{};
     SOCKET socket_=INVALID_SOCKET;
     bool winsock_ready_=false;
     LoginResult login_{};
@@ -222,19 +261,53 @@ private:
     // is confirmed. Avatar attachments stay unresolved and invisible.
     std::map<std::uint32_t,objectspatial::Transform> linked_objects_;
     std::set<std::uint32_t> avatar_root_ids_; // known, never rendered
+    std::uint32_t own_avatar_local_id_=0U; // verified against login UUID
     load::Scheduler mesh_scheduler_{};
+    load::Scheduler texture_scheduler_{};
+    std::wstring texture_capability_url_; // authenticated ViewerAsset bearer
+    struct TextureResult {
+        std::string id;
+        unsigned http_status=0U;
+        std::uint32_t bytes=0U;
+        bool fetched=false,decoded=false;
+        texture::DecodedTexture image{};
+    };
+    std::future<TextureResult> texture_worker_;
+    static constexpr std::size_t kMaxDecodedTextureAssets=24U;
+    static constexpr std::size_t kMaxDecodedTextureBytes=48U*1024U*1024U;
+    std::map<std::string,texture::DecodedTexture> decoded_textures_;
+    std::size_t decoded_texture_bytes_=0U;
+    std::size_t texture_download_count_=0U,texture_failure_count_=0U;
+    std::chrono::steady_clock::time_point texture_last_start_{};
+    std::uint64_t texture_scan_revision_=~std::uint64_t{0};
+    float texture_last_scan_x_=0.f,texture_last_scan_y_=0.f,
+          texture_last_scan_z_=0.f;
+    bool texture_last_scan_position_valid_=false;
     std::wstring mesh_capability_url_; // in-memory bearer only
     struct MeshResult {
         std::string id;
         std::uint32_t bytes=0;
+        unsigned http_status=0;
         bool fetched=false,decoded=false;
         mesh::LOD lod;
     };
     std::future<MeshResult> mesh_worker_;
+    // At most one delayed retry per unique mesh UUID; no packet or
+    // signed capability URLs are kept in these retry records.
+    std::map<std::string,std::chrono::steady_clock::time_point>
+        mesh_retry_after_;
+    static constexpr std::size_t kMaxWorldMeshAssets=96U;
+    static constexpr std::size_t kMaxWorldMeshTriangles=240000U;
     std::map<std::string,mesh::LOD> loaded_meshes_;
+    std::size_t loaded_mesh_triangle_count_=0U;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
     std::uint64_t mesh_scan_revision_=~std::uint64_t{0};
+    // Asset discovery must refresh when the camera avatar walks, even if
+    // object data has not changed; otherwise mesh loading freezes on move.
+    float mesh_last_scan_x_=0.f,mesh_last_scan_y_=0.f,
+          mesh_last_scan_z_=0.f;
+    bool mesh_last_scan_position_valid_=false;
     struct MissingObject {
         unsigned attempts=0U;
         std::chrono::steady_clock::time_point sent_at{};

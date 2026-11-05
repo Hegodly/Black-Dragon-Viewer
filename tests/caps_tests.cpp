@@ -273,6 +273,72 @@ int exercise(){
     if(!parse_seed_llsd(wrong_type,cap,&mesh_cap,&parse_report)||
        !mesh_cap.empty()||
        parse_report.mesh_issue!=L"unsupported LLSD grant type")return 37;
+    // A real trusted LLSD TeleportFailed body has an Info/Reason field.
+    // Display only sanitized text. Every other event remains unsupported.
+    const auto failed=
+        "<llsd><map><key>id</key><integer>1004</integer>"
+        "<key>events</key><array><map>"
+        "<key>message</key><string>TeleportFailed</string>"
+        "<key>body</key><map><key>Info</key><array><map>"
+        "<key>Reason</key><string>Cannot enter this region.</string>"
+        "</map></array></map></map></array></map></llsd>";
+    const auto notice=observe_event_queue_response(failed);
+    if(!notice.structurally_valid||!notice.safe_to_ack||
+       notice.event_count!=1U||notice.handled_events!=1U||
+       notice.unsupported_events!=0U||
+       notice.notifications.size()!=1U||
+       notice.notifications[0]!="Teleport failed: Cannot enter this region."||
+       notice.next_ack.token!="1004")return 41;
+    // A bearer URL must never leak through reason text into the UI.
+    const auto url_failed=
+        "<llsd><map><key>id</key><integer>1005</integer>"
+        "<key>events</key><array><map>"
+        "<key>message</key><string>TeleportFailed</string>"
+        "<key>body</key><map><key>Reason</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/secret</string>"
+        "</map></map></array></map></llsd>";
+    const auto redacted=observe_event_queue_response(url_failed);
+    if(!redacted.safe_to_ack||redacted.handled_events!=1U||
+       redacted.notifications.size()!=1U||
+       redacted.notifications[0]!="Teleport failed")return 42;
+    const auto crossing=
+        "<llsd><map><key>id</key><integer>1006</integer>"
+        "<key>events</key><array><map>"
+        "<key>message</key><string>TeleportFinish</string>"
+        "<key>body</key><map><key>Info</key><array/></map>"
+        "</map></array></map></llsd>";
+    const auto unfinished=observe_event_queue_response(crossing);
+    if(!unfinished.safe_to_ack||unfinished.handled_events!=0U||
+       unfinished.unsupported_events!=1U||
+       !unfinished.notifications.empty())return 43;
+    // Do not treat malformed event elements as recognized actions.
+    const auto invalid_action=
+        "<llsd><map><key>id</key><integer>1007</integer>"
+        "<key>events</key><array><map>"
+        "<key>message</key><string>TeleportFailed!</string>"
+        "<key>body</key><map><key>Reason</key><string>Oops</string></map>"
+        "</map></array></map></llsd>";
+    const auto unsafe_action=observe_event_queue_response(invalid_action);
+    if(!unsafe_action.safe_to_ack||unsafe_action.handled_events!=0U||
+       unsafe_action.unsupported_events!=1U)return 44;
+    // Official ViewerAsset handles both mesh_id and texture_id. Mesh-only
+    // GetMesh2 does NOT authorize a texture fetch; avoid arbitrary hosts.
+    std::wstring texture_cap;
+    const auto texture_seed=
+        "<llsd><map><key>ViewerAsset</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/assets</uri>"
+        "<key>GetMesh2</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/mesh</uri>"
+        "</map></llsd>";
+    if(!parse_seed_llsd(texture_seed,cap,&mesh_cap,nullptr,&texture_cap)||
+       texture_cap!=L"https://simhost-123.agni.secondlife.io/cap/assets"||
+       mesh_cap!=texture_cap)return 45;
+    if(!parse_seed_llsd(alternate,cap,&mesh_cap,nullptr,&texture_cap)||
+       !texture_cap.empty()||
+       mesh_cap!=L"https://simhost-123.agni.secondlife.io/cap/new")
+       return 46;
+    if(!parse_seed_llsd(optional_bad,cap,&mesh_cap,nullptr,&texture_cap)||
+       !texture_cap.empty())return 47;
     return 0;
 }
 }

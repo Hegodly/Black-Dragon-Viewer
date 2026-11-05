@@ -469,10 +469,22 @@ LoginResult parse_login_xmlrpc(std::string_view xml){
        !parse_u32(lookup(L"circuit_code"),code)||code==0)
        return result;
     LoginHandoff handoff{};
-    // Login response identifiers are ASCII UUID/IP; reject all other bytes.
-    handoff.agent_id=std::string(agent.begin(),agent.end());
-    handoff.session_id=std::string(session.begin(),session.end());
-    handoff.simulator_host=std::string(sim.begin(),sim.end());
+    // Login identifiers and simulator host must be ASCII; reject any
+    // non-ASCII input rather than silently narrowing UTF-16 to char.
+    const auto to_ascii=[](std::wstring_view src,std::string& dst) {
+        if(src.empty()||src.size()>255U)return false;
+        dst.clear();
+        dst.reserve(src.size());
+        for(wchar_t ch:src){
+            if(ch<0x21 || ch>0x7e)return false;
+            dst.push_back(static_cast<char>(ch));
+        }
+        return true;
+    };
+    if(!to_ascii(agent,handoff.agent_id)||
+       !to_ascii(session,handoff.session_id)||
+       !to_ascii(sim,handoff.simulator_host))
+        return result;
     handoff.simulator_port=static_cast<std::uint16_t>(port);
     handoff.seed_capability=std::move(seed);
     if(!valid_handoff(handoff))return result;

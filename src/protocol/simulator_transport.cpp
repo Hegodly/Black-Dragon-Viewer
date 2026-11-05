@@ -39,7 +39,14 @@ std::uint32_t get_le32(const std::vector<std::uint8_t>& body,std::size_t at) noe
 }
 }
 bool Circuit::send_packet(lludp::Packet packet) noexcept {
-    if(socket_==INVALID_SOCKET)return false;
+    if(socket_==INVALID_SOCKET||!reliable_window_.can_send(packet))
+        return false;
+    // Track the original reliable sequence, including a transient failed
+    // nonblocking send. The bounded retry queue will transmit it again.
+    try {
+        if(!reliable_window_.record_sent(packet,
+                   reliable::Window::Clock::now()))return false;
+    }catch(...){return false;}
     return send_all(socket_,packet);
 }
 bool Circuit::send_startup_messages() noexcept {
@@ -105,61 +112,103 @@ bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
        state_!=CircuitState::MovementConfirmed)return false;
     mesh_capability_url_=std::move(capability);
     mesh_scan_revision_=~std::uint64_t{0};
+    mesh_last_scan_position_valid_=false;
+    mesh_last_scan_x_=mesh_last_scan_y_=mesh_last_scan_z_=0.f;
     return true;
 }
-void Circuit::schedule_visible_meshes() noexcept {
-    if(mesh_capability_url_.empty()||
-       mesh_scan_revision_==spatial_object_revision_||
-       !movement_position_.verified)return;
-    mesh_scan_revision_=spatial_object_revision_;
-    const auto close_to_agent=[&](float x,float y,float z){
-        return std::isfinite(x)&&std::isfinite(y)&&std::isfinite(z)&&
-            std::abs(x-movement_position_.x)<=144.f&&
-            std::abs(y-movement_position_.y)<=144.f&&
-            std::abs(z-movement_position_.z)<=96.f;
+const objectspatial::Transform* Circuit::world_mesh_anchor(
+    const objectspatial::Transform& item) const noexcept {
+    if(item.parent_id==0U)return &item;
+    std::array<std::uint32_t,16U> seen{};
+    std::size_t depth=0U;
+    auto parent=item.parent_id;
+    while(parent!=0U&&depth<seen.size()){
+        if(avatar_root_ids_.contains(parent)||
+           std::find(seen.begin(),seen.begin()+depth,parent)!=
+               seen.begin()+depth)return nullptr;
+        seen[depth++]=parent;
+        const auto root=spatial_objects_.find(parent);
+        if(root!=spatial_objects_.end())
+            return root->second.parent_id==0U?&root->second:nullptr;
+        const auto linked=linked_objects_.find(parent);
+        if(linked==linked_objects_.end())return nullptr;
+        parent=linked->second.parent_id;
+    }
+    return nullptr;
+}
+void Circuit::prune_unreferenced_meshes() noexcept {
+    if(loaded_meshes_.empty())return;
+    // Hysteresis (176m vs 144m load radius) avoids thrashing across a
+    // visibility boundary. Drop no-longer-needed CPU mesh data and its
+    // finished scheduler entry; do not cancel an active fetch.
+    const auto within_retention_radius=[&](const objectspatial::Transform& t) noexcept {
+        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
+            std::abs(t.x-movement_position_.x)<=176.f&&
+            std::abs(t.y-movement_position_.y)<=176.f&&
+            std::abs(t.z-movement_position_.z)<=128.f;
     };
-    for(const auto& [id,t]:spatial_objects_){
-        (void)id;
-        if(t.mesh_asset_id.empty()||!close_to_agent(t.x,t.y,t.z))
-            continue;
-        const float d=std::hypot(
-            std::hypot(t.x-movement_position_.x,
-                       t.y-movement_position_.y),
-            t.z-movement_position_.z);
-        (void)mesh_scheduler_.request(t.mesh_asset_id,
-                                     load::Kind::VisibleMesh,d,true,0U);
-    }
-    // Only download linked mesh shapes with a verified world root.
-    // Avatar attachments are intentionally deferred until the rig is ready.
-    for(const auto& [id,t]:linked_objects_){
-        (void)id;
-        if(t.mesh_asset_id.empty())continue;
-        auto parent=t.parent_id;
-        std::array<std::uint32_t,16> seen{};
-        std::size_t depth=0;
-        const objectspatial::Transform* root=nullptr;
-        while(parent!=0U&&depth<seen.size()){
-            if(avatar_root_ids_.contains(parent))break;
-            if(std::find(seen.begin(),seen.begin()+depth,parent)!=
-               seen.begin()+depth)break;
-            seen[depth++]=parent;
-            const auto r=spatial_objects_.find(parent);
-            if(r!=spatial_objects_.end()){
-                if(r->second.parent_id==0U)root=&r->second;
-                break;
+    const auto needed=[&](std::string_view asset) noexcept {
+        const auto uses=[&](const auto& objects) noexcept {
+            for(const auto& [id,t]:objects){
+                (void)id;
+                if(t.mesh_asset_id!=asset)continue;
+                const auto* anchor=world_mesh_anchor(t);
+                if(anchor&&within_retention_radius(*anchor))return true;
             }
-            const auto c=linked_objects_.find(parent);
-            if(c==linked_objects_.end())break;
-            parent=c->second.parent_id;
-        }
-        if(!root||!close_to_agent(root->x,root->y,root->z))continue;
-        const float d=std::hypot(
-            std::hypot(root->x-movement_position_.x,
-                       root->y-movement_position_.y),
-            root->z-movement_position_.z);
-        (void)mesh_scheduler_.request(t.mesh_asset_id,
-                                     load::Kind::VisibleMesh,d,true,0U);
+            return false;
+        };
+        return uses(spatial_objects_)||uses(linked_objects_);
+    };
+    for(auto it=loaded_meshes_.begin();it!=loaded_meshes_.end();){
+        if(needed(it->first)){++it;continue;}
+        const auto triangles=it->second.triangles.size();
+        loaded_mesh_triangle_count_=
+            triangles>loaded_mesh_triangle_count_?0U:
+                loaded_mesh_triangle_count_-triangles;
+        (void)mesh_scheduler_.forget_finished(it->first);
+        it=loaded_meshes_.erase(it);
+        ++spatial_object_revision_;
     }
+}
+void Circuit::schedule_visible_meshes() noexcept {
+    if(mesh_capability_url_.empty()||!movement_position_.verified)return;
+    // Spatial-object revision alone is insufficient: walking from one
+    // house to another must discover newly visible mesh assets even if
+    // the simulator sends no full ObjectUpdate messages.
+    const bool moved=!mesh_last_scan_position_valid_||
+        std::hypot(std::hypot(
+            movement_position_.x-mesh_last_scan_x_,
+            movement_position_.y-mesh_last_scan_y_),
+            movement_position_.z-mesh_last_scan_z_)>=12.f;
+    if(mesh_scan_revision_==spatial_object_revision_&&!moved)return;
+    prune_unreferenced_meshes();
+    mesh_scan_revision_=spatial_object_revision_;
+    mesh_last_scan_x_=movement_position_.x;
+    mesh_last_scan_y_=movement_position_.y;
+    mesh_last_scan_z_=movement_position_.z;
+    mesh_last_scan_position_valid_=true;
+    const auto close_to_agent=[&](const objectspatial::Transform& t) noexcept {
+        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
+            std::abs(t.x-movement_position_.x)<=144.f&&
+            std::abs(t.y-movement_position_.y)<=144.f&&
+            std::abs(t.z-movement_position_.z)<=96.f;
+    };
+    const auto schedule=[&](const auto& objects) noexcept {
+        for(const auto& [id,t]:objects){
+            (void)id;
+            if(t.mesh_asset_id.empty())continue;
+            const auto* anchor=world_mesh_anchor(t);
+            if(!anchor||!close_to_agent(*anchor))continue;
+            const float d=std::hypot(
+                std::hypot(anchor->x-movement_position_.x,
+                           anchor->y-movement_position_.y),
+                anchor->z-movement_position_.z);
+            (void)mesh_scheduler_.request(t.mesh_asset_id,
+                                         load::Kind::VisibleMesh,d,true,0U);
+        }
+    };
+    schedule(spatial_objects_);
+    schedule(linked_objects_);
 }
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
@@ -175,24 +224,62 @@ void Circuit::maybe_fetch_mesh() noexcept {
                 ++mesh_download_count_;
                 const auto item=mesh_scheduler_.next_decode();
                 if(item&&item->id==result.id){
-                    const bool room=loaded_meshes_.contains(result.id)||
-                                    loaded_meshes_.size()<32U;
+                    const auto old=loaded_meshes_.find(result.id);
+                    const auto prior=old==loaded_meshes_.end()?0U:
+                        old->second.triangles.size();
+                    const auto used=loaded_mesh_triangle_count_-
+                        std::min(prior,loaded_mesh_triangle_count_);
+                    const bool room=
+                        (old!=loaded_meshes_.end()||
+                         loaded_meshes_.size()<kMaxWorldMeshAssets)&&
+                        used<=kMaxWorldMeshTriangles&&
+                        result.lod.triangles.size()<=
+                            kMaxWorldMeshTriangles-used;
                     const bool ok=result.decoded&&room;
                     (void)mesh_scheduler_.decode_finished(result.id,ok);
                     if(ok){
+                        loaded_mesh_triangle_count_=
+                            used+result.lod.triangles.size();
                         loaded_meshes_.insert_or_assign(
                             result.id,std::move(result.lod));
                         ++spatial_object_revision_;
                     }else ++mesh_failure_count_;
                 }
-            }else ++mesh_failure_count_;
+            }else {
+                ++mesh_failure_count_;
+                // Failed HTTP connections / throttling are recoverable,
+                // unlike 4xx missing assets or a malformed mesh payload.
+                const auto status=result.http_status;
+                const bool transient=status==0U||status==429U||
+                    status==500U||status==502U||status==503U||
+                    status==504U;
+                const auto* job=mesh_scheduler_.find(result.id);
+                if(transient&&job&&
+                   job->retry_count<load::Scheduler::kMaxTransientRetries&&
+                   mesh_retry_after_.size()<128U){
+                    const auto delay=std::chrono::seconds(
+                        1U<<std::min(job->retry_count,3U));
+                    mesh_retry_after_.insert_or_assign(
+                        result.id,std::chrono::steady_clock::now()+delay);
+                }
+            }
         }catch(...){++mesh_failure_count_;}
+    }
+    // Requeue only failed transient network fetches once their quiet period
+    // elapses. A 404 or bad geometry is not retried endlessly.
+    const auto retry_now=std::chrono::steady_clock::now();
+    for(auto it=mesh_retry_after_.begin();it!=mesh_retry_after_.end();){
+        if(retry_now>=it->second){
+            (void)mesh_scheduler_.retry_failed(it->first);
+            it=mesh_retry_after_.erase(it);
+        }else ++it;
     }
     if(mesh_worker_.valid()||mesh_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
     if(mesh_last_start_!=std::chrono::steady_clock::time_point{}&&
        now-mesh_last_start_<std::chrono::milliseconds(350))return;
-    if(loaded_meshes_.size()>=32U)return;
+    if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
+       loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles)return;
     auto selected=mesh_scheduler_.next_download();
     if(!selected)return;
     mesh_last_start_=now;
@@ -203,6 +290,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
         result.id=id;
         const auto reply=caps::fetch_mesh_asset(std::move(url),id);
         result.fetched=reply.fetched;
+        result.http_status=reply.status;
         result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
         if(reply.fetched)
             result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
@@ -297,6 +385,30 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     ++packets_received_;
+    // Acknowledge all outbound packet sequences, not only the two login
+    // handshake packets. Appended LLUDP ACKs and PacketAck blocks may
+    // arrive together, including on retransmitted frames.
+    const auto confirmed=[this](std::uint32_t ack) noexcept {
+        reliable_window_.acknowledge(ack);
+        if(ack==1U)use_acked_=true;
+        if(ack==2U)move_acked_=true;
+    };
+    for(const auto ack:incoming.appended_acks)confirmed(ack);
+    const auto type=classify(incoming);
+    if(type==Inbound::PacketAck){
+        for(std::size_t i=5;i+4<=incoming.body.size();i+=4)
+            confirmed(get_le32(incoming.body,i));
+    }
+    // ACK before replay suppression: a simulator may resend a packet
+    // because our first ACK was lost. Do not decode the world twice.
+    if(incoming.flags&lludp::kReliable){
+        lludp::Packet acknowledgment{};
+        const std::array<std::uint32_t,1> seq={incoming.sequence};
+        if(packet_ack(seq,sequence_++,acknowledgment))
+            (void)send_packet(std::move(acknowledgment));
+        if(!reliable_window_.accept_incoming(incoming.sequence))
+            return;
+    }
     // These are bounded packet/framing observations from the actual
     // authenticated simulator UDP circuit. No geometry is synthesized.
     const auto world=worldwire::inspect(incoming);
@@ -361,10 +473,31 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 std::vector<objectspatial::Transform> linked;
                 std::vector<std::uint32_t> parent_ids;
                 std::vector<std::uint32_t> avatar_ids;
+                std::vector<objectspatial::AvatarFullPose> avatar_poses;
                 objectspatial::FullDecodeAudit frame{};
                 if(objectspatial::decode_full_transforms(
                        incoming,objects,&frame,&parent_ids,&linked,
-                       &avatar_ids)){
+                       &avatar_ids,&avatar_poses)){
+                    // Only the authenticated login AgentID can define our
+                    // own avatar local ID and authoritative world origin.
+                    std::array<std::uint8_t,16U> own_uuid{};
+                    if(parse_uuid(login_.handoff.agent_id,own_uuid)){
+                        for(const auto& avatar:avatar_poses){
+                            if(avatar.full_id!=own_uuid)continue;
+                            own_avatar_local_id_=avatar.local_id;
+                            const float moved=std::hypot(std::hypot(
+                                avatar.x-movement_position_.x,
+                                avatar.y-movement_position_.y),
+                                avatar.z-movement_position_.z);
+                            if(moved>=.04f){
+                                movement_position_.x=avatar.x;
+                                movement_position_.y=avatar.y;
+                                movement_position_.z=avatar.z;
+                                ++spatial_object_revision_;
+                            }
+                            break;
+                        }
+                    }
                     ++spatial_object_frames_;
                     ++decoded_full_spatial_frames_;
                     full_decode_audit_.volume+=frame.volume;
@@ -386,6 +519,9 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.light_records+=frame.light_records;
                     full_decode_audit_.projector_records+=frame.projector_records;
                     full_decode_audit_.other_extra_records+=frame.other_extra_records;
+                    full_decode_audit_.extended_mesh_records+=frame.extended_mesh_records;
+                    full_decode_audit_.render_material_records+=frame.render_material_records;
+                    full_decode_audit_.reflection_probe_records+=frame.reflection_probe_records;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
                             if(avatar_root_ids_.insert(id).second)
@@ -491,7 +627,58 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             }
             break;
         }
-        case worldwire::Kind::ObjectTerse:++object_terse_packets_;break;
+        case worldwire::Kind::ObjectTerse:{
+            ++object_terse_packets_;
+            if(region_seen_&&movement_seen_&&region_metadata_.verified&&
+               movement_position_.verified){
+                std::vector<objectspatial::TersePose> poses;
+                if(objectspatial::decode_terse_poses(incoming,poses)){
+                    for(const auto& pose:poses){
+                        if(own_avatar_local_id_!=0U&&
+                           pose.local_id==own_avatar_local_id_){
+                            // Server-confirmed own avatar pose; update
+                            // region-relative scene origin and allow new
+                            // nearby mesh assets to become eligible.
+                            if(pose.x>=0.f&&pose.x<256.f&&
+                               pose.y>=0.f&&pose.y<256.f&&
+                               pose.z>=-4096.f&&pose.z<8192.f){
+                                const float moved=std::hypot(std::hypot(
+                                    pose.x-movement_position_.x,
+                                    pose.y-movement_position_.y),
+                                    pose.z-movement_position_.z);
+                                if(moved>=.04f){
+                                    movement_position_.x=pose.x;
+                                    movement_position_.y=pose.y;
+                                    movement_position_.z=pose.z;
+                                    ++spatial_object_revision_;
+                                }
+                            }
+                            continue;
+                        }
+                        if(avatar_root_ids_.contains(pose.local_id))
+                            continue; // never guess another avatar's pose
+                        const auto root=spatial_objects_.find(pose.local_id);
+                        if(root!=spatial_objects_.end()){
+                            if(objectspatial::apply_terse_pose(
+                                  root->second,pose))
+                                ++spatial_object_revision_;
+                            continue;
+                        }
+                        const auto child=linked_objects_.find(pose.local_id);
+                        if(child!=linked_objects_.end()){
+                            if(objectspatial::apply_terse_pose(
+                                  child->second,pose))
+                                ++spatial_object_revision_;
+                            continue;
+                        }
+                        // Missing full update: ask for a verified object
+                        // rather than inventing mesh geometry from a pose.
+                        remember_missing_object(pose.local_id);
+                    }
+                }
+            }
+            break;
+        }
         case worldwire::Kind::ObjectKilled:{
             ++object_killed_packets_;
             if(region_seen_&&movement_seen_){
@@ -499,6 +686,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 if(objectspatial::decode_killed_ids(incoming,ids))
                     for(const auto id:ids){
                         missing_objects_.erase(id);
+                        if(id==own_avatar_local_id_)own_avatar_local_id_=0U;
                         if(avatar_root_ids_.erase(id)>0U)
                             ++spatial_object_revision_;
                         if(spatial_objects_.erase(id)>0U)
@@ -520,24 +708,6 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     }
     if(state_==CircuitState::WaitingForSimulator)
         state_=CircuitState::SimulatorResponded;
-    // Inspect ACKs before dispatching received messages.
-    for(std::uint32_t ack:incoming.appended_acks){
-        if(ack==1U)use_acked_=true;
-        if(ack==2U)move_acked_=true;
-    }
-    auto type=classify(incoming);
-    if(type==Inbound::PacketAck){
-        for(std::size_t i=5;i+4<=incoming.body.size();i+=4){
-            const auto ack=get_le32(incoming.body,i);
-            if(ack==1U)use_acked_=true;
-            if(ack==2U)move_acked_=true;
-        }
-    }
-    if(incoming.flags&lludp::kReliable) {
-        lludp::Packet ack{};
-        const std::array<std::uint32_t,1> seq={incoming.sequence};
-        if(packet_ack(seq,sequence_++,ack))(void)send_packet(std::move(ack));
-    }
     if(type==Inbound::StartPing){
         lludp::Packet reply{};
         if(complete_ping(incoming.body[1],sequence_++,reply))
@@ -566,8 +736,21 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     if(region_seen_&&movement_seen_){
         state_=CircuitState::MovementConfirmed;
         mesh_scheduler_.set_online(true);
+        texture_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+}
+void Circuit::retry_unacknowledged() noexcept {
+    if(socket_==INVALID_SOCKET||state_==CircuitState::Failed)return;
+    // At most four retransmits per frame: no unbounded send/CPU spikes.
+    try {
+        const auto retries=reliable_window_.due(
+            reliable::Window::Clock::now(),4U);
+        for(const auto& packet:retries)
+            (void)send_all(socket_,packet);
+    }catch(...){
+        // An allocation failure must not terminate the viewer frame loop.
+    }
 }
 void Circuit::maybe_retry() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed||
@@ -601,12 +784,30 @@ void Circuit::poll(unsigned budget) noexcept {
             std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
             packet))handle_packet(packet);
     }
+    retry_unacknowledged();
     maybe_retry();
     maybe_send_agent_update();
     maybe_send_missing_object_requests();
     maybe_fetch_mesh();
+    maybe_fetch_texture();
 }
 void Circuit::stop() noexcept {
+    if(texture_worker_.valid()){
+        try{(void)texture_worker_.get();}catch(...){}
+    }
+    if(!texture_capability_url_.empty()){
+        SecureZeroMemory(texture_capability_url_.data(),
+                         texture_capability_url_.size()*sizeof(wchar_t));
+        texture_capability_url_.clear();
+    }
+    texture_scheduler_.set_online(false);
+    decoded_textures_.clear();
+    decoded_texture_bytes_=0U;
+    texture_download_count_=texture_failure_count_=0U;
+    texture_last_start_={};
+    texture_scan_revision_=~std::uint64_t{0};
+    texture_last_scan_position_valid_=false;
+    texture_last_scan_x_=texture_last_scan_y_=texture_last_scan_z_=0.f;
     if(mesh_worker_.valid()){
         try{(void)mesh_worker_.get();}catch(...){}
     }
@@ -615,7 +816,10 @@ void Circuit::stop() noexcept {
                          mesh_capability_url_.size()*sizeof(wchar_t));
         mesh_capability_url_.clear();
     }
+    reliable_window_.clear();
     loaded_meshes_.clear();
+    loaded_mesh_triangle_count_=0U;
+    mesh_retry_after_.clear();
     mesh_download_count_=mesh_failure_count_=0U;
     mesh_last_start_={};
     mesh_scan_revision_=~std::uint64_t{0};
@@ -645,6 +849,7 @@ void Circuit::stop() noexcept {
     spatial_objects_.clear();
     linked_objects_.clear();
     avatar_root_ids_.clear();
+    own_avatar_local_id_=0U;
     mesh_scheduler_.set_online(false);
     missing_objects_.clear();
     requested_object_ids_=cached_object_ids_=0U;

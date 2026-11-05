@@ -584,6 +584,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L"CAP "+std::wstring(
                         sl_circuit_.mesh_capability_ready()?L"YES":L"NO")+
                     L" | MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
+                    L" | J2C "+std::to_wstring(
+                        sl_circuit_.decoded_texture_count())+
                     L" | Q "+std::to_wstring(
                         sl_circuit_.mesh_asset_stats().queued)+
                     L" | Fetch "+std::to_wstring(
@@ -594,17 +596,20 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         sl_circuit_.compressed_decode_audit().sculpt_records)+
                     L" | FSc "+std::to_wstring(audit.sculpt_records)+
                     L" | FMesh "+std::to_wstring(audit.mesh_sculpt_records)+
-                    L" | FLight "+std::to_wstring(audit.light_records)+
-                    L" | FFlex "+std::to_wstring(audit.flexible_records)+
-                    L" | FOther "+std::to_wstring(
+                    L" | XMesh "+std::to_wstring(audit.extended_mesh_records)+
+                    L" | PBR "+std::to_wstring(audit.render_material_records)+
+                    L" | Probe "+std::to_wstring(audit.reflection_probe_records)+
+                    L" | Other "+std::to_wstring(
                         audit.projector_records+audit.other_extra_records)+
-                    L" | FBad "+std::to_wstring(
+                    L" | Bad "+std::to_wstring(
                         audit.malformed_extra_envelopes);
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R43.1: full shape fix + missing medium-LOD fallback | textures, avatar pending",
+        label(L"JPEG2000 CPU decoded "+std::to_wstring(
+                  sl_circuit_.decoded_texture_count())+
+              L" assets; DX12 per-face texture binding still pending | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
@@ -1303,9 +1308,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   L"CAPS negotiation not started":caps_status_,
                   box(contentX+252,y+54,contentWidth-269,24.f),
                   small_font_.Get(),p.muted);
-            label(caps_seed_summary_.empty()?
-                  L"Seed: waiting for CAPS response":
-                  L"Seed: "+caps_seed_summary_,
+            label(!caps_last_notice_.empty()?caps_last_notice_:
+                  (caps_seed_summary_.empty()?
+                   L"Seed: waiting for CAPS response":
+                   L"Seed: "+caps_seed_summary_),
                   box(contentX+252,y+78,contentWidth-269,23.f),
                   small_font_.Get(),p.muted);
         }else{
@@ -1786,6 +1792,8 @@ void Window::begin_sl_login() {
     caps_ack_={};
     caps_completed_polls_=0;
     caps_events_observed_=caps_events_unsupported_=0;
+    caps_notifications_handled_=0;
+    caps_last_notice_.clear();
     caps_consecutive_failures_=0;
     caps_dispatch_blocked_=false;
     caps_next_poll_={};
@@ -1888,7 +1896,8 @@ void Window::start_caps_poll() {
     caps_status_=L"R9 CAPS polling: "+
         std::to_wstring(caps_events_observed_)+
         L" observed / "+std::to_wstring(caps_events_unsupported_)+
-        L" NOT applied";
+        L" unsupported / "+std::to_wstring(caps_notifications_handled_)+
+        L" notices delivered";
     if(!caps_recent_types_.empty())
         caps_status_+=L" ("+caps_recent_types_+L")";
     caps_poll_future_=std::async(std::launch::async,
@@ -2023,6 +2032,9 @@ void Window::update_sl_connection() {
             if(result.mesh_granted)
                 (void)sl_circuit_.set_mesh_capability(
                     std::move(result.mesh_capability_url));
+            if(result.texture_granted)
+                (void)sl_circuit_.set_texture_capability(
+                    std::move(result.texture_capability_url));
             if(result.event_queue_granted){
                 caps_poll_started_=true;
                 caps_event_queue_url_=std::move(result.event_queue_url);
@@ -2035,6 +2047,9 @@ void Window::update_sl_connection() {
         if(!result.mesh_capability_url.empty())
             SecureZeroMemory(result.mesh_capability_url.data(),
                  result.mesh_capability_url.size()*sizeof(wchar_t));
+        if(!result.texture_capability_url.empty())
+            SecureZeroMemory(result.texture_capability_url.data(),
+                result.texture_capability_url.size()*sizeof(wchar_t));
         if(!result.event_queue_url.empty())
             SecureZeroMemory(result.event_queue_url.data(),
                 result.event_queue_url.size()*sizeof(wchar_t));
@@ -2052,6 +2067,13 @@ void Window::update_sl_connection() {
                 caps_consecutive_failures_=0;
                 caps_events_observed_+=result.event_count;
                 caps_events_unsupported_+=result.unsupported_events;
+                caps_notifications_handled_+=result.handled_events;
+                // Only the bounded TeleportFailed notice has a defined
+                // UI handler. Never show arbitrary CAPS event bodies.
+                if(!result.notifications.empty()){
+                    const auto& safe=result.notifications.back();
+                    caps_last_notice_.assign(safe.begin(),safe.end());
+                }
                 if(!caps_ack_.token.empty())
                     SecureZeroMemory(caps_ack_.token.data(),
                                      caps_ack_.token.size());
@@ -2061,7 +2083,8 @@ void Window::update_sl_connection() {
                         std::to_wstring(caps_events_observed_)+
                         L" observed; "+
                         std::to_wstring(caps_events_unsupported_)+
-                        L" actions NOT applied";
+                        L" unsupported; "+std::to_wstring(
+                            caps_notifications_handled_)+L" notices";
                     caps_recent_types_.clear();
                     if(!result.event_types.empty()){
                         for(std::size_t i=0;i<result.event_types.size()&&i<2;++i){

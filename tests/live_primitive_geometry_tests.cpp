@@ -25,11 +25,16 @@ int main(){
     Transform root{77U,128.f,140.f,35.f,2.f,3.f,4.f};
     root.primitive=Kind::Box;
     roots.emplace(root.local_id,root);
+    roots[77U].base_tint_present=true;
+    roots[77U].base_r=.25f;roots[77U].base_g=.5f;roots[77U].base_b=.75f;
     auto solids=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f);
     if(!valid(solids)||solids.root_shapes!=1U||
        solids.linked_shapes!=0U||solids.scene.vertices.size()!=36U)
         return 1;
+    if(std::abs(solids.scene.vertices[0].r-.25f)>.001f||
+       std::abs(solids.scene.vertices[0].g-.5f)>.001f||
+       std::abs(solids.scene.vertices[0].b-.75f)>.001f)return 18;
     roots[77U].primitive=Kind::Cylinder;
     auto cylinder=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f);
@@ -129,6 +134,9 @@ int main(){
     if(mesh_root.root_meshes!=1U||mesh_root.linked_meshes!=0U||
        mesh_root.emitted_triangles!=1U||
        mesh_root.scene.vertices.size()!=3U)return 15;
+    if(std::abs(mesh_root.scene.vertices[0].r-.25f)>.001f||
+       std::abs(mesh_root.scene.vertices[0].g-.5f)>.001f||
+       std::abs(mesh_root.scene.vertices[0].b-.75f)>.001f)return 19;
     roots[77U].mesh_asset_id.clear();
     Transform mesh_child_t{88U,1.f,0.f,0.f,1.f,1.f,1.f};
     mesh_child_t.parent_id=77U;

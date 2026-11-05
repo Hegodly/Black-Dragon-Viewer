@@ -126,6 +126,8 @@ private:
     unsigned caps_completed_polls_=0;
     std::uint64_t caps_events_observed_=0;
     std::uint64_t caps_events_unsupported_=0;
+    std::uint64_t caps_notifications_handled_=0;
+    std::wstring caps_last_notice_; // sanitized TeleportFailed only
     unsigned caps_consecutive_failures_=0;
     bool caps_dispatch_blocked_=false;
     std::chrono::steady_clock::time_point caps_next_poll_{};

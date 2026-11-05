@@ -45,6 +45,7 @@ on:
       - release/kami-r41-legacy-mesh-cdn-20261104
       - release/kami-r42-mesh-discovery-20261104
       - release/kami-r43-full-object-shape-audit-20261104
+      - feature/kami-official-sl-bridge-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -62,6 +63,7 @@ on:
   pull_request:
     branches:
       - release/kami-r42-mesh-discovery-20261104
+      - release/kami-r43-full-object-shape-audit-20261104
   workflow_dispatch:
 
 jobs:
@@ -124,7 +126,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
           Copy-Item build/Release/KAMIViewer.exe dist/KAMI
           Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_LLUdpCodec.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_ExtraParams.dll dist/KAMI
+          New-Item -ItemType Directory -Force -Path dist/KAMI/Source/lludp | Out-Null
+          Copy-Item src/sl_reference/official_lludp_zerocode.cpp dist/KAMI/Source/lludp
+          Copy-Item include/kami/protocol/official_lludp_zerocode.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/lludp/llzerocode.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/lludp/stdtypes.h dist/KAMI/Source/lludp
+          Copy-Item src/sl_reference/official_extra_params.cpp dist/KAMI/Source/lludp
+          Copy-Item include/kami/protocol/official_extra_params.h dist/KAMI/Source/lludp
           Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
+          Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
@@ -141,10 +153,11 @@ jobs:
           Copy-Item R42_STATUS.md dist/KAMI
           Copy-Item R43_STATUS.md dist/KAMI
           Copy-Item R43_1_STATUS.md dist/KAMI
+          Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Official-SL-Wire-Extras-Prototype-20261104.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R43.1-Pretest-Mesh-Fallback-DX12
-          path: dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          name: KAMI-Official-SL-Wire-Extras-Prototype-20261104
+          path: dist/KAMI-Official-SL-Wire-Extras-Prototype-20261104.zip
           retention-days: 14

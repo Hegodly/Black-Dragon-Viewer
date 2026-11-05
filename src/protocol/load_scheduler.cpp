@@ -88,6 +88,29 @@ bool Scheduler::download_finished(std::string_view id,
     asset->stage=Stage::DecodeQueued;
     return true;
 }
+bool Scheduler::retry_failed(std::string_view id) noexcept {
+    auto* asset=online_?mutable_find(id):nullptr;
+    if(!asset||asset->stage!=Stage::Failed||
+       asset->retry_count>=kMaxTransientRetries)return false;
+    ++asset->retry_count;
+    asset->actual_bytes=0U;
+    asset->stage=Stage::Queued;
+    return true;
+}
+bool Scheduler::forget_finished(std::string_view uuid) noexcept {
+    if(!online_)return false;
+    const auto it=std::find_if(entries_.begin(),entries_.end(),
+        [&](const Asset& asset){return asset.id==uuid;});
+    if(it==entries_.end()||it->stage==Stage::Downloading||
+       it->stage==Stage::Decoding)return false;
+    if(it->stage==Stage::Resident) {
+        // Counter is only for confirmed uploads, never anticipated bytes.
+        const auto bytes=static_cast<std::uint64_t>(it->actual_bytes);
+        uploaded_bytes_=bytes>uploaded_bytes_?0U:uploaded_bytes_-bytes;
+    }
+    entries_.erase(it);
+    return true;
+}
 std::optional<Asset> Scheduler::next_decode() {
     // In the initial pipeline the download completion moves directly to
     // decoding; real workers take the resulting jobs off-thread.

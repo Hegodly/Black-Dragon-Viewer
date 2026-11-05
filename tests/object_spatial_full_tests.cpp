@@ -29,7 +29,8 @@ void var2(Bytes& b,const Bytes& data={}) {
     b.insert(b.end(),data.begin(),data.end());
 }
 Bytes block(std::uint32_t id,std::uint32_t parent=0,
-            Byte pcode=9,float x=128.f,const Bytes& extras={}) {
+            Byte pcode=9,float x=128.f,const Bytes& extras={},
+            const Bytes& texture={}) {
     Bytes b;
     u32(b,id); // LocalID
     b.push_back(0U); // State
@@ -44,7 +45,7 @@ Bytes block(std::uint32_t id,std::uint32_t parent=0,
     var1(b,pos);
     u32(b,parent);u32(b,0U); // ParentID and UpdateFlags
     b.insert(b.end(),23U,0U); // Prim path/profile shape
-    var2(b);var1(b);var2(b);var2(b);var1(b);
+    var2(b,texture);var1(b);var2(b);var2(b);var1(b);
     b.insert(b.end(),4U,0U); // TextColor
     var1(b);var1(b);var1(b,extras); // MediaURL, particles, extra
     b.insert(b.end(),66U,0U); // sound + joint data
@@ -196,11 +197,25 @@ int main(){
     if(!objectspatial::decode_full_transforms(
            packet({block(102U,0U,9U,128.f,flex)}),out,&audit)||
        audit.flexible_records!=1U||audit.mesh_sculpt_records!=0U)return 17;
-    Bytes project{1U,0x40U,0U,16U,0U,0U,0U};
-    project.insert(project.end(),16U,0U);
+    // Official LLNetworkData requires 28 bytes for light-image parameters.
+    Bytes project{1U,0x40U,0U,28U,0U,0U,0U};
+    project.insert(project.end(),28U,0U);
     if(!objectspatial::decode_full_transforms(
            packet({block(103U,0U,9U,128.f,project)}),out,&audit)||
        audit.projector_records!=1U||audit.mesh_references!=0U)return 18;
+    Bytes materials{1U,0x80U,0U,12U,0U,0U,0U};
+    materials.insert(materials.end(),12U,0x22U);
+    if(!objectspatial::decode_full_transforms(
+           packet({block(106U,0U,9U,128.f,materials)}),out,&audit)||
+       audit.render_material_records!=1U||
+       audit.other_extra_records!=0U||
+       audit.mesh_references!=0U)return 22;
+    Bytes xmesh{1U,0x70U,0U,4U,0U,0U,0U,0U,0U,0U,0U};
+    if(!objectspatial::decode_full_transforms(
+           packet({block(107U,0U,9U,128.f,xmesh)}),out,&audit)||
+       audit.extended_mesh_records!=1U||
+       audit.mesh_sculpt_records!=0U||
+       audit.mesh_references!=0U)return 23;
     Bytes unknown{1U,0x99U,0U,1U,0U,0U,0U,0U};
     if(!objectspatial::decode_full_transforms(
            packet({block(104U,0U,9U,128.f,unknown)}),out,&audit)||
@@ -219,5 +234,52 @@ int main(){
            packet({malformed_box}),out,&audit)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
        audit.malformed_extra_envelopes!=1U)return 21;
+    // Real High12 TextureEntry: UUID default, exception terminator,
+    // then inverted RGB/A. Do not pretend this is a downloaded texture.
+    Bytes te(16U,0x7fU);
+    te.insert(te.end(),{0U,0U,255U,128U,0U});
+    if(!objectspatial::decode_full_transforms(
+           packet({block(111U,0U,9U,128.f,{},te)}),out,&audit)||
+       out.size()!=1U||!out[0].default_texture_present||
+       !out[0].base_tint_present||
+       out[0].base_r!=1.f||out[0].base_g!=0.f||
+       std::abs(out[0].base_b-127.f/255.f)>.001f||
+       out[0].base_a!=1.f||audit.texture_references!=1U)return 24;
+    Bytes malformed_te=te;malformed_te.resize(19U);
+    if(!objectspatial::decode_full_transforms(
+           packet({block(112U,0U,9U,128.f,{},malformed_te)}),out,&audit)||
+       out.size()!=1U||out[0].base_tint_present)return 25;
+    auto avatar_block=block(901U,0U,47U,201.f);
+    for(unsigned i=0;i<16U;++i)
+        avatar_block[5U+i]=static_cast<Byte>(i+1U);
+    std::vector<std::uint32_t> known_avatar_ids;
+    std::vector<objectspatial::AvatarFullPose> full_avatar_poses;
+    if(!objectspatial::decode_full_transforms(packet({avatar_block}),
+           out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
+       !out.empty()||known_avatar_ids.size()!=1U||
+       known_avatar_ids[0]!=901U||full_avatar_poses.size()!=1U||
+       full_avatar_poses[0].local_id!=901U||
+       full_avatar_poses[0].full_id[0]!=1U||
+       full_avatar_poses[0].full_id[15]!=16U||
+       full_avatar_poses[0].x!=201.f||
+       full_avatar_poses[0].y!=140.f||
+       full_avatar_poses[0].z!=35.f)return 26;
+    // Avatar ObjectData may be prefixed by a 16-byte collision plane.
+    // It must not shift the region pose or confuse the authenticated UUID.
+    avatar_block[40U]=76U;
+    avatar_block.insert(avatar_block.begin()+41U,16U,0U);
+    if(!objectspatial::decode_full_transforms(packet({avatar_block}),
+           out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
+       full_avatar_poses.size()!=1U||
+       full_avatar_poses[0].x!=201.f)return 27;
+    // Reject a non-finite avatar position without fabricating origin.
+    const float bad_pos=std::nanf("");
+    std::uint32_t bits=0U;
+    std::memcpy(&bits,&bad_pos,sizeof(bits));
+    for(unsigned i=0;i<4U;++i)
+        avatar_block[57U+i]=static_cast<Byte>(bits>>(8U*i));
+    if(!objectspatial::decode_full_transforms(packet({avatar_block}),
+           out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
+       !full_avatar_poses.empty()||known_avatar_ids.size()!=1U)return 28;
     return 0;
 }

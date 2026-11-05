@@ -317,9 +317,11 @@ bool trusted_mesh_caps_url(std::wstring_view url) noexcept {
 }
 bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                      std::wstring* mesh_capability_url,
-                     SeedParseReport* report) {
+                     SeedParseReport* report,
+                     std::wstring* texture_capability_url) {
     event_queue_url.clear();
     if(mesh_capability_url)mesh_capability_url->clear();
+    if(texture_capability_url)texture_capability_url->clear();
     if(report)*report={};
     ComPtr<IXMLDOMDocument2> dom;
     if(!parse_dom(xml,dom))return false;
@@ -373,13 +375,16 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                 report->mesh_issue=mesh_url_problem(url,type);
         }
     }
+    if(texture_capability_url)
+        *texture_capability_url=viewer_asset;
     if(mesh_capability_url){
         *mesh_capability_url=!viewer_asset.empty()?std::move(viewer_asset):
                              !getmesh2.empty()?std::move(getmesh2):
                              std::move(getmesh);
     }
     return !event_queue_url.empty()||
-           (mesh_capability_url&&!mesh_capability_url->empty());
+           (mesh_capability_url&&!mesh_capability_url->empty())||
+           (texture_capability_url&&!texture_capability_url->empty());
 }
 bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     event_count=0;
@@ -416,6 +421,85 @@ bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     }
     return id_found&&events_found;
 }
+namespace {
+// Only the trusted TeleportFailed LLSD event has a bounded UI handler.
+// The official SL event body contains Info/Reason. Traverse no more than
+// four LLSD map/array levels. Never echo URLs, capability paths, markup or
+// arbitrary binary fields to the user interface.
+std::string safe_failure_reason(std::wstring_view input){
+    if(input.empty()||input.size()>120U)return {};
+    std::string result;
+    result.reserve(input.size());
+    for(const wchar_t ch:input){
+        const bool allowed=(ch>=L'A'&&ch<=L'Z')||
+            (ch>=L'a'&&ch<=L'z')||
+            (ch>=L'0'&&ch<=L'9')||
+            ch==L' '||ch==L'.'||ch==L','||ch==L':'||
+            ch==L';'||ch==L'?'||ch==L'!'||ch==L'-'||
+            ch==L'\''||ch==L'('||ch==L')';
+        if(!allowed)return {};
+        result.push_back(static_cast<char>(ch));
+    }
+    auto lowercase=result;
+    std::transform(lowercase.begin(),lowercase.end(),lowercase.begin(),
+                   [](char c){return c>='A'&&c<='Z'?char(c+32):c;});
+    if(lowercase.find("http")!=std::string::npos||
+       lowercase.find("token")!=std::string::npos||
+       lowercase.find("capability")!=std::string::npos)return {};
+    return result;
+}
+std::string failure_reason_in(IXMLDOMNode* node,unsigned depth){
+    if(!node||depth>4U)return {};
+    const auto kind=node_name(node);
+    if(kind!=L"map"&&kind!=L"array")return {};
+    ComPtr<IXMLDOMNodeList> members;
+    if(FAILED(node->get_childNodes(members.GetAddressOf()))||!members)
+        return {};
+    long n=0;
+    if(FAILED(members->get_length(&n))||n<0||n>128L)return {};
+    for(long i=0;i<n;++i){
+        ComPtr<IXMLDOMNode> child;
+        if(FAILED(members->get_item(i,child.GetAddressOf()))||!child)
+            return {};
+        if(node_name(child.Get())==L"key"&&i+1<n){
+            const auto name=node_text(child.Get());
+            ComPtr<IXMLDOMNode> value;
+            if(FAILED(members->get_item(i+1,value.GetAddressOf()))||!value)
+                return {};
+            if((name==L"Reason"||name==L"reason")&&
+               node_name(value.Get())==L"string"){
+                const auto reason=safe_failure_reason(node_text(value.Get()));
+                if(!reason.empty())return reason;
+            }
+            const auto nested=failure_reason_in(value.Get(),depth+1U);
+            if(!nested.empty())return nested;
+            ++i;
+        }else{
+            const auto nested=failure_reason_in(child.Get(),depth+1U);
+            if(!nested.empty())return nested;
+        }
+    }
+    return {};
+}
+std::string extract_teleport_failure(IXMLDOMNode* entry){
+    if(!entry||node_name(entry)!=L"map")return {};
+    ComPtr<IXMLDOMNodeList> members;
+    if(FAILED(entry->get_childNodes(members.GetAddressOf()))||!members)
+        return {};
+    long n=0;
+    if(FAILED(members->get_length(&n))||n<0||n>80L)return {};
+    for(long i=0;i+1<n;++i){
+        ComPtr<IXMLDOMNode> key,value;
+        if(FAILED(members->get_item(i,key.GetAddressOf()))||!key||
+           node_name(key.Get())!=L"key"||
+           node_text(key.Get())!=L"body")continue;
+        if(FAILED(members->get_item(i+1,value.GetAddressOf()))||!value)
+            return {};
+        return failure_reason_in(value.Get(),0U);
+    }
+    return {};
+}
+} // namespace
 bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
     out={};
     ComPtr<IXMLDOMDocument2> dom;
@@ -481,10 +565,10 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
                 if(FAILED(members->get_length(&mcount))||mcount>80)return false;
                 std::string safe;
                 for(long m=0;m+1<mcount;++m){
-                    ComPtr<IXMLDOMNode> key,data;
-                    if(FAILED(members->get_item(m,key.GetAddressOf()))||
-                       !key||node_name(key.Get())!=L"key"||
-                       node_text(key.Get())!=L"message")continue;
+                    ComPtr<IXMLDOMNode> member_key,data;
+                    if(FAILED(members->get_item(m,member_key.GetAddressOf()))||
+                       !member_key||node_name(member_key.Get())!=L"key"||
+                       node_text(member_key.Get())!=L"message")continue;
                     if(FAILED(members->get_item(m+1,data.GetAddressOf()))||
                        !data||node_name(data.Get())!=L"string")break;
                     const auto raw=node_text(data.Get());
@@ -499,6 +583,14 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
                         safe.push_back(static_cast<char>(ch));
                     }
                     break;
+                }
+                if(safe=="TeleportFailed"&&
+                   out.notifications.size()<8U){
+                    auto reason=extract_teleport_failure(entry.Get());
+                    std::string notice="Teleport failed";
+                    if(!reason.empty())notice+=": "+reason;
+                    out.notifications.push_back(std::move(notice));
+                    ++out.handled_events;
                 }
                 out.event_types.push_back(safe.empty()?
                     std::string("UnknownEvent"):std::move(safe));
@@ -543,42 +635,58 @@ PollResponse observe_event_queue_response(std::string_view xml) {
         return result;
     }
     result.event_count=frame.event_count;
-    result.unsupported_events=frame.event_count;
+    result.handled_events=frame.handled_events;
+    result.unsupported_events=frame.event_count-frame.handled_events;
+    result.notifications=std::move(frame.notifications);
     result.event_types=std::move(frame.event_types);
     result.structurally_valid=true;
-    // Commit these observations on the UI thread before sending the next
-    // typed cursor ACK. For now no body-dependent SL event actions run:
-    // unsupported messages are intentionally ignored with a visible count.
+    // Commit notifications on the UI thread before advancing the ACK.
+    // Only the bounded TeleportFailed notice is handled; no region
+    // transition or other LLSD event payload executes.
     result.safe_to_ack=true;
     result.next_ack=std::move(frame.id);
     result.diagnostic=result.event_count?
         L"EventQueueGet live: "+
             std::to_wstring(result.event_count)+
-            L" event(s) observed; actions NOT applied":
+            L" event(s) observed; "+std::to_wstring(result.handled_events)+
+            L" teleport failure notice(s) handled":
         L"EventQueueGet heartbeat; no events";
     return result;
 }
 
-MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
+bool jpeg2000_codestream_header(
+    std::span<const std::uint8_t> bytes) noexcept {
+    // Raw J2C codestream SOC marker (FF4F) or standard JP2 signature box.
+    // This is an untrusted-byte precheck, NOT successful image decoding.
+    return (bytes.size()>=2U&&bytes[0]==0xffU&&bytes[1]==0x4fU)||
+        (bytes.size()>=12U&&bytes[0]==0U&&bytes[1]==0U&&
+         bytes[2]==0U&&bytes[3]==12U&&bytes[4]==0x6aU&&
+         bytes[5]==0x50U&&bytes[6]==0x20U&&bytes[7]==0x20U&&
+         bytes[8]==0x0dU&&bytes[9]==0x0aU&&
+         bytes[10]==0x87U&&bytes[11]==0x0aU);
+}
+static MeshReply fetch_asset_with_field(
+    std::wstring capability_url,std::string asset_id,
+    std::wstring_view field,std::size_t max_bytes) {
     MeshReply response{};
     // The mesh endpoint comes from authenticated seed LLSD. Most
     // capabilities are HTTPS; legacy Linden-owned mesh CDN roots can
     // use HTTP with no bearer path/query. Their mesh asset bytes are
     // unencrypted and unauthenticated: limit size and validate decode.
     // Never use the plaintext exception for seed/EventQueue requests.
-    if(!valid_uuid(mesh_id)||mesh_id.size()!=36U||
+    if(!valid_uuid(asset_id)||asset_id.size()!=36U||
        !trusted_mesh_caps_url(capability_url))return response;
     std::wstring suffix;
-    suffix.reserve(mesh_id.size());
-    for(char ch:mesh_id)suffix.push_back(static_cast<wchar_t>(ch));
+    suffix.reserve(asset_id.size());
+    for(char ch:asset_id)suffix.push_back(static_cast<wchar_t>(ch));
     // Match the official Second Life mesh repository URL convention.
     // The capability URL is authenticated and never logged.
     const bool query=capability_url.find(L'?')!=std::wstring::npos;
-    if(query)capability_url+=L"&mesh_id=";
+    if(query)capability_url+=L"&"+std::wstring(field)+L"=";
     else {
         if(!capability_url.empty()&&capability_url.back()!=L'/')
             capability_url.push_back(L'/');
-        capability_url+=L"?mesh_id=";
+        capability_url+=L"?"+std::wstring(field)+L"=";
     }
     capability_url+=suffix;
     Parts target{};
@@ -609,7 +717,7 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
         WINHTTP_NO_HEADER_INDEX))return response;
     response.status=status;
     if(status!=200U)return response;
-    constexpr std::size_t max_bytes=8U*1024U*1024U;
+
     std::array<std::uint8_t,8192> buffer{};
     for(;;){
         DWORD count=0U;
@@ -625,6 +733,20 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
                               buffer.begin(),buffer.begin()+count);
     }
     response.fetched=!response.bytes.empty();
+    return response;
+}
+MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
+    return fetch_asset_with_field(std::move(capability_url),
+        std::move(mesh_id),L"mesh_id",8U*1024U*1024U);
+}
+MeshReply fetch_texture_asset(std::wstring capability_url,
+                              std::string texture_id){
+    auto response=fetch_asset_with_field(std::move(capability_url),
+        std::move(texture_id),L"texture_id",6U*1024U*1024U);
+    if(response.fetched&&!jpeg2000_codestream_header(response.bytes)){
+        response.fetched=false;
+        response.bytes.clear();
+    }
     return response;
 }
 SeedResponse request_seed(std::wstring seed_url) {
@@ -651,7 +773,8 @@ SeedResponse request_seed(std::wstring seed_url) {
     }
     SeedParseReport report{};
     const bool parsed=parse_seed_llsd(reply.body,result.event_queue_url,
-                                     &result.mesh_capability_url,&report);
+                                     &result.mesh_capability_url,&report,
+                                     &result.texture_capability_url);
     result.mesh_named=report.mesh_named;
     result.mesh_rejected=report.mesh_rejected;
     if(!parsed){
@@ -664,7 +787,9 @@ SeedResponse request_seed(std::wstring seed_url) {
     }
     result.event_queue_granted=!result.event_queue_url.empty();
     result.mesh_granted=!result.mesh_capability_url.empty();
-    result.granted=result.event_queue_granted||result.mesh_granted;
+    result.texture_granted=!result.texture_capability_url.empty();
+    result.granted=result.event_queue_granted||result.mesh_granted||
+                   result.texture_granted;
     if(result.event_queue_granted&&result.mesh_granted)
         result.diagnostic=L"CAPS seed OK: EventQueue + mesh granted";
     else if(result.event_queue_granted)

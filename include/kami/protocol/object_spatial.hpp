@@ -1,5 +1,6 @@
 #pragma once
 #include "kami/protocol/lludp.hpp"
+#include <array>
 #include <cstdint>
 #include <string>
 #include <span>
@@ -21,12 +22,26 @@ struct Transform {
     std::string mesh_asset_id; // authenticated ExtraParams id, NOT downloaded
     bool volume_params_seen=false; // full 23-byte SL path/profile available
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
+    std::string default_texture_asset_id; // UUID from verified server TE
+    // Authentic default TextureEntry tint (per-face overrides unavailable).
+    // RGB is baked into DX12 untextured preview; alpha retained for future
+    // translucent material pass. No texture image is implied to be loaded.
+    bool base_tint_present=false;
+    float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
 };
 // Apply a compressed update without incorrectly restoring stale mesh and
 // primitive metadata from an earlier full update. Offline unit-testable.
 [[nodiscard]] bool same_spatial_transform(const Transform&,const Transform&) noexcept;
 [[nodiscard]] Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous);
+// Authenticated full High12 PCode=47 avatar identity and region pose.
+// The simulator UUID is compared to the authenticated login AgentID
+// before this can ever advance the own-avatar camera/world origin.
+struct AvatarFullPose {
+    std::uint32_t local_id=0U;
+    std::array<std::uint8_t,16U> full_id{};
+    float x=0.f,y=0.f,z=0.f;
+};
 // Aggregate only counts, never simulator IDs or user payloads.
 struct FullDecodeAudit {
     std::uint32_t volume=0,non_volume=0,linked=0;
@@ -39,6 +54,9 @@ struct FullDecodeAudit {
     std::uint32_t extra_envelopes=0,malformed_extra_envelopes=0;
     std::uint32_t flexible_records=0,light_records=0;
     std::uint32_t projector_records=0,other_extra_records=0;
+    // Modern official LLNetworkData parameter types, not mesh UUIDs.
+    std::uint32_t extended_mesh_records=0,render_material_records=0;
+    std::uint32_t reflection_probe_records=0;
 };
 struct CompressedDecodeAudit {
     std::uint32_t extras_seen=0,extra_records=0,sculpt_records=0;
@@ -55,11 +73,25 @@ struct CompressedDecodeAudit {
     FullDecodeAudit* audit=nullptr,
     std::vector<std::uint32_t>* parent_references=nullptr,
     std::vector<Transform>* child_transforms=nullptr,
-    std::vector<std::uint32_t>* avatar_root_ids=nullptr) noexcept;
+    std::vector<std::uint32_t>* avatar_root_ids=nullptr,
+    std::vector<AvatarFullPose>* avatar_poses=nullptr) noexcept;
 [[nodiscard]] bool decode_compressed_transforms(
     const lludp::Packet& packet,std::vector<Transform>& out,
     std::vector<Transform>* child_transforms=nullptr,
     CompressedDecodeAudit* audit=nullptr) noexcept;
+// High 15 ImprovedTerseObjectUpdate: update pose of already-known objects.
+// Does not create objects, invent geometry, or interpret avatar outfits.
+struct TersePose {
+    std::uint32_t local_id=0;
+    float x=0.f,y=0.f,z=0.f;
+    float rx=0.f,ry=0.f,rz=0.f,rw=1.f;
+};
+[[nodiscard]] bool decode_terse_poses(
+    const lludp::Packet& packet,std::vector<TersePose>& out) noexcept;
+[[nodiscard]] bool apply_terse_pose(
+    Transform& existing,const TersePose& update) noexcept;
+// Appends the change only when the pose differs enough to warrant a GPU
+// geometry upload. Unknown objects should be ignored by the caller.
 // ObjectUpdateCached is an inventory of local IDs, NOT full object data.
 [[nodiscard]] bool decode_cached_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;

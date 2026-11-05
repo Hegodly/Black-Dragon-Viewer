@@ -1,6 +1,8 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/texture_entry.hpp"
+#include "kami/protocol/official_extra_params.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -56,6 +58,9 @@ struct CompressedVolume {
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     bool extras=false,shape=false,unsupported=false;
+    bool base_tint_present=false,default_texture_present=false;
+    std::string default_texture_asset_id;
+    float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
     std::uint32_t extra_records=0,sculpt_records=0;
     bool legacy_particles=false;
 };
@@ -108,16 +113,25 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     if(count>32U)return out;
     for(unsigned i=0;i<count;++i){
         if(!has(6U))return out;
-        const auto type=u16(data,at);
         const std::size_t length=u32(data,at+2U);
         at+=6U;
         if(length>4096U||!has(length))return out;
-        ++out.extra_records;
-        if(type==0x30U && length==17U)++out.sculpt_records;
         at+=length;
     }
+    // Validate the complete envelope using Linden Lab's parameter type
+    // sizes (0x30 sculpt, 0x70 extended flags, 0x80 render material).
+    const auto extras=data.subspan(first,at-first);
+    KamiSlExtraParamsV1 summary{};
+    summary.struct_size=sizeof(summary);
+    if(!kami_sl_decode_extra_params_v1(extras.data(),
+          static_cast<std::uint32_t>(extras.size()),&summary)){
+        out.unsupported=true;
+        return out;
+    }
+    out.extra_records=summary.records;
+    out.sculpt_records=summary.sculpt;
     out.extras=true;
-    out.mesh=mesh::mesh_asset_from_extras(data.subspan(first,at-first));
+    out.mesh=mesh::mesh_asset_from_extras(extras);
     // LLViewerObject processes sound and NV fields BEFORE
     // LLVOVolume::unpackVolumeParams() consumes 23 shape bytes.
     if(special&0x10U){
@@ -128,6 +142,27 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     if(!has(23U))return out;
     out.primitive=classify_simple_shape(data.subspan(at,23U));
     out.shape=true;
+    at+=23U;
+    // LLVOVolume unpacks TextureEntry immediately after the volume
+    // parameters. LLDataPackerBinaryBuffer uses LE S32 length then TE.
+    // Malformed optional TE data never produces a fabricated color.
+    if(has(4U)){
+        const std::uint32_t length=u32(data,at);
+        at+=4U;
+        if(length<=4096U&&has(length)&&length>=16U){
+            const auto te=data.subspan(at,length);
+            texture::Base tint{};
+            if(texture::decode_base(te,tint)){
+                out.base_tint_present=true;
+                out.default_texture_asset_id=texture::default_image_uuid(tint);
+                out.base_r=tint.red;out.base_g=tint.green;
+                out.base_b=tint.blue;out.base_a=tint.alpha;
+                out.default_texture_present=
+                    std::any_of(tint.image_id.begin(),tint.image_id.end(),
+                                [](std::uint8_t value){return value!=0U;});
+            }
+        }
+    }
     if(!out.mesh.empty())out.primitive=PrimitiveKind::Unknown;
     return out;
 }
@@ -185,6 +220,11 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.mesh_asset_id=shape.mesh;
         t.primitive=shape.primitive;
         t.volume_params_seen=shape.shape;
+        t.default_texture_present=shape.default_texture_present;
+        t.default_texture_asset_id=shape.default_texture_asset_id;
+        t.base_tint_present=shape.base_tint_present;
+        t.base_r=shape.base_r;t.base_g=shape.base_g;
+        t.base_b=shape.base_b;t.base_a=shape.base_a;
         if(shape.extras)++frame.extras_seen;
         frame.extra_records+=shape.extra_records;
         frame.sculpt_records+=shape.sculpt_records;
@@ -219,7 +259,11 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.rx==b.rx&&a.ry==b.ry&&a.rz==b.rz&&a.rw==b.rw&&
         a.primitive==b.primitive&&a.mesh_asset_id==b.mesh_asset_id&&
         a.volume_params_seen==b.volume_params_seen&&
-        a.default_texture_present==b.default_texture_present;
+        a.default_texture_present==b.default_texture_present&&
+        a.default_texture_asset_id==b.default_texture_asset_id&&
+        a.base_tint_present==b.base_tint_present&&
+        a.base_r==b.base_r&&a.base_g==b.base_g&&
+        a.base_b==b.base_b&&a.base_a==b.base_a;
 }
 Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous){
@@ -234,6 +278,14 @@ Transform merge_compressed_transform(
     }
     merged.default_texture_present=
         merged.default_texture_present||previous.default_texture_present;
+    if(merged.default_texture_asset_id.empty()&&
+       !incoming.base_tint_present)
+        merged.default_texture_asset_id=previous.default_texture_asset_id;
+    if(!incoming.base_tint_present&&previous.base_tint_present){
+        merged.base_tint_present=true;
+        merged.base_r=previous.base_r;merged.base_g=previous.base_g;
+        merged.base_b=previous.base_b;merged.base_a=previous.base_a;
+    }
     // A validated sculpt/mesh marker always takes priority over a
     // previous simple-prim classification.
     if(!merged.mesh_asset_id.empty())

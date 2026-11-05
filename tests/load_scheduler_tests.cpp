@@ -47,5 +47,36 @@ int main(){
     if(!queue.request(c,Kind::OwnAvatar,0.f,true,1U))return 13;
     const auto last=queue.next_download();
     if(!last||last->id!=c)return 14;
+    if(!queue.download_finished(c,0U,false)||queue.retry_failed(a))
+        return 15;
+    // A failed transient download may only be retried explicitly three
+    // times, never requeued automatically or after a malformed decode.
+    for(unsigned retry=1U;retry<=Scheduler::kMaxTransientRetries;++retry){
+        if(!queue.retry_failed(c)||queue.find(c)->retry_count!=retry||
+           queue.find(c)->stage!=Stage::Queued)return 16;
+        const auto attempt=queue.next_download();
+        if(!attempt||attempt->id!=c||
+           !queue.download_finished(c,0U,false))return 17;
+    }
+    if(queue.retry_failed(c)||queue.next_download()||
+       queue.find(c)->stage!=Stage::Failed)return 18;
+    queue.clear();
+    if(queue.find(c)||queue.statistics().queued!=0U)return 19;
+    // A mesh referenced by a now-despawned linkset can be evicted,
+    // leaving capacity for other assets. Never cancel an active worker.
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,20U))return 20;
+    auto active=queue.next_download();
+    if(!active||active->id!=a||queue.forget_finished(a))return 21;
+    if(!queue.download_finished(a,20U,true))return 22;
+    auto decoded=queue.next_decode();
+    if(!decoded||decoded->id!=a||
+       queue.forget_finished(a)||!queue.decode_finished(a,true))
+       return 23;
+    if(!queue.next_gpu_upload(20U)||!queue.gpu_uploaded(a)||
+       queue.statistics().gpu_uploaded_bytes!=20U)return 24;
+    if(!queue.forget_finished(a)||queue.find(a)||
+       queue.statistics().gpu_uploaded_bytes!=0U)return 25;
+    if(!queue.request(a,Kind::VisibleMesh,2.f,true,20U)||
+       !queue.next_download())return 26;
     return 0;
 }

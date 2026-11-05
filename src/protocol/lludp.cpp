@@ -1,5 +1,7 @@
 #include "kami/protocol/lludp.hpp"
+#include "kami/protocol/official_lludp_zerocode.h"
 #include <algorithm>
+#include <array>
 #include <limits>
 
 namespace kami::protocol::lludp {
@@ -18,38 +20,45 @@ void write_be32(std::vector<std::uint8_t>& to,std::uint32_t n){
     to.push_back(static_cast<std::uint8_t>(n>>8));
     to.push_back(static_cast<std::uint8_t>(n));
 }
+// Decode/encode zero-coded LLUDP message bytes using the official Linden
+// Lab LLZeroCode algorithm in the separately replaceable LGPL codec DLL.
+// The legacy KAMI circuit still handles message templates and ACKs until
+// the official simulator backend is integrated.
 bool uncompress(std::span<const std::uint8_t> bytes,
                 std::vector<std::uint8_t>& out) {
     out.clear();
-    for(std::size_t i=0;i<bytes.size();++i) {
-        const auto b=bytes[i];
-        if(b!=0U){
-            if(out.size()>=kMaxBody)return false;
-            out.push_back(b);
-        } else {
-            if(++i>=bytes.size()||bytes[i]==0U||
-               out.size()+bytes[i]>kMaxBody)return false;
-            out.insert(out.end(),bytes[i],0U);
-        }
-    }
-    return !out.empty();
+    if(bytes.empty()||bytes.size()>kMaxWire)return false;
+    // Decode into bounded stack storage, not a new 16 KiB heap block
+    // for every simulator packet. Copy only the valid decoded region.
+    std::array<std::uint8_t,kMaxBody> scratch{};
+    const auto written=kami_sl_official_zerocode_decode(
+        bytes.data(),static_cast<std::uint32_t>(bytes.size()),
+        scratch.data(),static_cast<std::uint32_t>(scratch.size()));
+    if(written<=0)return false;
+    out.assign(scratch.data(),scratch.data()+written);
+    return true;
 }
 bool compress(std::span<const std::uint8_t> body,
-              std::vector<std::uint8_t>& out){
+              std::vector<std::uint8_t>& out,bool& compressed) {
     out.clear();
-    for(std::size_t i=0;i<body.size();) {
-        if(body[i]!=0U) {
-            out.push_back(body[i++]);
-        } else {
-            std::size_t count=0;
-            while(i<body.size()&&body[i]==0U&&count<255U) {
-                ++i;++count;
-            }
-            out.push_back(0U);
-            out.push_back(static_cast<std::uint8_t>(count));
-        }
+    compressed=false;
+    if(body.empty()||body.size()>kMaxBody)return false;
+    // Avoid a temporary heap allocation proportional to the maximum
+    // encoded packet size. The DLL's bounded encoder owns validation.
+    std::array<std::uint8_t,2U*kMaxBody+12U> scratch{};
+    const auto written=kami_sl_official_zerocode_encode(
+        body.data(),static_cast<std::uint32_t>(body.size()),
+        scratch.data(),static_cast<std::uint32_t>(scratch.size()));
+    if(written<0)return false;
+    if(written==0){
+        // Official writer refuses to set the zero-code bit when compression
+        // doesn't save bytes. The old KAMI codec set it unconditionally.
+        out.assign(body.begin(),body.end());
+        return true;
     }
-    return !out.empty();
+    compressed=true;
+    out.assign(scratch.data(),scratch.data()+written);
+    return true;
 }
 } // namespace
 bool message_number(std::span<const std::uint8_t> body,
@@ -114,18 +123,21 @@ bool encode(const Packet& packet,std::vector<std::uint8_t>& output) {
        return false;
     std::uint32_t id=0;unsigned id_bytes=0;
     if(!message_number(packet.body,id,id_bytes))return false;
-    std::vector<std::uint8_t> wire;
-    wire.reserve(packet.body.size()+packet.extra_header.size()+32U);
-    wire.push_back(packet.flags);
-    write_be32(wire,packet.sequence);
-    wire.push_back(static_cast<std::uint8_t>(packet.extra_header.size()));
-    wire.insert(wire.end(),packet.extra_header.begin(),packet.extra_header.end());
     std::vector<std::uint8_t> data;
+    std::uint8_t actual_flags=packet.flags;
     if(packet.flags&kZerocoded){
-        if(!compress(packet.body,data))return false;
+        bool compressed=false;
+        if(!compress(packet.body,data,compressed))return false;
+        if(!compressed)actual_flags&=static_cast<std::uint8_t>(~kZerocoded);
     } else {
         data=packet.body;
     }
+    std::vector<std::uint8_t> wire;
+    wire.reserve(data.size()+packet.extra_header.size()+32U);
+    wire.push_back(actual_flags);
+    write_be32(wire,packet.sequence);
+    wire.push_back(static_cast<std::uint8_t>(packet.extra_header.size()));
+    wire.insert(wire.end(),packet.extra_header.begin(),packet.extra_header.end());
     wire.insert(wire.end(),data.begin(),data.end());
     if(packet.flags&kAppendedAcks){
         for(const auto ack:packet.appended_acks)write_be32(wire,ack);
