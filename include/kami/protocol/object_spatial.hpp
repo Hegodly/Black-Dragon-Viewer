@@ -21,6 +21,11 @@ struct Transform {
     std::string mesh_asset_id; // authenticated ExtraParams id, NOT downloaded
     bool volume_params_seen=false; // full 23-byte SL path/profile available
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
+    // Authentic default TextureEntry tint (per-face overrides unavailable).
+    // RGB is baked into DX12 untextured preview; alpha retained for future
+    // translucent material pass. No texture image is implied to be loaded.
+    bool base_tint_present=false;
+    float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
 };
 // Apply a compressed update without incorrectly restoring stale mesh and
 // primitive metadata from an earlier full update. Offline unit-testable.
