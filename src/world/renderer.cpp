@@ -870,7 +870,7 @@ bool Renderer::set_verified_live_terrain(
     const auto primitives=build_live_primitive_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?1024U:
+        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?2048U:
             graphics_.preset==graphics::Preset::Balanced?512U:
             graphics_.preset==graphics::Preset::Performance?256U:128U,circuit.known_avatar_roots(),
         live_texture_layers_,pbr_table.faces);
@@ -887,7 +887,7 @@ bool Renderer::set_verified_live_terrain(
         circuit.known_avatar_roots(),
         circuit.decoded_mesh_assets(),
         agent.x,agent.y,agent.z,std::min<std::size_t>(graphics_.mesh_triangles(),
-            scene.vertices.size()<1999000U?(1999000U-scene.vertices.size())/3U:0U),live_texture_layers_,pbr_table.faces);
+            scene.vertices.size()<3999000U?(3999000U-scene.vertices.size())/3U:0U),live_texture_layers_,pbr_table.faces);
     const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
         mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
@@ -900,7 +900,7 @@ bool Renderer::set_verified_live_terrain(
         scene.vertices.insert(scene.vertices.end(),
                               marker.vertices.begin(),marker.vertices.end());
     }
-    if(scene.vertices.empty()||scene.vertices.size()>2000000U){
+    if(scene.vertices.empty()||scene.vertices.size()>4000000U){
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
@@ -1482,4 +1482,5 @@ void Renderer::shutdown() noexcept {
     shadow_srv_heap_.Reset();
 }
 } // namespace kami::world
+
 

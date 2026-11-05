@@ -704,6 +704,10 @@ static MeshReply fetch_asset_with_field(
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         target.secure?WINHTTP_FLAG_SECURE:0));
     if(!req.value)return response;
+    // Decode HTTP content encoding before the bounded response-body read.
+    // Some CDNs serve gzipped/deflated material JSON/LLSD responses.
+    DWORD decompression=WINHTTP_DECOMPRESSION_FLAG_GZIP|WINHTTP_DECOMPRESSION_FLAG_DEFLATE;
+    if(!WinHttpSetOption(req.value,WINHTTP_OPTION_DECOMPRESSION,&decompression,sizeof(decompression)))return response;
     DWORD redirects=WINHTTP_DISABLE_REDIRECTS;
     if(!WinHttpSetOption(req.value,WINHTTP_OPTION_DISABLE_FEATURE,
                          &redirects,sizeof(redirects)))return response;

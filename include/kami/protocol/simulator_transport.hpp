@@ -129,6 +129,7 @@ public:
     [[nodiscard]] const std::set<std::uint32_t>& known_avatar_roots() const noexcept {
         return avatar_root_ids_;
     }
+    void set_maximum_world_detail(bool value) noexcept {maximum_world_detail_=value;}
     [[nodiscard]] bool set_mesh_capability(std::wstring capability) noexcept;
     [[nodiscard]] bool mesh_capability_ready() const noexcept {
         return !mesh_capability_url_.empty();
@@ -142,6 +143,7 @@ public:
     [[nodiscard]] const pbr::Materials& decoded_materials() const noexcept {return loaded_materials_;}
     [[nodiscard]] const pbr::Overrides& material_overrides() const noexcept {return material_overrides_;}
     [[nodiscard]] std::size_t material_failures() const noexcept {return material_failures_;}
+    [[nodiscard]] pbr::AssetFormat material_last_format() const noexcept {return material_last_format_;}
     [[nodiscard]] unsigned material_last_http() const noexcept {return material_last_http_;}
     [[nodiscard]] std::size_t material_last_bytes() const noexcept {return material_last_bytes_;}
     [[nodiscard]] std::size_t material_http_failures() const noexcept {return material_http_failures_;}
@@ -309,6 +311,7 @@ private:
     pbr::Overrides material_overrides_;
     struct MaterialResult {
         std::string id;unsigned status=0U;bool fetched=false,decoded=false;
+        pbr::AssetFormat format=pbr::AssetFormat::Unknown;
         std::size_t bytes=0U;pbr::DecodeError error=pbr::DecodeError::None;
         pbr::Material material{};
     };
@@ -316,6 +319,7 @@ private:
     struct MaterialAttempt {unsigned tries=0U;std::chrono::steady_clock::time_point next{};};
     std::map<std::string,MaterialAttempt> material_attempts_;
     std::size_t material_failures_=0U,material_http_failures_=0U,material_decode_failures_=0U;
+    pbr::AssetFormat material_last_format_=pbr::AssetFormat::Unknown;
     unsigned material_last_http_=0U;std::size_t material_last_bytes_=0U;
     pbr::DecodeError material_last_decode_error_=pbr::DecodeError::None;
     std::chrono::steady_clock::time_point material_last_scan_{};
@@ -355,8 +359,9 @@ private:
     // signed capability URLs are kept in these retry records.
     std::map<std::string,std::chrono::steady_clock::time_point>
         mesh_retry_after_;
-    static constexpr std::size_t kMaxWorldMeshAssets=2048U;
-    static constexpr std::size_t kMaxWorldMeshTriangles=2000000U;
+    static constexpr std::size_t kMaxWorldMeshAssets=4096U;
+    static constexpr std::size_t kMaxWorldMeshTriangles=4000000U;
+    bool maximum_world_detail_=false;
     std::map<std::string,mesh::LOD> loaded_meshes_;
     std::size_t loaded_mesh_triangle_count_=0U;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;

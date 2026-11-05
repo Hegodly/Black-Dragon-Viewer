@@ -3,6 +3,7 @@
 #include "kami/world/live_primitive_geometry.hpp"
 #include <cstdio>
 #include <algorithm>
+#include "kami/graphics/settings.hpp"
 #include <cstring>
 #include "kami/world/environment.hpp"
 using namespace kami;
@@ -42,12 +43,14 @@ int run(){
         auto unchanged=m;auto error=DecodeError::None;
         return !decode_asset(bytes,unchanged,&error)&&error==expected&&unchanged==m;
     };
-    for(const std::string header:std::vector<std::string>{"<? LLSD/XML ?>\n","<? LLSD/Notation ?>\n","<? arbitrary ?>\n","<? LLSD/Binary ",std::string(80,' ')}){
+    for(const auto& [header,error]:std::map<std::string,DecodeError>{
+        {"<? LLSD/XML ?>\n",DecodeError::XML},{"<? LLSD/Notation ?>\n",DecodeError::Notation},
+        {"<? arbitrary ?>\n",DecodeError::Header},{"<? LLSD/Binary ",DecodeError::Header}}){
         auto bytes=bare;bytes.insert(bytes.begin(),header.begin(),header.end());
-        if(!check_bad(bytes,DecodeError::Envelope))return 27;
+        if(!check_bad(bytes,error))return 27;
     }
     auto trailing=canonical;trailing.push_back('x');
-    if(!check_bad(trailing,DecodeError::Envelope)||!check_bad({},DecodeError::Size))return 28;
+    if(!check_bad(trailing,DecodeError::Trailing)||!check_bad({},DecodeError::Size))return 28;
     auto version_bad=asset(json);const std::string version="1.1";
     const auto where=std::search(version_bad.begin(),version_bad.end(),version.begin(),version.end());
     if(where==version_bad.end())return 29;*where='2';
@@ -56,6 +59,39 @@ int run(){
     const auto type_at=std::search(type_bad.begin(),type_bad.end(),type.begin(),type.end());
     if(type_at==type_bad.end())return 31;*type_at='x';
     if(!check_bad(type_bad,DecodeError::Type)||!check_bad(asset("not json"),DecodeError::GLTF))return 32;
+    const auto escape=[](const std::string& value){
+        std::string out;for(const char c:value){
+            if(c=='&')out+="&amp;";else if(c=='<')out+="&lt;";else if(c=='>')out+="&gt;";
+            else if(c=='"')out+="&quot;";else out+=c;
+        }return out;
+    };
+    const auto bytes=[](const std::string& text){return std::vector<std::uint8_t>(text.begin(),text.end());};
+    const std::string xml="<llsd><map><key>version</key><string>1.1</string><key>type</key><string>GLTF 2.0</string><key>data</key><string>"+escape(json)+"</string></map></llsd>";
+    const std::string cdata="<llsd><map><key>version</key><string>1.1</string><key>type</key><string>GLTF 2.0</string><key>data</key><string><![CDATA["+json+"]]></string></map></llsd>";
+    const std::string notation="{'version':'1.1','type':'GLTF 2.0','data':s("+std::to_string(json.size())+")'"+json+"'}";
+    for(const auto& input:std::vector<std::string>{xml,"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"+xml,
+        "<? LLSD/XML ?>\n"+xml,cdata,"\xef\xbb\xbf"+xml,notation,"<? lLsD/NoTaTiOn ?>\n"+notation}){
+        Material decoded;decode_error=DecodeError::Envelope;
+        if(!decode_asset(bytes(input),decoded,&decode_error)||decoded!=m||decode_error!=DecodeError::None)return 33;
+    }
+    const std::string json_envelope="{\"version\":\"1.1\",\"type\":\"GLTF 2.0\",\"data\":\"";
+    // JSON quoted strings are a valid subset of notation; escaping the
+    // nested glTF text must preserve its own JSON escape sequences.
+    std::string escaped;for(char c:json){if(c=='\\'||c=='"')escaped+='\\';escaped+=c;}
+    if(!decode_asset(bytes(json_envelope+escaped+"\"}"),from_official)||from_official!=m)return 34;
+    if(asset_format(canonical)!=AssetFormat::Binary||asset_format(bytes(xml))!=AssetFormat::XML||
+       asset_format(bytes(notation))!=AssetFormat::Notation||asset_format(std::vector<std::uint8_t>{0x1f,0x8b})!=AssetFormat::Gzip)return 35;
+    for(const auto& input:std::vector<std::string>{xml+"junk",xml+xml,"<llsd><array/></llsd>",
+        "<!DOCTYPE llsd SYSTEM 'https://example.invalid/never-fetch'>"+xml,
+        "<llsd><map><key>data</key><string><map/></string></map></llsd>",
+        "<llsd><map><key>version</key><string>1.1</string><key>version</key><string>1.0</string></map></llsd>"})
+        if(!check_bad(bytes(input),DecodeError::XML))return 36;
+    if(!check_bad(bytes("{'version':s(99)'1.1'}"),DecodeError::Notation)||
+       !check_bad(bytes("{'version':'1.1','version':'1.1'}"),DecodeError::Notation)||
+       !check_bad(std::vector<std::uint8_t>{0x1f,0x8b,0,0},DecodeError::Compressed))return 37;
+    auto wrong_value=bare;const auto value_tag=std::find(wrong_value.begin()+10U,wrong_value.end(),std::uint8_t('s'));
+    if(value_tag==wrong_value.end())return 38;*value_tag='b';
+    if(!check_bad(wrong_value,DecodeError::Value))return 39;
     const auto prior=m;auto truncated=asset(json);truncated.pop_back();
     if(decode_asset(truncated,m)||m!=prior)return 2;
     auto remote=json;remote.replace(remote.find(image),image.size(),"https://example.com/image.png");
@@ -114,6 +150,11 @@ int run(){
     if(!selected.server||!selected.box||selected.center!=std::array<float,3>{0,0,0})return 23;
     const auto fallback=world::select_environment_probe({{77U,volume}},{0,0,0},{1000,0,0});
     if(fallback.server||fallback.center[0]!=1000)return 24;
+    graphics::Settings settings;settings.preset=graphics::Preset::Quality;
+    if(settings.mesh_triangles()!=1000000U)return 40;
+    settings.preset=graphics::Preset::Balanced;if(settings.mesh_triangles()!=180000U)return 41;
+    settings.preset=graphics::Preset::Performance;if(settings.mesh_triangles()!=80000U)return 42;
+    settings.preset=graphics::Preset::Potato;if(settings.mesh_triangles()!=24000U)return 43;
     return 0;
 }
 }

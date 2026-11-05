@@ -193,6 +193,16 @@ bool check_pbr_pixels(kami::world::Renderer& renderer) {
     }asset.push_back('}');
     protocol::pbr::Material m;protocol::pbr::DecodeError error;
     if(!protocol::pbr::decode_asset(asset,m,&error)||error!=protocol::pbr::DecodeError::None)return false;
+    const auto binary_material=m;
+    const std::string xml="<?xml version=\"1.0\"?><llsd><map><key>version</key><string>1.1</string><key>type</key><string>GLTF 2.0</string><key>data</key><string><![CDATA["+json+"]]></string></map></llsd>";
+    if(!protocol::pbr::decode_asset(std::vector<std::uint8_t>(xml.begin(),xml.end()),m,&error)||m!=binary_material)return false;
+    Result xml_pixels;
+    if(!render(m,xml_pixels)||xml_pixels.magenta<64U)return false;
+    const std::string notation="<?llsd/notation?>\n{'version':'1.1','type':'GLTF 2.0','data':s("+std::to_string(json.size())+")'"+json+"'}";
+    if(!protocol::pbr::decode_asset(std::vector<std::uint8_t>(notation.begin(),notation.end()),m,&error)||m!=binary_material)return false;
+    Result notation_pixels;
+    if(!render(m,notation_pixels)||notation_pixels.hash!=xml_pixels.hash)return false;
+    std::wcout<<L"KAMI MATERIAL ENVELOPE FORMATS PIXELS VERIFIED: binary, XML and length-delimited notation agree\n";
     Result opaque,mask,full,half,empty;
     // OPAQUE must ignore image alpha. A green legacy tint must not replace
     // the PBR material's magenta base map.
