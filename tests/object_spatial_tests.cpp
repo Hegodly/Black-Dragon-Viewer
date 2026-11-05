@@ -285,5 +285,64 @@ int main(){
        alias_audit.mesh_references!=0U)
         return 41;
 
+    // R67: stream by the actual composed child position, not merely
+    // the parent root. A building whose root lies outside the 144m
+    // stream radius may contain perfectly visible linked mesh pieces.
+    {
+        using Transform=objectspatial::Transform;
+        Transform remote_root{1001U,252.f,140.f,35.f,2.f,2.f,2.f};
+        Transform near_child{1002U,-127.f,0.f,0.f,1.f,1.f,1.f};
+        near_child.parent_id=1001U;
+        const std::map<std::uint32_t,Transform> roots{
+            {1001U,remote_root}};
+        const std::map<std::uint32_t,Transform> links{
+            {1002U,near_child}};
+        std::array<float,3> world_position{};
+        if(!objectspatial::resolve_world_position(
+                near_child,roots,links,{},world_position)||
+           std::abs(world_position[0]-125.f)>.001f||
+           std::abs(world_position[1]-140.f)>.001f||
+           std::abs(world_position[2]-35.f)>.001f||
+           std::abs(remote_root.x-50.f)<=144.f||
+           std::abs(world_position[0]-50.f)>144.f)
+            return 42;
+        constexpr float half=0.7071067811865476f;
+        auto rotated_root=remote_root;
+        rotated_root.x=128.f;rotated_root.rz=half;rotated_root.rw=half;
+        auto rotated_child=near_child;
+        rotated_child.x=1.f;
+        auto grandchild=near_child;grandchild.local_id=1003U;
+        grandchild.parent_id=1002U;
+        grandchild.x=0.f;grandchild.y=2.f;
+        const std::map<std::uint32_t,Transform> rotated_roots{
+            {1001U,rotated_root}};
+        const std::map<std::uint32_t,Transform> rotated_links{
+            {1002U,rotated_child},{1003U,grandchild}};
+        if(!objectspatial::resolve_world_position(
+                rotated_child,rotated_roots,rotated_links,{},
+                world_position)||
+           std::abs(world_position[0]-128.f)>.001f||
+           std::abs(world_position[1]-141.f)>.001f)return 43;
+        if(!objectspatial::resolve_world_position(
+                grandchild,rotated_roots,rotated_links,{},
+                world_position)||
+           std::abs(world_position[0]-126.f)>.001f||
+           std::abs(world_position[1]-141.f)>.001f)return 44;
+        const auto retained=world_position;
+        if(objectspatial::resolve_world_position(
+                near_child,{},links,{},world_position)||
+           world_position!=retained)return 45;
+        auto cycle=near_child;cycle.parent_id=1002U;
+        if(objectspatial::resolve_world_position(
+                cycle,roots,{{1002U,cycle}},{},world_position)||
+           world_position!=retained)return 46;
+        auto nonunit=rotated_root;nonunit.rw=3.f;
+        if(objectspatial::resolve_world_position(
+                near_child,{{1001U,nonunit}},links,{},world_position))
+            return 47;
+        if(objectspatial::resolve_world_position(
+                near_child,roots,links,{1001U},world_position))
+            return 48;
+    }
     return 0;
 }
