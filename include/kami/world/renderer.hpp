@@ -264,7 +264,7 @@ private:
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
     bool texture_upload_pending_=false;
-    static constexpr UINT kLiveTextureLayers=24U;
+    static constexpr UINT kLiveTextureLayers=48U;
     static constexpr UINT kLiveTextureSize=256U;
     std::size_t primitive_eligible_=0;
     std::size_t primitive_unresolved_=0;
