@@ -192,8 +192,34 @@ void Circuit::maybe_fetch_mesh() noexcept {
                         ++spatial_object_revision_;
                     }else ++mesh_failure_count_;
                 }
-            }else ++mesh_failure_count_;
+            }else {
+                ++mesh_failure_count_;
+                // Failed HTTP connections / throttling are recoverable,
+                // unlike 4xx missing assets or a malformed mesh payload.
+                const auto status=result.http_status;
+                const bool transient=status==0U||status==429U||
+                    status==500U||status==502U||status==503U||
+                    status==504U;
+                const auto* job=mesh_scheduler_.find(result.id);
+                if(transient&&job&&
+                   job->retry_count<load::Scheduler::kMaxTransientRetries&&
+                   mesh_retry_after_.size()<128U){
+                    const auto delay=std::chrono::seconds(
+                        1U<<std::min(job->retry_count,3U));
+                    mesh_retry_after_.insert_or_assign(
+                        result.id,std::chrono::steady_clock::now()+delay);
+                }
+            }
         }catch(...){++mesh_failure_count_;}
+    }
+    // Requeue only failed transient network fetches once their quiet period
+    // elapses. A 404 or bad geometry is not retried endlessly.
+    const auto retry_now=std::chrono::steady_clock::now();
+    for(auto it=mesh_retry_after_.begin();it!=mesh_retry_after_.end();){
+        if(retry_now>=it->second){
+            (void)mesh_scheduler_.retry_failed(it->first);
+            it=mesh_retry_after_.erase(it);
+        }else ++it;
     }
     if(mesh_worker_.valid()||mesh_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
@@ -210,6 +236,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
         result.id=id;
         const auto reply=caps::fetch_mesh_asset(std::move(url),id);
         result.fetched=reply.fetched;
+        result.http_status=reply.status;
         result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
         if(reply.fetched)
             result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
@@ -646,6 +673,7 @@ void Circuit::stop() noexcept {
     }
     reliable_window_.clear();
     loaded_meshes_.clear();
+    mesh_retry_after_.clear();
     mesh_download_count_=mesh_failure_count_=0U;
     mesh_last_start_={};
     mesh_scan_revision_=~std::uint64_t{0};
