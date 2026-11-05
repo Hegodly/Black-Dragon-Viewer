@@ -2,6 +2,7 @@
 #include "kami/appearance.hpp"
 #include "kami/features/viewer_foundation.hpp"
 #include "kami/diagnostics/seven_systems.hpp"
+#include "kami/world/scene_diff.hpp"
 
 #include <windowsx.h>
 #include <wincred.h>
@@ -1975,7 +1976,14 @@ void Window::update_sl_connection() {
             live_water_status_=L"R9 water DX12 upload unavailable";
     }
     const auto land_revision=sl_circuit_.land_revision();
-    const auto spatial_revision=sl_circuit_.spatial_object_revision();
+    // Local avatar full/terse pose updates are not world-geometry edits.
+    // Rebase from an authenticated movement position after 12m instead.
+    const auto spatial_revision=sl_circuit_.spatial_render_revision();
+    const auto& scene_agent=sl_circuit_.movement_position();
+    const bool scene_rebase=scene_agent.verified&&
+        world::world_scene_rebase_due(
+            {scene_agent.x,scene_agent.y,scene_agent.z},
+            live_scene_uploaded_origin_,live_scene_origin_valid_);
     const auto now=std::chrono::steady_clock::now();
     // Coalesce bursts of land patches. Upload only verified, finite
     // decoded elevations and never block the UI on every network packet.
@@ -1983,14 +1991,18 @@ void Window::update_sl_connection() {
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
        world_renderer_.ready()&&land_revision>0U&&
        (land_revision!=live_land_uploaded_revision_||
-        spatial_revision!=live_spatial_uploaded_revision_)&&
+        (spatial_revision!=live_spatial_uploaded_revision_||
+         scene_rebase))&&
        (live_land_last_upload_==std::chrono::steady_clock::time_point{}||
         now-live_land_last_upload_>=std::chrono::milliseconds(800))){
         live_land_last_upload_=now;
         if(world_renderer_.set_verified_live_terrain(sl_circuit_)){
             live_land_uploaded_revision_=land_revision;
             live_spatial_uploaded_revision_=spatial_revision;
-            live_water_status_=L"R19 DX12 live land and object bounds";
+            live_scene_uploaded_origin_={
+                scene_agent.x,scene_agent.y,scene_agent.z};
+            live_scene_origin_valid_=scene_agent.verified;
+            live_water_status_=L"R51 DX12 coalesced land and mesh world";
         }else{
             live_water_status_=L"R12 land geometry could not be uploaded";
         }
@@ -2004,6 +2016,8 @@ void Window::update_sl_connection() {
         live_land_uploaded_revision_=0;
         live_spatial_uploaded_revision_=0;
         live_land_last_upload_={};
+        live_scene_uploaded_origin_={};
+        live_scene_origin_valid_=false;
         live_water_attempted_=false;
         live_water_status_.clear();
     }
