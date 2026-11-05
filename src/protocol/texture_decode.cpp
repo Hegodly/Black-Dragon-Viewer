@@ -55,7 +55,7 @@ std::uint8_t to_byte(std::int32_t raw,const opj_image_comp_t& comp){
     return static_cast<std::uint8_t>(
         (clamped*255+maximum/2U)/maximum);
 }
-bool compatible(const opj_image_t& image){
+bool compatible(const opj_image_t& image,bool pixel_storage_ready){
     if(image.x1<=image.x0||image.y1<=image.y0||
        !image.comps||image.numcomps==0U||image.numcomps>4U)
         return false;
@@ -67,7 +67,7 @@ bool compatible(const opj_image_t& image){
     if(image.numcomps==2U)return false; // unsupported gray+alpha
     for(std::uint32_t c=0;c<image.numcomps;++c){
         const auto& comp=image.comps[c];
-        if(!comp.data||comp.w!=width||comp.h!=height||
+        if((pixel_storage_ready&&!comp.data)||comp.w!=width||comp.h!=height||
            comp.prec==0U||comp.prec>16U||
            comp.dx!=1U||comp.dy!=1U||
            comp.x0!=image.x0||comp.y0!=image.y0)
@@ -109,10 +109,10 @@ bool decode_jpeg2000(std::span<const std::uint8_t> j2c,
         if(!opj_read_header(stream.get(),codec.get(),&decoded))
             return false;
         Image image(decoded,&opj_image_destroy);
-        if(!image||!compatible(*image))return false;
+        if(!image||!compatible(*image,false))return false;
         if(!opj_decode(codec.get(),stream.get(),image.get())||
            !opj_end_decompress(codec.get(),stream.get())||
-           !compatible(*image))return false;
+           !compatible(*image,true))return false;
         DecodedTexture ready{};
         ready.width=image->x1-image->x0;
         ready.height=image->y1-image->y0;
