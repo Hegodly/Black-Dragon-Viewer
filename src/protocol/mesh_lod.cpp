@@ -340,6 +340,25 @@ bool decode_mesh_lod(std::span<const std::uint8_t> asset,LOD& out) noexcept {
         constexpr std::array<const char*,4U> levels{
             "high_lod","medium_lod","low_lod","lowest_lod"
         };
+        // Validate metadata for every declared LOD before selecting a preferred
+        // block. Otherwise a valid high LOD could mask malformed medium/low
+        // offsets and bypass the existing corruption regression test.
+        for(const char* name:levels){
+            const Value* block=header.get(name);
+            if(!block)continue;
+            if(block->kind!=Value::Kind::Map)return false;
+            double offset=0.,length=0.;
+            if(!number(block->get("offset"),offset)||
+               !number(block->get("size"),length))return false;
+            if(length==0.)continue; // SL missing-LOD sentinel
+            if(offset<0.||length<6.||offset>double(asset.size())||
+               length>4.*1024.*1024.)return false;
+            const auto off=static_cast<std::size_t>(offset);
+            const auto len=static_cast<std::size_t>(length);
+            if(double(off)!=offset||double(len)!=length||
+               header_bytes>asset.size()||off>asset.size()-header_bytes||
+               len>asset.size()-header_bytes-off)return false;
+        }
         for(const char* name:levels){
             const Value* block=header.get(name);
             if(!block)continue;
