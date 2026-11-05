@@ -22,6 +22,7 @@ struct Transform {
     std::string mesh_asset_id; // authenticated ExtraParams id, NOT downloaded
     bool volume_params_seen=false; // full 23-byte SL path/profile available
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
+    std::string default_texture_asset_id; // UUID from verified server TE
     // Authentic default TextureEntry tint (per-face overrides unavailable).
     // RGB is baked into DX12 untextured preview; alpha retained for future
     // translucent material pass. No texture image is implied to be loaded.
