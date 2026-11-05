@@ -972,6 +972,12 @@ bool Renderer::set_verified_live_terrain(
     uploaded_mesh_vertices_=new_mesh_vertices;
     uploaded_mesh_shapes_=mesh_objects.root_meshes+mesh_objects.linked_meshes;
     uploaded_mesh_triangles_=mesh_objects.emitted_triangles;
+    mesh_eligible_instances_=mesh_objects.eligible_instances;
+    mesh_missing_lod_instances_=mesh_objects.missing_lod_instances;
+    mesh_waiting_for_parent_=mesh_objects.waiting_for_parent;
+    mesh_out_of_range_instances_=mesh_objects.out_of_range_instances;
+    mesh_invalid_pose_instances_=mesh_objects.invalid_pose_instances;
+    mesh_undrawn_instances_=mesh_objects.undrawn_eligible_instances;
     uploaded_textured_triangles_=mesh_objects.textured_triangles+
                                  primitives.textured_triangles;
     primitive_eligible_=primitives.eligible_shapes;
@@ -1082,6 +1088,10 @@ void Renderer::clear_decoded_region_geometry() {
     uploaded_root_primitive_shapes_=0;
     uploaded_linked_primitive_shapes_=0;
     uploaded_primitive_vertices_=0;
+    uploaded_mesh_vertices_=uploaded_mesh_shapes_=uploaded_mesh_triangles_=0;
+    mesh_eligible_instances_=mesh_missing_lod_instances_=0;
+    mesh_waiting_for_parent_=mesh_out_of_range_instances_=0;
+    mesh_invalid_pose_instances_=mesh_undrawn_instances_=0;
     uploaded_textured_triangles_=0;
     live_texture_layers_.clear();
     texture_upload_pending_=false;
