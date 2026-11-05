@@ -55,6 +55,7 @@ on:
       - opt/kami-r50-dx12-streaming-cpu-20261105
       - fix/kami-r51-gpu-synchronization-geometry-coalescing-20261105
       - fix/kami-r52-cross-system-audit-20261105
+      - test/kami-r52-forced-warp-virtual-gpu-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -129,6 +130,27 @@ jobs:
           } finally { $reader.Dispose() }
       - name: Test native core
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Force Microsoft WARP virtual GPU and render KAMI DX12
+        shell: pwsh
+        run: |
+          # This is a mandatory virtual-GPU test, not an ordinary DX12
+          # fallback that might silently choose the host GPU. The test
+          # returns a nonzero exit if WARP is unavailable or rendering fails.
+          $exe = "$PWD/build/Release/KAMI-DX12-Smoke.exe"
+          & $exe --force-warp 2>&1 | Tee-Object -FilePath warp-gpu-result.txt
+          if ($LASTEXITCODE -ne 0) {
+            throw "WARP software GPU render/resize/texture test failed (exit $LASTEXITCODE)"
+          }
+          $output = Get-Content warp-gpu-result.txt -Raw
+          if ($output -notmatch "KAMI WARP VIRTUAL GPU VERIFIED") {
+            throw "Smoke did not positively identify the forced WARP adapter"
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: KAMI-R52-Forced-WARP-Virtual-GPU-Result
+          path: warp-gpu-result.txt
+          retention-days: 14
       - name: Package test executable
         shell: pwsh
         run: |
