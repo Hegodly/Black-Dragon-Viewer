@@ -13,7 +13,7 @@
 
 namespace kami::world {
 // Hard upper bound for the Quality live-region primitive draw budget.
-inline constexpr std::size_t kMaxQualityPrimitiveShapes=4080U;
+inline constexpr std::size_t kMaxQualityPrimitiveShapes=2048U;
 // The live DX12 region upload includes land, water, proxies, meshes,
 // simple primitives and an optional avatar marker.
 inline constexpr std::size_t kLiveSceneVertexLimit=4000000U;
