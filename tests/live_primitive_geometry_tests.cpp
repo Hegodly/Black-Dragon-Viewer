@@ -356,6 +356,6 @@ int run_primitive_tests(){
 int main(){
     const int code=run_primitive_tests();
     if(code!=0)std::fprintf(stderr,
-        "KAMI prim/material regression failed: check %d\\n",code);
+        "KAMI prim/material regression failed: check %d\n",code);
     return code;
 }
