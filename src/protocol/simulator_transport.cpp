@@ -141,7 +141,7 @@ void Circuit::prune_unreferenced_meshes() noexcept {
     // Hysteresis (176m vs 144m load radius) avoids thrashing across a
     // visibility boundary. Drop no-longer-needed CPU mesh data and its
     // finished scheduler entry; do not cancel an active fetch.
-    const auto near=[&](const objectspatial::Transform& t) noexcept {
+    const auto within_retention_radius=[&](const objectspatial::Transform& t) noexcept {
         return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
             std::abs(t.x-movement_position_.x)<=176.f&&
             std::abs(t.y-movement_position_.y)<=176.f&&
@@ -153,7 +153,7 @@ void Circuit::prune_unreferenced_meshes() noexcept {
                 (void)id;
                 if(t.mesh_asset_id!=asset)continue;
                 const auto* anchor=world_mesh_anchor(t);
-                if(anchor&&near(*anchor))return true;
+                if(anchor&&within_retention_radius(*anchor))return true;
             }
             return false;
         };
