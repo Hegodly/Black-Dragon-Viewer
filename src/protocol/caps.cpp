@@ -317,9 +317,11 @@ bool trusted_mesh_caps_url(std::wstring_view url) noexcept {
 }
 bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                      std::wstring* mesh_capability_url,
-                     SeedParseReport* report) {
+                     SeedParseReport* report,
+                     std::wstring* texture_capability_url) {
     event_queue_url.clear();
     if(mesh_capability_url)mesh_capability_url->clear();
+    if(texture_capability_url)texture_capability_url->clear();
     if(report)*report={};
     ComPtr<IXMLDOMDocument2> dom;
     if(!parse_dom(xml,dom))return false;
@@ -373,13 +375,16 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                 report->mesh_issue=mesh_url_problem(url,type);
         }
     }
+    if(texture_capability_url)
+        *texture_capability_url=viewer_asset;
     if(mesh_capability_url){
         *mesh_capability_url=!viewer_asset.empty()?std::move(viewer_asset):
                              !getmesh2.empty()?std::move(getmesh2):
                              std::move(getmesh);
     }
     return !event_queue_url.empty()||
-           (mesh_capability_url&&!mesh_capability_url->empty());
+           (mesh_capability_url&&!mesh_capability_url->empty())||
+           (texture_capability_url&&!texture_capability_url->empty());
 }
 bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     event_count=0;
@@ -741,7 +746,8 @@ SeedResponse request_seed(std::wstring seed_url) {
     }
     SeedParseReport report{};
     const bool parsed=parse_seed_llsd(reply.body,result.event_queue_url,
-                                     &result.mesh_capability_url,&report);
+                                     &result.mesh_capability_url,&report,
+                                     &result.texture_capability_url);
     result.mesh_named=report.mesh_named;
     result.mesh_rejected=report.mesh_rejected;
     if(!parsed){
@@ -754,7 +760,9 @@ SeedResponse request_seed(std::wstring seed_url) {
     }
     result.event_queue_granted=!result.event_queue_url.empty();
     result.mesh_granted=!result.mesh_capability_url.empty();
-    result.granted=result.event_queue_granted||result.mesh_granted;
+    result.texture_granted=!result.texture_capability_url.empty();
+    result.granted=result.event_queue_granted||result.mesh_granted||
+                   result.texture_granted;
     if(result.event_queue_granted&&result.mesh_granted)
         result.diagnostic=L"CAPS seed OK: EventQueue + mesh granted";
     else if(result.event_queue_granted)
