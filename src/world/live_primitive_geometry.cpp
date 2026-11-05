@@ -135,7 +135,7 @@ struct Emitter {
         UV coords[]={uvx,uvy,uvz};
         V positions[]={a,b,c};
         float r=red,g=green,bl=blue;
-        if(face<material.face_rgba.size()&&material.base_tint_present){
+        if(face<material.face_rgba.size()&&material.face_rgba_present){
             r=material.face_rgba[face][0];
             g=material.face_rgba[face][1];
             bl=material.face_rgba[face][2];
