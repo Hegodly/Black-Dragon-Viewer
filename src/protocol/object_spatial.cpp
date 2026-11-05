@@ -282,6 +282,62 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
     if(audit)*audit=frame;
     return true;
 }
+bool resolve_world_position(
+    const Transform& object,
+    const std::map<std::uint32_t,Transform>& roots,
+    const std::map<std::uint32_t,Transform>& children,
+    const std::set<std::uint32_t>& avatar_roots,
+    std::array<float,3>& world) noexcept {
+    const auto finite_pose=[](const Transform& t) noexcept {
+        const float sq=t.rx*t.rx+t.ry*t.ry+t.rz*t.rz+t.rw*t.rw;
+        return t.local_id!=0U&&std::isfinite(t.x)&&
+            std::isfinite(t.y)&&std::isfinite(t.z)&&
+            std::isfinite(sq)&&sq>.99f&&sq<1.01f;
+    };
+    if(!finite_pose(object))return false;
+    // Compose root-relative and nested-child offsets the same way the
+    // actual DX12 mesh hierarchy does. Root-only distance calculations
+    // omit valid nearby children of a distant structural linkset.
+    std::array<float,3> position{object.x,object.y,object.z};
+    std::array<std::uint32_t,16U> visited{};
+    std::size_t depth=0U;
+    visited[depth++]=object.local_id;
+    const Transform* current=&object;
+    while(current->parent_id!=0U){
+        if(depth>=visited.size())return false;
+        const auto id=current->parent_id;
+        if(avatar_roots.contains(id)||
+           std::find(visited.begin(),visited.begin()+depth,id)!=
+               visited.begin()+depth)return false;
+        visited[depth++]=id;
+        const Transform* parent=nullptr;
+        const auto root=roots.find(id);
+        if(root!=roots.end()){
+            if(root->second.parent_id!=0U)return false;
+            parent=&root->second;
+        }else{
+            const auto child=children.find(id);
+            if(child==children.end()||child->second.parent_id==0U)
+                return false;
+            parent=&child->second;
+        }
+        if(!finite_pose(*parent))return false;
+        const float qx=parent->rx,qy=parent->ry,qz=parent->rz,qw=parent->rw;
+        const float tx=2.f*(qy*position[2]-qz*position[1]);
+        const float ty=2.f*(qz*position[0]-qx*position[2]);
+        const float tz=2.f*(qx*position[1]-qy*position[0]);
+        position={
+            parent->x+position[0]+qw*tx+(qy*tz-qz*ty),
+            parent->y+position[1]+qw*ty+(qz*tx-qx*tz),
+            parent->z+position[2]+qw*tz+(qx*ty-qy*tx)
+        };
+        if(!std::isfinite(position[0])||!std::isfinite(position[1])||
+           !std::isfinite(position[2]))return false;
+        current=parent;
+    }
+    world=position;
+    return true;
+}
 bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
     return a.local_id==b.local_id&&a.parent_id==b.parent_id&&
         a.x==b.x&&a.y==b.y&&a.z==b.z&&
