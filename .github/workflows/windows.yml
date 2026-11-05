@@ -48,6 +48,7 @@ on:
       - feature/kami-official-sl-bridge-20261104
       - feature/kami-official-sl-bridge-20261104
       - fix/kami-r45-mesh-alias-official-bridge-20261104
+      - fix/kami-r46-object-retention-recovery-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -157,9 +158,9 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R45-Mesh-Fix-Official-Bridge.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R46-World-Stream-Recovery-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R45-Mesh-Fix-Official-Bridge
-          path: dist/KAMI-R45-Mesh-Fix-Official-Bridge.zip
+          name: KAMI-R46-World-Stream-Recovery-DX12
+          path: dist/KAMI-R46-World-Stream-Recovery-DX12.zip
           retention-days: 14
