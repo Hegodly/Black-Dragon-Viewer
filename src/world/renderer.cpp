@@ -870,10 +870,12 @@ bool Renderer::set_verified_live_terrain(
     const auto primitives=build_live_primitive_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?2048U:
+        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?kMaxQualityPrimitiveShapes:
             graphics_.preset==graphics::Preset::Balanced?512U:
             graphics_.preset==graphics::Preset::Performance?256U:128U,circuit.known_avatar_roots(),
-        live_texture_layers_,pbr_table.faces);
+        live_texture_layers_,pbr_table.faces,
+        // Include land/water/proxies and leave room for the avatar marker.
+        scene.vertices.size()<3999000U?3999000U-scene.vertices.size():0U);
     const auto new_primitive_vertices=primitives.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
                           primitives.scene.vertices.begin(),
