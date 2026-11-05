@@ -63,6 +63,19 @@ struct CompressedDecodeAudit {
     const lludp::Packet& packet,std::vector<Transform>& out,
     std::vector<Transform>* child_transforms=nullptr,
     CompressedDecodeAudit* audit=nullptr) noexcept;
+// High 15 ImprovedTerseObjectUpdate: update pose of already-known objects.
+// Does not create objects, invent geometry, or interpret avatar outfits.
+struct TersePose {
+    std::uint32_t local_id=0;
+    float x=0.f,y=0.f,z=0.f;
+    float rx=0.f,ry=0.f,rz=0.f,rw=1.f;
+};
+[[nodiscard]] bool decode_terse_poses(
+    const lludp::Packet& packet,std::vector<TersePose>& out) noexcept;
+[[nodiscard]] bool apply_terse_pose(
+    Transform& existing,const TersePose& update) noexcept;
+// Appends the change only when the pose differs enough to warrant a GPU
+// geometry upload. Unknown objects should be ignored by the caller.
 // ObjectUpdateCached is an inventory of local IDs, NOT full object data.
 [[nodiscard]] bool decode_cached_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
