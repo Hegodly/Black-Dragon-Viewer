@@ -501,12 +501,18 @@ MeshBatch build_live_mesh_geometry(
     std::vector<Item> chosen;
     const auto try_add=[&](const Transform& t,Pose pose,bool child){
         if(t.reflection_probe||t.mesh_asset_id.empty())return;
-        const auto found=loaded.find(t.mesh_asset_id);
-        if(found==loaded.end()||found->second.triangles.empty())return;
-        if(!finite(pose.pos)||!valid_quat(pose.rot))return;
+        if(!finite(pose.pos)||!valid_quat(pose.rot)){
+            ++batch.invalid_pose_instances;return;
+        }
         const V delta=sub(pose.pos,origin);
         if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
-           std::abs(delta.z)>96.f)return;
+           std::abs(delta.z)>96.f){
+            ++batch.out_of_range_instances;return;
+        }
+        const auto found=loaded.find(t.mesh_asset_id);
+        if(found==loaded.end()||found->second.triangles.empty()){
+            ++batch.missing_lod_instances;return;
+        }
         chosen.push_back({&t,&found->second,pose,child,dot(delta,delta)});
     };
     for(const auto& [id,t]:roots){
@@ -515,8 +521,7 @@ MeshBatch build_live_mesh_geometry(
     }
     for(const auto& [id,t]:children){
         (void)id;
-        if(t.mesh_asset_id.empty()||!loaded.contains(t.mesh_asset_id))
-            continue;
+        if(t.mesh_asset_id.empty()||t.reflection_probe)continue;
         Pose pose{};std::uint32_t missing=0U;
         if(resolve(t,roots,children,avatar_roots,pose,missing)==
            RootResult::Found)try_add(t,pose,true);
@@ -524,6 +529,7 @@ MeshBatch build_live_mesh_geometry(
     }
     std::sort(chosen.begin(),chosen.end(),
        [](const Item& a,const Item& b){return a.distance<b.distance;});
+    batch.eligible_instances=chosen.size();
     auto& verts=batch.scene.vertices;
     verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
     for(const auto& item:chosen){
@@ -607,6 +613,8 @@ MeshBatch build_live_mesh_geometry(
         }
         if(batch.emitted_triangles>=max_triangles)break;
     }
+    batch.undrawn_eligible_instances=batch.eligible_instances-
+        (batch.root_meshes+batch.linked_meshes);
     batch.scene.terrain_count=verts.size();
     return batch;
 }
