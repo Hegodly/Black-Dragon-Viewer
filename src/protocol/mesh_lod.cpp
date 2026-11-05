@@ -243,7 +243,8 @@ bool inflate(std::span<const std::uint8_t> compressed,
 bool decode_faces(const Value& root,LOD& out) {
     if(root.kind!=Value::Kind::Array||root.list.size()>32U)return false;
     LOD result{};
-    for(const auto& face:root.list){
+    for(std::size_t face_number=0U;face_number<root.list.size();++face_number){
+        const auto& face=root.list[face_number];
         if(face.kind!=Value::Kind::Map)return false;
         if(const auto* empty=face.get("NoGeometry")){
             if(empty->kind!=Value::Kind::Boolean||!empty->boolean)return false;
@@ -301,6 +302,7 @@ bool decode_faces(const Value& root,LOD& out) {
             if(a>=positions.size()||b>=positions.size()||
                c>=positions.size()||a==b||a==c||b==c)return false;
             Triangle triangle{};
+            triangle.face_index=static_cast<std::uint8_t>(face_number);
             for(unsigned idx=0;idx<3U;++idx){
                 const auto& point=positions[idx==0U?a:idx==1U?b:c];
                 for(unsigned axis=0;axis<3U;++axis)
