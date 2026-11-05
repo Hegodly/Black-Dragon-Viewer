@@ -12,6 +12,7 @@
 #include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
 #include <winsock2.h>
+#include <cstddef>
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -29,8 +30,24 @@ enum class CircuitState : std::uint8_t {
     Closed, WaitingForSimulator, SimulatorResponded,
     RegionHandshakeReceived, MovementConfirmed, Failed
 };
+namespace detail {
+// Expired missing-object requests must not permanently occupy the
+// bounded parent-recovery queue. The simulator gets five attempts first.
+[[nodiscard]] inline bool reclaim_missing_request(
+    unsigned attempts,std::chrono::steady_clock::time_point sent_at,
+    std::chrono::steady_clock::time_point now) noexcept {
+    return attempts>=5U&&
+        sent_at!=std::chrono::steady_clock::time_point{}&&
+        now>=sent_at&&now-sent_at>=std::chrono::seconds(90);
+}
+}
 class Circuit final {
 public:
+    // Retention only: DX12 still renders a bounded near-camera subset.
+    // Real decorated regions routinely contain >512 root/1024 child objects.
+    static constexpr std::size_t kMaxRootObjects=2048U;
+    static constexpr std::size_t kMaxLinkedObjects=8192U;
+    static constexpr std::size_t kMaxMissingObjectRequests=256U;
     Circuit()=default;
     Circuit(const Circuit&)=delete;
     Circuit& operator=(const Circuit&)=delete;
@@ -152,6 +169,12 @@ public:
     [[nodiscard]] std::size_t retained_linked_objects() const noexcept {
         return linked_objects_.size();
     }
+    [[nodiscard]] std::uint64_t dropped_root_updates() const noexcept {
+        return dropped_root_updates_;
+    }
+    [[nodiscard]] std::uint64_t dropped_linked_updates() const noexcept {
+        return dropped_linked_updates_;
+    }
     [[nodiscard]] std::uint32_t spatial_object_frames() const noexcept {
         return spatial_object_frames_;
     }
@@ -262,6 +285,7 @@ private:
     std::map<std::uint32_t,objectspatial::Transform> linked_objects_;
     std::set<std::uint32_t> avatar_root_ids_; // known, never rendered
     std::uint32_t own_avatar_local_id_=0U; // verified against login UUID
+    std::uint64_t dropped_root_updates_=0U,dropped_linked_updates_=0U;
     load::Scheduler mesh_scheduler_{};
     load::Scheduler texture_scheduler_{};
     std::wstring texture_capability_url_; // authenticated ViewerAsset bearer

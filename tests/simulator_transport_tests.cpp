@@ -32,6 +32,18 @@ bool send_test(SOCKET server,const sockaddr_in& viewer,int viewer_size,
 }
 }
 int main() {
+    // Catch regressions to the old 512/1024 object retention limits.
+    static_assert(sim::Circuit::kMaxRootObjects>=2048U);
+    static_assert(sim::Circuit::kMaxLinkedObjects>=8192U);
+    static_assert(sim::Circuit::kMaxMissingObjectRequests==256U);
+    const auto now=std::chrono::steady_clock::now();
+    const auto recent=now-std::chrono::seconds(30);
+    const auto stale=now-std::chrono::seconds(95);
+    if(sim::detail::reclaim_missing_request(4U,stale,now)||
+       sim::detail::reclaim_missing_request(5U,recent,now)||
+       sim::detail::reclaim_missing_request(5U,{},now)||
+       !sim::detail::reclaim_missing_request(5U,stale,now))
+        return 27;
     WSADATA wsa{};
     if(WSAStartup(MAKEWORD(2,2),&wsa)!=0)return 1;
     const SOCKET server=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);

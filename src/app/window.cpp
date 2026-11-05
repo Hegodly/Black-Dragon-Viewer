@@ -1998,7 +1998,10 @@ void Window::update_sl_connection() {
         live_water_status_.clear();
     }
     if(sl_login_status_==protocol::LoginStatus::Accepted&&
-       sl_circuit_.movement_seen()&&
+       // movement_seen alone can precede RegionHandshake. Starting the
+       // one-shot seed fetch then could discard a successful grant before
+       // Circuit reaches MovementConfirmed, leaving CAP NO indefinitely.
+       sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
        !caps_seed_started_&&!caps_seed_url_.empty()){
         caps_seed_started_=true;
         caps_status_=L"CAPS: requesting region seed over HTTPS...";

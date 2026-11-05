@@ -267,5 +267,23 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(
            compressed(malformed_tint),out)||out.size()!=1U||
        out[0].base_tint_present)return 33;
+    // Compressed High 13 mesh alias is decoded via the official
+    // extra-param bridge; extended 0x70 is not a mesh UUID.
+    auto mesh_alias=meshblock;
+    mesh_alias[mesh_alias.size()-23U-17U-6U]=0x60U;
+    objectspatial::CompressedDecodeAudit alias_audit{};
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(mesh_alias),out,&children,&alias_audit)||
+       children.size()!=1U||
+       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       alias_audit.mesh_references!=1U||alias_audit.sculpt_records!=1U)
+        return 40;
+    mesh_alias[mesh_alias.size()-23U-17U-6U]=0x70U;
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(mesh_alias),out,&children,&alias_audit)||
+       children.size()!=1U||!children[0].mesh_asset_id.empty()||
+       alias_audit.mesh_references!=0U)
+        return 41;
+
     return 0;
 }

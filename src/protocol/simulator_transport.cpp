@@ -342,7 +342,19 @@ void Circuit::maybe_send_agent_update() noexcept {
 void Circuit::remember_missing_object(std::uint32_t id) noexcept {
     if(id==0U||avatar_root_ids_.contains(id)||
        spatial_objects_.contains(id)||linked_objects_.contains(id)||
-       missing_objects_.contains(id)||missing_objects_.size()>=256U)return;
+       missing_objects_.contains(id))return;
+    if(missing_objects_.size()>=kMaxMissingObjectRequests){
+        // Recover capacity after the final unanswered request has aged
+        // out; previously 256 exhausted entries could block every new root.
+        const auto now=std::chrono::steady_clock::now();
+        for(auto it=missing_objects_.begin();it!=missing_objects_.end();){
+            if(detail::reclaim_missing_request(
+                   it->second.attempts,it->second.sent_at,now))
+                it=missing_objects_.erase(it);
+            else ++it;
+        }
+        if(missing_objects_.size()>=kMaxMissingObjectRequests)return;
+    }
     missing_objects_.try_emplace(id);
 }
 void Circuit::maybe_send_missing_object_requests() noexcept {
@@ -531,8 +543,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     }
                     for(auto id:parent_ids)remember_missing_object(id);
                     for(const auto& child:linked){
-                        if(linked_objects_.size()>=1024U&&
-                           !linked_objects_.contains(child.local_id))continue;
+                        if(linked_objects_.size()>=kMaxLinkedObjects&&
+                            !linked_objects_.contains(child.local_id)){
+                            ++dropped_linked_updates_;continue;
+                        }
                         const auto prior=linked_objects_.find(child.local_id);
                         if(prior==linked_objects_.end()||
                            !objectspatial::same_spatial_transform(prior->second,child)){
@@ -542,8 +556,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         missing_objects_.erase(child.local_id);
                     }
                     for(const auto& obj:objects){
-                        if(spatial_objects_.size()>=512U &&
-                           !spatial_objects_.contains(obj.local_id))continue;
+                        if(spatial_objects_.size()>=kMaxRootObjects &&
+                            !spatial_objects_.contains(obj.local_id)){
+                            ++dropped_root_updates_;continue;
+                        }
                         const auto prior=spatial_objects_.find(obj.local_id);
                         if(prior==spatial_objects_.end()||
                            !objectspatial::same_spatial_transform(prior->second,obj)){
@@ -578,8 +594,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     ++spatial_object_frames_;
                     for(const auto& child:linked){
                         remember_missing_object(child.parent_id);
-                        if(linked_objects_.size()>=1024U&&
-                           !linked_objects_.contains(child.local_id))continue;
+                        if(linked_objects_.size()>=kMaxLinkedObjects&&
+                            !linked_objects_.contains(child.local_id)){
+                            ++dropped_linked_updates_;continue;
+                        }
                         // Compressed child topology is not decoded yet;
                         // preserve an earlier verified full-update shape.
                         auto updated=child;
@@ -596,8 +614,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         missing_objects_.erase(child.local_id);
                     }
                     for(const auto& obj:objects){
-                        if(spatial_objects_.size()>=512U &&
-                           !spatial_objects_.contains(obj.local_id))continue;
+                        if(spatial_objects_.size()>=kMaxRootObjects &&
+                            !spatial_objects_.contains(obj.local_id)){
+                            ++dropped_root_updates_;continue;
+                        }
                         auto updated=obj;
                         const auto previous=spatial_objects_.find(obj.local_id);
                         if(previous!=spatial_objects_.end())
@@ -850,6 +870,7 @@ void Circuit::stop() noexcept {
     linked_objects_.clear();
     avatar_root_ids_.clear();
     own_avatar_local_id_=0U;
+    dropped_root_updates_=dropped_linked_updates_=0U;
     mesh_scheduler_.set_online(false);
     missing_objects_.clear();
     requested_object_ids_=cached_object_ids_=0U;

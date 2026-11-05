@@ -22,12 +22,14 @@ enum : std::uint16_t {
     PARAMS_RENDER_MATERIAL=0x80,PARAMS_REFLECTION_PROBE=0x90
 };
 bool known_size_valid(std::uint16_t type,std::uint32_t size) noexcept {
-    // Matches official LLNetworkData::isValid. A type 0x60 exists
-    // historically in the enum but has no accepted length here.
+    // Official LLViewerObject::unpackParameterEntry remaps 0x60
+    // (PARAMS_MESH) to 0x30 (PARAMS_SCULPT). Both carry the same
+    // 17-byte payload: sculpt UUID[16] + type[1].
     switch(type){
     case PARAMS_FLEXIBLE: return size==16U;
     case PARAMS_LIGHT: return size==16U;
-    case PARAMS_SCULPT: return size==17U;
+    case PARAMS_SCULPT:
+    case PARAMS_MESH: return size==17U;
     case PARAMS_LIGHT_IMAGE: return size==28U;
     case PARAMS_EXTENDED_MESH: return size==4U;
     case PARAMS_RENDER_MATERIAL: return size>1U;
@@ -80,7 +82,8 @@ kami_sl_decode_extra_params_v1(const std::uint8_t* bytes,
         case PARAMS_EXTENDED_MESH:++tmp.extended_mesh;break;
         case PARAMS_RENDER_MATERIAL:++tmp.render_material;break;
         case PARAMS_REFLECTION_PROBE:++tmp.reflection_probe;break;
-        case PARAMS_SCULPT:{
+        case PARAMS_SCULPT:
+        case PARAMS_MESH:{
             ++tmp.sculpt;
             // Linden Lab: LLSculptParams packs UUID[16] then sculpt
             // type[1]; lower 6 bits == 5 means a mesh, not 0x70.
