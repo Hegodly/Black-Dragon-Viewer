@@ -47,7 +47,8 @@ class Circuit final {
 public:
     // Retention only: DX12 still renders a bounded near-camera subset.
     // Real decorated regions routinely contain >512 root/1024 child objects.
-    static constexpr std::size_t kMaxRootObjects=2048U;
+    // R63: 4,080 individually rooted primitives must reach the renderer.
+    static constexpr std::size_t kMaxRootObjects=4096U;
     static constexpr std::size_t kMaxLinkedObjects=8192U;
     static constexpr std::size_t kMaxMissingObjectRequests=256U;
     Circuit()=default;
