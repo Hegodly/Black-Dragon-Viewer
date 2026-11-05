@@ -260,6 +260,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         texture::Base base{};
         if(texture::decode_base(texture_entry,base)){
             t.base_tint_present=true;
+            t.face_rgba_present=true;
             t.default_texture_asset_id=texture::default_image_uuid(base);
             for(unsigned face=0U;face<t.face_texture_override.size();++face){
                 if(base.face_image_override[face]){
