@@ -6,6 +6,8 @@ Fix 1: The real simulator world-intake layer was limited to 2,048 distinct root 
 
 Fix 2: The fixed-capacity GPU PBR material table was assembled by local object ID, potentially exhausting its 1,023 unique material slots on distant roots before nearby drawable objects. In live scenes, reserve terrain PBR first and sort root/linked materials by the viewer's authenticated root-anchor distance, with deterministic tie-breaks. Reject unresolved child hierarchies and reflection probes from this visible material table. Linked-object priority is based on its authenticated parent root position, not its exact rotated local offset, so it is an approximation. The GPU material record limit remains unchanged; overflow falls back to legacy face appearance rather than exceeding the upload buffer.
 
+Fix 3: Switching the graphics preset in the Home UI used to rebuild the old geometry buffer without immediately regenerating the live region under its new primitive allowance. Invalidate the last applied spatial revision on a manual preset change; the next coalesced region update (up to the existing 800 ms interval) generates the scene with the newly selected Quality/Balanced/Performance/Potato budget.
+
 New tests: compile-time assertion that retained roots cover the 4,080 Quality primitive limit; synthetic material table overfill with 1,040 distinct roots confirms a late-ID near root and terrain still bind; an orphan linked prim does not consume PBR records. Existing 4,200-shape and sphere vertex-budget regressions from R62 remain included.
 
 CI: original Windows x64 build, all ctest native tests, forced Microsoft WARP DX12 smoke (PBR, material formats, pixel output) and test ZIP packaging.
