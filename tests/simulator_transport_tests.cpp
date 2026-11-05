@@ -37,7 +37,9 @@ int main() {
     // Catch regressions to the old 512/1024 object retention limits.
     static_assert(sim::Circuit::kMaxRootObjects>=2048U);
     static_assert(sim::Circuit::kMaxLinkedObjects>=8192U);
-    static_assert(sim::Circuit::kMaxMissingObjectRequests==1024U);
+    static_assert(sim::Circuit::kMaxMissingObjectRequests==4096U);
+    static_assert(sim::Circuit::kMaxMissingObjectRequests>=
+                  sim::Circuit::kMaxRootObjects);
     // The mesh fetch pool may never exceed the shared authenticated
     // scheduler's upper bound on active downloads.
     static_assert(sim::Circuit::kMaxConcurrentMeshWorkers==4U);
@@ -59,6 +61,18 @@ int main() {
        sim::detail::prefer_missing_request(true,2U,recent,true,1U,stale)||
        !sim::detail::prefer_missing_request(true,1U,stale,true,1U,recent))
         return 28;
+    // R68: unresolved linked-object parents MUST outrank even earlier
+    // cached-object requests and speculative movement records; stable
+    // attempt/backoff ordering is retained within each category.
+    if(!sim::detail::prefer_parent_missing_request(
+            true,true,4U,stale,false,true,0U,recent)||
+       sim::detail::prefer_parent_missing_request(
+            false,true,0U,recent,true,true,4U,stale)||
+       !sim::detail::prefer_parent_missing_request(
+            false,true,2U,stale,false,false,0U,recent)||
+       !sim::detail::prefer_parent_missing_request(
+            true,true,0U,recent,true,true,2U,stale))
+        return 56;
     WSADATA wsa{};
     if(WSAStartup(MAKEWORD(2,2),&wsa)!=0)return 1;
     const SOCKET server=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
