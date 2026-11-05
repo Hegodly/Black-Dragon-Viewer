@@ -46,7 +46,7 @@ assert "CopyTextureRegion" in renderer
 assert "GetCopyableFootprints" in renderer
 assert "material_texture_" in renderer
 # t0 shadow map, t1 albedo, t2 dynamic skinned-mesh bone palette
-assert "NumDescriptors=4" in (root/"src/world/shader_cache.cpp").read_text(encoding="utf-8")
+assert "NumDescriptors=5" in (root/"src/world/shader_cache.cpp").read_text(encoding="utf-8")
 assert "skinRows" in shader and "BLENDINDICES" in shader
 assert "make_skin_palette()" in renderer
 assert (root/"src/features/rig.cpp").is_file()

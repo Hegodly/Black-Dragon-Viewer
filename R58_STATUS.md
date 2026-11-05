@@ -8,7 +8,7 @@ Implemented material path:
 - Fetch authenticated ViewerAsset material_id assets on a background worker, with bounded caches and transient retries. Decode SL binary LLSD material versions 1.0/1.1 and their glTF 2.0 JSON. Image references must be UUIDs; embedded/remote URLs are not fetched.
 - Consume authenticated High31 GenericStreamingMessage material override snapshots: base/emissive factors, metallic/roughness, alpha mode/cutoff, double-sided, texture replacements/clears and per-map transforms. Keep overrides received before their base material and clear stale overrides on object removal/region reset.
 - Stream PBR base-color, normal, metallic/roughness, occlusion and emissive images through the existing JPEG2000/DX12 array path.
-- Bind deduplicated GPU material records per face. Apply sRGB decoding to color/emissive maps; keep normal and ORM data linear. Use derivative tangent frames for normal maps, GGX lighting, AO, emissive output, unlit materials and independent map transforms.
+- Bind deduplicated GPU material records per face. Apply sRGB decoding to color/emissive maps; keep normal and ORM data linear. Use sRGB render-target blending and derivative tangent frames for normal maps, GGX lighting, AO, emissive output, unlit materials and independent map transforms.
 - Render OPAQUE, MASK and BLEND correctly as distinct paths. Blended world triangles are sorted from far to near and drawn after opaque surfaces, with depth testing and no depth writes. Double-sided materials flip back-face normals. Masked materials share their alpha test with shadows.
 - Honor the existing PBR lighting toggle. Diagnostics report decoded material assets, bound material faces and material failures.
 

@@ -16,7 +16,7 @@
 
 namespace kami::world {
 namespace {
-constexpr DXGI_FORMAT kColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+constexpr DXGI_FORMAT kColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
 constexpr UINT kCompilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 constexpr std::size_t kMaxShaderBytes = 4U * 1024U * 1024U;
@@ -129,7 +129,7 @@ bool root_signature(ID3D12Device* device,
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_DESCRIPTOR_RANGE shadow_range{};
     shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    shadow_range.NumDescriptors=4;
+    shadow_range.NumDescriptors=5;
     shadow_range.BaseShaderRegister=0;
     shadow_range.OffsetInDescriptorsFromTableStart=D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     D3D12_ROOT_PARAMETER parameters[2]{};

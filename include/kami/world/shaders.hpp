@@ -23,6 +23,7 @@ Texture2DArray<float4> materialTexture : register(t1);
 StructuredBuffer<float4> skinRows : register(t2);
 SamplerState materialSampler : register(s1);
 StructuredBuffer<float4> materialRows : register(t3);
+Texture2DArray<float4> colorTexture : register(t4);
 struct VertexIn {
     float3 position : POSITION;
     float3 normal : NORMAL;
@@ -166,7 +167,9 @@ float2 pbr_uv(float2 uv,uint offset,uint slot) {
 }
 float4 pbr_texel(float2 uv,uint offset,uint slot,float layer) {
     if(layer<0.5)return float4(1.0,1.0,1.0,1.0);
-    return materialTexture.Sample(materialSampler,float3(pbr_uv(uv,offset,slot),layer));
+    float3 coord=float3(pbr_uv(uv,offset,slot),layer);
+    if(slot==0U||slot==3U)return colorTexture.Sample(materialSampler,coord);
+    return materialTexture.Sample(materialSampler,coord);
 }
 float3 srgb_linear(float3 value) {
     return float3(value.r<=0.04045?value.r/12.92:pow((value.r+0.055)/1.055,2.4),
@@ -178,7 +181,7 @@ float4 pbr_base(float2 uv,uint offset,bool front) {
     if(!front&&flags.y<0.5)clip(-1.0);
     float4 sampled=pbr_texel(uv,offset,0U,materialRows[offset+3U].x);
     float4 base=materialRows[offset];
-    base.rgb*=srgb_linear(sampled.rgb);base.a*=sampled.a;
+    base.rgb*=sampled.rgb;base.a*=sampled.a;
     if(flags.x>0.5&&flags.x<1.5)clip(base.a-materialRows[offset+2U].w);
     else if(flags.x>1.5)clip(base.a-0.0001);
     return base;
@@ -257,7 +260,7 @@ float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
         }
         roughness=clamp(roughness,0.07,1.0);
         emissive=materialRows[offset+1U].rgb*
-            srgb_linear(pbr_texel(input.uv,offset,3U,layers.w).rgb);
+            pbr_texel(input.uv,offset,3U,layers.w).rgb;
         opacity=flags.x>1.5?surface.a:1.0;
     }
     float3 L=normalize(-sunDirectionIntensity.xyz);
@@ -328,7 +331,7 @@ float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
     }
     // Basic filmic output mapping while maintaining SDR UNORM compatibility.
     color=color/(color+float3(1.0,1.0,1.0));
-    color=pow(max(color,0.0),1.0/2.2);
+    // The sRGB render-target view encodes output and blends in linear space.
     return float4(saturate(color),opacity);
 }
 
@@ -370,7 +373,7 @@ float4 sky_pixel_main(SkyVertexOutput input) : SV_TARGET {
                .55*sunDisc)*saturate(sunDirectionIntensity.w);
     }
     color=color/(1.0+color);
-    return float4(saturate(pow(color,1.0/2.2)),1.0);
+    return float4(saturate(color),1.0);
 }
 )";
 }

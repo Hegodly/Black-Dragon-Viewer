@@ -25,7 +25,8 @@
 
 namespace kami::world {
 namespace {
-constexpr DXGI_FORMAT kColorFormat=DXGI_FORMAT_R8G8B8A8_UNORM;
+constexpr DXGI_FORMAT kColorFormat=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+constexpr DXGI_FORMAT kSwapchainFormat=DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kDepthFormat=DXGI_FORMAT_D32_FLOAT;
 UINT scaled(UINT source,unsigned scale) {
     return std::max<UINT>(64U,static_cast<UINT>((static_cast<std::uint64_t>(source)*scale+50U)/100U));
@@ -120,8 +121,8 @@ bool Renderer::make_shadow() {
 
 
 
-static_assert(sizeof(Vertex)==68U,
-              "KAMI GPU vertex input layout must match 68-byte packed vertices");
+static_assert(sizeof(Vertex)==72U,
+              "KAMI GPU vertex input layout must match 72-byte packed vertices");
 static_assert(sizeof(rig::Matrix)==64U,
               "KAMI GPU skinning palette must pack four float4 rows per joint");
 
@@ -240,7 +241,7 @@ TextureUploadStatus Renderer::make_material_texture(
     desc.Height=th;
     desc.DepthOrArraySize=static_cast<UINT16>(slices);
     desc.MipLevels=1;
-    desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
     desc.SampleDesc.Count=1;
     desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
@@ -373,6 +374,9 @@ TextureUploadStatus Renderer::make_material_texture(
         handle.ptr+=dev->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
+        srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        handle.ptr+=3U*dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
         material_texture_=std::move(image_gpu);
     }
     return TextureUploadStatus::Committed;
@@ -385,7 +389,9 @@ bool Renderer::make_targets() {
         if(FAILED(swapchain_->GetBuffer(
                 i,IID_PPV_ARGS(buffers_[i].ReleaseAndGetAddressOf()))))
             return false;
-        graphics->CreateRenderTargetView(buffers_[i].Get(),nullptr,rtv_handle(i));
+        D3D12_RENDER_TARGET_VIEW_DESC rtv{};rtv.Format=kColorFormat;
+        rtv.ViewDimension=D3D12_RTV_DIMENSION_TEXTURE2D;
+        graphics->CreateRenderTargetView(buffers_[i].Get(),&rtv,rtv_handle(i));
     }
     return true;
 }
@@ -521,7 +527,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     DXGI_SWAP_CHAIN_DESC1 swap{};
     swap.Width=width_;
     swap.Height=height_;
-    swap.Format=kColorFormat;
+    swap.Format=kSwapchainFormat;
     swap.Stereo=FALSE;
     swap.SampleDesc.Count=1;
     swap.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -555,7 +561,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     dsv.NumDescriptors=2;
     D3D12_DESCRIPTOR_HEAP_DESC srv{};
     srv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srv.NumDescriptors=4;
+    srv.NumDescriptors=5;
     srv.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if(FAILED(device_.native_device()->CreateDescriptorHeap(
             &dsv,IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf()))) ||
@@ -642,7 +648,7 @@ void Renderer::resize(UINT width,UINT height) {
     for(auto& buffer:buffers_) buffer.Reset();
     depth_.Reset();
     if(FAILED(swapchain_->ResizeBuffers(kBuffers,target_width,target_height,
-                kColorFormat,allow_tearing_?DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING:0))) {
+                kSwapchainFormat,allow_tearing_?DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING:0))) {
         ready_=false;
         error_=L"Failed to resize DirectX 12 render scale";
         return;

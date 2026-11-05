@@ -268,8 +268,6 @@ bool effective(std::string_view id,std::uint32_t object,unsigned face,const Mate
         if(o.uv_mask&(2U<<(3U*i)))out.uv[i].scale=v.uv[i].scale;
         if(o.uv_mask&(4U<<(3U*i)))out.uv[i].rotation=v.uv[i].rotation;
     }
-    // SL's ORM channel uses one image for occlusion, roughness and metal.
-    if(out.images[Occlusion].empty())out.images[Occlusion]=out.images[MetallicRoughness];
     return true;
 }
 }
