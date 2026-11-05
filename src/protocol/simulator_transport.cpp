@@ -285,18 +285,28 @@ void Circuit::maybe_fetch_mesh() noexcept {
     if(!selected)return;
     mesh_last_start_=now;
     auto cap=mesh_capability_url_;
-    mesh_worker_=std::async(std::launch::async,
-       [url=std::move(cap),id=selected->id]()mutable{
-        MeshResult result{};
-        result.id=id;
-        const auto reply=caps::fetch_mesh_asset(std::move(url),id);
-        result.fetched=reply.fetched;
-        result.http_status=reply.status;
-        result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
-        if(reply.fetched)
-            result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
-        return result;
-    });
+    // std::async may throw bad_alloc or system_error under thread/VM
+    // pressure. This function is noexcept: without handling, KAMI
+    // terminates during busy mesh streaming instead of recovering.
+    try{
+        mesh_worker_=std::async(std::launch::async,
+           [url=std::move(cap),id=selected->id]()mutable{
+            MeshResult result{};
+            result.id=id;
+            const auto reply=caps::fetch_mesh_asset(std::move(url),id);
+            result.fetched=reply.fetched;
+            result.http_status=reply.status;
+            result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
+            if(reply.fetched)
+                result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
+            return result;
+        });
+    }catch(...){
+        (void)mesh_scheduler_.download_finished(selected->id,0U,false);
+        ++mesh_failure_count_;
+        // The next simulator update can retry a different mesh; never
+        // strand this UUID in the Downloading state.
+    }
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     if(state_!=CircuitState::MovementConfirmed||
