@@ -328,12 +328,20 @@ MeshBatch build_live_mesh_geometry(
     verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
     for(const auto& item:chosen){
         std::size_t object_triangles=0U;
-        const auto layer_it=texture_layers.find(
-            item.transform->default_texture_asset_id);
-        const std::uint16_t selected_layer=layer_it==texture_layers.end()?
-            0U:layer_it->second;
         for(const auto& triangle:item.lod->triangles){
             if(batch.emitted_triangles>=max_triangles)break;
+            // Every mesh face is an independent SL material slot. An
+            // explicit null override must never fall back to its parent.
+            const unsigned face=triangle.face_index;
+            const auto& obj=*item.transform;
+            const std::string& texture_id=
+                face<obj.face_texture_override.size()&&
+                obj.face_texture_override[face]?
+                  obj.face_texture_asset_ids[face]:
+                  obj.default_texture_asset_id;
+            const auto layer_it=texture_layers.find(texture_id);
+            const std::uint16_t selected_layer=
+                layer_it==texture_layers.end()?0U:layer_it->second;
             std::array<V,3> points{};
             bool valid=true;
             for(unsigned v=0U;v<3U;++v){
