@@ -172,6 +172,7 @@ void Circuit::prune_unreferenced_meshes() noexcept {
 }
 void Circuit::schedule_visible_meshes() noexcept {
     if(mesh_capability_url_.empty()||!movement_position_.verified)return;
+    try{
     // Spatial-object revision alone is insufficient: walking from one
     // house to another must discover newly visible mesh assets even if
     // the simulator sends no full ObjectUpdate messages.
@@ -193,7 +194,7 @@ void Circuit::schedule_visible_meshes() noexcept {
             std::abs(t.y-movement_position_.y)<=144.f&&
             std::abs(t.z-movement_position_.z)<=96.f;
     };
-    const auto schedule=[&](const auto& objects) noexcept {
+    const auto schedule=[&](const auto& objects) {
         for(const auto& [id,t]:objects){
             (void)id;
             if(t.mesh_asset_id.empty())continue;
@@ -209,6 +210,9 @@ void Circuit::schedule_visible_meshes() noexcept {
     };
     schedule(spatial_objects_);
     schedule(linked_objects_);
+    }catch(...){
+        mesh_scan_revision_=~std::uint64_t{0};
+    }
 }
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
@@ -283,6 +287,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
     auto selected=mesh_scheduler_.next_download();
     if(!selected)return;
     mesh_last_start_=now;
+    try{
     auto cap=mesh_capability_url_;
     mesh_worker_=std::async(std::launch::async,
        [url=std::move(cap),id=selected->id]()mutable{
@@ -296,6 +301,10 @@ void Circuit::maybe_fetch_mesh() noexcept {
             result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
         return result;
     });
+    }catch(...){
+        (void)mesh_scheduler_.download_finished(selected->id,0U,false);
+        ++mesh_failure_count_;
+    }
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -355,7 +364,8 @@ void Circuit::remember_missing_object(std::uint32_t id) noexcept {
         }
         if(missing_objects_.size()>=kMaxMissingObjectRequests)return;
     }
-    missing_objects_.try_emplace(id);
+    try{missing_objects_.try_emplace(id);}
+    catch(...){ /* best-effort recovery: never terminate UDP polling */ }
 }
 void Circuit::maybe_send_missing_object_requests() noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -364,6 +374,7 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     const auto now=std::chrono::steady_clock::now();
     if(last_object_request_!=std::chrono::steady_clock::time_point{}&&
        now-last_object_request_<std::chrono::milliseconds(400))return;
+    try{
     std::vector<std::uint32_t> ids;
     ids.reserve(16U);
     for(const auto& [id,state]:missing_objects_){
@@ -394,8 +405,14 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
         }
         requested_object_ids_+=static_cast<std::uint32_t>(ids.size());
     }
+    }catch(...){
+        // If the best-effort request vector cannot be allocated,
+        // recover normally on the next tick, never terminate the viewer.
+        last_object_request_={};
+    }
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
+    try{
     ++packets_received_;
     // Acknowledge all outbound packet sequences, not only the two login
     // handshake packets. Appended LLUDP ACKs and PacketAck blocks may
@@ -761,6 +778,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         texture_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+    }catch(...){
+        // Malformed/large simulator payloads may stress allocations.
+        // An individual packet must not terminate the entire app.
+        ++invalid_world_packets_;
+    }
 }
 void Circuit::retry_unacknowledged() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed)return;
