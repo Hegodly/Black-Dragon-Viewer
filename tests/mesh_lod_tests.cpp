@@ -65,5 +65,24 @@ int main() {
     bad=missing_medium;
     bad[67U+medium.size()]=0xffU; // damaged deflate stream after new header
     if(decode_mesh_lod(bad,good))return 9;
+    // SL's official LLSDSerialize::toBinary emits raw binary LLSD:
+    // no "<?llsd/binary?>" prefix on the mesh header or zipped LOD.
+    // A genuine mesh HTTP 200 response previously failed immediately.
+    auto raw=bytes;
+    if(raw.size()<17U||raw[15U]!='\n'||raw[16U]!='{')return 10;
+    raw.erase(raw.begin(),raw.begin()+16U);
+    if(!decode_mesh_lod(raw,good)||good.triangles.size()!=1U||
+       good.decoded_bytes!=92U)return 11;
+    // Forward-compatible deprecated binary header remains supported.
+    auto deprecated=raw;
+    constexpr char old_header[]="<? LLSD/Binary ?>\n";
+    deprecated.insert(deprecated.begin(),old_header,
+                      old_header+sizeof(old_header)-1U);
+    if(!decode_mesh_lod(deprecated,good)||good.triangles.size()!=1U)
+        return 12;
+    // Random raw buffers are never accepted as mesh LLSD.
+    auto nonsense=raw;
+    nonsense[0]=0x30U;
+    if(decode_mesh_lod(nonsense,good))return 13;
     return 0;
 }
