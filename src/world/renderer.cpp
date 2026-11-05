@@ -118,8 +118,8 @@ bool Renderer::make_shadow() {
 
 
 
-static_assert(sizeof(Vertex)==64U,
-              "KAMI GPU vertex input layout must match 64-byte packed vertices");
+static_assert(sizeof(Vertex)==68U,
+              "KAMI GPU vertex input layout must match 68-byte packed vertices");
 static_assert(sizeof(rig::Matrix)==64U,
               "KAMI GPU skinning palette must pack four float4 rows per joint");
 
@@ -182,7 +182,7 @@ bool Renderer::make_material_texture(
     desc.SampleDesc.Count=1;
     desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
-    const auto* dev=device_.native_device();
+    auto* dev=device_.native_device();
     if(!dev||!shadow_srv_heap_||!allocator_||!commands_)return false;
     Microsoft::WRL::ComPtr<ID3D12Resource> image_gpu,staging;
     const auto heap_default=heap(D3D12_HEAP_TYPE_DEFAULT);
