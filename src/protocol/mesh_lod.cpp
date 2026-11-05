@@ -263,7 +263,7 @@ bool decode_faces(const Value& root,LOD& out) {
         if(points.size()<18U||points.size()%6U!=0U||
            points.size()/6U>65536U||
            indices.size()<6U||indices.size()%6U!=0U||
-           indices.size()/6U>20000U)return false;
+           indices.size()/6U>60000U)return false;
         std::array<float,3> lo{},hi{};
         if(!position_domain(face,lo,hi))return false;
         std::array<float,2> uv_lo{},uv_hi{};
@@ -271,7 +271,7 @@ bool decode_faces(const Value& root,LOD& out) {
            (texcoords->bytes.size()!=points.size()/6U*4U||
             !uv_domain(face,uv_lo,uv_hi)))return false;
         const std::size_t total=indices.size()/6U;
-        if(total+result.triangles.size()>20000U)return false;
+        if(total+result.triangles.size()>60000U)return false;
         std::vector<std::array<float,3>> positions;
         positions.reserve(points.size()/6U);
         for(std::size_t i=0;i<points.size();i+=6U){
@@ -332,41 +332,46 @@ bool decode_mesh_lod(std::span<const std::uint8_t> asset,LOD& out) noexcept {
         std::size_t header_bytes=0U;
         if(!read_llsd(asset,header,header_bytes)||
            header.kind!=Value::Kind::Map)return false;
-        // Prefer medium LOD to conserve GPU time. SL permits missing
-        // medium LODs, often encoded as a present map with size == 0.
-        // Fall back to the required high LOD ONLY for an absent/empty
-        // medium block; do not silently accept malformed nonempty data.
-        const Value* block=header.get("medium_lod");
-        if(!block)block=header.get("high_lod");
-        else {
+        // Real SL mesh assets may omit any of their four optional LOD
+        // blocks. A valid low/lowest static LOD is still genuine geometry:
+        // reject nonzero malformed offsets/lengths, then try the next
+        // bounded and fully decoded asset block if a populated higher
+        // LOD has invalid or unsupported geometry.
+        constexpr std::array<const char*,4U> levels{
+            "medium_lod","high_lod","low_lod","lowest_lod"
+        };
+        for(const char* name:levels){
+            const Value* block=header.get(name);
+            if(!block)continue;
             if(block->kind!=Value::Kind::Map)return false;
-            double medium_size=0.;
-            if(!number(block->get("size"),medium_size))return false;
-            if(medium_size==0.)block=header.get("high_lod");
+            double offset=0.,length=0.;
+            if(!number(block->get("offset"),offset)||
+               !number(block->get("size"),length))return false;
+            // SL uses size=0 as a missing-LOD sentinel, often with
+            // offset=-1. Do not treat this absent block as corruption.
+            if(length==0.)continue;
+            if(offset<0.||length<6.||
+               offset>double(asset.size())||length>4.*1024.*1024.)
+                return false;
+            const auto off=static_cast<std::size_t>(offset);
+            const auto len=static_cast<std::size_t>(length);
+            if(double(off)!=offset||double(len)!=length||
+               header_bytes>asset.size()||off>asset.size()-header_bytes||
+               len>asset.size()-header_bytes-off)return false;
+            std::vector<std::uint8_t> uncompressed;
+            if(!inflate(asset.subspan(header_bytes+off,len),uncompressed))
+                continue;
+            Value lod;
+            std::size_t parsed=0U;
+            if(!read_llsd(uncompressed,lod,parsed)||
+               parsed!=uncompressed.size())continue;
+            LOD result{};
+            if(!decode_faces(lod,result))continue;
+            result.decoded_bytes=uncompressed.size();
+            out=std::move(result);
+            return true;
         }
-        if(!block||block->kind!=Value::Kind::Map)return false;
-        double offset=0.,length=0.;
-        if(!number(block->get("offset"),offset)||
-           !number(block->get("size"),length)||
-           offset<0.||length<6.||
-           offset>double(asset.size())||length>4.*1024.*1024.)return false;
-        const auto off=static_cast<std::size_t>(offset);
-        const auto len=static_cast<std::size_t>(length);
-        if(double(off)!=offset||double(len)!=length||
-           header_bytes>asset.size()||off>asset.size()-header_bytes||
-           len>asset.size()-header_bytes-off)return false;
-        std::vector<std::uint8_t> uncompressed;
-        if(!inflate(asset.subspan(header_bytes+off,len),uncompressed))
-            return false;
-        Value lod;
-        std::size_t parsed=0U;
-        if(!read_llsd(uncompressed,lod,parsed)||
-           parsed!=uncompressed.size())return false;
-        LOD result{};
-        if(!decode_faces(lod,result))return false;
-        result.decoded_bytes=uncompressed.size();
-        out=std::move(result);
-        return true;
+        return false;
     }catch(...){return false;}
 }
 } // namespace kami::protocol::mesh
