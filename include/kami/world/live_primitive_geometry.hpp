@@ -1,4 +1,5 @@
 #pragma once
+#include "kami/protocol/texture_budget.hpp"
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/mesh_lod.hpp"
 #include "kami/protocol/texture_decode.hpp"
@@ -46,7 +47,7 @@ select_visible_mesh_texture_layers(
     const std::map<std::string,protocol::mesh::LOD>& loaded,
     const std::map<std::string,protocol::texture::DecodedTexture>& decoded,
     float agent_x,float agent_y,float agent_z,
-    std::size_t max_layers=24U,
+    std::size_t max_layers=protocol::texture::kGPUImageLayers,
     const std::map<std::string,std::uint16_t>& previous={});
 
 struct MeshBatch {

@@ -9,6 +9,7 @@
 #include "kami/protocol/load_scheduler.hpp"
 #include "kami/protocol/mesh_lod.hpp"
 #include "kami/protocol/texture_decode.hpp"
+#include "kami/protocol/texture_budget.hpp"
 #include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
 #include <winsock2.h>
@@ -303,11 +304,12 @@ private:
         texture::DecodedTexture image{};
     };
     std::future<TextureResult> texture_worker_;
-    // CPU preview cache is wider than the 24-slice DX12 GPU atlas so
+    std::map<std::string,std::chrono::steady_clock::time_point> texture_retry_after_;
+    // CPU preview cache is wider than the DX12 GPU atlas so
     // large decorated regions can stream nearby assets over time.
-    static constexpr std::size_t kMaxDecodedTextureAssets=96U;
-    static constexpr std::size_t kMaxDecodedTextureBytes=96U*1024U*1024U;
-    std::set<std::string> texture_desired_ids_; // nearest 96 authenticated IDs
+    static constexpr std::size_t kMaxDecodedTextureAssets=texture::kCPUImageAssets;
+    static constexpr std::size_t kMaxDecodedTextureBytes=texture::kCPUImageBytes;
+    std::set<std::string> texture_desired_ids_; // nearest bounded authenticated IDs
     std::map<std::string,texture::DecodedTexture> decoded_textures_;
     std::size_t decoded_texture_bytes_=0U;
     std::size_t texture_download_count_=0U,texture_failure_count_=0U;

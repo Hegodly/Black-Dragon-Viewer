@@ -11,6 +11,7 @@
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include "kami/protocol/texture_decode.hpp"
+#include "kami/protocol/texture_budget.hpp"
 #include "kami/world/region_geometry.hpp"
 #include "kami/world/live_avatar.hpp"
 #include <optional>
@@ -264,8 +265,8 @@ private:
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
     bool texture_upload_pending_=false;
-    static constexpr UINT kLiveTextureLayers=48U;
-    static constexpr UINT kLiveTextureSize=256U;
+    static constexpr UINT kLiveTextureLayers=protocol::texture::kGPUImageLayers;
+    static constexpr UINT kLiveTextureSize=protocol::texture::kPreviewExtent;
     std::size_t primitive_eligible_=0;
     std::size_t primitive_unresolved_=0;
     std::size_t primitive_missing_anchor_=0,primitive_avatar_parent_=0;

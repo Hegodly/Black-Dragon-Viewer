@@ -364,6 +364,31 @@ int run_primitive_tests(){
         {{305U,close_prim}}, {},{},assets,bitmaps,
         128.f,140.f,35.f,48U);
     if(bounded.size()>48U)return 43;
+    // Dense decorated regions exceed the old 48-image limit. All 192
+    // unique visible assets must receive distinct stable GPU slots.
+    std::map<std::uint32_t,Transform> dense;
+    std::map<std::string,protocol::texture::DecodedTexture> dense_images;
+    for(std::uint32_t i=0U;i<protocol::texture::kGPUImageLayers+8U;++i){
+        Transform t=close_prim;t.local_id=1000U+i;
+        t.face_texture_override.fill(false);
+        t.default_texture_asset_id="dense-image-"+std::to_string(i);
+        t.x=128.f+float(i%10U);t.y=140.f+float(i/10U);
+        dense_images.emplace(t.default_texture_asset_id,one_pixel);
+        dense.emplace(t.local_id,t);
+    }
+    const auto expanded=world::select_visible_mesh_texture_layers(
+        dense,{}, {},{},dense_images,128.f,140.f,35.f,1000U);
+    if(expanded.size()!=protocol::texture::kGPUImageLayers)return 45;
+    std::set<std::uint16_t> slots;
+    for(const auto& [id,slot]:expanded){
+        if(slot==0U||slot>protocol::texture::kGPUImageLayers||
+           !slots.insert(slot).second)return 46;
+    }
+    if(!slots.contains(protocol::texture::kGPUImageLayers))return 47;
+    const auto repeated=world::select_visible_mesh_texture_layers(
+        dense,{}, {},{},dense_images,128.f,140.f,35.f,
+        protocol::texture::kGPUImageLayers,expanded);
+    if(repeated!=expanded)return 48;
     return 0;
 }
 
