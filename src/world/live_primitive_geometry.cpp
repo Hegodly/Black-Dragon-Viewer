@@ -523,17 +523,33 @@ MeshBatch build_live_mesh_geometry(
         (void)id;
         if(t.mesh_asset_id.empty()||t.reflection_probe)continue;
         Pose pose{};std::uint32_t missing=0U;
-        if(resolve(t,roots,children,avatar_roots,pose,missing)==
-           RootResult::Found)try_add(t,pose,true);
-        else ++batch.waiting_for_parent;
+        switch(resolve(t,roots,children,avatar_roots,pose,missing)){
+        case RootResult::Found:try_add(t,pose,true);break;
+        case RootResult::Missing:++batch.parent_missing_instances;
+            ++batch.waiting_for_parent;break;
+        case RootResult::Avatar:++batch.parent_avatar_instances;
+            ++batch.waiting_for_parent;break;
+        case RootResult::Cycle:++batch.parent_cycle_instances;
+            ++batch.waiting_for_parent;break;
+        case RootResult::Invalid:++batch.parent_invalid_instances;
+            ++batch.waiting_for_parent;break;
+        case RootResult::TooDeep:++batch.parent_too_deep_instances;
+            ++batch.waiting_for_parent;break;
+        }
     }
     std::sort(chosen.begin(),chosen.end(),
        [](const Item& a,const Item& b){return a.distance<b.distance;});
     batch.eligible_instances=chosen.size();
     auto& verts=batch.scene.vertices;
     verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
-    for(const auto& item:chosen){
+    for(std::size_t index=0U;index<chosen.size();++index){
+        if(batch.emitted_triangles>=max_triangles){
+            batch.undrawn_budget_instances+=chosen.size()-index;
+            break;
+        }
+        const auto& item=chosen[index];
         std::size_t object_triangles=0U;
+        std::size_t transparent=0U,invalid_geometry=0U;
         for(const auto& triangle:item.lod->triangles){
             if(batch.emitted_triangles>=max_triangles)break;
             // Every mesh face is an independent SL material slot. An
@@ -543,7 +559,9 @@ MeshBatch build_live_mesh_geometry(
             const auto pbr=pbr_faces.find(pbr_face_key(obj.local_id,face));
             const auto material_index=pbr==pbr_faces.end()?0U:pbr->second;
             if(material_index==0U&&obj.face_rgba_present&&face<obj.face_rgba.size()&&
-               obj.face_rgba[face][3]<=0.f)continue;
+               obj.face_rgba[face][3]<=0.f){
+                ++transparent;continue;
+            }
             const std::string& texture_id=
                 face<obj.face_texture_override.size()&&
                 obj.face_texture_override[face]?
@@ -563,7 +581,7 @@ MeshBatch build_live_mesh_geometry(
                 points[v]={world.x-origin.x,world.z-origin.z,world.y-origin.y};
                 valid=valid&&finite(points[v]);
             }
-            if(!valid)continue;
+            if(!valid){++invalid_geometry;continue;}
             // SL coordinate conversion swaps Y/Z handedness. Reverse the
             // winding exactly once; no convex-geometry guesses for meshes.
             std::swap(points[1],points[2]);
@@ -574,7 +592,9 @@ MeshBatch build_live_mesh_geometry(
             const auto b=sub(points[2],points[0]);
             V normal=cross(a,b);
             const float length=std::sqrt(dot(normal,normal));
-            if(!std::isfinite(length)||length<1.e-8f)continue;
+            if(!std::isfinite(length)||length<1.e-8f){
+                ++invalid_geometry;continue;
+            }
             normal=scale(normal,1.f/length);
             for(unsigned v=0U;v<3U;++v){
                 const auto& p=points[v];
@@ -610,8 +630,13 @@ MeshBatch build_live_mesh_geometry(
         if(object_triangles){
             if(item.child)++batch.linked_meshes;
             else ++batch.root_meshes;
+        }else if(transparent){
+            ++batch.undrawn_transparent_instances;
+        }else if(invalid_geometry){
+            ++batch.undrawn_bad_geometry_instances;
         }
-        if(batch.emitted_triangles>=max_triangles)break;
+        // Remaining budget-deferred objects are counted at the top of
+        // the following loop iteration; don't inflate transparency.
     }
     batch.undrawn_eligible_instances=batch.eligible_instances-
         (batch.root_meshes+batch.linked_meshes);
