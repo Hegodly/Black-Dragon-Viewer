@@ -341,7 +341,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     const std::map<std::string,std::uint16_t>& previous) {
     // Keep the original single-draw DX12 array budget (slice 0 is the
     // procedural fallback). Never select textures based on UUID sorting.
-    max_layers=std::min<std::size_t>(max_layers,24U);
+    max_layers=std::min<std::size_t>(max_layers,48U);
     const V origin{agent_x,agent_y,agent_z};
     if(!max_layers||!finite(origin))return {};
     std::map<std::string,float> nearest;
@@ -422,7 +422,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
         });
     if(candidates.size()>max_layers)candidates.resize(max_layers);
     std::map<std::string,std::uint16_t> selected;
-    std::array<bool,25U> occupied{};
+    std::array<bool,49U> occupied{};
     occupied[0]=true;
     // Keep unchanged material IDs on the same GPU slice if still visible.
     for(const auto& [uuid,distance]:candidates){
