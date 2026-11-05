@@ -138,4 +138,44 @@ bool decode_jpeg2000(std::span<const std::uint8_t> j2c,
         return true;
     }catch(...){return false;}
 }
+bool downscale_preview(DecodedTexture& image,
+                       std::uint32_t max_side) noexcept {
+    if(max_side==0U||max_side>2048U||
+       image.width==0U||image.height==0U||
+       image.width>4096U||image.height>4096U)return false;
+    const auto pixels=std::uint64_t(image.width)*image.height;
+    if(pixels>16U*1024U*1024U||image.rgba.size()!=pixels*4U)
+        return false;
+    const std::uint32_t larger=std::max(image.width,image.height);
+    if(larger<=max_side)return true;
+    const auto reduce=[&](std::uint32_t dimension) {
+        return std::max<std::uint32_t>(1U,
+            static_cast<std::uint32_t>(
+                (std::uint64_t(dimension)*max_side+larger/2U)/larger));
+    };
+    const auto width=reduce(image.width),height=reduce(image.height);
+    try{
+        std::vector<std::uint8_t> scaled;
+        scaled.resize(std::size_t(width)*height*4U);
+        for(std::uint32_t y=0U;y<height;++y){
+            // Center-of-texel nearest filtering. No fixed point overflow.
+            const auto iy=std::min<std::uint64_t>(
+                image.height-1U,
+                (std::uint64_t(2U)*y+1U)*image.height/(2U*height));
+            for(std::uint32_t x=0U;x<width;++x){
+                const auto ix=std::min<std::uint64_t>(
+                    image.width-1U,
+                    (std::uint64_t(2U)*x+1U)*image.width/(2U*width));
+                const auto src=4U*(std::size_t(iy)*image.width+
+                                   std::size_t(ix));
+                const auto dst=4U*(std::size_t(y)*width+x);
+                std::memcpy(scaled.data()+dst,image.rgba.data()+src,4U);
+            }
+        }
+        image.rgba=std::move(scaled);
+        image.width=width;
+        image.height=height;
+        return true;
+    }catch(...){return false;}
+}
 } // namespace kami::protocol::texture
