@@ -219,5 +219,25 @@ int main(){
            packet({malformed_box}),out,&audit)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
        audit.malformed_extra_envelopes!=1U)return 21;
+    // High 12 must recognize the official 0x60 mesh alias and not
+    // classify it as an unknown ExtraParam or a simple box.
+    auto mesh_alias=sculpt;
+    mesh_alias[1U]=0x60U;
+    auto aliased_block=block(120U,0U,9U,128.f,mesh_alias);
+    aliased_block[109]=0x10U;aliased_block[110]=0x01U;
+    aliased_block[115]=100U;aliased_block[116]=100U;
+    if(!objectspatial::decode_full_transforms(
+        packet({aliased_block}),out,&audit)||out.size()!=1U||
+       out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       audit.mesh_references!=1U||audit.sculpt_records!=1U||
+       audit.mesh_sculpt_records!=1U||audit.other_extra_records!=0U)
+        return 22;
+    mesh_alias.back()=3U; // 0x60 without a type-5 sculpt is not a mesh
+    if(!objectspatial::decode_full_transforms(
+        packet({block(121U,0U,9U,128.f,mesh_alias)}),out,&audit)||
+       audit.mesh_references!=0U||audit.sculpt_records!=1U)
+        return 23;
+
     return 0;
 }
