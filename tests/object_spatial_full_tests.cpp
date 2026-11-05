@@ -281,5 +281,19 @@ int main(){
     if(!objectspatial::decode_full_transforms(packet({avatar_block}),
            out,&audit,nullptr,nullptr,&known_avatar_ids,&full_avatar_poses)||
        !full_avatar_poses.empty()||known_avatar_ids.size()!=1U)return 28;
+    // Full High 12 object must recognize a 0x60 mesh alias.
+    auto alias_extra=sculpt;
+    alias_extra[1U]=0x60U;
+    auto aliased_block=block(120U,0U,9U,128.f,alias_extra);
+    aliased_block[109]=0x10U;aliased_block[110]=0x01U;
+    aliased_block[115]=100U;aliased_block[116]=100U;
+    if(!objectspatial::decode_full_transforms(
+        packet({aliased_block}),out,&audit)||out.size()!=1U||
+       out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       audit.mesh_references!=1U||audit.sculpt_records!=1U||
+       audit.mesh_sculpt_records!=1U||audit.other_extra_records!=0U)
+        return 22;
+
     return 0;
 }
