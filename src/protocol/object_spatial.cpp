@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/world_wire.hpp"
 #include "kami/protocol/mesh_reference.hpp"
+#include "kami/protocol/official_extra_params.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -108,16 +109,25 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     if(count>32U)return out;
     for(unsigned i=0;i<count;++i){
         if(!has(6U))return out;
-        const auto type=u16(data,at);
         const std::size_t length=u32(data,at+2U);
         at+=6U;
         if(length>4096U||!has(length))return out;
-        ++out.extra_records;
-        if(type==0x30U && length==17U)++out.sculpt_records;
         at+=length;
     }
+    // Validate the complete envelope using Linden Lab's parameter type
+    // sizes (0x30 sculpt, 0x70 extended flags, 0x80 render material).
+    const auto extras=data.subspan(first,at-first);
+    KamiSlExtraParamsV1 summary{};
+    summary.struct_size=sizeof(summary);
+    if(!kami_sl_decode_extra_params_v1(extras.data(),
+          static_cast<std::uint32_t>(extras.size()),&summary)){
+        out.unsupported=true;
+        return out;
+    }
+    out.extra_records=summary.records;
+    out.sculpt_records=summary.sculpt;
     out.extras=true;
-    out.mesh=mesh::mesh_asset_from_extras(data.subspan(first,at-first));
+    out.mesh=mesh::mesh_asset_from_extras(extras);
     // LLViewerObject processes sound and NV fields BEFORE
     // LLVOVolume::unpackVolumeParams() consumes 23 shape bytes.
     if(special&0x10U){
