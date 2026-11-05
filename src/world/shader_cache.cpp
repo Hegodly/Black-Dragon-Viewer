@@ -21,7 +21,7 @@ constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
 constexpr UINT kCompilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 constexpr std::size_t kMaxShaderBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxPipelineBytes = 32U * 1024U * 1024U;
-constexpr std::string_view kBuildVersion = "kami-dx12-pso-v6-atmosphere-water-biome-sm5";
+constexpr std::string_view kBuildVersion = "kami-dx12-pso-v7-sl-default-texture-array-sm5";
 namespace fs = std::filesystem;
 
 std::uint64_t fnv(std::string_view data, std::uint64_t h = 14695981039346656037ULL) noexcept {
@@ -183,7 +183,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc(
     desc.pRootSignature=root;
     desc.VS={vs.data(),vs.size()};
     desc.PS={ps.data(),ps.size()};
-    desc.InputLayout={input,8};
+    desc.InputLayout={input,9};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.FrontCounterClockwise=FALSE;
@@ -254,6 +254,8 @@ bool ShaderCache::prepare(
         {"BLENDINDICES",0,DXGI_FORMAT_R32_UINT,0,56,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"BLENDWEIGHT",0,DXGI_FORMAT_R32_UINT,0,60,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",2,DXGI_FORMAT_R32_FLOAT,0,64,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     auto desc=pipeline_desc(signature.Get(),vs,ps,input);
@@ -343,12 +345,14 @@ bool ShaderCache::prepare_shadow(
         {"BLENDINDICES",0,DXGI_FORMAT_R32_UINT,0,56,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
         {"BLENDWEIGHT",0,DXGI_FORMAT_R32_UINT,0,60,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",2,DXGI_FORMAT_R32_FLOAT,0,64,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature=signature;
     desc.VS={vs.data(),vs.size()};
-    desc.InputLayout={input,8};
+    desc.InputLayout={input,9};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     desc.RasterizerState.DepthClipEnable=TRUE;

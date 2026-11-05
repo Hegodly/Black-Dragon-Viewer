@@ -50,6 +50,7 @@ on:
       - fix/kami-r45-mesh-alias-official-bridge-20261104
       - fix/kami-r46-object-retention-recovery-20261105
       - fix/kami-r47-binary-llsd-mesh-20261105
+      - feature/kami-r48-dx12-mesh-texture-preview-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -159,9 +160,9 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R47-Raw-Binary-Mesh-LOD-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R48-Mesh-Albedo-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R47-Raw-Binary-Mesh-LOD-DX12
-          path: dist/KAMI-R47-Raw-Binary-Mesh-LOD-DX12.zip
+          name: KAMI-R48-Mesh-Albedo-DX12
+          path: dist/KAMI-R48-Mesh-Albedo-DX12.zip
           retention-days: 14

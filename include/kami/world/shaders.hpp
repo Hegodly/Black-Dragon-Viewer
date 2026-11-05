@@ -17,7 +17,7 @@ cbuffer Frame : register(b0) {
 };
 Texture2D<float> shadowDepth : register(t0);
 SamplerComparisonState shadowComparison : register(s0);
-Texture2D<float4> materialTexture : register(t1);
+Texture2DArray<float4> materialTexture : register(t1);
 // Four float4 rows per original KAMI joint. Explicit vector arithmetic
 // avoids row/column-major ambiguities and works with DX11-era HLSL profiles.
 StructuredBuffer<float4> skinRows : register(t2);
@@ -31,6 +31,7 @@ struct VertexIn {
     float region : TEXCOORD1; // zero unless a local body physics marker
     uint bones : BLENDINDICES;
     uint weights : BLENDWEIGHT;
+    float textureLayer : TEXCOORD2;
 };
 struct Interpolant {
     float4 clip : SV_POSITION;
@@ -39,6 +40,7 @@ struct Interpolant {
     float3 albedo : TEXCOORD2;
     float2 material : TEXCOORD3;
     float2 uv : TEXCOORD4;
+    nointerpolation float textureLayer : TEXCOORD5;
 };
 // The same local avatar transformation is used in the depth/shadow and
 // main passes; this keeps locomotion and shadows synchronized on the GPU.
@@ -121,6 +123,7 @@ Interpolant vertex_main(VertexIn input) {
     output.albedo = input.color;
     output.material = input.material;
     output.uv = input.uv;
+    output.textureLayer = input.textureLayer;
     return output;
 }
 float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
@@ -170,8 +173,14 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     float VdotH=saturate(dot(V,H));
     // This is a real sampled GPU texture, procedurally uploaded by KAMI.
     // Later SL texture assets will enter through the same resource interface.
-    float3 texel=materialTexture.Sample(materialSampler,input.uv).rgb;
-    float3 base=saturate(input.albedo*lerp(0.72,1.12,texel));
+    float layer=clamp(round(input.textureLayer),0.0,24.0);
+    float3 texel=materialTexture.Sample(materialSampler,
+        float3(input.uv,layer)).rgb;
+    // Layer 0 is KAMI's old procedural material. Other slices contain
+    // genuinely decoded SL default TextureEntry images (not PBR overrides).
+    float3 base=layer<0.5?
+        saturate(input.albedo*lerp(0.72,1.12,texel)):
+        saturate(input.albedo*texel);
     float visibility=shadow_factor(input.position,N);
     float3 radiance=float3(1.25,1.18,1.08)*sunDirectionIntensity.w;
     float3 color;

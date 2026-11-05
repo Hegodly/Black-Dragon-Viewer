@@ -7,6 +7,9 @@
 namespace kami::protocol::texture {
 struct Base {
     std::array<std::uint8_t,16U> image_id{};
+    // Sparse original SL TE face-image exceptions (0..44).
+    std::array<std::array<std::uint8_t,16U>,45U> face_image_ids{};
+    std::array<bool,45U> face_image_override{};
     float red=1.f,green=1.f,blue=1.f,alpha=1.f;
 };
 // Decode the default image ID and default RGBA tint in an SL TextureEntry.
@@ -20,4 +23,5 @@ struct Base {
 // SL network UUID ordering, canonical lowercase format. All-zero UUID
 // denotes no image. The transport must not fetch zero or malformed IDs.
 [[nodiscard]] std::string default_image_uuid(const Base& entry);
+[[nodiscard]] std::string face_image_uuid(const Base& entry,unsigned face);
 } // namespace kami::protocol::texture

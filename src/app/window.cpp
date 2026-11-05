@@ -586,6 +586,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
                     L" | J2C "+std::to_wstring(
                         sl_circuit_.decoded_texture_count())+
+                    L" | TexGPU "+std::to_wstring(
+                        world_renderer_.bound_sl_texture_assets())+
+                    L" | TexTri "+std::to_wstring(
+                        world_renderer_.uploaded_textured_triangles())+
                     L" | Q "+std::to_wstring(
                         sl_circuit_.mesh_asset_stats().queued)+
                     L" | Fetch "+std::to_wstring(
@@ -609,7 +613,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         }
         label(L"JPEG2000 CPU decoded "+std::to_wstring(
                   sl_circuit_.decoded_texture_count())+
-              L" assets; DX12 per-face texture binding still pending | avatar partial",
+              L" assets; DX12 mesh default/per-face texture preview active (max 24) | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;

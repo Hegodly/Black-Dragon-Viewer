@@ -13,6 +13,7 @@ struct Vertex {
     float body_region=0.f; // legacy local preview; rigged vertices use weights
     std::uint32_t bone_indices=0;
     std::uint32_t bone_weights=0; // packed normalized UNORM8 x4; zero=unrigged
+    float texture_layer=0.f; // 0=original procedural fallback, >0=validated SL albedo
 };
 struct SceneMesh {
     std::vector<Vertex> vertices;

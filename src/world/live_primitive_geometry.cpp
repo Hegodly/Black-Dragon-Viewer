@@ -285,7 +285,8 @@ MeshBatch build_live_mesh_geometry(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     const std::set<std::uint32_t>& avatar_roots,
     const std::map<std::string,protocol::mesh::LOD>& loaded,
-    float agent_x,float agent_y,float agent_z,std::size_t max_triangles){
+    float agent_x,float agent_y,float agent_z,std::size_t max_triangles,
+    const std::map<std::string,std::uint16_t>& texture_layers){
     MeshBatch batch{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return batch;
@@ -329,6 +330,18 @@ MeshBatch build_live_mesh_geometry(
         std::size_t object_triangles=0U;
         for(const auto& triangle:item.lod->triangles){
             if(batch.emitted_triangles>=max_triangles)break;
+            // Every mesh face is an independent SL material slot. An
+            // explicit null override must never fall back to its parent.
+            const unsigned face=triangle.face_index;
+            const auto& obj=*item.transform;
+            const std::string& texture_id=
+                face<obj.face_texture_override.size()&&
+                obj.face_texture_override[face]?
+                  obj.face_texture_asset_ids[face]:
+                  obj.default_texture_asset_id;
+            const auto layer_it=texture_layers.find(texture_id);
+            const std::uint16_t selected_layer=
+                layer_it==texture_layers.end()?0U:layer_it->second;
             std::array<V,3> points{};
             bool valid=true;
             for(unsigned v=0U;v<3U;++v){
@@ -344,6 +357,9 @@ MeshBatch build_live_mesh_geometry(
             // SL coordinate conversion swaps Y/Z handedness. Reverse the
             // winding exactly once; no convex-geometry guesses for meshes.
             std::swap(points[1],points[2]);
+            // Keep mesh UV winding in step with the handedness swap.
+            const std::array<unsigned,3> original_index{0U,2U,1U};
+            const bool textured=selected_layer>0U&&triangle.has_uv;
             const auto a=sub(points[1],points[0]);
             const auto b=sub(points[2],points[0]);
             V normal=cross(a,b);
@@ -359,11 +375,17 @@ MeshBatch build_live_mesh_geometry(
                     std::clamp(t.base_g,0.f,1.f):.87f;
                 const float blue=t.base_tint_present?
                     std::clamp(t.base_b,0.f,1.f):.96f;
+                const auto oi=original_index[v];
                 verts.push_back({p.x,p.y,p.z,normal.x,normal.y,normal.z,
-                                 red,green,blue,.04f,.82f,0.f,0.f});
+                                 red,green,blue,.04f,.82f,
+                                 triangle.has_uv?triangle.uv[2U*oi]:0.f,
+                                 triangle.has_uv?triangle.uv[2U*oi+1U]:0.f,
+                                 0.f,0U,0U,
+                                 textured?static_cast<float>(selected_layer):0.f});
             }
             ++object_triangles;
             ++batch.emitted_triangles;
+            if(textured)++batch.textured_triangles;
         }
         if(object_triangles){
             if(item.child)++batch.linked_meshes;

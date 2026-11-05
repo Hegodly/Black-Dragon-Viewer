@@ -30,7 +30,16 @@ void Circuit::prune_decoded_textures() noexcept {
         const auto check=[&](const auto& objects){
             for(const auto& [id,t]:objects){
                 (void)id;
-                if(t.default_texture_asset_id!=asset)continue;
+                bool referenced=(t.default_texture_asset_id==asset);
+                if(!referenced){
+                    for(unsigned face=0U;face<t.face_texture_override.size();++face){
+                        if(t.face_texture_override[face]&&
+                           t.face_texture_asset_ids[face]==asset){
+                            referenced=true;break;
+                        }
+                    }
+                }
+                if(!referenced)continue;
                 const auto* anchor=world_mesh_anchor(t);
                 if(anchor&&within_retention(*anchor))return true;
             }
@@ -45,6 +54,8 @@ void Circuit::prune_decoded_textures() noexcept {
             bytes>decoded_texture_bytes_?0U:decoded_texture_bytes_-bytes;
         (void)texture_scheduler_.forget_finished(it->first);
         it=decoded_textures_.erase(it);
+        // The visible GPU atlas must drop evicted textures on next frame.
+        ++spatial_object_revision_;
     }
 }
 void Circuit::schedule_visible_textures() noexcept {
@@ -70,16 +81,23 @@ void Circuit::schedule_visible_textures() noexcept {
     const auto schedule=[&](const auto& objects){
         for(const auto& [id,t]:objects){
             (void)id;
-            if(t.default_texture_asset_id.empty())continue;
             const auto* anchor=world_mesh_anchor(t);
             if(!anchor||!near_enough(*anchor))continue;
             const float distance=std::hypot(std::hypot(
                 anchor->x-movement_position_.x,
                 anchor->y-movement_position_.y),
                 anchor->z-movement_position_.z);
-            (void)texture_scheduler_.request(
-                t.default_texture_asset_id,load::Kind::VisibleTexture,
-                distance,true,0U);
+            const auto request=[&](const std::string& image){
+                if(image.empty())return;
+                (void)texture_scheduler_.request(
+                    image,load::Kind::VisibleTexture,distance,true,0U);
+            };
+            // TE default plus explicitly specified face overrides. The
+            // load scheduler deduplicates shared IDs across mesh instances.
+            request(t.default_texture_asset_id);
+            for(unsigned face=0U;face<t.face_texture_override.size();++face)
+                if(t.face_texture_override[face])
+                    request(t.face_texture_asset_ids[face]);
         }
     };
     schedule(spatial_objects_);
@@ -115,6 +133,9 @@ void Circuit::maybe_fetch_texture() noexcept {
                         decoded_texture_bytes_=used+bytes;
                         decoded_textures_.insert_or_assign(
                             result.id,std::move(result.image));
+                        // Notify the 800 ms coalesced DX12 region uploader:
+                        // a new J2C image must also rebuild the texture atlas.
+                        ++spatial_object_revision_;
                     }else ++texture_failure_count_;
                 }
             }else{

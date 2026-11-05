@@ -10,6 +10,7 @@
 #include "kami/features/rig_diagnostics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
+#include "kami/protocol/texture_decode.hpp"
 #include "kami/world/region_geometry.hpp"
 #include "kami/world/live_avatar.hpp"
 #include <optional>
@@ -18,6 +19,8 @@
 #include <wrl/client.h>
 #include <array>
 #include <chrono>
+#include <map>
+#include <cstdint>
 #include <cstddef>
 #include <string>
 #include <windows.h>
@@ -134,6 +137,12 @@ public:
     [[nodiscard]] std::size_t uploaded_mesh_triangles() const noexcept {
         return region_mesh_?uploaded_mesh_triangles_:0U;
     }
+    [[nodiscard]] std::size_t bound_sl_texture_assets() const noexcept {
+        return region_mesh_?live_texture_layers_.size():0U;
+    }
+    [[nodiscard]] std::size_t uploaded_textured_triangles() const noexcept {
+        return region_mesh_?uploaded_textured_triangles_:0U;
+    }
     [[nodiscard]] std::size_t live_primitive_eligible() const noexcept {
         return region_mesh_?primitive_eligible_:0U;
     }
@@ -206,7 +215,10 @@ private:
     [[nodiscard]] bool make_targets();
     [[nodiscard]] bool make_depth();
     [[nodiscard]] bool make_shadow();
-    [[nodiscard]] bool make_material_texture();
+    // Layer zero is the original procedural fallback. Other slices are
+    // authenticated, CPU-decoded SL default TextureEntry images.
+    [[nodiscard]] bool make_material_texture(
+        const std::map<std::string,protocol::texture::DecodedTexture>* images=nullptr);
     [[nodiscard]] bool make_skin_palette();
     [[nodiscard]] bool update_skin_palette() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
@@ -234,6 +246,10 @@ private:
     std::size_t uploaded_primitive_vertices_=0;
     std::size_t uploaded_mesh_vertices_=0,uploaded_mesh_shapes_=0;
     std::size_t uploaded_mesh_triangles_=0;
+    std::size_t uploaded_textured_triangles_=0;
+    std::map<std::string,std::uint16_t> live_texture_layers_;
+    static constexpr UINT kLiveTextureLayers=24U;
+    static constexpr UINT kLiveTextureSize=256U;
     std::size_t primitive_eligible_=0;
     std::size_t primitive_unresolved_=0;
     std::size_t primitive_missing_anchor_=0,primitive_avatar_parent_=0;

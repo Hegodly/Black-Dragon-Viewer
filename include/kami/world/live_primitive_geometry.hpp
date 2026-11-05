@@ -35,6 +35,7 @@ struct MeshBatch {
     SceneMesh scene{};
     std::size_t root_meshes=0,linked_meshes=0;
     std::size_t emitted_triangles=0,waiting_for_parent=0;
+    std::size_t textured_triangles=0; // authentic default TE + decoded mesh UV
 };
 // Render ONLY vertices decoded from real mesh assets (no surrogate boxes).
 // Shared SL-to-DX12 transforms with the validated prim hierarchy builder.
@@ -44,5 +45,6 @@ struct MeshBatch {
     const std::set<std::uint32_t>& avatar_roots,
     const std::map<std::string,protocol::mesh::LOD>& loaded,
     float agent_x,float agent_y,float agent_z,
-    std::size_t max_triangles=18000U);
+    std::size_t max_triangles=18000U,
+    const std::map<std::string,std::uint16_t>& texture_layers={});
 } // namespace kami::world
