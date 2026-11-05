@@ -5,6 +5,7 @@
 #include <map>
 #include <set>
 #include <limits>
+#include <cstdio>
 using namespace kami;
 namespace {
 using Transform=protocol::objectspatial::Transform;
@@ -21,7 +22,7 @@ bool valid(const world::PrimitiveBatch& b) {
     return true;
 }
 }
-int main(){
+int run_primitive_tests(){
     std::map<std::uint32_t,Transform> roots,children;
     Transform root{77U,128.f,140.f,35.f,2.f,3.f,4.f};
     root.primitive=Kind::Box;
@@ -350,4 +351,11 @@ int main(){
         128.f,140.f,35.f,48U);
     if(bounded.size()>48U)return 43;
     return 0;
+}
+
+int main(){
+    const int code=run_primitive_tests();
+    if(code!=0)std::fprintf(stderr,
+        "KAMI prim/material regression failed: check %d\\n",code);
+    return code;
 }
