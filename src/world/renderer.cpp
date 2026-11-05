@@ -764,7 +764,8 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_mesh_assets(),
         circuit.decoded_texture_assets(),
         agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_);
-    if(next_layers!=live_texture_layers_){
+    const bool atlas_changed=next_layers!=live_texture_layers_;
+    if(atlas_changed){
         auto previous=std::move(live_texture_layers_);
         live_texture_layers_=std::move(next_layers);
         if(ready_){
@@ -819,7 +820,7 @@ bool Renderer::set_verified_live_terrain(
             // The GPU atlas might have been updated already while the
             // old world vertex buffer still references previous layer
             // indices. Never present mismatched geometry and materials.
-            if(!next_layers.empty())ready_=false;
+            if(atlas_changed)ready_=false;
             error_=L"R52 DX12 scene upload failed; renderer stopped to prevent mixed world/texture state";
             return false;
         }
