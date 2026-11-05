@@ -76,5 +76,31 @@ int main(){
     summary.struct_size=42U;
     if(kami_sl_decode_extra_params_v1(fields.data(),
         static_cast<std::uint32_t>(fields.size()),&summary))return 12;
+    // Official mesh param 0x60 aliases sculpt 0x30 and must yield
+    // the same authenticated UUID, but 0x70 remains only flags.
+    Bytes alias{1U};
+    extra(alias,0x60U,sculpt);
+    summary.struct_size=sizeof(summary);
+    if(!kami_sl_decode_extra_params_v1(alias.data(),
+            static_cast<std::uint32_t>(alias.size()),&summary)||
+       summary.records!=1U||summary.sculpt!=1U||
+       summary.mesh_sculpt!=1U||summary.unknown!=0U||
+       kami::protocol::mesh::mesh_asset_from_extras(alias)!=mesh)
+       return 13;
+    auto bad_alias=alias;
+    bad_alias.back()=3U; // ordinary sculpt, not a mesh
+    summary.struct_size=sizeof(summary);
+    if(!kami_sl_decode_extra_params_v1(bad_alias.data(),
+            static_cast<std::uint32_t>(bad_alias.size()),&summary)||
+       summary.sculpt!=1U||summary.mesh_sculpt!=0U||
+       !kami::protocol::mesh::mesh_asset_from_extras(bad_alias).empty())
+       return 14;
+    bad_alias=Bytes{1U};
+    extra(bad_alias,0x60U,Bytes(16U,0U)); // malformed mesh alias
+    summary.struct_size=sizeof(summary);
+    if(kami_sl_decode_extra_params_v1(bad_alias.data(),
+            static_cast<std::uint32_t>(bad_alias.size()),&summary))
+       return 15;
+
     return 0;
 }
