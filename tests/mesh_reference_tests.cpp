@@ -23,5 +23,16 @@ int main(){
     malformed=input;
     for(unsigned i=7U;i<23U;++i)malformed[i]=0U;
     if(!mesh::mesh_asset_from_extras(malformed).empty())return 8;
+    // Official viewer also accepts PARAMS_MESH (0x60), not just
+    // PARAMS_SCULPT (0x30); keep the 17-byte/type-5 validation.
+    input[1]=0x60U;
+    if(mesh::mesh_asset_from_extras(input)!=uuid)return 9;
+    input.back()=3U;
+    if(!mesh::mesh_asset_from_extras(input).empty())return 10;
+    input.back()=0x85U;
+    if(mesh::mesh_asset_from_extras(input)!=uuid)return 11;
+    input[1]=0x70U; // extended mesh flags are NOT a mesh UUID
+    if(!mesh::mesh_asset_from_extras(input).empty())return 12;
+
     return 0;
 }
