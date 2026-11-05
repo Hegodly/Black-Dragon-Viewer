@@ -50,7 +50,10 @@ public:
     // R63: 4,080 individually rooted primitives must reach the renderer.
     static constexpr std::size_t kMaxRootObjects=4096U;
     static constexpr std::size_t kMaxLinkedObjects=8192U;
-    static constexpr std::size_t kMaxMissingObjectRequests=256U;
+    // R65: 256 queued cache misses was exhausted on decorated regions.
+    // Retain more authenticated missing IDs, while each outbound packet
+    // remains strictly capped at 16 and transmission rate-limited.
+    static constexpr std::size_t kMaxMissingObjectRequests=1024U;
     Circuit()=default;
     Circuit(const Circuit&)=delete;
     Circuit& operator=(const Circuit&)=delete;
