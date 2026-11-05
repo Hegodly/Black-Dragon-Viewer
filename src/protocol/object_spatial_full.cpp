@@ -207,14 +207,16 @@ bool decode_full_transforms(const lludp::Packet& packet,
                     (std::uint32_t(extras[at+5U])<<24U);
                 at+=6U;
                 if(length>4096U||length>extras.size()-at||
-                   (type==0x30U&&length!=17U)){
+                   ((type==0x30U||type==0x60U)&&length!=17U)){
                     extras_valid=false;break;
                 }
                 ++seen.extra_records;
                 if(type==0x10U)++seen.flexible_records;
                 else if(type==0x20U)++seen.light_records;
                 else if(type==0x40U)++seen.projector_records;
-                else if(type==0x30U){
+                else if(type==0x30U||type==0x60U){
+                    // Official LLViewerObject maps PARAMS_MESH (0x60)
+                    // onto sculpt parameters (0x30) for mesh assets.
                     ++seen.sculpt_records;
                     if((extras[at+16U]&0x3fU)==5U)
                         ++seen.mesh_sculpt_records;
