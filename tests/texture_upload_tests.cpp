@@ -6,10 +6,11 @@
 #include "kami/world/scene_diff.hpp"
 #include <array>
 #include <limits>
-static_assert(sizeof(kami::world::Vertex)==68U,
+static_assert(sizeof(kami::world::Vertex)==72U,
     "DX12 mesh texture layer must fit the vertex input layout");
 
 int main() {
+    static_assert(offsetof(kami::world::Vertex,pbr_material)==68U);
     // Incremental GPU atlas uploads must touch only changed material
     // slices, not repack unrelated textures on every J2C arrival.
     using kami::world::changed_atlas_layers;
@@ -135,3 +136,4 @@ int main() {
     }
     return 0;
 }
+

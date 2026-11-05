@@ -12,7 +12,7 @@ namespace kami::world {
 // upload when the renderable world has not changed at all.
 [[nodiscard]] inline bool same_scene_geometry(
     const SceneMesh& a,const SceneMesh& b) noexcept {
-    static_assert(sizeof(Vertex)==68U);
+    static_assert(sizeof(Vertex)==72U);
     static_assert(std::is_trivially_copyable_v<Vertex>);
     if(a.terrain_count!=b.terrain_count||
        a.avatar_count!=b.avatar_count||
@@ -70,3 +70,4 @@ namespace kami::world {
     return true;
 }
 } // namespace kami::world
+

@@ -442,6 +442,16 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     }
     // These are bounded packet/framing observations from the actual
     // authenticated simulator UDP circuit. No geometry is synthesized.
+    if(state_==CircuitState::MovementConfirmed){
+        std::uint32_t object=0U;std::map<unsigned,pbr::Override> overrides;
+        if(pbr::decode_override(incoming.body,object,overrides)&&
+           (material_overrides_.contains(object)||material_overrides_.size()<2048U)){
+            if(overrides.empty())material_overrides_.erase(object);
+            else material_overrides_.insert_or_assign(object,std::move(overrides));
+            ++spatial_object_revision_;
+            texture_scan_revision_=~std::uint64_t{0};
+        }
+    }
     const auto world=worldwire::inspect(incoming);
     // These packet bodies are only admitted from the already connected,
     // authenticated simulator socket. Keep only bounded user-visible chat
@@ -727,6 +737,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 if(objectspatial::decode_killed_ids(incoming,ids))
                     for(const auto id:ids){
                         missing_objects_.erase(id);
+                        material_overrides_.erase(id);
                         if(id==own_avatar_local_id_)own_avatar_local_id_=0U;
                         if(avatar_root_ids_.erase(id)>0U)
                             ++spatial_object_revision_;
@@ -839,9 +850,13 @@ void Circuit::poll(unsigned budget) noexcept {
     maybe_send_agent_update();
     maybe_send_missing_object_requests();
     maybe_fetch_mesh();
+    maybe_fetch_material();
     maybe_fetch_texture();
 }
 void Circuit::stop() noexcept {
+    if(material_worker_.valid()){try{(void)material_worker_.get();}catch(...){}}
+    loaded_materials_.clear();material_overrides_.clear();material_attempts_.clear();
+    material_failures_=0U;material_last_scan_={};
     if(texture_worker_.valid()){
         try{(void)texture_worker_.get();}catch(...){}
     }
@@ -926,3 +941,4 @@ std::wstring Circuit::diagnostic() const {
     return L"UNKNOWN SIMULATOR STATE";
 }
 } // namespace kami::protocol::sim
+

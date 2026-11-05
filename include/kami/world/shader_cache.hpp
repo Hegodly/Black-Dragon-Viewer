@@ -26,7 +26,7 @@ public:
         Microsoft::WRL::ComPtr<ID3D12RootSignature>& signature,
         Microsoft::WRL::ComPtr<ID3D12PipelineState>& pipeline,
         ShaderPreparation& report,
-        const Progress& progress = {});
+        const Progress& progress = {},bool blend=false);
     [[nodiscard]] static std::uint64_t source_version() noexcept;
     [[nodiscard]] static bool prepare_shadow(
         ID3D12Device* device,ID3D12RootSignature* signature,
@@ -39,3 +39,4 @@ public:
         ShaderPreparation& report);
 };
 } // namespace kami::world
+

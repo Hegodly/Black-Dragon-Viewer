@@ -739,6 +739,10 @@ MeshReply fetch_mesh_asset(std::wstring capability_url,std::string mesh_id){
     return fetch_asset_with_field(std::move(capability_url),
         std::move(mesh_id),L"mesh_id",8U*1024U*1024U);
 }
+MeshReply fetch_material_asset(std::wstring capability_url,std::string material_id){
+    return fetch_asset_with_field(std::move(capability_url),std::move(material_id),
+        L"material_id",1024U*1024U+4096U);
+}
 MeshReply fetch_texture_asset(std::wstring capability_url,
                               std::string texture_id){
     auto response=fetch_asset_with_field(std::move(capability_url),
@@ -853,3 +857,4 @@ PollResponse probe_event_queue_once(
     return observed;
 }
 } // namespace kami::protocol::caps
+

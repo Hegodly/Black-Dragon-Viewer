@@ -22,6 +22,8 @@ Texture2DArray<float4> materialTexture : register(t1);
 // avoids row/column-major ambiguities and works with DX11-era HLSL profiles.
 StructuredBuffer<float4> skinRows : register(t2);
 SamplerState materialSampler : register(s1);
+StructuredBuffer<float4> materialRows : register(t3);
+Texture2DArray<float4> colorTexture : register(t4);
 struct VertexIn {
     float3 position : POSITION;
     float3 normal : NORMAL;
@@ -32,6 +34,7 @@ struct VertexIn {
     uint bones : BLENDINDICES;
     uint weights : BLENDWEIGHT;
     float textureLayer : TEXCOORD2;
+    uint pbrMaterial : TEXCOORD3;
 };
 struct Interpolant {
     float4 clip : SV_POSITION;
@@ -41,6 +44,7 @@ struct Interpolant {
     float2 material : TEXCOORD3;
     float2 uv : TEXCOORD4;
     nointerpolation float textureLayer : TEXCOORD5;
+    nointerpolation uint pbrMaterial : TEXCOORD6;
 };
 // The same local avatar transformation is used in the depth/shadow and
 // main passes; this keeps locomotion and shadows synchronized on the GPU.
@@ -124,12 +128,14 @@ Interpolant vertex_main(VertexIn input) {
     output.material = input.material;
     output.uv = input.uv;
     output.textureLayer = input.textureLayer;
+    output.pbrMaterial=input.pbrMaterial;
     return output;
 }
 struct ShadowInterpolant {
     float4 clip : SV_POSITION;
     float2 uv : TEXCOORD0;
     nointerpolation float textureLayer : TEXCOORD1;
+    nointerpolation uint pbrMaterial : TEXCOORD2;
 };
 float4 sample_material(float2 uv,float sourceLayer) {
     uint width,height,layers;
@@ -145,11 +151,60 @@ ShadowInterpolant shadow_vertex_main(VertexIn input) {
     skin_vertex(input,skinned,skinnedNormal);
     ShadowInterpolant output;
     output.clip=mul(float4(avatar_position(skinned,input.region),1.0),lightViewProjection);
-    output.uv=input.uv;output.textureLayer=input.textureLayer;
+    output.uv=input.uv;output.textureLayer=input.textureLayer;output.pbrMaterial=input.pbrMaterial;
     return output;
 }
-void shadow_pixel_main(ShadowInterpolant input) {
-    sample_material(input.uv,input.textureLayer);
+uint material_offset(uint index) {
+    uint rows,stride;materialRows.GetDimensions(rows,stride);
+    return index>0U&&index<rows/15U?index*15U:0U;
+}
+float2 pbr_uv(float2 uv,uint offset,uint slot) {
+    float4 transform=materialRows[offset+5U+2U*slot];
+    float2 shifted=uv*transform.xy;
+    float co=cos(transform.z),si=sin(transform.z);
+    return float2(co*shifted.x-si*shifted.y,si*shifted.x+co*shifted.y)+
+        materialRows[offset+6U+2U*slot].xy;
+}
+float4 pbr_texel(float2 uv,uint offset,uint slot,float layer) {
+    if(layer<0.5)return float4(1.0,1.0,1.0,1.0);
+    float3 coord=float3(pbr_uv(uv,offset,slot),layer);
+    if(slot==0U||slot==3U)return colorTexture.Sample(materialSampler,coord);
+    return materialTexture.Sample(materialSampler,coord);
+}
+float3 srgb_linear(float3 value) {
+    return float3(value.r<=0.04045?value.r/12.92:pow((value.r+0.055)/1.055,2.4),
+                  value.g<=0.04045?value.g/12.92:pow((value.g+0.055)/1.055,2.4),
+                  value.b<=0.04045?value.b/12.92:pow((value.b+0.055)/1.055,2.4));
+}
+float4 pbr_base(float2 uv,uint offset,bool front) {
+    float4 flags=materialRows[offset+4U];
+    if(!front&&flags.y<0.5)clip(-1.0);
+    float4 sampled=pbr_texel(uv,offset,0U,materialRows[offset+3U].x);
+    float4 base=materialRows[offset];
+    base.rgb*=sampled.rgb;base.a*=sampled.a;
+    if(flags.x>0.5&&flags.x<1.5)clip(base.a-materialRows[offset+2U].w);
+    else if(flags.x>1.5)clip(base.a-0.0001);
+    return base;
+}
+void shadow_pixel_main(ShadowInterpolant input,bool front:SV_IsFrontFace) {
+    uint offset=material_offset(input.pbrMaterial);
+    if(offset>0U)pbr_base(input.uv,offset,front);
+    else sample_material(input.uv,input.textureLayer);
+}
+float3 mapped_normal(float3 N,float3 position,float2 uv,uint offset) {
+    float layer=materialRows[offset+3U].y;if(layer<0.5)return N;
+    float2 coord=pbr_uv(uv,offset,1U);
+    float3 tangentNormal=materialTexture.Sample(materialSampler,float3(coord,layer)).xyz*2.0-1.0;
+    tangentNormal.xy*=materialRows[offset+1U].w;
+    float3 px=ddx(position),py=ddy(position);float2 ux=ddx(coord),uy=ddy(coord);
+    float det=ux.x*uy.y-ux.y*uy.x;
+    if(abs(det)<0.00000001)return N;
+    float3 T=(px*uy.y-py*ux.y)/det;
+    T-=N*dot(N,T);float lengthT=length(T);
+    if(lengthT<0.000001)return N;T/=lengthT;
+    float3 rawB=(py*ux.x-px*uy.x)/det;
+    float3 B=normalize(cross(N,T))*sign(dot(cross(N,T),rawB));
+    return normalize(T*tangentNormal.x+B*tangentNormal.y+N*tangentNormal.z);
 }
 float shadow_factor(float3 position,float3 normal) {
     if(frame.w<0.5) return 1.0;
@@ -182,8 +237,32 @@ float ggx_distribution(float NdotH, float r) {
 float smith_visibility(float NdotX, float k) {
     return NdotX/(NdotX*(1.0-k)+k);
 }
-float4 pixel_main(Interpolant input) : SV_TARGET {
+float4 pixel_main(Interpolant input,bool front:SV_IsFrontFace) : SV_TARGET {
+    uint offset=material_offset(input.pbrMaterial);
     float3 N=normalize(input.normal);
+    float4 surface=float4(0.0,0.0,0.0,1.0);
+    float metallic=saturate(input.material.x),roughness=clamp(input.material.y,0.07,1.0);
+    float occlusion=1.0;float3 emissive=float3(0.0,0.0,0.0);float opacity=1.0;
+    bool unlit=false;
+    if(offset>0U){
+        surface=pbr_base(input.uv,offset,front);
+        float4 flags=materialRows[offset+4U];unlit=flags.z>0.5;
+        if(!front)N=-N;
+        float4 factors=materialRows[offset+2U];
+        float4 layers=materialRows[offset+3U];
+        metallic=factors.x;roughness=factors.y;
+        if(frame.z>0.5&&!unlit){
+            float3 orm=pbr_texel(input.uv,offset,2U,layers.z).rgb;
+            metallic*=orm.b;roughness*=orm.g;
+            float ao=flags.w>0.5?pbr_texel(input.uv,offset,4U,flags.w).r:orm.r;
+            occlusion=lerp(1.0,ao,factors.z);
+            N=mapped_normal(N,input.position,input.uv,offset);
+        }
+        roughness=clamp(roughness,0.07,1.0);
+        emissive=materialRows[offset+1U].rgb*
+            pbr_texel(input.uv,offset,3U,layers.w).rgb;
+        opacity=flags.x>1.5?surface.a:1.0;
+    }
     float3 L=normalize(-sunDirectionIntensity.xyz);
     float3 V=normalize(cameraWorldPosition.xyz-input.position);
     float3 H=normalize(L+V);
@@ -191,25 +270,20 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     float NdotV=max(saturate(dot(N,V)),0.001);
     float NdotH=saturate(dot(N,H));
     float VdotH=saturate(dot(V,H));
-    // This is a real sampled GPU texture, procedurally uploaded by KAMI.
-    // Later SL texture assets will enter through the same resource interface.
-    uint imageWidth,imageHeight,imageLayers;
-    materialTexture.GetDimensions(imageWidth,imageHeight,imageLayers);
-    float layer=clamp(round(input.textureLayer),0.0,float(imageLayers-1U));
-    float3 texel=sample_material(input.uv,layer).rgb;
-    // Layer 0 is KAMI's old procedural material. Other slices contain
-    // genuinely decoded SL default TextureEntry images (not PBR overrides).
-    float3 base=layer<0.5?
-        saturate(input.albedo*lerp(0.72,1.12,texel)):
-        saturate(input.albedo*texel);
+    float3 base;
+    if(offset>0U)base=surface.rgb;
+    else {
+        float3 texel=sample_material(input.uv,input.textureLayer).rgb;
+        base=input.textureLayer<0.5?saturate(input.albedo*lerp(0.72,1.12,texel)):
+            saturate(input.albedo*texel);
+    }
     float visibility=shadow_factor(input.position,N);
     float3 radiance=float3(1.25,1.18,1.08)*sunDirectionIntensity.w;
     float3 color;
-    if(frame.z<0.5) {
+    if(unlit)color=base;
+    else if(frame.z<0.5) {
         color=base*(0.16+0.84*NdotL*visibility)*sunDirectionIntensity.w;
     } else {
-        float metallic=saturate(input.material.x);
-        float roughness=clamp(input.material.y,0.07,1.0);
         float3 F0=lerp(float3(0.04,0.04,0.04),base,metallic);
         float3 F=fresnel_schlick(VdotH,F0);
         float a=(roughness+1.0);
@@ -218,8 +292,9 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
         float D=ggx_distribution(NdotH,roughness);
         float3 specular=D*G*F/max(4.0*NdotV*NdotL,0.001);
         float3 diffuse=(1.0-F)*(1.0-metallic)*base/PI;
-        color=base*0.075+(diffuse+specular)*radiance*NdotL*visibility;
+        color=base*0.075*occlusion+(diffuse+specular)*radiance*NdotL*visibility;
     }
+    color+=emissive;
     // Original KAMI material-space contact shading. This uses existing per-pixel
     // world position/normal, not an incorrectly labelled screen-space AO pass.
     if(kamiEffects.y>0.5) {
@@ -228,14 +303,14 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
         color*=lerp(contact,1.0,0.12*saturate(N.y));
     }
     // GPU-native procedural specular microglints: no external overlay or injector.
-    if(kamiEffects.z>0.5 && input.material.x>0.15) {
+    if(kamiEffects.z>0.5 && metallic>0.15) {
         float3 R=reflect(-L,N);
         float focused=pow(saturate(dot(R,V)),64.0);
         float sparkle=pow(saturate(sin(input.position.x*94.7+
                             input.position.y*117.3+input.position.z*51.8+
                             frame.x*1.4)*0.5+0.5),24.0);
         color+=float3(0.7,0.82,1.0)*focused*sparkle*
-                    saturate(input.material.x)*0.26;
+                    saturate(metallic)*0.26;
     }
     // KAMI distance-based atmosphere. Not volumetric ray marching.
     if(kamiEffects.x>0.5) {
@@ -256,8 +331,8 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     }
     // Basic filmic output mapping while maintaining SDR UNORM compatibility.
     color=color/(color+float3(1.0,1.0,1.0));
-    color=pow(max(color,0.0),1.0/2.2);
-    return float4(saturate(color),1.0);
+    // The sRGB render-target view encodes output and blends in linear space.
+    return float4(saturate(color),opacity);
 }
 
 struct SkyVertexOutput {
@@ -298,7 +373,7 @@ float4 sky_pixel_main(SkyVertexOutput input) : SV_TARGET {
                .55*sunDisc)*saturate(sunDirectionIntensity.w);
     }
     color=color/(1.0+color);
-    return float4(saturate(pow(color,1.0/2.2)),1.0);
+    return float4(saturate(color),1.0);
 }
 )";
 }

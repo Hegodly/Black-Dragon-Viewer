@@ -25,7 +25,8 @@
 
 namespace kami::world {
 namespace {
-constexpr DXGI_FORMAT kColorFormat=DXGI_FORMAT_R8G8B8A8_UNORM;
+constexpr DXGI_FORMAT kColorFormat=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+constexpr DXGI_FORMAT kSwapchainFormat=DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kDepthFormat=DXGI_FORMAT_D32_FLOAT;
 UINT scaled(UINT source,unsigned scale) {
     return std::max<UINT>(64U,static_cast<UINT>((static_cast<std::uint64_t>(source)*scale+50U)/100U));
@@ -120,8 +121,8 @@ bool Renderer::make_shadow() {
 
 
 
-static_assert(sizeof(Vertex)==68U,
-              "KAMI GPU vertex input layout must match 68-byte packed vertices");
+static_assert(sizeof(Vertex)==72U,
+              "KAMI GPU vertex input layout must match 72-byte packed vertices");
 static_assert(sizeof(rig::Matrix)==64U,
               "KAMI GPU skinning palette must pack four float4 rows per joint");
 
@@ -166,6 +167,44 @@ bool Renderer::update_skin_palette() noexcept {
 }
 
 
+bool Renderer::make_material_records(const std::vector<PBRRow>& rows){
+    if(rows.empty()||rows.size()>std::size_t(protocol::pbr::kMaxGPURecords+1U)*protocol::pbr::kRows)return false;
+    const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
+    const auto desc=buffer_desc(rows.size()*sizeof(PBRRow));
+    Microsoft::WRL::ComPtr<ID3D12Resource> candidate;
+    if(FAILED(device_.native_device()->CreateCommittedResource(&properties,D3D12_HEAP_FLAG_NONE,
+        &desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(candidate.GetAddressOf()))))return false;
+    void* data=nullptr;const D3D12_RANGE no_read{0U,0U};
+    if(FAILED(candidate->Map(0U,&no_read,&data))||!data)return false;
+    std::memcpy(data,rows.data(),rows.size()*sizeof(PBRRow));candidate->Unmap(0U,nullptr);
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format=DXGI_FORMAT_UNKNOWN;srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Buffer.NumElements=static_cast<UINT>(rows.size());srv.Buffer.StructureByteStride=sizeof(PBRRow);
+    auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr+=3U*device_.native_device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    device_.native_device()->CreateShaderResourceView(candidate.Get(),&srv,handle);
+    material_records_=std::move(candidate);return true;
+}
+bool Renderer::sort_blended_geometry(float x,float y,float z){
+    if(transparent_vertices_.empty())return true;
+    std::vector<std::pair<float,std::size_t>> order;
+    order.reserve(transparent_vertices_.size()/3U);
+    for(std::size_t at=0U;at<transparent_vertices_.size();at+=3U){
+        float cx=0.f,cy=0.f,cz=0.f;
+        for(unsigned i=0;i<3U;++i){const auto& v=transparent_vertices_[at+i];cx+=v.px;cy+=v.py;cz+=v.pz;}
+        cx=cx/3.f-x;cy=cy/3.f-y;cz=cz/3.f-z;
+        order.emplace_back(cx*cx+cy*cy+cz*cz,at);
+    }
+    std::stable_sort(order.begin(),order.end(),[](const auto& a,const auto& b){return a.first>b.first;});
+    void* data=nullptr;const D3D12_RANGE no_read{0U,0U};
+    if(FAILED(geometry_->Map(0U,&no_read,&data))||!data)return false;
+    auto* destination=static_cast<Vertex*>(data)+terrain_count_+avatar_count_;
+    for(const auto& [distance,at]:order){(void)distance;
+        std::memcpy(destination,transparent_vertices_.data()+at,3U*sizeof(Vertex));destination+=3U;}
+    geometry_->Unmap(0U,nullptr);return true;
+}
+
 TextureUploadStatus Renderer::make_material_texture(
     const std::map<std::string,protocol::texture::DecodedTexture>* images,
     const std::map<std::string,std::uint16_t>* previous_layers) {
@@ -202,7 +241,7 @@ TextureUploadStatus Renderer::make_material_texture(
     desc.Height=th;
     desc.DepthOrArraySize=static_cast<UINT16>(slices);
     desc.MipLevels=1;
-    desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
     desc.SampleDesc.Count=1;
     desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
@@ -335,6 +374,9 @@ TextureUploadStatus Renderer::make_material_texture(
         handle.ptr+=dev->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
+        srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        handle.ptr+=3U*dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
         material_texture_=std::move(image_gpu);
     }
     return TextureUploadStatus::Committed;
@@ -347,7 +389,9 @@ bool Renderer::make_targets() {
         if(FAILED(swapchain_->GetBuffer(
                 i,IID_PPV_ARGS(buffers_[i].ReleaseAndGetAddressOf()))))
             return false;
-        graphics->CreateRenderTargetView(buffers_[i].Get(),nullptr,rtv_handle(i));
+        D3D12_RENDER_TARGET_VIEW_DESC rtv{};rtv.Format=kColorFormat;
+        rtv.ViewDimension=D3D12_RTV_DIMENSION_TEXTURE2D;
+        graphics->CreateRenderTargetView(buffers_[i].Get(),&rtv,rtv_handle(i));
     }
     return true;
 }
@@ -382,6 +426,9 @@ bool Renderer::make_pipeline() {
     ShaderPreparation report;
     if(!ShaderCache::prepare(device_.native_device(),signature_,pipeline_,report))
         return false;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_signature;
+    ShaderPreparation blend_report;
+    if(!ShaderCache::prepare(device_.native_device(),blend_signature,blend_pipeline_,blend_report,{},true))return false;
     ShaderPreparation shadow_report;
     if(!ShaderCache::prepare_shadow(
         device_.native_device(),signature_.Get(),shadow_pipeline_,shadow_report))
@@ -406,7 +453,20 @@ bool Renderer::make_geometry() {
         return false;
     const auto audit=rig::inspect(scene.vertices);
     if(audit.status==rig::Compatibility::Invalid)return false;
-    const UINT bytes=static_cast<UINT>(scene.vertices.size()*sizeof(Vertex));
+    if(scene.terrain_count%3U!=0U||scene.avatar_count%3U!=0U)return false;
+    std::vector<Vertex> upload,transparent;
+    upload.reserve(scene.vertices.size());
+    for(std::size_t at=0U;at<scene.terrain_count;at+=3U){
+        const auto index=scene.vertices[at].pbr_material;
+        const auto row=std::size_t(index)*protocol::pbr::kRows+4U;
+        const bool blend=index!=0U&&row<pbr_rows_.size()&&pbr_rows_[row][0]>1.5f;
+        auto& target=blend?transparent:upload;
+        target.insert(target.end(),scene.vertices.begin()+at,scene.vertices.begin()+at+3U);
+    }
+    const auto opaque_count=upload.size();
+    upload.insert(upload.end(),scene.vertices.begin()+scene.terrain_count,scene.vertices.end());
+    upload.insert(upload.end(),transparent.begin(),transparent.end());
+    const UINT bytes=static_cast<UINT>(upload.size()*sizeof(Vertex));
     const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
     const auto desc=buffer_desc(bytes);
     // GPU uploads are transactional. Never release a known-good world
@@ -420,12 +480,13 @@ bool Renderer::make_geometry() {
     void* mapped=nullptr;
     const D3D12_RANGE no_read{0,0};
     if(FAILED(candidate->Map(0,&no_read,&mapped))||!mapped)return false;
-    std::memcpy(mapped,scene.vertices.data(),bytes);
+    std::memcpy(mapped,upload.data(),bytes);
     const D3D12_RANGE written{0,bytes};
     candidate->Unmap(0,&written);
     geometry_=std::move(candidate);
     skin_audit_=audit;
-    terrain_count_=scene.terrain_count;
+    terrain_count_=opaque_count;
+    transparent_vertices_=std::move(transparent);
     avatar_count_=scene.avatar_count;
     vertex_view_.BufferLocation=geometry_->GetGPUVirtualAddress();
     vertex_view_.SizeInBytes=bytes;
@@ -466,7 +527,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     DXGI_SWAP_CHAIN_DESC1 swap{};
     swap.Width=width_;
     swap.Height=height_;
-    swap.Format=kColorFormat;
+    swap.Format=kSwapchainFormat;
     swap.Stereo=FALSE;
     swap.SampleDesc.Count=1;
     swap.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -500,7 +561,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     dsv.NumDescriptors=2;
     D3D12_DESCRIPTOR_HEAP_DESC srv{};
     srv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srv.NumDescriptors=3;
+    srv.NumDescriptors=5;
     srv.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if(FAILED(device_.native_device()->CreateDescriptorHeap(
             &dsv,IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf()))) ||
@@ -558,6 +619,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
         error_=L"Could not upload DX12 material texture";
         return false;
     }
+    if(!make_material_records(pbr_rows_)){error_=L"Could not upload glTF material records";return false;}
     if(!make_skin_palette()) {
         error_=L"Could not create DX12 skinned-avatar palette";
         return false;
@@ -586,7 +648,7 @@ void Renderer::resize(UINT width,UINT height) {
     for(auto& buffer:buffers_) buffer.Reset();
     depth_.Reset();
     if(FAILED(swapchain_->ResizeBuffers(kBuffers,target_width,target_height,
-                kColorFormat,allow_tearing_?DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING:0))) {
+                kSwapchainFormat,allow_tearing_?DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING:0))) {
         ready_=false;
         error_=L"Failed to resize DirectX 12 render scale";
         return;
@@ -751,7 +813,8 @@ bool Renderer::set_verified_live_terrain(
         circuit.known_avatar_roots(),
         circuit.decoded_mesh_assets(),
         circuit.decoded_texture_assets(),
-        agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_);
+        agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_,
+        circuit.decoded_materials(),circuit.material_overrides());
     texture_upload_pending_=false;
     if(next_layers!=live_texture_layers_){
         auto previous=std::move(live_texture_layers_);
@@ -773,13 +836,16 @@ bool Renderer::set_verified_live_terrain(
             }
         }
     }
+    const auto pbr_table=build_pbr_table(circuit.decoded_spatial_objects(),
+        circuit.decoded_linked_objects(),circuit.decoded_materials(),
+        circuit.material_overrides(),live_texture_layers_);
     // Build the prim geometry AFTER GPU image residency is chosen, so
     // each real face has the appropriate DX12 texture array layer.
     const auto primitives=build_live_primitive_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
         agent.x,agent.y,agent.z,128U,circuit.known_avatar_roots(),
-        live_texture_layers_);
+        live_texture_layers_,pbr_table.faces);
     const auto new_primitive_vertices=primitives.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
                           primitives.scene.vertices.begin(),
@@ -792,7 +858,7 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_linked_objects(),
         circuit.known_avatar_roots(),
         circuit.decoded_mesh_assets(),
-        agent.x,agent.y,agent.z,18000U,live_texture_layers_);
+        agent.x,agent.y,agent.z,18000U,live_texture_layers_,pbr_table.faces);
     const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
         mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
@@ -825,7 +891,10 @@ bool Renderer::set_verified_live_terrain(
     // candidate once, but skip the DX12 vertex buffer allocation, copy,
     // and associated GPU synchronization if its actual content is equal.
     // This also preserves the previous known-good resource on failure.
-    const bool unchanged=region_mesh_&&same_scene_geometry(*region_mesh_,scene);
+    const bool material_changed=pbr_rows_!=pbr_table.rows;
+    const auto previous_rows=pbr_rows_;
+    pbr_rows_=pbr_table.rows;
+    const bool unchanged=!material_changed&&region_mesh_&&same_scene_geometry(*region_mesh_,scene);
     if(!unchanged){
         auto previous=std::move(region_mesh_);
         region_mesh_=std::move(scene);
@@ -833,11 +902,15 @@ bool Renderer::set_verified_live_terrain(
         // immutable upload resources: replacing the pointer does not
         // require waiting for the independent texture-copy queue.
         if(ready_&&!make_geometry()){
-            region_mesh_=std::move(previous);
+            region_mesh_=std::move(previous);pbr_rows_=previous_rows;
             error_=L"R12 DX12 land mesh upload failed";
             return false;
         }
     }
+    if(material_changed&&ready_&&!make_material_records(pbr_rows_)){
+        ready_=false;error_=L"DX12 glTF material record upload failed";return false;
+    }
+    bound_pbr_faces_=pbr_table.faces.size();
     if(!live_region_origin_valid_){
         live_region_origin_=stable_origin;
         live_region_origin_valid_=true;
@@ -1050,6 +1123,9 @@ void Renderer::draw() {
                    region_mesh_?nullptr:sample_test_terrain_height,
                    graphics_.animate_avatar);
     const auto camera=camera_.pose();
+    if(!sort_blended_geometry(camera.eye.x,camera.eye.y,camera.eye.z)){
+        ready_=false;error_=L"DX12 transparent geometry update failed";return;
+    }
     const XMVECTOR eye=XMVectorSet(camera.eye.x,camera.eye.y,camera.eye.z,0.f);
     const XMVECTOR focus=XMVectorSet(camera.focus.x,camera.focus.y,camera.focus.z,0.f);
     const XMMATRIX view=XMMatrixLookAtLH(
@@ -1223,6 +1299,15 @@ void Renderer::draw() {
     commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
     commands_->DrawInstanced(static_cast<UINT>(avatar_count_),1,
                             static_cast<UINT>(terrain_count_),0);
+    if(!transparent_vertices_.empty()){
+        constants[25]=0.f;constants[47]=0.f;constants[55]=0.f;
+        constants[56]=0.f;constants[57]=0.f;constants[58]=0.f;constants[59]=0.f;
+        constants[60]=0.f;constants[61]=0.f;constants[62]=0.f;
+        commands_->SetPipelineState(blend_pipeline_.Get());
+        commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
+        commands_->DrawInstanced(static_cast<UINT>(transparent_vertices_.size()),1,
+            static_cast<UINT>(terrain_count_+avatar_count_),0);
+    }
     Microsoft::WRL::ComPtr<ID3D12Resource> photo_readback;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT photo_layout{};
     UINT64 photo_bytes=0;
@@ -1326,6 +1411,7 @@ void Renderer::shutdown() noexcept {
     material_texture_.Reset();
     material_upload_.Reset();
     skin_palette_buffer_.Reset();
+    material_records_.Reset();transparent_vertices_.clear();
     for(auto& buffer:buffers_) buffer.Reset();
     swapchain_.Reset();
     geometry_.Reset();
@@ -1338,6 +1424,7 @@ void Renderer::shutdown() noexcept {
     live_region_origin_valid_=false;
     texture_upload_pending_=false;
     pipeline_.Reset();
+    blend_pipeline_.Reset();
     shadow_pipeline_.Reset();
     sky_pipeline_.Reset();
     signature_.Reset();
@@ -1347,3 +1434,4 @@ void Renderer::shutdown() noexcept {
     shadow_srv_heap_.Reset();
 }
 } // namespace kami::world
+
