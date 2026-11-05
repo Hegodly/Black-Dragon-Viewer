@@ -110,7 +110,12 @@ assert "set_verified_live_water(" in renderer
 assert "circuit.state()!=protocol::sim::CircuitState::MovementConfirmed" in renderer
 assert "circuit.movement_position()" in renderer
 assert "world_renderer_.clear_live_water_preview()" in app
-assert "device_.initialize(allow_software_dx12)" in renderer
+# The optional second argument is used only by the forced WARP CI test.
+# Hardware remains the default for the shipped viewer and the renderer
+# must never replace DX12 with another 3D graphics API.
+assert ("device_.initialize(allow_software_dx12)" in renderer or
+        "device_.initialize(allow_software_dx12,force_software_dx12)" in renderer)
+assert "bool force_software_dx12=false" in (root/"include/kami/world/renderer.hpp").read_text(encoding="utf-8")
 assert "bool allow_software_dx12=false" in (root/"include/kami/world/renderer.hpp").read_text(encoding="utf-8")
 assert "d3d11" not in re.sub(r'(?m)^\s*#.*$', "", cmake.lower())
 assert "opengl" not in re.sub(r'(?m)^\s*#.*$', "", cmake.lower())

@@ -42,7 +42,8 @@ public:
 
     // Software DX12 WARP may be enabled explicitly by test hosts only.
     [[nodiscard]] bool initialize(HWND window, UINT width, UINT height,
-                                  bool allow_software_dx12=false);
+                                  bool allow_software_dx12=false,
+                                  bool force_software_dx12=false);
     void resize(UINT width, UINT height);
     void set_graphics(graphics::Settings settings);
     void draw();
@@ -204,6 +205,9 @@ public:
 
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     [[nodiscard]] ID3D12Device* native_device() const noexcept {return device_.native_device();}
+    [[nodiscard]] bool software_dx12_active() const noexcept {
+        return device_.status()==DeviceStatus::ReadySoftware;
+    }
     [[nodiscard]] const std::wstring& adapter_name() const noexcept {
         return device_.adapter_name();
     }
