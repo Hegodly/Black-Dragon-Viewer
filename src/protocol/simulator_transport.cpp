@@ -736,6 +736,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
     if(region_seen_&&movement_seen_){
         state_=CircuitState::MovementConfirmed;
         mesh_scheduler_.set_online(true);
+        texture_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
 }
@@ -788,8 +789,25 @@ void Circuit::poll(unsigned budget) noexcept {
     maybe_send_agent_update();
     maybe_send_missing_object_requests();
     maybe_fetch_mesh();
+    maybe_fetch_texture();
 }
 void Circuit::stop() noexcept {
+    if(texture_worker_.valid()){
+        try{(void)texture_worker_.get();}catch(...){}
+    }
+    if(!texture_capability_url_.empty()){
+        SecureZeroMemory(texture_capability_url_.data(),
+                         texture_capability_url_.size()*sizeof(wchar_t));
+        texture_capability_url_.clear();
+    }
+    texture_scheduler_.set_online(false);
+    decoded_textures_.clear();
+    decoded_texture_bytes_=0U;
+    texture_download_count_=texture_failure_count_=0U;
+    texture_last_start_={};
+    texture_scan_revision_=~std::uint64_t{0};
+    texture_last_scan_position_valid_=false;
+    texture_last_scan_x_=texture_last_scan_y_=texture_last_scan_z_=0.f;
     if(mesh_worker_.valid()){
         try{(void)mesh_worker_.get();}catch(...){}
     }
