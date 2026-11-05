@@ -552,7 +552,37 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             }
             break;
         }
-        case worldwire::Kind::ObjectTerse:++object_terse_packets_;break;
+        case worldwire::Kind::ObjectTerse:{
+            ++object_terse_packets_;
+            if(region_seen_&&movement_seen_&&region_metadata_.verified&&
+               movement_position_.verified){
+                std::vector<objectspatial::TersePose> poses;
+                if(objectspatial::decode_terse_poses(incoming,poses)){
+                    for(const auto& pose:poses){
+                        if(avatar_root_ids_.contains(pose.local_id))
+                            continue; // no skeleton or appearance guesswork
+                        const auto root=spatial_objects_.find(pose.local_id);
+                        if(root!=spatial_objects_.end()){
+                            if(objectspatial::apply_terse_pose(
+                                  root->second,pose))
+                                ++spatial_object_revision_;
+                            continue;
+                        }
+                        const auto child=linked_objects_.find(pose.local_id);
+                        if(child!=linked_objects_.end()){
+                            if(objectspatial::apply_terse_pose(
+                                  child->second,pose))
+                                ++spatial_object_revision_;
+                            continue;
+                        }
+                        // Missing full update: ask for a verified object
+                        // rather than inventing mesh geometry from a pose.
+                        remember_missing_object(pose.local_id);
+                    }
+                }
+            }
+            break;
+        }
         case worldwire::Kind::ObjectKilled:{
             ++object_killed_packets_;
             if(region_seen_&&movement_seen_){
