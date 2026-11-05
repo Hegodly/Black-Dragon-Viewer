@@ -351,24 +351,36 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     // for this world rebuild, then look up only those material slots.
     std::map<std::string,std::uint32_t> drawable_faces;
     const auto gather=[&](const Transform& t,Pose pose) {
+        if(!finite(pose.pos)||!valid_quat(pose.rot))return;
+        const bool is_mesh=!t.mesh_asset_id.empty();
         const auto mesh=loaded.find(t.mesh_asset_id);
-        if(mesh==loaded.end()||!finite(pose.pos)||!valid_quat(pose.rot))return;
+        if(is_mesh&&mesh==loaded.end())return;
+        if(!is_mesh&&t.primitive==Kind::Unknown)return;
         const V delta=sub(pose.pos,origin);
         if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
            std::abs(delta.z)>96.f)return;
         const float distance=dot(delta,delta);
-        const auto [faces_it,inserted_faces]=
-            drawable_faces.try_emplace(t.mesh_asset_id,0U);
-        if(inserted_faces){
-            std::uint32_t mask=0U;
-            for(const auto& face:mesh->second.triangles){
-                if(face.has_uv&&face.face_index<32U)
-                    mask|=(std::uint32_t{1}<<face.face_index);
-                if(mask==0xffffffffU)break;
+        std::uint32_t mask=0U;
+        if(is_mesh){
+            const auto [faces_it,inserted_faces]=
+                drawable_faces.try_emplace(t.mesh_asset_id,0U);
+            if(inserted_faces){
+                for(const auto& face:mesh->second.triangles){
+                    if(face.has_uv&&face.face_index<32U)
+                        faces_it->second|=(std::uint32_t{1}<<face.face_index);
+                    if(faces_it->second==0xffffffffU)break;
+                }
             }
-            faces_it->second=mask;
+            mask=faces_it->second;
+        }else{
+            // Supported simple-prim preview exposes only genuine
+            // material-capable faces: cube six, cylinder three,
+            // prism five, sphere one. Mesh/sculpt Unknown is excluded.
+            const unsigned faces=t.primitive==Kind::Box?6U:
+                t.primitive==Kind::Cylinder?3U:
+                t.primitive==Kind::Prism?5U:1U;
+            mask=(std::uint32_t{1}<<faces)-1U;
         }
-        const std::uint32_t mask=faces_it->second;
         if(mask==0U)return;
         for(unsigned f=0U;f<32U;++f){
             if((mask&(std::uint32_t{1}<<f))==0U)continue;
@@ -388,12 +400,14 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     };
     for(const auto& [id,root]:roots){
         (void)id;
-        if(root.parent_id==0U&&!root.mesh_asset_id.empty())
+        if(root.parent_id==0U&&
+           (!root.mesh_asset_id.empty()||root.primitive!=Kind::Unknown))
             gather(root,{pos(root),quat(root)});
     }
     for(const auto& [id,child]:children){
         (void)id;
-        if(child.mesh_asset_id.empty())continue;
+        if(child.mesh_asset_id.empty()&&child.primitive==Kind::Unknown)
+            continue;
         Pose pose{};
         std::uint32_t missing=0U;
         if(resolve(child,roots,children,avatar_roots,pose,missing)==
