@@ -8,6 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <filesystem>
 #include <objbase.h>
 
@@ -20,7 +21,14 @@ void print_failure(const wchar_t* step,const kami::world::Renderer& renderer) {
               <<L": "<<renderer.error()<<L"\n";
 }
 }
-int main() {
+int main(int argc,char** argv) {
+    // The --force-warp mode must prove software rasterization, not merely
+    // a DX12 device which happens to be available on the CI machine.
+    bool force_warp=false;
+    for(int i=1;i<argc;++i){
+        if(std::string_view(argv[i])=="--force-warp")force_warp=true;
+        else{std::wcerr<<L"Unrecognized DX12 smoke option\n";return 31;}
+    }
     auto instance=GetModuleHandleW(nullptr);
     WNDCLASSEXW desc{};
     desc.cbSize=sizeof(desc);
@@ -50,16 +58,20 @@ int main() {
     int result=0;
     {
         kami::world::Renderer renderer;
-        if(!renderer.initialize(window,640,480,true)) {
+        if(!renderer.initialize(window,640,480,true,force_warp)) {
             print_failure(L"initialize",renderer);
             // No hardware/display in an automated server VM can prevent
             // an HWND swap chain. Report SKIPPED, not a false GPU pass.
-            if(renderer.error().find(L"No DirectX 12 device")!=std::wstring::npos ||
-               renderer.error().find(L"swap chain")!=std::wstring::npos)
+            if(force_warp)result=30; // no silent skip for requested WARP
+            else if(renderer.error().find(L"No DirectX 12 device")!=std::wstring::npos ||
+                    renderer.error().find(L"swap chain")!=std::wstring::npos)
                 result=77;
             else result=1;
         } else {
-            if(renderer.vertex_count()==0) {
+            if(force_warp&&!renderer.software_dx12_active()){
+                print_failure(L"explicit WARP selection",renderer);
+                result=29;
+            }else if(renderer.vertex_count()==0) {
                 print_failure(L"empty scene",renderer);
                 result=2;
             } else if(renderer.skin_compatibility().status!=
@@ -294,7 +306,8 @@ int main() {
                     }
                 }
                 if(!result) std::wcout
-                    <<L"KAMI DX12 SMOKE PASS - adapter: "<<renderer.adapter_name()
+                    <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":"KAMI DX12 SMOKE PASS")
+                    <<L" - adapter: "<<renderer.adapter_name()
                     <<L"; drawn="<<renderer.vertex_count()
                     <<L" vertices; PBR, shadows, texture upload, resize, FPS presentation path\n";
             }
