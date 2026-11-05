@@ -260,6 +260,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         texture::Base base{};
         if(texture::decode_base(texture_entry,base)){
             t.base_tint_present=true;
+            t.default_texture_asset_id=texture::default_image_uuid(base);
             t.base_r=base.red;t.base_g=base.green;
             t.base_b=base.blue;t.base_a=base.alpha;
         }
