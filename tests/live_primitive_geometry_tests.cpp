@@ -137,6 +137,32 @@ int main(){
     if(std::abs(mesh_root.scene.vertices[0].r-.25f)>.001f||
        std::abs(mesh_root.scene.vertices[0].g-.5f)>.001f||
        std::abs(mesh_root.scene.vertices[0].b-.75f)>.001f)return 19;
+    // Only genuine SL mesh UVs and a resident default TE texture UUID
+    // may select a non-procedural DX12 texture array layer.
+    assets[asset_id].triangles[0].has_uv=true;
+    assets[asset_id].triangles[0].uv={0.f,1.f,1.f,1.f,0.f,0.f};
+    const std::string texture_id="12345678-90ab-4cde-8fab-000000000099";
+    roots[77U].default_texture_asset_id=texture_id;
+    const auto textured=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U,
+        {{texture_id,7U}});
+    if(textured.textured_triangles!=1U||
+       textured.scene.vertices.size()!=3U||
+       textured.scene.vertices[0].texture_layer!=7.f||
+       textured.scene.vertices[1].texture_layer!=7.f||
+       textured.scene.vertices[2].texture_layer!=7.f||
+       std::abs(textured.scene.vertices[1].v-0.f)>.001f||
+       std::abs(textured.scene.vertices[2].u-1.f)>.001f)return 20;
+    const auto fallback=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U);
+    if(fallback.textured_triangles!=0U||
+       fallback.scene.vertices[0].texture_layer!=0.f)return 21;
+    assets[asset_id].triangles[0].has_uv=false;
+    const auto no_uv=world::build_live_mesh_geometry(
+        roots,children,{},assets,128.f,140.f,35.f,10U,
+        {{texture_id,7U}});
+    if(no_uv.textured_triangles!=0U||
+       no_uv.scene.vertices[0].texture_layer!=0.f)return 22;
     roots[77U].mesh_asset_id.clear();
     Transform mesh_child_t{88U,1.f,0.f,0.f,1.f,1.f,1.f};
     mesh_child_t.parent_id=77U;
