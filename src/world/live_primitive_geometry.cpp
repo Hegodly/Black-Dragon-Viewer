@@ -183,6 +183,13 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin){
         return false;
     const std::size_t start=out.size();
     Emitter e{out,p,{t.sx*.5f,t.sy*.5f,t.sz*.5f},origin};
+    if(t.base_tint_present){
+        // Use the actual region-provided default face tint. This is a
+        // solid-color approximation, NOT a substitute for JPEG2000/PBR.
+        e.red=std::clamp(t.base_r,0.f,1.f);
+        e.green=std::clamp(t.base_g,0.f,1.f);
+        e.blue=std::clamp(t.base_b,0.f,1.f);
+    }
     switch(t.primitive){
         case Kind::Box:build_box(e);break;
         case Kind::Cylinder:build_cylinder(e);break;
@@ -345,8 +352,15 @@ MeshBatch build_live_mesh_geometry(
             normal=scale(normal,1.f/length);
             for(unsigned v=0U;v<3U;++v){
                 const auto& p=points[v];
+                const auto& t=*item.transform;
+                const float red=t.base_tint_present?
+                    std::clamp(t.base_r,0.f,1.f):.80f;
+                const float green=t.base_tint_present?
+                    std::clamp(t.base_g,0.f,1.f):.87f;
+                const float blue=t.base_tint_present?
+                    std::clamp(t.base_b,0.f,1.f):.96f;
                 verts.push_back({p.x,p.y,p.z,normal.x,normal.y,normal.z,
-                                 .80f,.87f,.96f,.04f,.82f,0.f,0.f});
+                                 red,green,blue,.04f,.82f,0.f,0.f});
             }
             ++object_triangles;
             ++batch.emitted_triangles;
