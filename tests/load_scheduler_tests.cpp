@@ -62,5 +62,21 @@ int main(){
        queue.find(c)->stage!=Stage::Failed)return 18;
     queue.clear();
     if(queue.find(c)||queue.statistics().queued!=0U)return 19;
+    // A mesh referenced by a now-despawned linkset can be evicted,
+    // leaving capacity for other assets. Never cancel an active worker.
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,20U))return 20;
+    auto active=queue.next_download();
+    if(!active||active->id!=a||queue.forget_finished(a))return 21;
+    if(!queue.download_finished(a,20U,true))return 22;
+    auto decoded=queue.next_decode();
+    if(!decoded||decoded->id!=a||
+       queue.forget_finished(a)||!queue.decode_finished(a,true))
+       return 23;
+    if(!queue.next_gpu_upload(20U)||!queue.gpu_uploaded(a)||
+       queue.statistics().gpu_uploaded_bytes!=20U)return 24;
+    if(!queue.forget_finished(a)||queue.find(a)||
+       queue.statistics().gpu_uploaded_bytes!=0U)return 25;
+    if(!queue.request(a,Kind::VisibleMesh,2.f,true,20U)||
+       !queue.next_download())return 26;
     return 0;
 }
