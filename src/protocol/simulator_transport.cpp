@@ -220,11 +220,14 @@ void Circuit::schedule_visible_meshes() noexcept {
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
     if(state_!=CircuitState::MovementConfirmed)return;
-    if(mesh_worker_.valid()){
-        if(mesh_worker_.wait_for(std::chrono::seconds(0))!=
-           std::future_status::ready)return;
+    // Drain completed downloads independently. One slow CDN response
+    // must not block other ready meshes from entering the live scene.
+    for(auto& worker:mesh_workers_){
+        if(!worker.valid()||
+           worker.wait_for(std::chrono::seconds(0))!=
+               std::future_status::ready)continue;
         try{
-            auto result=mesh_worker_.get();
+            auto result=worker.get();
             const bool accepted=mesh_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
             if(result.fetched&&accepted){
@@ -282,38 +285,44 @@ void Circuit::maybe_fetch_mesh() noexcept {
             it=mesh_retry_after_.erase(it);
         }else ++it;
     }
-    if(mesh_worker_.valid()||mesh_capability_url_.empty())return;
+    if(mesh_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
     if(mesh_last_start_!=std::chrono::steady_clock::time_point{}&&
-       now-mesh_last_start_<std::chrono::milliseconds(maximum_world_detail_?50:350))return;
+       now-mesh_last_start_<std::chrono::milliseconds(
+           maximum_world_detail_?50:350))return;
     if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
        loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles)return;
-    auto selected=mesh_scheduler_.next_download();
-    if(!selected)return;
-    mesh_last_start_=now;
-    auto cap=mesh_capability_url_;
-    // std::async may throw bad_alloc or system_error under thread/VM
-    // pressure. This function is noexcept: without handling, KAMI
-    // terminates during busy mesh streaming instead of recovering.
-    try{
-        mesh_worker_=std::async(std::launch::async,
-           [url=std::move(cap),id=selected->id]()mutable{
-            MeshResult result{};
-            result.id=id;
-            const auto reply=caps::fetch_mesh_asset(std::move(url),id);
-            result.fetched=reply.fetched;
-            result.http_status=reply.status;
-            result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
-            if(reply.fetched)
-                result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
-            return result;
-        });
-    }catch(...){
-        (void)mesh_scheduler_.download_finished(selected->id,0U,false);
-        ++mesh_failure_count_;
-        // The next simulator update can retry a different mesh; never
-        // strand this UUID in the Downloading state.
+    // At most four independent mesh fetch+decode futures. Fill free
+    // worker slots at the existing throttled launch interval; preserve
+    // the scheduler's nearest-visible priority and bounded HTTP retries.
+    bool launched=false;
+    for(auto& worker:mesh_workers_){
+        if(worker.valid())continue;
+        auto selected=mesh_scheduler_.next_download();
+        if(!selected)break;
+        auto cap=mesh_capability_url_;
+        try{
+            worker=std::async(std::launch::async,
+                [url=std::move(cap),id=selected->id]()mutable{
+                    MeshResult result{};
+                    result.id=id;
+                    const auto reply=caps::fetch_mesh_asset(std::move(url),id);
+                    result.fetched=reply.fetched;
+                    result.http_status=reply.status;
+                    result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
+                    if(reply.fetched)
+                        result.decoded=mesh::decode_mesh_lod(
+                            reply.bytes,result.lod);
+                    return result;
+                });
+            launched=true;
+        }catch(...){
+            (void)mesh_scheduler_.download_finished(
+                selected->id,0U,false);
+            ++mesh_failure_count_;
+        }
     }
+    if(launched)mesh_last_start_=now;
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -914,8 +923,8 @@ void Circuit::stop() noexcept {
     texture_scan_revision_=~std::uint64_t{0};
     texture_last_scan_position_valid_=false;
     texture_last_scan_x_=texture_last_scan_y_=texture_last_scan_z_=0.f;
-    if(mesh_worker_.valid()){
-        try{(void)mesh_worker_.get();}catch(...){}
+    for(auto& worker:mesh_workers_)if(worker.valid()){
+        try{(void)worker.get();}catch(...){}
     }
     if(!mesh_capability_url_.empty()){
         SecureZeroMemory(mesh_capability_url_.data(),
