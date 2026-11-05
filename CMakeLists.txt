@@ -16,6 +16,12 @@ FetchContent_Declare(openjpeg
     GIT_SHALLOW TRUE
     GIT_PROGRESS FALSE)
 FetchContent_MakeAvailable(openjpeg)
+# OpenJPEG sets parent-scope output directories. Reset those before
+# declaring KAMI targets so native .exe/.dll remain at build/Release,
+# as expected by our Windows smoke tests and portable packaging.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 if(NOT WIN32)
   message(FATAL_ERROR "KAMI Original Core is Windows-only.")
 endif()
