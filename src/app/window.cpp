@@ -491,7 +491,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     }
     label(L"7 SYSTEMS TEST [F9]",box(41,height-93,200,25),
           small_font_.Get(),p.accent);
-    label(L"ORIGINAL CORE / R65",box(42,height-65,189,25),small_font_.Get(),p.muted);
+    label(L"ORIGINAL CORE / R66",box(42,height-65,189,25),small_font_.Get(),p.muted);
 
     const float contentX = 279.f;
     const float contentWidth = width - 305.f;
@@ -592,35 +592,20 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   box(contentX+36,y+25,contentWidth-76,20),
                   small_font_.Get(),p.muted);
             if(i==0U && rowHeight>=62.f){
-                const auto& audit=sl_circuit_.full_decode_audit();
-                // Surface why solid geometry is missing, not just totals.
+                // R66: classify mesh instance losses ahead of all raw
+                // frame counts. This row previously overflowed the panel,
+                // hiding the reason hundreds of mesh references could
+                // produce only a few DX12-visible objects.
                 const std::wstring reasons=
-                    L"CAP "+std::wstring(
-                        sl_circuit_.mesh_capability_ready()?L"YES":L"NO")+
-                    L" | MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
-                    L" | J2C "+std::to_wstring(
-                        sl_circuit_.decoded_texture_count())+
-                    L" | TexGPU "+std::to_wstring(
-                        world_renderer_.bound_sl_texture_assets())+
-                    L" | TexTri "+std::to_wstring(
-                        world_renderer_.uploaded_textured_triangles())+
-                    L" | Q "+std::to_wstring(
-                        sl_circuit_.mesh_asset_stats().queued)+
-                    L" | Fetch "+std::to_wstring(
-                        sl_circuit_.mesh_download_count())+
-                    L" | LOD "+std::to_wstring(
-                        sl_circuit_.decoded_mesh_assets().size())+
-                    L" | CSc "+std::to_wstring(
-                        sl_circuit_.compressed_decode_audit().sculpt_records)+
-                    L" | FSc "+std::to_wstring(audit.sculpt_records)+
-                    L" | FMesh "+std::to_wstring(audit.mesh_sculpt_records)+
-                    L" | XMesh "+std::to_wstring(audit.extended_mesh_records)+
-                    L" | PBR "+std::to_wstring(audit.render_material_records)+
-                    L" | Probe "+std::to_wstring(audit.reflection_probe_records)+
-                    L" | Other "+std::to_wstring(
-                        audit.projector_records+audit.other_extra_records)+
-                    L" | Bad "+std::to_wstring(
-                        audit.malformed_extra_envelopes);
+                    L"MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
+                    L" | LOD "+std::to_wstring(sl_circuit_.decoded_mesh_assets().size())+
+                    L" | Near "+std::to_wstring(world_renderer_.mesh_eligible_instances())+
+                    L" | NoLOD "+std::to_wstring(world_renderer_.mesh_missing_lod_instances())+
+                    L" | Parent "+std::to_wstring(world_renderer_.mesh_waiting_for_parent())+
+                    L" | Far "+std::to_wstring(world_renderer_.mesh_out_of_range_instances())+
+                    L" | BadPose "+std::to_wstring(world_renderer_.mesh_invalid_pose_instances())+
+                    L" | Undrawn "+std::to_wstring(world_renderer_.mesh_undrawn_instances())+
+                    L" | Tris "+std::to_wstring(world_renderer_.uploaded_mesh_triangles());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
@@ -1357,7 +1342,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
        sl_circuit_.movement_seen()){
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
-        label(L"R65 LIVE | Land patches "+std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+        label(L"R66 LIVE | Land patches "+std::to_wstring(sl_circuit_.decoded_land_patches().size())+
               L" | meshes drawn "+std::to_wstring(world_renderer_.uploaded_live_meshes())+
               L" | primitives drawn "+std::to_wstring(world_renderer_.uploaded_root_primitive_shapes()+
                   world_renderer_.uploaded_linked_primitive_shapes())+
