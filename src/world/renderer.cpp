@@ -3,6 +3,7 @@
 #include "kami/world/live_water.hpp"
 #include "kami/world/object_proxies.hpp"
 #include "kami/world/live_primitive_geometry.hpp"
+#include "kami/world/texture_atlas.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
@@ -165,13 +166,25 @@ bool Renderer::update_skin_palette() noexcept {
 
 
 bool Renderer::make_material_texture(
-    const std::map<std::string,protocol::texture::DecodedTexture>* images) {
-    // One bounded DX12 texture array avoids expensive descriptor-set
-    // rebinding for every mesh face, preserving the FPS-first draw path.
-    // Slice zero is the original KAMI-authored procedural material.
-    // Slices 1..24 contain validated CPU-decoded SL default TE assets.
+    const std::map<std::string,protocol::texture::DecodedTexture>* images,
+    const std::map<std::string,std::uint16_t>* previous_layers) {
+    // R50: retain the GPU Texture2DArray and SRV. Only upload layers whose
+    // UUID changed; the old path rebuilt all 25 slices (6.25 MiB), allocated
+    // a new GPU texture, and stalled the graphics queue on each new J2C.
     constexpr UINT tw=kLiveTextureSize,th=kLiveTextureSize;
     constexpr UINT slices=kLiveTextureLayers+1U;
+    auto* dev=device_.native_device();
+    if(!dev||!shadow_srv_heap_||!allocator_||!commands_)return false;
+    const bool incremental=material_texture_&&previous_layers;
+    std::vector<std::uint16_t> dirty;
+    if(incremental)
+        dirty=changed_atlas_layers(*previous_layers,live_texture_layers_);
+    else{
+        dirty.reserve(slices);
+        for(UINT i=0;i<slices;++i)
+            dirty.push_back(static_cast<std::uint16_t>(i));
+    }
+    if(dirty.empty())return true;
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     desc.Width=tw;
@@ -182,27 +195,28 @@ bool Renderer::make_material_texture(
     desc.SampleDesc.Count=1;
     desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
 
-    auto* dev=device_.native_device();
-    if(!dev||!shadow_srv_heap_||!allocator_||!commands_)return false;
-    Microsoft::WRL::ComPtr<ID3D12Resource> image_gpu,staging;
-    const auto heap_default=heap(D3D12_HEAP_TYPE_DEFAULT);
-    if(FAILED(dev->CreateCommittedResource(
-        &heap_default,D3D12_HEAP_FLAG_NONE,&desc,
-        D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
-        IID_PPV_ARGS(image_gpu.GetAddressOf()))))return false;
-
-    std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT,slices> footprints{};
-    std::array<UINT,slices> rows{};
-    std::array<UINT64,slices> row_bytes{};
-    UINT64 upload_size=0U;
-    dev->GetCopyableFootprints(&desc,0,slices,0,footprints.data(),
-                              rows.data(),row_bytes.data(),&upload_size);
-    if(upload_size==0U||upload_size>16U*1024U*1024U)return false;
-    for(UINT i=0;i<slices;++i)
-        if(rows[i]!=th||row_bytes[i]!=tw*4U)return false;
-
-    const auto upload_desc=buffer_desc(upload_size);
+    Microsoft::WRL::ComPtr<ID3D12Resource> image_gpu;
+    if(incremental)image_gpu=material_texture_;
+    else{
+        const auto heap_default=heap(D3D12_HEAP_TYPE_DEFAULT);
+        if(FAILED(dev->CreateCommittedResource(
+            &heap_default,D3D12_HEAP_FLAG_NONE,&desc,
+            D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
+            IID_PPV_ARGS(image_gpu.GetAddressOf()))))return false;
+    }
+    // One upload footprint per changed layer (not the entire array).
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    UINT rows=0U;
+    UINT64 row_bytes=0U,one_size=0U;
+    dev->GetCopyableFootprints(
+        &desc,0U,1U,0U,&footprint,&rows,&row_bytes,&one_size);
+    if(rows!=th||row_bytes!=tw*4U||one_size==0U||
+       one_size>1024U*1024U||dirty.size()>slices||
+       dirty.size()>16U*1024U*1024U/one_size)return false;
+    const UINT64 upload_size=one_size*dirty.size();
     const auto heap_upload=heap(D3D12_HEAP_TYPE_UPLOAD);
+    const auto upload_desc=buffer_desc(upload_size);
+    Microsoft::WRL::ComPtr<ID3D12Resource> staging;
     if(FAILED(dev->CreateCommittedResource(
         &heap_upload,D3D12_HEAP_FLAG_NONE,&upload_desc,
         D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
@@ -214,37 +228,34 @@ bool Renderer::make_material_texture(
             if(layer==0U||layer>=slices)continue;
             const auto it=images->find(id);
             if(it==images->end())continue;
-            const auto& sample=it->second;
-            const auto pixels=static_cast<std::uint64_t>(sample.width)*
-                              static_cast<std::uint64_t>(sample.height);
-            if(sample.width==0U||sample.height==0U||
-               sample.width>2048U||sample.height>2048U||
+            const auto& bitmap=it->second;
+            const UINT64 pixels=UINT64(bitmap.width)*bitmap.height;
+            if(bitmap.width==0U||bitmap.height==0U||
+               bitmap.width>2048U||bitmap.height>2048U||
                pixels>4U*1024U*1024U||
-               pixels*4U!=sample.rgba.size())continue;
-            decoded[layer]=&sample;
+               bitmap.rgba.size()!=pixels*4U)continue;
+            decoded[layer]=&bitmap;
         }
     }
     std::uint8_t* mapped=nullptr;
     const D3D12_RANGE no_read{0,0};
     if(FAILED(staging->Map(0,&no_read,
-       reinterpret_cast<void**>(&mapped)))||!mapped)return false;
+        reinterpret_cast<void**>(&mapped)))||!mapped)return false;
     std::memset(mapped,0,static_cast<std::size_t>(upload_size));
-    for(UINT layer=0;layer<slices;++layer){
+    for(std::size_t index=0U;index<dirty.size();++index){
+        const UINT layer=dirty[index];
         const auto* source=decoded[layer];
-        const auto& layout=footprints[layer];
-        auto* dest=mapped+static_cast<std::size_t>(layout.Offset);
+        auto* dest=mapped+static_cast<std::size_t>(index*one_size);
         for(UINT y=0;y<th;++y){
             auto* row=dest+static_cast<std::size_t>(y)*
-                layout.Footprint.RowPitch;
+                footprint.Footprint.RowPitch;
             for(UINT x=0;x<tw;++x){
                 auto* pixel=row+static_cast<std::size_t>(x)*4U;
                 if(source){
-                    // Deterministic nearest-neighbor preview: never sample
-                    // beyond a decoded JPEG2000 buffer; no GPU decompressor.
-                    const auto sx=static_cast<std::size_t>(
-                        (static_cast<std::uint64_t>(x)*source->width)/tw);
-                    const auto sy=static_cast<std::size_t>(
-                        (static_cast<std::uint64_t>(y)*source->height)/th);
+                    const auto sx=std::size_t(
+                        UINT64(x)*source->width/tw);
+                    const auto sy=std::size_t(
+                        UINT64(y)*source->height/th);
                     const auto at=4U*(sy*source->width+sx);
                     std::memcpy(pixel,source->rgba.data()+at,4U);
                 }else{
@@ -259,11 +270,17 @@ bool Renderer::make_material_texture(
     }
     const D3D12_RANGE written{0,static_cast<SIZE_T>(upload_size)};
     staging->Unmap(0,&written);
-
     if(FAILED(allocator_->Reset())||
        FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get())))
        return false;
-    for(UINT layer=0;layer<slices;++layer){
+    if(incremental){
+        const auto copying=barrier(image_gpu.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_COPY_DEST);
+        commands_->ResourceBarrier(1,&copying);
+    }
+    for(std::size_t index=0U;index<dirty.size();++index){
+        const UINT layer=dirty[index];
         D3D12_TEXTURE_COPY_LOCATION dest{};
         dest.pResource=image_gpu.Get();
         dest.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -271,7 +288,8 @@ bool Renderer::make_material_texture(
         D3D12_TEXTURE_COPY_LOCATION src{};
         src.pResource=staging.Get();
         src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        src.PlacedFootprint=footprints[layer];
+        src.PlacedFootprint=footprint;
+        src.PlacedFootprint.Offset=UINT64(index)*one_size;
         commands_->CopyTextureRegion(&dest,0,0,0,&src,nullptr);
     }
     const auto ready=barrier(image_gpu.Get(),
@@ -281,22 +299,22 @@ bool Renderer::make_material_texture(
     if(FAILED(commands_->Close()))return false;
     ID3D12CommandList* lists[]={commands_.Get()};
     device_.graphics_queue()->ExecuteCommandLists(1,lists);
-    // GPU must finish reading the old texture before SRV replacement,
-    // and finish reading this staging resource before it is destroyed.
+    // Fence the staging upload. Existing SRV remains valid when doing a
+    // partial update, so other textures and descriptor handles are stable.
     wait_for_gpu();
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
-    srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
-    srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv.Texture2DArray.MipLevels=1;
-    srv.Texture2DArray.ArraySize=slices;
-    auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
-    handle.ptr+=dev->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
-    material_texture_=std::move(image_gpu);
-    // Upload data is no longer needed after the GPU fence.
+    if(!incremental){
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+        srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+        srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv.Texture2DArray.MipLevels=1;
+        srv.Texture2DArray.ArraySize=slices;
+        auto handle=shadow_srv_heap_->GetCPUDescriptorHandleForHeapStart();
+        handle.ptr+=dev->GetDescriptorHandleIncrementSize(
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
+        material_texture_=std::move(image_gpu);
+    }
     material_upload_.Reset();
     return true;
 }
@@ -625,18 +643,23 @@ bool Renderer::set_verified_live_terrain(
         if(patch.size!=16U&&patch.size!=32U)continue;
         nearest.push_back(&patch);
     }
-    std::sort(nearest.begin(),nearest.end(),
-        [&](const auto* a,const auto* b){
-            auto d=[&](const auto* p){
-                const float cx=static_cast<float>(p->x)*p->size+
-                               p->size*.5f-agent.x;
-                const float cy=static_cast<float>(p->y)*p->size+
-                               p->size*.5f-agent.y;
-                return cx*cx+cy*cy;
-            };
-            return d(a)<d(b);
-        });
-    if(nearest.size()>64U)nearest.resize(64U);
+    const auto patch_nearer=[&](const auto* a,const auto* b){
+        auto d=[&](const auto* p){
+            const float cx=static_cast<float>(p->x)*p->size+
+                           p->size*.5f-agent.x;
+            const float cy=static_cast<float>(p->y)*p->size+
+                           p->size*.5f-agent.y;
+            return cx*cx+cy*cy;
+        };
+        return d(a)<d(b);
+    };
+    // We draw only 64 land patches. On a full region, partial_sort
+    // avoids sorting the many offscreen patches that won't reach DX12.
+    if(nearest.size()>64U){
+        std::partial_sort(nearest.begin(),nearest.begin()+64U,
+                          nearest.end(),patch_nearer);
+        nearest.resize(64U);
+    }else std::sort(nearest.begin(),nearest.end(),patch_nearer);
     if(!live_avatar_preview_.active()&&!live_avatar_preview_.reset(agent)){
         error_=L"R16 avatar marker needs verified simulator spawn";
         return false;
@@ -705,7 +728,8 @@ bool Renderer::set_verified_live_terrain(
         live_texture_layers_=std::move(next_layers);
         if(ready_){
             wait_for_gpu();
-            if(!make_material_texture(&circuit.decoded_texture_assets())){
+            if(!make_material_texture(&circuit.decoded_texture_assets(),
+                                     &previous)){
                 live_texture_layers_=std::move(previous);
                 error_=L"DX12 could not stage decoded SL texture array";
                 return false;

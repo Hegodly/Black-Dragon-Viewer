@@ -295,6 +295,11 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     const V origin{agent_x,agent_y,agent_z};
     if(!max_layers||!finite(origin))return {};
     std::map<std::string,float> nearest;
+    // Hundreds of SL objects often instance the same mesh LOD. Decoding
+    // its UV-bearing material faces for every instance repeatedly scanned
+    // thousands of triangles. Cache a compact 32-bit face mask per asset
+    // for this world rebuild, then look up only those material slots.
+    std::map<std::string,std::uint32_t> drawable_faces;
     const auto gather=[&](const Transform& t,Pose pose) {
         const auto mesh=loaded.find(t.mesh_asset_id);
         if(mesh==loaded.end()||!finite(pose.pos)||!valid_quat(pose.rot))return;
@@ -302,15 +307,24 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
         if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
            std::abs(delta.z)>96.f)return;
         const float distance=dot(delta,delta);
-        std::array<bool,32U> seen_faces{};
-        for(const auto& face:mesh->second.triangles){
-            if(!face.has_uv||face.face_index>=seen_faces.size())continue;
-            if(seen_faces[face.face_index])continue;
-            seen_faces[face.face_index]=true;
-            const unsigned f=face.face_index;
+        const auto [faces_it,inserted_faces]=
+            drawable_faces.try_emplace(t.mesh_asset_id,0U);
+        if(inserted_faces){
+            std::uint32_t mask=0U;
+            for(const auto& face:mesh->second.triangles){
+                if(face.has_uv&&face.face_index<32U)
+                    mask|=(std::uint32_t{1}<<face.face_index);
+                if(mask==0xffffffffU)break;
+            }
+            faces_it->second=mask;
+        }
+        const std::uint32_t mask=faces_it->second;
+        if(mask==0U)return;
+        for(unsigned f=0U;f<32U;++f){
+            if((mask&(std::uint32_t{1}<<f))==0U)continue;
             const auto& uuid=t.face_texture_override[f]?
                 t.face_texture_asset_ids[f]:t.default_texture_asset_id;
-            if(uuid.empty())continue; // an explicit zero UUID is not default
+            if(uuid.empty())continue; // explicit null UUID is not default
             const auto image=decoded.find(uuid);
             if(image==decoded.end())continue;
             const auto& bitmap=image->second;
