@@ -804,6 +804,17 @@ bool Renderer::set_verified_live_terrain(
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
+    // The DX12 camera and local avatar marker use the original simulator
+    // spawn. Every subsequent interest refresh decodes geometry relative
+    // to the *current* agent position. Re-align only world vertices to
+    // the stable spawn origin before comparing/uploading GPU geometry.
+    const std::array<float,3> current_origin{agent.x,agent.y,agent.z};
+    const auto stable_origin=live_region_origin_valid_?
+        live_region_origin_:current_origin;
+    if(!align_world_vertices_to_origin(scene,current_origin,stable_origin)){
+        error_=L"R52 invalid live region coordinate rebase";
+        return false;
+    }
     // Revisions include frequent simulator interest-list packets and
     // decoded images which may never become drawable. Build a finite
     // candidate once, but skip the DX12 vertex buffer allocation, copy,
@@ -821,6 +832,10 @@ bool Renderer::set_verified_live_terrain(
             error_=L"R12 DX12 land mesh upload failed";
             return false;
         }
+    }
+    if(!live_region_origin_valid_){
+        live_region_origin_=stable_origin;
+        live_region_origin_valid_=true;
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;
@@ -843,9 +858,12 @@ bool Renderer::set_verified_live_terrain(
     if(!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;
-        const float ground=patch.elevation[middle*patch.size+middle]-agent.z;
-        const float x=static_cast<float>(patch.x)*patch.size+middle-agent.x;
-        const float z=static_cast<float>(patch.y)*patch.size+middle-agent.y;
+        const float ground=patch.elevation[middle*patch.size+middle]-
+                           stable_origin[2];
+        const float x=static_cast<float>(patch.x)*patch.size+middle-
+                      stable_origin[0];
+        const float z=static_cast<float>(patch.y)*patch.size+middle-
+                      stable_origin[1];
         // Anchor near a real decoded land patch, even if the avatar is
         // over water or the nearest patch is beyond the 200m far plane.
         // System::update adds the 2.77m head offset when head-tracking
@@ -935,6 +953,8 @@ void Renderer::clear_decoded_region_geometry() {
     uploaded_textured_triangles_=0;
     live_texture_layers_.clear();
     texture_upload_pending_=false;
+    live_region_origin_={};
+    live_region_origin_valid_=false;
     primitive_eligible_=0;
     primitive_unresolved_=0;
     primitive_distant_=0;
@@ -1308,6 +1328,9 @@ void Renderer::shutdown() noexcept {
     texture_copy_commands_.Reset();
     texture_copy_allocator_.Reset();
     texture_copy_submitted_fence_=0U;
+    live_region_origin_={};
+    live_region_origin_valid_=false;
+    texture_upload_pending_=false;
     pipeline_.Reset();
     shadow_pipeline_.Reset();
     sky_pipeline_.Reset();
