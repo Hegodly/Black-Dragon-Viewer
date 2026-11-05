@@ -202,6 +202,73 @@ int main(){
     if(attachment.root_meshes||attachment.linked_meshes||
        attachment.emitted_triangles||attachment.waiting_for_parent==0U)
        return 17;
+    // R53: simple SL primitives must use the exact same decoded-J2C
+    // GPU array as mesh LODs, with independently numbered material faces.
+    Transform cuboid{201U,128.f,140.f,35.f,2.f,3.f,4.f};
+    cuboid.primitive=Kind::Box;
+    cuboid.default_texture_asset_id=texture_id;
+    std::map<std::uint32_t,Transform> textured_prim{{201U,cuboid}};
+    const auto textured_box=world::build_live_primitive_geometry(
+        textured_prim,{},128.f,140.f,35.f,128U,{},{{texture_id,5U}});
+    if(!valid(textured_box)||textured_box.scene.vertices.size()!=36U||
+       textured_box.textured_triangles!=12U)return 31;
+    for(const auto& v:textured_box.scene.vertices)
+        if(v.texture_layer!=5.f||!std::isfinite(v.u)||
+           !std::isfinite(v.v))return 32;
+    // Distinct per-face overrides and explicit zero image must not
+    // accidentally inherit the default image from an adjacent face.
+    const std::string alternate="aaaa1111-bbbb-4ccc-8ddd-eeeeeeee0001";
+    textured_prim[201U].face_texture_override[2U]=true;
+    textured_prim[201U].face_texture_asset_ids[2U]=alternate;
+    const auto box_with_override=world::build_live_primitive_geometry(
+        textured_prim,{},128.f,140.f,35.f,128U,{},
+        {{texture_id,5U},{alternate,7U}});
+    if(box_with_override.scene.vertices.size()!=36U||
+       box_with_override.textured_triangles!=12U||
+       box_with_override.scene.vertices[12U].texture_layer!=7.f||
+       box_with_override.scene.vertices[0U].texture_layer!=5.f||
+       box_with_override.scene.vertices[35U].texture_layer!=5.f)return 33;
+    textured_prim[201U].face_texture_asset_ids[2U].clear();
+    const auto explicit_null=world::build_live_primitive_geometry(
+        textured_prim,{},128.f,140.f,35.f,128U,{},
+        {{texture_id,5U},{alternate,7U}});
+    if(explicit_null.textured_triangles!=10U||
+       explicit_null.scene.vertices[12U].texture_layer!=0.f||
+       explicit_null.scene.vertices[0U].texture_layer!=5.f)return 34;
+    textured_prim[201U].face_texture_override[2U]=false;
+    // Real SL UV transform: repeat, offset, rotation from each TE face,
+    // not screen-space or post-generated world-space guesses.
+    auto& face_uv=textured_prim[201U].face_uv[0U];
+    face_uv.repeat_u=2.f;
+    face_uv.repeat_v=.5f;
+    face_uv.offset_u=.25f;
+    face_uv.offset_v=-.25f;
+    face_uv.rotation=0.f;
+    textured_prim[201U].face_rgba_present=true;
+    for(auto& color:textured_prim[201U].face_rgba)color={1.f,1.f,1.f,1.f};
+    textured_prim[201U].face_rgba[0U]={.15f,.35f,.55f,1.f};
+    const auto uv_box=world::build_live_primitive_geometry(
+        textured_prim,{},128.f,140.f,35.f,128U,{},{{texture_id,5U}});
+    if(uv_box.scene.vertices.size()!=36U||
+       std::abs(uv_box.scene.vertices[0].u+.25f)>1.e-4f||
+       std::abs(uv_box.scene.vertices[0].v-1.0f)>1.e-4f||
+       std::abs(uv_box.scene.vertices[0].r-.15f)>1.e-4f||
+       std::abs(uv_box.scene.vertices[0].g-.35f)>1.e-4f||
+       std::abs(uv_box.scene.vertices[0].b-.55f)>1.e-4f||
+       std::abs(uv_box.scene.vertices[6].r-1.f)>1.e-4f)return 35;
+    for(const auto kind:{Kind::Cylinder,Kind::Sphere,Kind::Prism}){
+        textured_prim[201U].primitive=kind;
+        const auto shape=world::build_live_primitive_geometry(
+            textured_prim,{},128.f,140.f,35.f,128U,{},
+            {{texture_id,5U}});
+        if(!valid(shape)||shape.scene.vertices.empty()||
+           shape.textured_triangles!=shape.scene.vertices.size()/3U)
+            return 36;
+        if(kind==Kind::Cylinder&&shape.scene.vertices.size()!=240U)
+            return 37;
+        if(kind==Kind::Prism&&shape.scene.vertices.size()!=24U)
+            return 38;
+    }
     // R49: selecting the alphabetically first decoded UUID can render
     // the wrong (distant) building and starve nearby real mesh faces.
     assets[asset_id].triangles[0].has_uv=true;
