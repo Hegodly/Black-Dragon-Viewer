@@ -1,5 +1,6 @@
 #pragma once
 #include "kami/protocol/lludp.hpp"
+#include <array>
 #include <cstdint>
 #include <string>
 #include <span>
@@ -32,6 +33,14 @@ struct Transform {
 [[nodiscard]] bool same_spatial_transform(const Transform&,const Transform&) noexcept;
 [[nodiscard]] Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous);
+// Authenticated full High12 PCode=47 avatar identity and region pose.
+// The simulator UUID is compared to the authenticated login AgentID
+// before this can ever advance the own-avatar camera/world origin.
+struct AvatarFullPose {
+    std::uint32_t local_id=0U;
+    std::array<std::uint8_t,16U> full_id{};
+    float x=0.f,y=0.f,z=0.f;
+};
 // Aggregate only counts, never simulator IDs or user payloads.
 struct FullDecodeAudit {
     std::uint32_t volume=0,non_volume=0,linked=0;
@@ -63,7 +72,8 @@ struct CompressedDecodeAudit {
     FullDecodeAudit* audit=nullptr,
     std::vector<std::uint32_t>* parent_references=nullptr,
     std::vector<Transform>* child_transforms=nullptr,
-    std::vector<std::uint32_t>* avatar_root_ids=nullptr) noexcept;
+    std::vector<std::uint32_t>* avatar_root_ids=nullptr,
+    std::vector<AvatarFullPose>* avatar_poses=nullptr) noexcept;
 [[nodiscard]] bool decode_compressed_transforms(
     const lludp::Packet& packet,std::vector<Transform>& out,
     std::vector<Transform>* child_transforms=nullptr,
