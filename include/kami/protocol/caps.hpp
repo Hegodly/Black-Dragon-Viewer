@@ -9,6 +9,14 @@ namespace kami::protocol::caps {
 // CAPS event intake: bounded observations plus a narrow, explicitly
 // supported teleport-failure notification. All other message bodies
 // remain unsupported; this does NOT implement region transitions.
+// Only retry transient seed failures with a strict per-login bound.
+// Permanent security/parse rejections must never spin or reuse bearer URLs.
+[[nodiscard]] inline bool retry_seed_response(unsigned status,
+                                             unsigned attempts) noexcept {
+    return attempts<3U&&
+        (status==0U||status==408U||status==429U||
+         status==500U||status==502U||status==503U||status==504U);
+}
 struct SeedResponse {
     bool granted=false;
     bool event_queue_granted=false;
