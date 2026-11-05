@@ -594,17 +594,18 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                         sl_circuit_.compressed_decode_audit().sculpt_records)+
                     L" | FSc "+std::to_wstring(audit.sculpt_records)+
                     L" | FMesh "+std::to_wstring(audit.mesh_sculpt_records)+
-                    L" | FLight "+std::to_wstring(audit.light_records)+
-                    L" | FFlex "+std::to_wstring(audit.flexible_records)+
-                    L" | FOther "+std::to_wstring(
+                    L" | XMesh "+std::to_wstring(audit.extended_mesh_records)+
+                    L" | PBR "+std::to_wstring(audit.render_material_records)+
+                    L" | Probe "+std::to_wstring(audit.reflection_probe_records)+
+                    L" | Other "+std::to_wstring(
                         audit.projector_records+audit.other_extra_records)+
-                    L" | FBad "+std::to_wstring(
+                    L" | Bad "+std::to_wstring(
                         audit.malformed_extra_envelopes);
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
         }
-        label(L"R43.1: full shape fix + missing medium-LOD fallback | textures, avatar pending",
+        label(L"Official LLUDP + SL ExtraParams bridge | full SL backend, textures, avatar still pending",
               box(contentX+25,height-89,contentWidth-54,24),
               small_font_.Get(),p.muted);
         return;
