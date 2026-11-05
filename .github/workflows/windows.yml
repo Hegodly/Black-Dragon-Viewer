@@ -68,6 +68,7 @@ on:
       - feature/kami-r62-4080-primitives-20261105
       - fix/kami-r63-density-pbr-priority-20261105
       - fix/kami-r64-mesh-priority-loading-20261105
+      - fix/kami-r65-2048-asset-recovery-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -175,7 +176,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KAMI-R64-Forced-WARP-PBR-Pixel-Verification-Result
+          name: KAMI-R65-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
       - name: Package test executable
@@ -200,7 +201,7 @@ jobs:
           Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
-          Copy-Item R64_STATUS.md dist/KAMI
+          Copy-Item R65_STATUS.md dist/KAMI
           Copy-Item LICENSE.PicoJSON.txt dist/KAMI
           Copy-Item LICENSE.TinyXML2.txt dist/KAMI
           Copy-Item R57_STATUS.md dist/KAMI
@@ -221,10 +222,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R64-Mesh-First-Loading-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R65-2048-World-Recovery-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R64-Mesh-First-Loading-DX12
-          path: dist/KAMI-R64-Mesh-First-Loading-DX12.zip
+          name: KAMI-R65-2048-World-Recovery-DX12
+          path: dist/KAMI-R65-2048-World-Recovery-DX12.zip
           retention-days: 14
 
