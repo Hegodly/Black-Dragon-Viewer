@@ -45,6 +45,8 @@ void Circuit::prune_decoded_textures() noexcept {
             bytes>decoded_texture_bytes_?0U:decoded_texture_bytes_-bytes;
         (void)texture_scheduler_.forget_finished(it->first);
         it=decoded_textures_.erase(it);
+        // The visible GPU atlas must drop evicted textures on next frame.
+        ++spatial_object_revision_;
     }
 }
 void Circuit::schedule_visible_textures() noexcept {
@@ -115,6 +117,9 @@ void Circuit::maybe_fetch_texture() noexcept {
                         decoded_texture_bytes_=used+bytes;
                         decoded_textures_.insert_or_assign(
                             result.id,std::move(result.image));
+                        // Notify the 800 ms coalesced DX12 region uploader:
+                        // a new J2C image must also rebuild the texture atlas.
+                        ++spatial_object_revision_;
                     }else ++texture_failure_count_;
                 }
             }else{
