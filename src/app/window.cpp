@@ -491,7 +491,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     }
     label(L"7 SYSTEMS TEST [F9]",box(41,height-93,200,25),
           small_font_.Get(),p.accent);
-    label(L"ORIGINAL CORE / R68",box(42,height-65,189,25),small_font_.Get(),p.muted);
+    label(L"ORIGINAL CORE / R69",box(42,height-65,189,25),small_font_.Get(),p.muted);
 
     const float contentX = 279.f;
     const float contentWidth = width - 305.f;
@@ -608,6 +608,22 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Tris "+std::to_wstring(world_renderer_.uploaded_mesh_triangles());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
+            }
+            if(i==5U && rowHeight>=62.f){
+                // R69: the previous Parent counter included genuine missing
+                // roots, avatar attachments, cycles and invalid hierarchies.
+                // Distinguish these before changing recovery networking.
+                const std::wstring causes=
+                    L"Mesh parents M:"+std::to_wstring(world_renderer_.mesh_parent_missing_instances())+
+                    L" A:"+std::to_wstring(world_renderer_.mesh_parent_avatar_instances())+
+                    L" C:"+std::to_wstring(world_renderer_.mesh_parent_cycle_instances())+
+                    L" I:"+std::to_wstring(world_renderer_.mesh_parent_invalid_instances())+
+                    L" D:"+std::to_wstring(world_renderer_.mesh_parent_deep_instances())+
+                    L" | Undrawn Alpha:"+std::to_wstring(world_renderer_.mesh_undrawn_transparent_instances())+
+                    L" Geom:"+std::to_wstring(world_renderer_.mesh_undrawn_bad_geometry_instances())+
+                    L" Budget:"+std::to_wstring(world_renderer_.mesh_undrawn_budget_instances());
+                label(causes,box(contentX+36,y+43,contentWidth-76,19),
+                      small_font_.Get(),p.accent);
             }
         }
         // GPU atlas != CPU JPEG2000 cache. Keep the numbers separate
@@ -1342,7 +1358,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
        sl_circuit_.movement_seen()){
         // Live counts originate from validated LLUDP packets, NOT the
         // DX12 offline renderer. Framing != decoded world geometry.
-        label(L"R68 LIVE | Land patches "+std::to_wstring(sl_circuit_.decoded_land_patches().size())+
+        label(L"R69 LIVE | Land patches "+std::to_wstring(sl_circuit_.decoded_land_patches().size())+
               L" | meshes drawn "+std::to_wstring(world_renderer_.uploaded_live_meshes())+
               L" | primitives drawn "+std::to_wstring(world_renderer_.uploaded_root_primitive_shapes()+
                   world_renderer_.uploaded_linked_primitive_shapes())+
