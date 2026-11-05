@@ -202,5 +202,49 @@ int main(){
     if(attachment.root_meshes||attachment.linked_meshes||
        attachment.emitted_triangles||attachment.waiting_for_parent==0U)
        return 17;
+    // R49: selecting the alphabetically first decoded UUID can render
+    // the wrong (distant) building and starve nearby real mesh faces.
+    assets[asset_id].triangles[0].has_uv=true;
+    Transform close_mesh{101U,128.f,140.f,35.f,1.f,1.f,1.f};
+    close_mesh.mesh_asset_id=asset_id;
+    const std::string close_id="ffffffff-ffff-4fff-8fff-ffffffffffff";
+    close_mesh.default_texture_asset_id=close_id;
+    Transform far_mesh=close_mesh;
+    far_mesh.local_id=102U;
+    far_mesh.x=200.f;
+    const std::string far_id="11111111-1111-4111-8111-111111111111";
+    far_mesh.default_texture_asset_id=far_id;
+    std::map<std::uint32_t,Transform> visible{{101U,close_mesh},
+                                               {102U,far_mesh}};
+    protocol::texture::DecodedTexture one_pixel{};
+    one_pixel.width=1U;one_pixel.height=1U;
+    one_pixel.rgba={255U,128U,64U,255U};
+    std::map<std::string,protocol::texture::DecodedTexture> bitmaps{
+        {close_id,one_pixel},{far_id,one_pixel}};
+    const auto nearest=world::select_visible_mesh_texture_layers(
+        visible,{}, {},assets,bitmaps,128.f,140.f,35.f,1U);
+    if(nearest.size()!=1U||nearest.at(close_id)!=1U)return 26;
+    const auto moved=world::select_visible_mesh_texture_layers(
+        visible,{}, {},assets,bitmaps,200.f,140.f,35.f,1U);
+    if(moved.size()!=1U||moved.at(far_id)!=1U)return 27;
+    const std::map<std::string,std::uint16_t> preferred{
+        {far_id,1U},{close_id,2U}};
+    const auto stable=world::select_visible_mesh_texture_layers(
+        visible,{}, {},assets,bitmaps,128.f,140.f,35.f,2U,preferred);
+    if(stable.size()!=2U||stable.at(far_id)!=1U||
+       stable.at(close_id)!=2U)return 28;
+    // Explicitly empty per-face image IDs must not inherit the
+    // default, and malformed decoded images cannot become GPU layers.
+    visible[101U].face_texture_override[0]=true;
+    visible[101U].face_texture_asset_ids[0].clear();
+    const auto nulled=world::select_visible_mesh_texture_layers(
+        visible,{}, {},assets,bitmaps,128.f,140.f,35.f,2U);
+    if(nulled.contains(close_id)||!nulled.contains(far_id))return 29;
+    visible[101U].face_texture_override[0]=false;
+    bitmaps[close_id].rgba.clear();
+    const auto invalid_image=world::select_visible_mesh_texture_layers(
+        visible,{}, {},assets,bitmaps,128.f,140.f,35.f,2U);
+    if(invalid_image.contains(close_id)||!invalid_image.contains(far_id))
+        return 30;
     return 0;
 }

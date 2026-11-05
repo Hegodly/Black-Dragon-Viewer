@@ -297,8 +297,11 @@ private:
         texture::DecodedTexture image{};
     };
     std::future<TextureResult> texture_worker_;
-    static constexpr std::size_t kMaxDecodedTextureAssets=24U;
-    static constexpr std::size_t kMaxDecodedTextureBytes=48U*1024U*1024U;
+    // CPU preview cache is wider than the 24-slice DX12 GPU atlas so
+    // large decorated regions can stream nearby assets over time.
+    static constexpr std::size_t kMaxDecodedTextureAssets=96U;
+    static constexpr std::size_t kMaxDecodedTextureBytes=96U*1024U*1024U;
+    std::set<std::string> texture_desired_ids_; // nearest 96 authenticated IDs
     std::map<std::string,texture::DecodedTexture> decoded_textures_;
     std::size_t decoded_texture_bytes_=0U;
     std::size_t texture_download_count_=0U,texture_failure_count_=0U;

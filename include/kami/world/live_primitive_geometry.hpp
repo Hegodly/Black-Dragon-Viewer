@@ -1,6 +1,7 @@
 #pragma once
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/protocol/mesh_lod.hpp"
+#include "kami/protocol/texture_decode.hpp"
 #include "kami/world/scene.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,21 @@ struct PrimitiveBatch {
     float agent_x,float agent_y,float agent_z,
     std::size_t limit=128U,
     const std::set<std::uint32_t>& avatar_roots={});
+// Select only JPEG2000 images that actually belong to visible static mesh
+// faces. Prioritize world distance, not the alphabetical UUID ordering of
+// the CPU cache. Preserve existing DX12 array slice numbers when possible
+// to avoid needless rebinds. Never select missing/invalid image pixels.
+[[nodiscard]] std::map<std::string,std::uint16_t>
+select_visible_mesh_texture_layers(
+    const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
+    const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
+    const std::set<std::uint32_t>& avatar_roots,
+    const std::map<std::string,protocol::mesh::LOD>& loaded,
+    const std::map<std::string,protocol::texture::DecodedTexture>& decoded,
+    float agent_x,float agent_y,float agent_z,
+    std::size_t max_layers=24U,
+    const std::map<std::string,std::uint16_t>& previous={});
+
 struct MeshBatch {
     SceneMesh scene{};
     std::size_t root_meshes=0,linked_meshes=0;

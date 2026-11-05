@@ -12,4 +12,9 @@ struct DecodedTexture {
 };
 [[nodiscard]] bool decode_jpeg2000(
     std::span<const std::uint8_t> j2c,DecodedTexture& output) noexcept;
+// R49 low-res preview cache: keep up to 512px on the longer axis to
+// prevent large SL J2C images from saturating RAM before the DX12 atlas
+// can select nearby faces. Retains aspect ratio and never invents pixels.
+[[nodiscard]] bool downscale_preview(DecodedTexture& image,
+                                     std::uint32_t max_side=512U) noexcept;
 } // namespace kami::protocol::texture

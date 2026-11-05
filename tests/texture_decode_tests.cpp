@@ -49,5 +49,32 @@ int main(){
     if(!kami::protocol::caps::jpeg2000_codestream_header(jp2))return 8;
     jp2[10]=0U;
     if(kami::protocol::caps::jpeg2000_codestream_header(jp2))return 9;
+    // R49 JPEG2000 preview cache must not retain a 16 MiB 2048x2048
+    // image just to make a 256px DX12 atlas slice. Preserve aspect ratio,
+    // RGBA pixel ordering, and transactional failure behavior.
+    kami::protocol::texture::DecodedTexture full{};
+    full.width=1024U;full.height=512U;
+    full.rgba.resize(1024U*512U*4U);
+    for(std::uint32_t y=0;y<full.height;++y)
+        for(std::uint32_t x=0;x<full.width;++x){
+            const auto at=4U*(std::size_t(y)*full.width+x);
+            full.rgba[at]=x<512U?31U:190U;
+            full.rgba[at+1U]=static_cast<std::uint8_t>(y&255U);
+            full.rgba[at+2U]=69U;
+            full.rgba[at+3U]=255U;
+        }
+    if(!kami::protocol::texture::downscale_preview(full,512U)||
+       full.width!=512U||full.height!=256U||
+       full.rgba.size()!=512U*256U*4U||
+       full.rgba[0]!=31U||full.rgba[4U*(511U)]!=190U)
+        return 10;
+    const auto first=full.rgba;
+    if(!kami::protocol::texture::downscale_preview(full,512U)||
+       full.rgba!=first)return 11;
+    if(kami::protocol::texture::downscale_preview(full,0U)||
+       full.rgba!=first)return 12;
+    full.rgba.pop_back();
+    if(kami::protocol::texture::downscale_preview(full,512U))
+        return 13;
     return 0;
 }

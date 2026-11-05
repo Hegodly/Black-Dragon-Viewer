@@ -19,43 +19,19 @@ bool Circuit::set_texture_capability(std::wstring capability) noexcept {
     return true;
 }
 void Circuit::prune_decoded_textures() noexcept {
-    if(decoded_textures_.empty())return;
-    const auto within_retention=[&](const objectspatial::Transform& t){
-        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
-            std::abs(t.x-movement_position_.x)<=176.f&&
-            std::abs(t.y-movement_position_.y)<=176.f&&
-            std::abs(t.z-movement_position_.z)<=128.f;
-    };
-    const auto used=[&](std::string_view asset){
-        const auto check=[&](const auto& objects){
-            for(const auto& [id,t]:objects){
-                (void)id;
-                bool referenced=(t.default_texture_asset_id==asset);
-                if(!referenced){
-                    for(unsigned face=0U;face<t.face_texture_override.size();++face){
-                        if(t.face_texture_override[face]&&
-                           t.face_texture_asset_ids[face]==asset){
-                            referenced=true;break;
-                        }
-                    }
-                }
-                if(!referenced)continue;
-                const auto* anchor=world_mesh_anchor(t);
-                if(anchor&&within_retention(*anchor))return true;
-            }
-            return false;
-        };
-        return check(spatial_objects_)||check(linked_objects_);
-    };
+    // R48 retained every image referenced anywhere within 176 m. Once
+    // 24 valid textures filled that cache, KAMI stopped downloading new
+    // nearby faces even when the avatar moved to a different building.
+    // Keep only the nearest 96 requested IDs, never stale far-away
+    // images. The DX12 array still uses only 24 GPU slices.
     for(auto it=decoded_textures_.begin();it!=decoded_textures_.end();){
-        if(used(it->first)){++it;continue;}
+        if(texture_desired_ids_.contains(it->first)){++it;continue;}
         const auto bytes=it->second.rgba.size();
         decoded_texture_bytes_=
             bytes>decoded_texture_bytes_?0U:decoded_texture_bytes_-bytes;
         (void)texture_scheduler_.forget_finished(it->first);
         it=decoded_textures_.erase(it);
-        // The visible GPU atlas must drop evicted textures on next frame.
-        ++spatial_object_revision_;
+        ++spatial_object_revision_; // update GPU atlas and scene together
     }
 }
 void Circuit::schedule_visible_textures() noexcept {
@@ -66,42 +42,75 @@ void Circuit::schedule_visible_textures() noexcept {
             movement_position_.y-texture_last_scan_y_),
             movement_position_.z-texture_last_scan_z_)>=12.f;
     if(texture_scan_revision_==spatial_object_revision_&&!moved)return;
-    prune_decoded_textures();
-    texture_scan_revision_=spatial_object_revision_;
-    texture_last_scan_x_=movement_position_.x;
-    texture_last_scan_y_=movement_position_.y;
-    texture_last_scan_z_=movement_position_.z;
-    texture_last_scan_position_valid_=true;
-    const auto near_enough=[&](const objectspatial::Transform& t) {
-        return std::isfinite(t.x)&&std::isfinite(t.y)&&std::isfinite(t.z)&&
-            std::abs(t.x-movement_position_.x)<=144.f&&
-            std::abs(t.y-movement_position_.y)<=144.f&&
-            std::abs(t.z-movement_position_.z)<=96.f;
-    };
-    const auto schedule=[&](const auto& objects){
-        for(const auto& [id,t]:objects){
-            (void)id;
-            const auto* anchor=world_mesh_anchor(t);
-            if(!anchor||!near_enough(*anchor))continue;
-            const float distance=std::hypot(std::hypot(
-                anchor->x-movement_position_.x,
-                anchor->y-movement_position_.y),
-                anchor->z-movement_position_.z);
-            const auto request=[&](const std::string& image){
-                if(image.empty())return;
-                (void)texture_scheduler_.request(
-                    image,load::Kind::VisibleTexture,distance,true,0U);
-            };
-            // TE default plus explicitly specified face overrides. The
-            // load scheduler deduplicates shared IDs across mesh instances.
-            request(t.default_texture_asset_id);
-            for(unsigned face=0U;face<t.face_texture_override.size();++face)
-                if(t.face_texture_override[face])
-                    request(t.face_texture_asset_ids[face]);
+    try{
+        // Aggregate nearest visible demand PER UUID across all root/linkset
+        // objects. The old scan requested every ID until the cache filled.
+        std::map<std::string,float> nearest;
+        const auto record=[&](const std::string& id,float distance){
+            if(id.empty())return;
+            const auto [it,inserted]=nearest.try_emplace(id,distance);
+            if(!inserted)it->second=std::min(it->second,distance);
+        };
+        const auto scan=[&](const auto& objects){
+            for(const auto& [id,t]:objects){
+                (void)id;
+                // Only mesh faces can use J2C images in the current DX12
+                // preview. Do not waste the 96-image CPU working set
+                // downloading textures for still-untextured simple prims.
+                if(t.mesh_asset_id.empty())continue;
+                const auto* anchor=world_mesh_anchor(t);
+                if(!anchor||!std::isfinite(anchor->x)||
+                   !std::isfinite(anchor->y)||!std::isfinite(anchor->z)||
+                   std::abs(anchor->x-movement_position_.x)>144.f||
+                   std::abs(anchor->y-movement_position_.y)>144.f||
+                   std::abs(anchor->z-movement_position_.z)>96.f)continue;
+                const float distance=std::hypot(std::hypot(
+                    anchor->x-movement_position_.x,
+                    anchor->y-movement_position_.y),
+                    anchor->z-movement_position_.z);
+                record(t.default_texture_asset_id,distance);
+                for(unsigned face=0U;face<t.face_texture_override.size();++face)
+                    if(t.face_texture_override[face])
+                        record(t.face_texture_asset_ids[face],distance);
+            }
+        };
+        scan(spatial_objects_);
+        scan(linked_objects_);
+        std::vector<std::pair<std::string,float>> ranked(
+            nearest.begin(),nearest.end());
+        std::sort(ranked.begin(),ranked.end(),
+            [](const auto& a,const auto& b){
+                if(a.second!=b.second)return a.second<b.second;
+                return a.first<b.first;
+            });
+        if(ranked.size()>kMaxDecodedTextureAssets)
+            ranked.resize(kMaxDecodedTextureAssets);
+        std::set<std::string> wanted;
+        for(const auto& [uuid,distance]:ranked){
+            (void)distance;
+            wanted.insert(uuid);
         }
-    };
-    schedule(spatial_objects_);
-    schedule(linked_objects_);
+        // Cancel stale queued requests where safe. In-progress HTTP
+        // workers are never cancelled mid-packet, keeping futures sound.
+        for(const auto& old:texture_desired_ids_)
+            if(!wanted.contains(old))
+                (void)texture_scheduler_.forget_finished(old);
+        texture_desired_ids_.swap(wanted);
+        prune_decoded_textures();
+        // Record revision AFTER pruning, which can increment it.
+        texture_scan_revision_=spatial_object_revision_;
+        texture_last_scan_x_=movement_position_.x;
+        texture_last_scan_y_=movement_position_.y;
+        texture_last_scan_z_=movement_position_.z;
+        texture_last_scan_position_valid_=true;
+        for(const auto& [uuid,distance]:ranked)
+            (void)texture_scheduler_.request(
+                uuid,load::Kind::VisibleTexture,distance,true,0U);
+    }catch(...){
+        // Out-of-memory should skip one interest-list update, never crash
+        // the simulator poll loop. A later spatial/position update retries.
+        texture_scan_revision_=~std::uint64_t{0};
+    }
 }
 void Circuit::maybe_fetch_texture() noexcept {
     schedule_visible_textures();
@@ -165,9 +174,13 @@ void Circuit::maybe_fetch_texture() noexcept {
                 result.http_status=reply.status;
                 result.fetched=reply.fetched;
                 result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
-                if(reply.fetched)
+                if(reply.fetched){
                     result.decoded=texture::decode_jpeg2000(
                         reply.bytes,result.image);
+                    if(result.decoded)
+                        result.decoded=texture::downscale_preview(
+                            result.image,512U);
+                }
                 return result;
             });
     }catch(...){

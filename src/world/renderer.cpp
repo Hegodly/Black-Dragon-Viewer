@@ -689,19 +689,17 @@ bool Renderer::set_verified_live_terrain(
                           primitives.scene.vertices.begin(),
                           primitives.scene.vertices.end());
     scene.terrain_count+=new_primitive_vertices;
-    // Stable 24-slice preview atlas: only successfully authenticated and
-    // CPU-decoded JPEG2000 assets can receive a GPU texture layer. The
-    // default TE UUID binds each mesh object; per-face overrides/PBR await
-    // explicit decoding. Keep procedural layer zero for missing textures.
-    std::map<std::string,std::uint16_t> next_layers;
-    for(const auto& [id,image]:circuit.decoded_texture_assets()){
-        const auto pixels=static_cast<std::uint64_t>(image.width)*image.height;
-        if(next_layers.size()>=kLiveTextureLayers)break;
-        if(!image.width||!image.height||pixels>4U*1024U*1024U||
-           image.rgba.size()!=pixels*4U)continue;
-        next_layers.emplace(id,
-            static_cast<std::uint16_t>(next_layers.size()+1U));
-    }
+    // R49: the first 24 UUIDs in a std::map are not necessarily the
+    // textures of nearby buildings. Select only decoded mesh-face assets
+    // that can actually draw near the avatar, distance first; keep
+    // existing array slots stable when the visible set is unchanged.
+    const auto next_layers=select_visible_mesh_texture_layers(
+        circuit.decoded_spatial_objects(),
+        circuit.decoded_linked_objects(),
+        circuit.known_avatar_roots(),
+        circuit.decoded_mesh_assets(),
+        circuit.decoded_texture_assets(),
+        agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_);
     if(next_layers!=live_texture_layers_){
         auto previous=std::move(live_texture_layers_);
         live_texture_layers_=std::move(next_layers);

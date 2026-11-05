@@ -280,6 +280,93 @@ PrimitiveBatch build_live_primitive_geometry(
     return result;
 }
 
+std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
+    const std::map<std::uint32_t,Transform>& roots,
+    const std::map<std::uint32_t,Transform>& children,
+    const std::set<std::uint32_t>& avatar_roots,
+    const std::map<std::string,protocol::mesh::LOD>& loaded,
+    const std::map<std::string,protocol::texture::DecodedTexture>& decoded,
+    float agent_x,float agent_y,float agent_z,
+    std::size_t max_layers,
+    const std::map<std::string,std::uint16_t>& previous) {
+    // Keep the original single-draw DX12 array budget (slice 0 is the
+    // procedural fallback). Never select textures based on UUID sorting.
+    max_layers=std::min<std::size_t>(max_layers,24U);
+    const V origin{agent_x,agent_y,agent_z};
+    if(!max_layers||!finite(origin))return {};
+    std::map<std::string,float> nearest;
+    const auto gather=[&](const Transform& t,Pose pose) {
+        const auto mesh=loaded.find(t.mesh_asset_id);
+        if(mesh==loaded.end()||!finite(pose.pos)||!valid_quat(pose.rot))return;
+        const V delta=sub(pose.pos,origin);
+        if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
+           std::abs(delta.z)>96.f)return;
+        const float distance=dot(delta,delta);
+        std::array<bool,32U> seen_faces{};
+        for(const auto& face:mesh->second.triangles){
+            if(!face.has_uv||face.face_index>=seen_faces.size())continue;
+            if(seen_faces[face.face_index])continue;
+            seen_faces[face.face_index]=true;
+            const unsigned f=face.face_index;
+            const auto& uuid=t.face_texture_override[f]?
+                t.face_texture_asset_ids[f]:t.default_texture_asset_id;
+            if(uuid.empty())continue; // an explicit zero UUID is not default
+            const auto image=decoded.find(uuid);
+            if(image==decoded.end())continue;
+            const auto& bitmap=image->second;
+            const auto pixels=std::uint64_t(bitmap.width)*bitmap.height;
+            if(!bitmap.width||!bitmap.height||bitmap.width>2048U||
+               bitmap.height>2048U||pixels>4U*1024U*1024U||
+               bitmap.rgba.size()!=pixels*4U)continue;
+            const auto [it,inserted]=nearest.try_emplace(uuid,distance);
+            if(!inserted)it->second=std::min(it->second,distance);
+        }
+    };
+    for(const auto& [id,root]:roots){
+        (void)id;
+        if(root.parent_id==0U&&!root.mesh_asset_id.empty())
+            gather(root,{pos(root),quat(root)});
+    }
+    for(const auto& [id,child]:children){
+        (void)id;
+        if(child.mesh_asset_id.empty())continue;
+        Pose pose{};
+        std::uint32_t missing=0U;
+        if(resolve(child,roots,children,avatar_roots,pose,missing)==
+           RootResult::Found)gather(child,pose);
+    }
+    std::vector<std::pair<std::string,float>> candidates(
+        nearest.begin(),nearest.end());
+    std::sort(candidates.begin(),candidates.end(),
+        [](const auto& a,const auto& b){
+            if(a.second!=b.second)return a.second<b.second;
+            return a.first<b.first;
+        });
+    if(candidates.size()>max_layers)candidates.resize(max_layers);
+    std::map<std::string,std::uint16_t> selected;
+    std::array<bool,25U> occupied{};
+    occupied[0]=true;
+    // Keep unchanged material IDs on the same GPU slice if still visible.
+    for(const auto& [uuid,distance]:candidates){
+        (void)distance;
+        const auto it=previous.find(uuid);
+        if(it==previous.end()||it->second==0U||
+           it->second>max_layers||occupied[it->second])continue;
+        selected.emplace(uuid,it->second);
+        occupied[it->second]=true;
+    }
+    std::uint16_t slot=1U;
+    for(const auto& [uuid,distance]:candidates){
+        (void)distance;
+        if(selected.contains(uuid))continue;
+        while(slot<=max_layers&&occupied[slot])++slot;
+        if(slot>max_layers)break;
+        selected.emplace(uuid,slot);
+        occupied[slot]=true;
+    }
+    return selected;
+}
+
 MeshBatch build_live_mesh_geometry(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
