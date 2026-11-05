@@ -13,6 +13,7 @@ namespace kami::world {
 struct PrimitiveBatch {
     SceneMesh scene{};
     std::size_t root_shapes=0,linked_shapes=0;
+    std::size_t textured_triangles=0U;
     // Eligibility diagnostics for live data; no UUIDs or simulator IDs.
     std::size_t eligible_shapes=0,unresolved_parent_shapes=0;
     std::size_t out_of_range_shapes=0,invalid_pose_shapes=0;
@@ -22,7 +23,7 @@ struct PrimitiveBatch {
     std::size_t cycle_shapes=0,invalid_parent_shapes=0;
     std::size_t deep_parent_shapes=0,unique_missing_ids=0;
 };
-// Finite, server-originated *untextured* simple primitive previews.
+// Finite, server-originated simple prim geometry with TE diffuse textures.
 // Root transforms must be region-space; linked transforms are composed
 // only after their root (and any intermediate linked parent) is verified.
 // Mesh/sculpt/cut/hollow primitives must NOT be replaced by fake geometry.
@@ -31,9 +32,10 @@ struct PrimitiveBatch {
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     float agent_x,float agent_y,float agent_z,
     std::size_t limit=128U,
-    const std::set<std::uint32_t>& avatar_roots={});
-// Select only JPEG2000 images that actually belong to visible static mesh
-// faces. Prioritize world distance, not the alphabetical UUID ordering of
+    const std::set<std::uint32_t>& avatar_roots={},
+    const std::map<std::string,std::uint16_t>& texture_layers={});
+// Select decoded JPEG2000 image IDs actually used by visible static mesh
+// AND supported simple prim faces. Prioritize distance, not UUID ordering of
 // the CPU cache. Preserve existing DX12 array slice numbers when possible
 // to avoid needless rebinds. Never select missing/invalid image pixels.
 [[nodiscard]] std::map<std::string,std::uint16_t>
