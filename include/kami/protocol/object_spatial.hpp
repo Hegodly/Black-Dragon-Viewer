@@ -3,6 +3,8 @@
 #include "kami/protocol/texture_entry.hpp"
 #include <array>
 #include <cstdint>
+#include <map>
+#include <set>
 #include <string>
 #include <span>
 #include <vector>
@@ -46,6 +48,17 @@ struct Transform {
 [[nodiscard]] bool same_spatial_transform(const Transform&,const Transform&) noexcept;
 [[nodiscard]] Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous);
+// Resolve an authenticated linked child's actual region-space position,
+// composing each verified parent rotation and translation. Do not use
+// the remote linkset root position as a substitute for the child when
+// scheduling nearby mesh, JPEG2000 or PBR assets. Fail closed for missing
+// parents, avatars, hierarchy cycles, bad poses and excessive depth.
+[[nodiscard]] bool resolve_world_position(
+    const Transform& object,
+    const std::map<std::uint32_t,Transform>& roots,
+    const std::map<std::uint32_t,Transform>& children,
+    const std::set<std::uint32_t>& avatar_roots,
+    std::array<float,3>& world) noexcept;
 // Authenticated full High12 PCode=47 avatar identity and region pose.
 // The simulator UUID is compared to the authenticated login AgentID
 // before this can ever advance the own-avatar camera/world origin.
