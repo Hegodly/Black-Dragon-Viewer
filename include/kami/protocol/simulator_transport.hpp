@@ -8,6 +8,7 @@
 #include "kami/protocol/avatar_appearance.hpp"
 #include "kami/protocol/load_scheduler.hpp"
 #include "kami/protocol/mesh_lod.hpp"
+#include "kami/protocol/reliable_circuit.hpp"
 #include "kami/protocol/caps.hpp"
 #include <winsock2.h>
 #include <chrono>
@@ -151,6 +152,15 @@ public:
     [[nodiscard]] std::size_t pending_object_requests() const noexcept {
         return missing_objects_.size();
     }
+    [[nodiscard]] std::size_t pending_reliable_packets() const noexcept {
+        return reliable_window_.pending();
+    }
+    [[nodiscard]] std::uint64_t reliable_resend_count() const noexcept {
+        return reliable_window_.resent_packets();
+    }
+    [[nodiscard]] std::uint64_t reliable_expired_count() const noexcept {
+        return reliable_window_.expired_packets();
+    }
     [[nodiscard]] std::uint32_t requested_object_ids() const noexcept {
         return requested_object_ids_;
     }
@@ -193,6 +203,8 @@ private:
     void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
+    void retry_unacknowledged() noexcept;
+    reliable::Window reliable_window_{};
     SOCKET socket_=INVALID_SOCKET;
     bool winsock_ready_=false;
     LoginResult login_{};
