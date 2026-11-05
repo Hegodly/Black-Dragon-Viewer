@@ -22,8 +22,8 @@ void Circuit::prune_decoded_textures() noexcept {
     // R48 retained every image referenced anywhere within 176 m. Once
     // 24 valid textures filled that cache, KAMI stopped downloading new
     // nearby faces even when the avatar moved to a different building.
-    // Keep only the nearest 96 requested IDs, never stale far-away
-    // images. The DX12 array still uses only 24 GPU slices.
+    // Keep only the nearest bounded requested IDs, never stale far-away
+    // images. The DX12 array still uses a bounded number of GPU slices.
     for(auto it=decoded_textures_.begin();it!=decoded_textures_.end();){
         if(texture_desired_ids_.contains(it->first)){++it;continue;}
         const auto bytes=it->second.rgba.size();
@@ -99,8 +99,10 @@ void Circuit::schedule_visible_textures() noexcept {
         // Cancel stale queued requests where safe. In-progress HTTP
         // workers are never cancelled mid-packet, keeping futures sound.
         for(const auto& old:texture_desired_ids_)
-            if(!wanted.contains(old))
+            if(!wanted.contains(old)){
                 (void)texture_scheduler_.forget_finished(old);
+                texture_retry_after_.erase(old);
+            }
         texture_desired_ids_.swap(wanted);
         prune_decoded_textures();
         // Record revision AFTER pruning, which can increment it.
@@ -128,7 +130,12 @@ void Circuit::maybe_fetch_texture() noexcept {
             auto result=texture_worker_.get();
             const bool accepted=texture_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
-            if(result.fetched&&accepted){
+            // A request may finish after the camera's interest set moved.
+            // Do not let obsolete data consume the new neighborhood's budget.
+            if(!texture_desired_ids_.contains(result.id)){
+                (void)texture_scheduler_.forget_finished(result.id);
+                texture_retry_after_.erase(result.id);
+            }else if(result.fetched&&accepted){
                 ++texture_download_count_;
                 // The async decoder has already completed this exact UUID.
                 // Never pop an unrelated decode job by scheduler priority.
@@ -156,8 +163,29 @@ void Circuit::maybe_fetch_texture() noexcept {
                 }
             }else{
                 ++texture_failure_count_;
+                const auto status=result.http_status;
+                const bool transient=status==0U||status==429U||
+                    status==500U||status==502U||status==503U||status==504U;
+                const auto* job=texture_scheduler_.find(result.id);
+                if(accepted&&transient&&job&&
+                   job->retry_count<load::Scheduler::kMaxTransientRetries&&
+                   texture_retry_after_.size()<kMaxDecodedTextureAssets){
+                    const auto delay=std::chrono::seconds(
+                        1U<<std::min(job->retry_count,3U));
+                    texture_retry_after_.insert_or_assign(
+                        result.id,std::chrono::steady_clock::now()+delay);
+                }
             }
         }catch(...){++texture_failure_count_;}
+    }
+    const auto retry_now=std::chrono::steady_clock::now();
+    for(auto it=texture_retry_after_.begin();it!=texture_retry_after_.end();){
+        if(!texture_desired_ids_.contains(it->first)){
+            it=texture_retry_after_.erase(it);
+        }else if(retry_now>=it->second){
+            (void)texture_scheduler_.retry_failed(it->first);
+            it=texture_retry_after_.erase(it);
+        }else ++it;
     }
     if(texture_worker_.valid()||texture_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
@@ -186,7 +214,7 @@ void Circuit::maybe_fetch_texture() noexcept {
                         reply.bytes,result.image);
                     if(result.decoded)
                         result.decoded=texture::downscale_preview(
-                            result.image,512U);
+                            result.image,texture::kPreviewExtent);
                 }
                 return result;
             });

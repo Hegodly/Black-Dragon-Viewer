@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include "kami/protocol/texture_budget.hpp"
 #include <cstdint>
 #include <map>
 #include <string>
@@ -8,13 +9,13 @@
 namespace kami::world {
 // A stable Texture2DArray (slice 0 is always procedural fallback).
 // Find exactly the SL image layers that were reassigned, without uploading
-// all 49 GPU subresources whenever one JPEG2000 image becomes visible.
+// all GPU subresources whenever one JPEG2000 image becomes visible.
 [[nodiscard]] inline std::vector<std::uint16_t> changed_atlas_layers(
     const std::map<std::string,std::uint16_t>& previous,
     const std::map<std::string,std::uint16_t>& next,
-    std::uint16_t max_layers=48U){
-    if(max_layers==0U||max_layers>48U)return {};
-    std::array<std::string,49U> before{},after{};
+    std::uint16_t max_layers=protocol::texture::kGPUImageLayers){
+    if(max_layers==0U||max_layers>protocol::texture::kGPUImageLayers)return {};
+    std::array<std::string,protocol::texture::kGPUImageLayers+1U> before{},after{};
     for(const auto& [id,slot]:previous)
         if(slot>0U&&slot<=max_layers)before[slot]=id;
     for(const auto& [id,slot]:next)

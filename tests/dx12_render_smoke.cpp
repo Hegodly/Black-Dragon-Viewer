@@ -192,6 +192,8 @@ int main(int argc,char** argv) {
                 }
                 if(!result) {
                     auto preview=kami::world::build_test_scene(8);
+                    for(auto& v:preview.vertices)
+                        v.texture_layer=float(kami::protocol::texture::kGPUImageLayers);
                     auto malicious=preview;
                     if(malicious.vertices.size()>malicious.terrain_count) {
                         auto& v=malicious.vertices[malicious.terrain_count];

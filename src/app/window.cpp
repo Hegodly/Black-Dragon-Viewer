@@ -618,7 +618,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                   sl_circuit_.decoded_texture_count())+
               L" | DX12 GPU "+std::to_wstring(
                   world_renderer_.bound_sl_texture_assets())+
-              L"/48 | textured triangles "+std::to_wstring(
+              L"/"+std::to_wstring(protocol::texture::kGPUImageLayers)+
+              L" | textured triangles "+std::to_wstring(
                   world_renderer_.uploaded_textured_triangles())+
               L" | avatar partial",
               box(contentX+25,height-89,contentWidth-54,24),

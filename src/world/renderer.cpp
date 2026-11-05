@@ -223,7 +223,7 @@ TextureUploadStatus Renderer::make_material_texture(
         &desc,0U,1U,0U,&footprint,&rows,&row_bytes,&one_size);
     if(rows!=th||row_bytes!=tw*4U||one_size==0U||
        one_size>1024U*1024U||dirty.size()>slices||
-       dirty.size()>16U*1024U*1024U/one_size)return TextureUploadStatus::Failed;
+       dirty.size()>protocol::texture::kMaxUploadBytes/one_size)return TextureUploadStatus::Failed;
     const UINT64 upload_size=one_size*dirty.size();
     const auto heap_upload=heap(D3D12_HEAP_TYPE_UPLOAD);
     const auto upload_desc=buffer_desc(upload_size);

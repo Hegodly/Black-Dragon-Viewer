@@ -173,7 +173,9 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     float VdotH=saturate(dot(V,H));
     // This is a real sampled GPU texture, procedurally uploaded by KAMI.
     // Later SL texture assets will enter through the same resource interface.
-    float layer=clamp(round(input.textureLayer),0.0,48.0);
+    uint imageWidth,imageHeight,imageLayers;
+    materialTexture.GetDimensions(imageWidth,imageHeight,imageLayers);
+    float layer=clamp(round(input.textureLayer),0.0,float(imageLayers-1U));
     float3 texel=materialTexture.Sample(materialSampler,
         float3(input.uv,layer)).rgb;
     // Layer 0 is KAMI's old procedural material. Other slices contain

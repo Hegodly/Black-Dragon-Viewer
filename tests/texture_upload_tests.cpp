@@ -86,6 +86,15 @@ int main() {
     if(kami::world::align_world_vertices_to_origin(
         rebased,{std::numeric_limits<float>::infinity(),150.f,44.f},
         {128.f,128.f,40.f}))return 25;
+    // Layers above the old limit must be copied on reassignment, with
+    // unchanged material slots left untouched.
+    const std::map<std::string,std::uint16_t> high_before{
+        {"old-image",kami::protocol::texture::kGPUImageLayers}};
+    const std::map<std::string,std::uint16_t> high_after{
+        {"new-image",kami::protocol::texture::kGPUImageLayers}};
+    if(changed_atlas_layers(high_before,high_after)!=
+       std::vector<std::uint16_t>{kami::protocol::texture::kGPUImageLayers})
+        return 26;
     kami::world::Device device;
     if(device.initialize(true)==kami::world::DeviceStatus::Unavailable)
         return 0; // The hosted VM may not have a DX12 adapter.
@@ -108,19 +117,19 @@ int main() {
        layout.Footprint.RowPitch%256!=0) return 2;
     if(total_bytes<row_bytes*rows) return 3;
     if(layout.Footprint.Format!=DXGI_FORMAT_R8G8B8A8_UNORM) return 4;
-    // Live SL textures use one bounded 49-slice GPU image array:
-    // fallback layer zero + up to 48 independently decoded assets.
-    texture.Width=256;
-    texture.Height=256;
-    texture.DepthOrArraySize=49;
-    std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT,49> mapped{};
-    std::array<UINT,49> rows_arr{};
-    std::array<UINT64,49> sizes{};
+    // Full shipped texture array: fallback plus bounded SL image layers.
+    constexpr unsigned slices=kami::protocol::texture::kGPUImageLayers+1U;
+    texture.Width=kami::protocol::texture::kPreviewExtent;
+    texture.Height=kami::protocol::texture::kPreviewExtent;
+    texture.DepthOrArraySize=slices;
+    std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT,slices> mapped{};
+    std::array<UINT,slices> rows_arr{};
+    std::array<UINT64,slices> sizes{};
     UINT64 upload=0;
     device.native_device()->GetCopyableFootprints(
-        &texture,0,49,0,mapped.data(),rows_arr.data(),sizes.data(),&upload);
-    if(upload==0||upload>16U*1024U*1024U)return 5;
-    for(unsigned i=0;i<49;++i){
+        &texture,0,slices,0,mapped.data(),rows_arr.data(),sizes.data(),&upload);
+    if(upload==0||upload>kami::protocol::texture::kMaxUploadBytes)return 5;
+    for(unsigned i=0;i<slices;++i){
         if(rows_arr[i]!=256U||sizes[i]!=1024U||
            mapped[i].Footprint.RowPitch%256U!=0U)return 6;
     }

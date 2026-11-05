@@ -851,6 +851,7 @@ void Circuit::stop() noexcept {
         texture_capability_url_.clear();
     }
     texture_scheduler_.set_online(false);
+    texture_retry_after_.clear();
     texture_desired_ids_.clear(); // never reuse previous region's interest set
     decoded_textures_.clear();
     decoded_texture_bytes_=0U;
