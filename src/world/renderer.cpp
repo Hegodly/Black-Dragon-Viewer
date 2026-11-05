@@ -978,6 +978,14 @@ bool Renderer::set_verified_live_terrain(
     mesh_out_of_range_instances_=mesh_objects.out_of_range_instances;
     mesh_invalid_pose_instances_=mesh_objects.invalid_pose_instances;
     mesh_undrawn_instances_=mesh_objects.undrawn_eligible_instances;
+    mesh_parent_missing_instances_=mesh_objects.parent_missing_instances;
+    mesh_parent_avatar_instances_=mesh_objects.parent_avatar_instances;
+    mesh_parent_cycle_instances_=mesh_objects.parent_cycle_instances;
+    mesh_parent_invalid_instances_=mesh_objects.parent_invalid_instances;
+    mesh_parent_deep_instances_=mesh_objects.parent_too_deep_instances;
+    mesh_undrawn_transparent_instances_=mesh_objects.undrawn_transparent_instances;
+    mesh_undrawn_bad_geometry_instances_=mesh_objects.undrawn_bad_geometry_instances;
+    mesh_undrawn_budget_instances_=mesh_objects.undrawn_budget_instances;
     uploaded_textured_triangles_=mesh_objects.textured_triangles+
                                  primitives.textured_triangles;
     primitive_eligible_=primitives.eligible_shapes;
@@ -1092,6 +1100,12 @@ void Renderer::clear_decoded_region_geometry() {
     mesh_eligible_instances_=mesh_missing_lod_instances_=0;
     mesh_waiting_for_parent_=mesh_out_of_range_instances_=0;
     mesh_invalid_pose_instances_=mesh_undrawn_instances_=0;
+    mesh_parent_missing_instances_=mesh_parent_avatar_instances_=0;
+    mesh_parent_cycle_instances_=mesh_parent_invalid_instances_=0;
+    mesh_parent_deep_instances_=0;
+    mesh_undrawn_transparent_instances_=0;
+    mesh_undrawn_bad_geometry_instances_=0;
+    mesh_undrawn_budget_instances_=0;
     uploaded_textured_triangles_=0;
     live_texture_layers_.clear();
     texture_upload_pending_=false;
