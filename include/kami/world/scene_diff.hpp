@@ -40,4 +40,33 @@ namespace kami::world {
     }
     return d2>=double(threshold_m)*threshold_m;
 }
+// Geometry decoders rebuild world vertices relative to the current
+// authoritative avatar position for culling. The live avatar/camera,
+// however, retain a stable region-spawn coordinate system. Convert only
+// world vertices back to that stable origin so a 12-meter interest refresh
+// never makes buildings jump around the camera.
+[[nodiscard]] inline bool align_world_vertices_to_origin(
+    SceneMesh& scene,const std::array<float,3>& current_agent,
+    const std::array<float,3>& stable_origin) noexcept {
+    if(scene.terrain_count>scene.vertices.size()||
+       scene.avatar_count>scene.vertices.size()-scene.terrain_count)
+        return false;
+    for(unsigned i=0;i<3U;++i)
+        if(!std::isfinite(current_agent[i])||
+           !std::isfinite(stable_origin[i]))return false;
+    const float dx=current_agent[0]-stable_origin[0];
+    const float dy=current_agent[2]-stable_origin[2]; // SL vertical Z to DX12 Y
+    const float dz=current_agent[1]-stable_origin[1]; // SL ground Y to DX12 Z
+    for(std::size_t i=0U;i<scene.terrain_count;++i){
+        auto& v=scene.vertices[i];
+        v.px+=dx;
+        v.py+=dy;
+        v.pz+=dz;
+        if(!std::isfinite(v.px)||!std::isfinite(v.py)||
+           !std::isfinite(v.pz))return false;
+    }
+    // Never translate the local avatar marker section; it is already
+    // anchored at the original simulator spawn.
+    return true;
+}
 } // namespace kami::world
