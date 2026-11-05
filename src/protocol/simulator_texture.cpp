@@ -54,6 +54,10 @@ void Circuit::schedule_visible_textures() noexcept {
         const auto scan=[&](const auto& objects){
             for(const auto& [id,t]:objects){
                 (void)id;
+                // Only mesh faces can use J2C images in the current DX12
+                // preview. Do not waste the 96-image CPU working set
+                // downloading textures for still-untextured simple prims.
+                if(t.mesh_asset_id.empty())continue;
                 const auto* anchor=world_mesh_anchor(t);
                 if(!anchor||!std::isfinite(anchor->x)||
                    !std::isfinite(anchor->y)||!std::isfinite(anchor->z)||
