@@ -96,6 +96,17 @@ add_executable(kami_spatial_terse_tests
 target_link_libraries(kami_spatial_terse_tests PRIVATE kami_core)
 add_test(NAME KamiLiveTerseObjectPoseUpdatesPreserveAssetIdentity
     COMMAND kami_spatial_terse_tests)
+# Hostile-input regression: 1536 bounded deterministic cases across
+# official-wire framing, object/land decode, mesh LLSD and TextureEntry.
+# This runs inside native Windows CTest; live SL is a separate test.
+add_executable(kami_r52_hostile_packet_tests
+    tests/r52_hostile_packet_tests.cpp)
+target_link_libraries(kami_r52_hostile_packet_tests PRIVATE kami_core)
+add_test(NAME KamiR52HostilePacketParserCrashRegression
+    COMMAND kami_r52_hostile_packet_tests)
+set_tests_properties(KamiR52HostilePacketParserCrashRegression
+    PROPERTIES TIMEOUT 20)
+
 add_executable(kami_sl_texture_entry_tests
     tests/texture_entry_tests.cpp)
 target_link_libraries(kami_sl_texture_entry_tests PRIVATE kami_core)
