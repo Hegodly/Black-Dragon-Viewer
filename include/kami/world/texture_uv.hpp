@@ -14,7 +14,9 @@ namespace kami::world {
        !std::isfinite(t.rotation))return {0.f,0.f};
     const float x=u-.5f,y=.5f-v;
     const float c=std::cos(t.rotation),s=std::sin(t.rotation);
-    const float sx=x*c-y*s,sy=x*s+y*c;
+    // Match Second Life's LLFace::xform: s'=s*cos+t*sin,
+    // t'=-s*sin+t*cos, then scale and offset.
+    const float sx=x*c+y*s,sy=-x*s+y*c;
     return {sx*t.repeat_u+t.offset_u+.5f,
             .5f-(sy*t.repeat_v+t.offset_v)};
 }
