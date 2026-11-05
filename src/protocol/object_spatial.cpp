@@ -113,7 +113,10 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
         at+=6U;
         if(length>4096U||!has(length))return out;
         ++out.extra_records;
-        if(type==0x30U && length==17U)++out.sculpt_records;
+        // Both official sculpt (0x30) and mesh (0x60) aliases
+        // carry 17-byte sculpt params with the mesh UUID/type.
+        if((type==0x30U||type==0x60U)&&length==17U)
+            ++out.sculpt_records;
         at+=length;
     }
     out.extras=true;
