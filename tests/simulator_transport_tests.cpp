@@ -9,6 +9,8 @@
 #include <vector>
 
 using namespace kami::protocol;
+// The live retention cap must not bottleneck the R62 4,080-shape renderer.
+static_assert(sim::Circuit::kMaxRootObjects>=4080U);
 namespace {
 LoginResult make_login(unsigned short port) {
     LoginResult result{};
