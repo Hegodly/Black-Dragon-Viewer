@@ -282,8 +282,6 @@ private:
     void prune_decoded_textures() noexcept;
     void schedule_visible_meshes() noexcept;
     void prune_unreferenced_meshes() noexcept;
-    [[nodiscard]] const objectspatial::Transform* world_mesh_anchor(
-        const objectspatial::Transform& item) const noexcept;
     void remember_missing_object(std::uint32_t id,bool important=true) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
