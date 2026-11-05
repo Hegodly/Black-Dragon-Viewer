@@ -2,11 +2,27 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include "kami/world/scene.hpp"
+#include "kami/world/texture_atlas.hpp"
 #include <array>
 static_assert(sizeof(kami::world::Vertex)==68U,
     "DX12 mesh texture layer must fit the vertex input layout");
 
 int main() {
+    // Incremental GPU atlas uploads must touch only changed material
+    // slices, not repack unrelated textures on every J2C arrival.
+    using kami::world::changed_atlas_layers;
+    const std::map<std::string,std::uint16_t> before{
+        {"texture-a",1U},{"texture-b",6U},{"texture-c",24U}};
+    const std::map<std::string,std::uint16_t> after{
+        {"texture-a",1U},{"texture-d",6U},{"texture-c",24U}};
+    if(changed_atlas_layers(before,before).size()!=0U)return 7;
+    if(changed_atlas_layers(before,after)!=
+       std::vector<std::uint16_t>{6U})return 8;
+    if(changed_atlas_layers(after,{} )!=
+       std::vector<std::uint16_t>({1U,6U,24U}))return 9;
+    if(changed_atlas_layers({},before)!=
+       std::vector<std::uint16_t>({1U,6U,24U}))return 10;
+    if(!changed_atlas_layers(before,after,0U).empty())return 11;
     kami::world::Device device;
     if(device.initialize(true)==kami::world::DeviceStatus::Unavailable)
         return 0; // The hosted VM may not have a DX12 adapter.
