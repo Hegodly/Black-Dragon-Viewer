@@ -261,7 +261,7 @@ PrimitiveBatch build_live_primitive_geometry(
     PrimitiveBatch result{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return result;
-    // R62: allow up to 4,080 real primitive shapes while keeping the
+    // R65: cap Quality at 2,048 real primitive shapes while keeping the
     // shared DX12 vertex upload bounded even in sphere-heavy regions.
     limit=std::min<std::size_t>(limit,kMaxQualityPrimitiveShapes);
     max_vertices=std::min<std::size_t>(max_vertices,4000000U);
