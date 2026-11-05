@@ -643,18 +643,23 @@ bool Renderer::set_verified_live_terrain(
         if(patch.size!=16U&&patch.size!=32U)continue;
         nearest.push_back(&patch);
     }
-    std::sort(nearest.begin(),nearest.end(),
-        [&](const auto* a,const auto* b){
-            auto d=[&](const auto* p){
-                const float cx=static_cast<float>(p->x)*p->size+
-                               p->size*.5f-agent.x;
-                const float cy=static_cast<float>(p->y)*p->size+
-                               p->size*.5f-agent.y;
-                return cx*cx+cy*cy;
-            };
-            return d(a)<d(b);
-        });
-    if(nearest.size()>64U)nearest.resize(64U);
+    const auto patch_nearer=[&](const auto* a,const auto* b){
+        auto d=[&](const auto* p){
+            const float cx=static_cast<float>(p->x)*p->size+
+                           p->size*.5f-agent.x;
+            const float cy=static_cast<float>(p->y)*p->size+
+                           p->size*.5f-agent.y;
+            return cx*cx+cy*cy;
+        };
+        return d(a)<d(b);
+    };
+    // We draw only 64 land patches. On a full region, partial_sort
+    // avoids sorting the many offscreen patches that won't reach DX12.
+    if(nearest.size()>64U){
+        std::partial_sort(nearest.begin(),nearest.begin()+64U,
+                          nearest.end(),patch_nearer);
+        nearest.resize(64U);
+    }else std::sort(nearest.begin(),nearest.end(),patch_nearer);
     if(!live_avatar_preview_.active()&&!live_avatar_preview_.reset(agent)){
         error_=L"R16 avatar marker needs verified simulator spawn";
         return false;
