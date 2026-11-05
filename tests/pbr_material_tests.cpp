@@ -141,6 +141,48 @@ int run(){
     if(land.faces.size()!=4U||!land.faces.contains(world::pbr_face_key(0U,3U)))return 19;
     const auto land_images=world::select_visible_mesh_texture_layers({}, {}, {}, {}, {{image,bitmap}},0,0,0,1U,{}, {}, {},{image});
     if(!land_images.contains(image))return 20;
+    // R63: >1,023 distinct PBR records must not let low local-ID,
+    // distant roots crowd out a nearby face or the terrain material.
+    {
+        Materials crowded_materials;
+        std::map<std::uint32_t,protocol::objectspatial::Transform> crowded_roots;
+        const std::string terrain_id="r63-terrain";
+        auto terrain_material=prior;
+        terrain_material.base[0]=0.991f;
+        crowded_materials.emplace(terrain_id,terrain_material);
+        for(std::uint32_t i=0U;i<1040U;++i){
+            const std::string material_id="r63-material-"+std::to_string(i);
+            auto material=prior;
+            material.base[0]=float(i+1U)/2048.f;
+            crowded_materials.emplace(material_id,material);
+            auto root=prim;
+            root.local_id=10000U+i;
+            root.x=i==1039U?0.f:80.f;
+            root.y=0.f;
+            root.z=0.f;
+            root.face_material_ids={};
+            root.face_material_ids[0]=material_id;
+            crowded_roots.emplace(root.local_id,root);
+        }
+        const auto first=world::build_pbr_table(
+            crowded_roots,{},crowded_materials,{}, {},{terrain_id,"","",""});
+        if(first.faces.contains(world::pbr_face_key(11039U,0U)))return 44;
+        const auto prioritized=world::build_pbr_table(
+            crowded_roots,{},crowded_materials,{}, {},
+            {terrain_id,"","",""},std::array<float,3>{0.f,0.f,0.f});
+        if(!prioritized.faces.contains(world::pbr_face_key(11039U,0U))||
+           !prioritized.faces.contains(world::pbr_face_key(0U,0U))||
+           prioritized.rows.size()>std::size_t(kMaxGPURecords)*kRows)return 45;
+        // Unresolved linked children must not consume PBR capacity.
+        auto orphan=prim;
+        orphan.parent_id=999999U;
+        orphan.local_id=20001U;
+        orphan.face_material_ids={};
+        orphan.face_material_ids[0]="r63-material-0";
+        const auto unresolved=world::build_pbr_table({},{{orphan.local_id,orphan}},
+            crowded_materials,{}, {},{},std::array<float,3>{0.f,0.f,0.f});
+        if(unresolved.faces.contains(world::pbr_face_key(orphan.local_id,0U)))return 46;
+    }
     std::vector<std::uint8_t> probe{1,0x90,0,9,0,0,0,0,0,0,0,0,0,0,0,1};
     bool found=false;float ambiance=-1,clip=-1;std::uint8_t flags=0;
     if(!decode_probe(probe,found,ambiance,clip,flags)||!found||ambiance!=0||clip!=0||flags!=1)return 21;
