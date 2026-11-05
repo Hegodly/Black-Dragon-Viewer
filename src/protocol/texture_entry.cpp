@@ -5,8 +5,8 @@
 #include <limits>
 
 namespace kami::protocol::texture {
-std::string default_image_uuid(const Base& entry) {
-    const auto& id=entry.image_id;
+namespace {
+std::string uuid_string(const std::array<std::uint8_t,16U>& id) {
     if(std::all_of(id.begin(),id.end(),
                    [](std::uint8_t byte){return byte==0U;}))return {};
     constexpr char hex[]="0123456789abcdef";
@@ -18,6 +18,16 @@ std::string default_image_uuid(const Base& entry) {
         result.push_back(hex[id[i]&0x0fU]);
     }
     return result;
+}
+} // namespace
+std::string default_image_uuid(const Base& entry) {
+    return uuid_string(entry.image_id);
+}
+std::string face_image_uuid(const Base& entry,unsigned face) {
+    if(face>=entry.face_image_override.size())return {};
+    return entry.face_image_override[face]?
+        uuid_string(entry.face_image_ids[face]):
+        uuid_string(entry.image_id);
 }
 bool decode_base(std::span<const std::uint8_t> bytes,Base& out) noexcept {
     if(bytes.size()<21U||bytes.size()>4096U)return false;
@@ -41,6 +51,12 @@ bool decode_base(std::span<const std::uint8_t> bytes,Base& out) noexcept {
         if(mask==0U){ended=true;break;}
         // Linden Lab LLPrimitive supports at most 45 per-face entries.
         if((mask>>45U)!=0U||bytes.size()-at<16U)return false;
+        for(unsigned face=0U;face<45U;++face){
+            if((mask&(std::uint64_t{1}<<face))==0U)continue;
+            parsed.face_image_override[face]=true;
+            std::copy_n(bytes.data()+at,16U,
+                        parsed.face_image_ids[face].begin());
+        }
         at+=16U;
     }
     if(!ended||bytes.size()-at<4U)return false;
