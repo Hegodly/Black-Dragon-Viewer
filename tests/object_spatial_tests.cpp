@@ -242,5 +242,30 @@ int main(){
            compressed(legacy),out,&children,&legacy_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
        legacy_audit.mesh_references!=0U)return 30;
+    // A genuine compressed full volume stores a U32 texture-entry byte
+    // length immediately after the 23 shape bytes, then the TE payload.
+    auto tinted=cbox;
+    std::vector<std::uint8_t> te(16U,0x31U);
+    te.insert(te.end(),{0U,255U,0U,128U,0U});
+    u32(tinted,static_cast<std::uint32_t>(te.size()));
+    tinted.insert(tinted.end(),te.begin(),te.end());
+    if(!objectspatial::decode_compressed_transforms(
+           compressed(tinted),out)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Box||
+       !out[0].base_tint_present||!out[0].default_texture_present||
+       out[0].base_r!=0.f||out[0].base_g!=1.f||
+       std::abs(out[0].base_b-127.f/255.f)>.001f)return 31;
+    auto previous=out[0];
+    auto sparse=objectspatial::Transform{previous.local_id,129.f,140.f,35.f,
+                                         2.f,3.f,4.f};
+    const auto merged=objectspatial::merge_compressed_transform(sparse,previous);
+    if(!merged.base_tint_present||merged.base_r!=0.f||
+       merged.base_g!=1.f||merged.primitive!=objectspatial::PrimitiveKind::Box||
+       !merged.default_texture_present)return 32;
+    auto malformed_tint=tinted;
+    malformed_tint.pop_back();
+    if(!objectspatial::decode_compressed_transforms(
+           compressed(malformed_tint),out)||out.size()!=1U||
+       out[0].base_tint_present)return 33;
     return 0;
 }
