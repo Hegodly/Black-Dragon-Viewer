@@ -502,6 +502,36 @@ int run_primitive_tests(){
         if(world::live_world_vertices_remaining(
             world::kLiveSceneVertexLimit)!=0U)return 63;
     }
+    // R66 classifications must explain why downloaded mesh LODs
+    // don't necessarily turn into visible in-world mesh instances.
+    {
+        auto near=dense_root;near.local_id=70001U;
+        auto absent=near;absent.local_id=70002U;
+        absent.mesh_asset_id="not-loaded-in-cache";
+        auto far=near;far.local_id=70003U;far.x=1000.f;
+        auto invalid=near;invalid.local_id=70004U;
+        invalid.rx=invalid.ry=invalid.rz=invalid.rw=0.f;
+        auto orphan=near;orphan.local_id=70005U;orphan.parent_id=999999U;
+        const auto sample=world::build_live_mesh_geometry(
+            {{near.local_id,near},{absent.local_id,absent},
+             {far.local_id,far},{invalid.local_id,invalid}},
+            {{orphan.local_id,orphan}}, {},
+            {{asset_id,lod}},128.f,140.f,35.f,0U);
+        if(sample.eligible_instances!=1U||
+           sample.missing_lod_instances!=1U||
+           sample.out_of_range_instances!=1U||
+           sample.invalid_pose_instances!=1U||
+           sample.waiting_for_parent!=1U||
+           sample.undrawn_eligible_instances!=1U||
+           sample.emitted_triangles!=0U)return 64;
+        const auto drawn=world::build_live_mesh_geometry(
+            {{near.local_id,near}}, {}, {}, {{asset_id,lod}},
+            128.f,140.f,35.f,1U);
+        if(drawn.eligible_instances!=1U||
+           drawn.undrawn_eligible_instances!=0U||
+           drawn.root_meshes!=1U||
+           drawn.emitted_triangles!=1U)return 65;
+    }
     dense_root.reflection_probe=true;
     const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
     if(invisible_probe.emitted_triangles!=0U)return 54;
