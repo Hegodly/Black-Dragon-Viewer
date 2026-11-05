@@ -11,6 +11,7 @@
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include "kami/protocol/texture_decode.hpp"
+#include "kami/protocol/texture_budget.hpp"
 #include "kami/world/region_geometry.hpp"
 #include "kami/world/live_avatar.hpp"
 #include <optional>
