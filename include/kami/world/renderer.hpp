@@ -289,6 +289,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commands_;
+    // R51: texture copy work must not reset the frame's command allocator.
+    // One dedicated copy list is submitted to the same ordered DX12 queue.
+    // The upload heap stays alive until its own fence has completed.
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> texture_copy_allocator_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> texture_copy_commands_;
+    UINT64 texture_copy_submitted_fence_=0U;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     Microsoft::WRL::ComPtr<ID3D12Resource> geometry_;
     D3D12_VERTEX_BUFFER_VIEW vertex_view_{};
