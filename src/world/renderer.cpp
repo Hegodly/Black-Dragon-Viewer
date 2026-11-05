@@ -848,7 +848,8 @@ bool Renderer::set_verified_live_terrain(
     }
     auto pbr_table=build_pbr_table(circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),circuit.decoded_materials(),
-        circuit.material_overrides(),live_texture_layers_,region.terrain_assets);
+        circuit.material_overrides(),live_texture_layers_,region.terrain_assets,
+        std::array<float,3>{agent.x,agent.y,agent.z});
     terrain_texture_layers_=terrain_pbr_layers_=0U;
     std::array<PBRRow,protocol::pbr::kRows> terrain_record{};
     for(unsigned i=0U;i<4U;++i){
