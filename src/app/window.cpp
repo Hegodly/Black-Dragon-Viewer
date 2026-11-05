@@ -1537,6 +1537,10 @@ void Window::advance_graphics(unsigned row) {
     graphics_=graphics::normalize(graphics_);
     graphics::save(graphics_);
     world_renderer_.set_graphics(graphics_);
+    // The cached DX12 live scene uses the *previous* preset's object
+    // count until a simulator revision arrives. Rebuild immediately on
+    // the next coalesced live-world tick when the user switches presets.
+    if(row==0U)live_spatial_uploaded_revision_=~std::uint64_t{0};
     sl_circuit_.set_maximum_world_detail(graphics_.preset==graphics::Preset::Quality);
     world_ready_=!world_initialized_ || world_renderer_.ready();
     next_frame_={};
