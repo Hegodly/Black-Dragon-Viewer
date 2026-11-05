@@ -416,6 +416,85 @@ bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     }
     return id_found&&events_found;
 }
+namespace {
+// Only the trusted TeleportFailed LLSD event has a bounded UI handler.
+// The official SL event body contains Info/Reason. Traverse no more than
+// four LLSD map/array levels. Never echo URLs, capability paths, markup or
+// arbitrary binary fields to the user interface.
+std::string safe_failure_reason(std::wstring_view input){
+    if(input.empty()||input.size()>120U)return {};
+    std::string result;
+    result.reserve(input.size());
+    for(const wchar_t ch:input){
+        const bool allowed=(ch>=L'A'&&ch<=L'Z')||
+            (ch>=L'a'&&ch<=L'z')||
+            (ch>=L'0'&&ch<=L'9')||
+            ch==L' '||ch==L'.'||ch==L','||ch==L':'||
+            ch==L';'||ch==L'?'||ch==L'!'||ch==L'-'||
+            ch==L'\''||ch==L'('||ch==L')';
+        if(!allowed)return {};
+        result.push_back(static_cast<char>(ch));
+    }
+    auto lowercase=result;
+    std::transform(lowercase.begin(),lowercase.end(),lowercase.begin(),
+                   [](char c){return c>='A'&&c<='Z'?char(c+32):c;});
+    if(lowercase.find("http")!=std::string::npos||
+       lowercase.find("token")!=std::string::npos||
+       lowercase.find("capability")!=std::string::npos)return {};
+    return result;
+}
+std::string failure_reason_in(IXMLDOMNode* node,unsigned depth){
+    if(!node||depth>4U)return {};
+    const auto kind=node_name(node);
+    if(kind!=L"map"&&kind!=L"array")return {};
+    ComPtr<IXMLDOMNodeList> members;
+    if(FAILED(node->get_childNodes(members.GetAddressOf()))||!members)
+        return {};
+    long n=0;
+    if(FAILED(members->get_length(&n))||n<0||n>128L)return {};
+    for(long i=0;i<n;++i){
+        ComPtr<IXMLDOMNode> child;
+        if(FAILED(members->get_item(i,child.GetAddressOf()))||!child)
+            return {};
+        if(node_name(child.Get())==L"key"&&i+1<n){
+            const auto name=node_text(child.Get());
+            ComPtr<IXMLDOMNode> value;
+            if(FAILED(members->get_item(i+1,value.GetAddressOf()))||!value)
+                return {};
+            if((name==L"Reason"||name==L"reason")&&
+               node_name(value.Get())==L"string"){
+                const auto reason=safe_failure_reason(node_text(value.Get()));
+                if(!reason.empty())return reason;
+            }
+            const auto nested=failure_reason_in(value.Get(),depth+1U);
+            if(!nested.empty())return nested;
+            ++i;
+        }else{
+            const auto nested=failure_reason_in(child.Get(),depth+1U);
+            if(!nested.empty())return nested;
+        }
+    }
+    return {};
+}
+std::string extract_teleport_failure(IXMLDOMNode* entry){
+    if(!entry||node_name(entry)!=L"map")return {};
+    ComPtr<IXMLDOMNodeList> members;
+    if(FAILED(entry->get_childNodes(members.GetAddressOf()))||!members)
+        return {};
+    long n=0;
+    if(FAILED(members->get_length(&n))||n<0||n>80L)return {};
+    for(long i=0;i+1<n;++i){
+        ComPtr<IXMLDOMNode> key,value;
+        if(FAILED(members->get_item(i,key.GetAddressOf()))||!key||
+           node_name(key.Get())!=L"key"||
+           node_text(key.Get())!=L"body")continue;
+        if(FAILED(members->get_item(i+1,value.GetAddressOf()))||!value)
+            return {};
+        return failure_reason_in(value.Get(),0U);
+    }
+    return {};
+}
+} // namespace
 bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
     out={};
     ComPtr<IXMLDOMDocument2> dom;
@@ -500,6 +579,14 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
                     }
                     break;
                 }
+                if(safe=="TeleportFailed"&&
+                   out.notifications.size()<8U){
+                    auto reason=extract_teleport_failure(entry.Get());
+                    std::string notice="Teleport failed";
+                    if(!reason.empty())notice+=": "+reason;
+                    out.notifications.push_back(std::move(notice));
+                    ++out.handled_events;
+                }
                 out.event_types.push_back(safe.empty()?
                     std::string("UnknownEvent"):std::move(safe));
             }
@@ -543,18 +630,21 @@ PollResponse observe_event_queue_response(std::string_view xml) {
         return result;
     }
     result.event_count=frame.event_count;
-    result.unsupported_events=frame.event_count;
+    result.handled_events=frame.handled_events;
+    result.unsupported_events=frame.event_count-frame.handled_events;
+    result.notifications=std::move(frame.notifications);
     result.event_types=std::move(frame.event_types);
     result.structurally_valid=true;
-    // Commit these observations on the UI thread before sending the next
-    // typed cursor ACK. For now no body-dependent SL event actions run:
-    // unsupported messages are intentionally ignored with a visible count.
+    // Commit notifications on the UI thread before advancing the ACK.
+    // Only the bounded TeleportFailed notice is handled; no region
+    // transition or other LLSD event payload executes.
     result.safe_to_ack=true;
     result.next_ack=std::move(frame.id);
     result.diagnostic=result.event_count?
         L"EventQueueGet live: "+
             std::to_wstring(result.event_count)+
-            L" event(s) observed; actions NOT applied":
+            L" event(s) observed; "+std::to_wstring(result.handled_events)+
+            L" teleport failure notice(s) handled":
         L"EventQueueGet heartbeat; no events";
     return result;
 }
