@@ -54,10 +54,11 @@ void Circuit::schedule_visible_textures() noexcept {
         const auto scan=[&](const auto& objects){
             for(const auto& [id,t]:objects){
                 (void)id;
-                // Only mesh faces can use J2C images in the current DX12
-                // preview. Do not waste the 96-image CPU working set
-                // downloading textures for still-untextured simple prims.
-                if(t.mesh_asset_id.empty())continue;
+                // R53: both decoded mesh UV faces and supported
+                // simple primitive surfaces can now consume JPEG2000.
+                // Unknown cuts/sculpts remain intentionally unrendered.
+                if(t.mesh_asset_id.empty()&&
+                   t.primitive==objectspatial::PrimitiveKind::Unknown)continue;
                 const auto* anchor=world_mesh_anchor(t);
                 if(!anchor||!std::isfinite(anchor->x)||
                    !std::isfinite(anchor->y)||!std::isfinite(anchor->z)||
@@ -69,7 +70,12 @@ void Circuit::schedule_visible_textures() noexcept {
                     anchor->y-movement_position_.y),
                     anchor->z-movement_position_.z);
                 record(t.default_texture_asset_id,distance);
-                for(unsigned face=0U;face<t.face_texture_override.size();++face)
+                const unsigned face_count=t.mesh_asset_id.empty()?
+                    (t.primitive==objectspatial::PrimitiveKind::Box?6U:
+                     t.primitive==objectspatial::PrimitiveKind::Cylinder?3U:
+                     t.primitive==objectspatial::PrimitiveKind::Prism?5U:1U):
+                    static_cast<unsigned>(t.face_texture_override.size());
+                for(unsigned face=0U;face<face_count;++face)
                     if(t.face_texture_override[face])
                         record(t.face_texture_asset_ids[face],distance);
             }
