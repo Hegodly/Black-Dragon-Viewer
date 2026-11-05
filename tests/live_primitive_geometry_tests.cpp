@@ -465,6 +465,43 @@ int run_primitive_tests(){
            capped.budget_deferred_shapes!=3U||
            capped.scene.vertices.size()>2410U)return 58;
     }
+    // R64 regression: render mesh assets first when 4,080 primitives
+    // compete for the same bounded DX12 world buffer. A prim-first
+    // allocator could fill the buffer and leave NO visible mesh.
+    {
+        constexpr std::size_t existing_land_vertices=3970000U;
+        protocol::mesh::LOD shared_lod;
+        shared_lod.triangles.assign(1000U,triangle);
+        const auto available=world::live_world_vertices_remaining(existing_land_vertices);
+        if(available!=29000U)return 59;
+        const auto mesh_first=world::build_live_mesh_geometry(
+            {{101U,dense_root}}, {}, {}, {{asset_id,shared_lod}},
+            128.f,140.f,35.f,available/3U);
+        if(mesh_first.emitted_triangles!=1000U||
+           mesh_first.scene.vertices.size()!=3000U)return 60;
+        std::map<std::uint32_t,Transform> crowded;
+        for(std::uint32_t i=0U;i<1000U;++i){
+            Transform box{50000U+i,
+                128.f+float(i%40U),140.f+float(i/40U),35.f,
+                1.f,1.f,1.f};
+            box.primitive=Kind::Box;
+            crowded.emplace(box.local_id,box);
+        }
+        const auto remainder=world::live_world_vertices_remaining(
+            existing_land_vertices+mesh_first.scene.vertices.size());
+        const auto prim_second=world::build_live_primitive_geometry(
+            crowded,{},128.f,140.f,35.f,world::kMaxQualityPrimitiveShapes,
+            {},{},{},remainder);
+        if(!valid(prim_second)||prim_second.root_shapes!=remainder/36U||
+           prim_second.budget_deferred_shapes!=
+               crowded.size()-prim_second.root_shapes)return 61;
+        if(existing_land_vertices+mesh_first.scene.vertices.size()+
+           prim_second.scene.vertices.size() >
+           world::kLiveSceneVertexLimit-world::kLiveAvatarVertexReserve)
+            return 62;
+        if(world::live_world_vertices_remaining(
+            world::kLiveSceneVertexLimit)!=0U)return 63;
+    }
     dense_root.reflection_probe=true;
     const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
     if(invisible_probe.emitted_triangles!=0U)return 54;
