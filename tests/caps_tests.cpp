@@ -339,6 +339,17 @@ int exercise(){
        return 46;
     if(!parse_seed_llsd(optional_bad,cap,&mesh_cap,nullptr,&texture_cap)||
        !texture_cap.empty())return 47;
+    // A dropped CAPS seed used to leave KAMI at CAP NO indefinitely.
+    // Retry only a few transient failures; never repeat rejected or
+    // malformed requests or continue using the bearer URL forever.
+    if(!retry_seed_response(0U,0U)||
+       !retry_seed_response(429U,1U)||
+       !retry_seed_response(503U,2U)||
+       retry_seed_response(503U,3U)||
+       retry_seed_response(401U,0U)||
+       retry_seed_response(403U,0U)||
+       retry_seed_response(404U,0U)||
+       retry_seed_response(200U,0U))return 48;
     return 0;
 }
 }
