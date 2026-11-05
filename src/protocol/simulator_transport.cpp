@@ -320,6 +320,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
     }
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
+    try{
     if(state_!=CircuitState::MovementConfirmed||
        !region_metadata_.verified||!movement_position_.verified||
        socket_==INVALID_SOCKET)return false;
@@ -334,6 +335,7 @@ bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     last_chat_sent_=now;
     // No local bubble: packet send is NOT server delivery confirmation.
     return true;
+    }catch(...){return false;} // preserve retry and no false delivery receipt
 }
 void Circuit::set_requested_controls(std::uint32_t flags) noexcept {
     requested_controls_=(flags&kAllowedMovement);
