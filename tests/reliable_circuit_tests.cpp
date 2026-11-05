@@ -1,4 +1,5 @@
 #include "kami/protocol/reliable_circuit.hpp"
+#include "kami/protocol/simulator_wire.hpp"
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -58,5 +59,28 @@ int main(){
     // Non-reliable packets must never consume the pending window.
     Packet noack{};noack.sequence=1000U;
     if(!q.record_sent(noack,time)||q.pending()!=0U)return 18;
+    // An actual SL PacketAck body uses a template-level little-endian
+    // U32 sequence (distinct from big-endian LLUDP header/piggyback ACK).
+    const std::array<std::uint32_t,2U> ids{0x11223344U,17U};
+    Packet ack{};
+    if(!kami::protocol::sim::packet_ack(ids,99U,ack))return 19;
+    std::vector<std::uint8_t> wire;
+    if(!kami::protocol::lludp::encode(ack,wire))return 20;
+    Packet decoded{};
+    if(!kami::protocol::lludp::decode(wire,decoded)||
+       decoded.body.size()!=13U||decoded.body[4]!=2U||
+       decoded.body[5]!=0x44U||decoded.body[6]!=0x33U||
+       decoded.body[7]!=0x22U||decoded.body[8]!=0x11U)return 21;
+    // Real appended ACKs in the LLUDP packet header are network order.
+    Packet piggy{};
+    piggy.sequence=88U;
+    piggy.flags=kami::protocol::lludp::kAppendedAcks;
+    piggy.body={0xff,0xff,0xff,0xfb,0};
+    piggy.appended_acks={0x11223344U,17U};
+    if(!kami::protocol::lludp::encode(piggy,wire)||
+       !kami::protocol::lludp::decode(wire,decoded)||
+       decoded.appended_acks.size()!=2U||
+       decoded.appended_acks[0]!=0x11223344U||
+       decoded.appended_acks[1]!=17U)return 22;
     return 0;
 }
