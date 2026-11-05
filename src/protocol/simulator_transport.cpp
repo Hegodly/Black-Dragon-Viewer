@@ -171,6 +171,7 @@ void Circuit::prune_unreferenced_meshes() noexcept {
     }
 }
 void Circuit::schedule_visible_meshes() noexcept {
+    try {
     if(mesh_capability_url_.empty()||!movement_position_.verified)return;
     // Spatial-object revision alone is insufficient: walking from one
     // house to another must discover newly visible mesh assets even if
@@ -209,6 +210,12 @@ void Circuit::schedule_visible_meshes() noexcept {
     };
     schedule(spatial_objects_);
     schedule(linked_objects_);
+    }catch(...){
+        // A bounded scheduler may still allocate when a new UUID is queued.
+        // Retry on the next simulator poll; never terminate under memory
+        // pressure inside this noexcept worker path.
+        mesh_scan_revision_=~std::uint64_t{0};
+    }
 }
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
@@ -407,6 +414,7 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     }
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
+    try {
     ++packets_received_;
     // Acknowledge all outbound packet sequences, not only the two login
     // handshake packets. Appended LLUDP ACKs and PacketAck blocks may
@@ -772,6 +780,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         texture_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+    }catch(...){
+        // A malformed or memory-pressure packet must not terminate the
+        // entire DX12 viewer. Its partial payload is never trusted.
+        ++invalid_world_packets_;
+    }
 }
 void Circuit::retry_unacknowledged() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed)return;
@@ -812,10 +825,14 @@ void Circuit::poll(unsigned budget) noexcept {
             break;
         }
         if(got<=0)break;
-        lludp::Packet packet{};
-        if(lludp::decode(
-            std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
-            packet))handle_packet(packet);
+        try{
+            lludp::Packet packet{};
+            if(lludp::decode(
+                std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
+                packet))handle_packet(packet);
+        }catch(...){
+            ++invalid_world_packets_;
+        }
     }
     retry_unacknowledged();
     maybe_retry();
