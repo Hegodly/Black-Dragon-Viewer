@@ -217,6 +217,20 @@ int run_primitive_tests(){
     for(const auto& v:textured_box.scene.vertices)
         if(v.texture_layer!=5.f||!std::isfinite(v.u)||
            !std::isfinite(v.v))return 32;
+    // Independent published Second Life prim face ordering, not an
+    // arbitrary face-number assignment based on the triangles array.
+    // KAMI converts source +Z into DirectX Y-up at the scene boundary.
+    const std::array<std::array<float,3U>,6U> box_face_normals{{
+        {0.f,1.f,0.f}, {0.f,0.f,-1.f}, {1.f,0.f,0.f},
+        {0.f,0.f,1.f}, {-1.f,0.f,0.f}, {0.f,-1.f,0.f}
+    }};
+    for(unsigned face=0U;face<6U;++face){
+        const auto& v=textured_box.scene.vertices[face*6U];
+        const auto& n=box_face_normals[face];
+        if(std::abs(v.nx-n[0])>.01f||
+           std::abs(v.ny-n[1])>.01f||
+           std::abs(v.nz-n[2])>.01f)return 44;
+    }
     // Distinct per-face overrides and explicit zero image must not
     // accidentally inherit the default image from an adjacent face.
     const std::string alternate="aaaa1111-bbbb-4ccc-8ddd-eeeeeeee0001";
