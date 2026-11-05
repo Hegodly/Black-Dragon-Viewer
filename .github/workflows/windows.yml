@@ -45,6 +45,7 @@ on:
       - release/kami-r41-legacy-mesh-cdn-20261104
       - release/kami-r42-mesh-discovery-20261104
       - release/kami-r43-full-object-shape-audit-20261104
+      - fix/kami-r45-mesh-param-compat-20261104
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -62,6 +63,7 @@ on:
   pull_request:
     branches:
       - release/kami-r42-mesh-discovery-20261104
+      - release/kami-r44-extraparam-type-audit-20261104
   workflow_dispatch:
 
 jobs:
@@ -142,9 +144,9 @@ jobs:
           Copy-Item R43_STATUS.md dist/KAMI
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R45-Mesh-Param-Compat-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R43.1-Pretest-Mesh-Fallback-DX12
-          path: dist/KAMI-R43.1-Pretest-Mesh-Fallback-DX12.zip
+          name: KAMI-R45-Mesh-Param-Compat-DX12
+          path: dist/KAMI-R45-Mesh-Param-Compat-DX12.zip
           retention-days: 14
