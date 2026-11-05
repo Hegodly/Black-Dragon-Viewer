@@ -79,6 +79,15 @@ struct MeshBatch {
     std::size_t out_of_range_instances=0;
     std::size_t invalid_pose_instances=0;
     std::size_t undrawn_eligible_instances=0;
+    // R69: Parent is not synonymous with a missing root: attachments,
+    // invalid/cyclic transforms and excessively deep links are separate.
+    std::size_t parent_missing_instances=0, parent_avatar_instances=0;
+    std::size_t parent_cycle_instances=0, parent_invalid_instances=0;
+    std::size_t parent_too_deep_instances=0;
+    // Undrawn meshes may be intentionally fully transparent, malformed /
+    // degenerate geometry, or simply outside the remaining draw budget.
+    std::size_t undrawn_transparent_instances=0, undrawn_bad_geometry_instances=0;
+    std::size_t undrawn_budget_instances=0;
 };
 // Render ONLY vertices decoded from real mesh assets (no surrogate boxes).
 // Shared SL-to-DX12 transforms with the validated prim hierarchy builder.
