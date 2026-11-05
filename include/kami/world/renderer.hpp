@@ -246,6 +246,11 @@ private:
     rig::Audit skin_audit_{};
     std::optional<SceneMesh> preview_mesh_;
     std::optional<SceneMesh> region_mesh_;
+    // Fixed per-region spawn origin: server position changes may select
+    // nearer objects, but must never shift old world geometry away from
+    // the camera/locally predicted avatar marker.
+    std::array<float,3> live_region_origin_{};
+    bool live_region_origin_valid_=false;
     std::size_t uploaded_root_bounds_=0;
     std::size_t uploaded_root_primitive_shapes_=0;
     std::size_t uploaded_linked_primitive_shapes_=0;
