@@ -866,35 +866,41 @@ bool Renderer::set_verified_live_terrain(
         pbr_table.rows.insert(pbr_table.rows.end(),terrain_record.begin(),terrain_record.end());
         for(std::size_t i=0U;i<built.scene.terrain_count;++i)scene.vertices[i].pbr_material=index;
     }
-    // Build the prim geometry AFTER GPU image residency is chosen, so
-    // each real face has the appropriate DX12 texture array layer.
-    const auto primitives=build_live_primitive_geometry(
-        circuit.decoded_spatial_objects(),
-        circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?kMaxQualityPrimitiveShapes:
-            graphics_.preset==graphics::Preset::Balanced?512U:
-            graphics_.preset==graphics::Preset::Performance?256U:128U,circuit.known_avatar_roots(),
-        live_texture_layers_,pbr_table.faces,
-        // Include land/water/proxies and leave room for the avatar marker.
-        scene.vertices.size()<3999000U?3999000U-scene.vertices.size():0U);
-    const auto new_primitive_vertices=primitives.scene.vertices.size();
-    scene.vertices.insert(scene.vertices.end(),
-                          primitives.scene.vertices.begin(),
-                          primitives.scene.vertices.end());
-    scene.terrain_count+=new_primitive_vertices;
-    // Real mesh asset triangles, decoded off-thread and validated against
-    // the session's authenticated object roots/child hierarchy.
+    // R64: mesh-first GPU vertex scheduling. Previously the new 4,080
+    // primitive allowance ran BEFORE the mesh pass and could spend the
+    // entire four-million-vertex scene budget on procedural prims, leaving
+    // zero capacity for nearby real buildings. Preserve actual mesh LODs
+    // first, then fill spare DX12 scene capacity with closest primitives.
+    // Both paths still bind the same already-selected SL texture/PBR atlas.
     const auto mesh_objects=build_live_mesh_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
         circuit.known_avatar_roots(),
         circuit.decoded_mesh_assets(),
-        agent.x,agent.y,agent.z,std::min<std::size_t>(graphics_.mesh_triangles(),
-            scene.vertices.size()<3999000U?(3999000U-scene.vertices.size())/3U:0U),live_texture_layers_,pbr_table.faces);
+        agent.x,agent.y,agent.z,std::min<std::size_t>(
+            graphics_.mesh_triangles(),live_world_vertices_remaining(
+                scene.vertices.size())/3U),
+        live_texture_layers_,pbr_table.faces);
     const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
         mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
     scene.terrain_count+=new_mesh_vertices;
+
+    const auto primitives=build_live_primitive_geometry(
+        circuit.decoded_spatial_objects(),
+        circuit.decoded_linked_objects(),
+        agent.x,agent.y,agent.z,
+        graphics_.preset==graphics::Preset::Quality?kMaxQualityPrimitiveShapes:
+        graphics_.preset==graphics::Preset::Balanced?512U:
+        graphics_.preset==graphics::Preset::Performance?256U:128U,
+        circuit.known_avatar_roots(),live_texture_layers_,pbr_table.faces,
+        live_world_vertices_remaining(scene.vertices.size()));
+    const auto new_primitive_vertices=primitives.scene.vertices.size();
+    scene.vertices.insert(scene.vertices.end(),
+                          primitives.scene.vertices.begin(),
+                          primitives.scene.vertices.end());
+    scene.terrain_count+=new_primitive_vertices;
+
     // Actual SL land stays in the terrain section. Append only an
     // obvious generic local placeholder in the separate avatar section.
     if(live_avatar_preview_.active()){
