@@ -142,6 +142,11 @@ public:
     [[nodiscard]] const pbr::Materials& decoded_materials() const noexcept {return loaded_materials_;}
     [[nodiscard]] const pbr::Overrides& material_overrides() const noexcept {return material_overrides_;}
     [[nodiscard]] std::size_t material_failures() const noexcept {return material_failures_;}
+    [[nodiscard]] unsigned material_last_http() const noexcept {return material_last_http_;}
+    [[nodiscard]] std::size_t material_last_bytes() const noexcept {return material_last_bytes_;}
+    [[nodiscard]] std::size_t material_http_failures() const noexcept {return material_http_failures_;}
+    [[nodiscard]] std::size_t material_decode_failures() const noexcept {return material_decode_failures_;}
+    [[nodiscard]] pbr::DecodeError material_last_decode_error() const noexcept {return material_last_decode_error_;}
     // Authenticated JPEG2000 textures decoded on a background worker.
     // CPU-ready does NOT mean uploaded to DX12 or bound to a face.
     [[nodiscard]] const std::map<std::string,texture::DecodedTexture>&
@@ -304,12 +309,15 @@ private:
     pbr::Overrides material_overrides_;
     struct MaterialResult {
         std::string id;unsigned status=0U;bool fetched=false,decoded=false;
+        std::size_t bytes=0U;pbr::DecodeError error=pbr::DecodeError::None;
         pbr::Material material{};
     };
     std::future<MaterialResult> material_worker_;
     struct MaterialAttempt {unsigned tries=0U;std::chrono::steady_clock::time_point next{};};
     std::map<std::string,MaterialAttempt> material_attempts_;
-    std::size_t material_failures_=0U;
+    std::size_t material_failures_=0U,material_http_failures_=0U,material_decode_failures_=0U;
+    unsigned material_last_http_=0U;std::size_t material_last_bytes_=0U;
+    pbr::DecodeError material_last_decode_error_=pbr::DecodeError::None;
     std::chrono::steady_clock::time_point material_last_scan_{};
     std::wstring texture_capability_url_; // authenticated ViewerAsset bearer
     struct TextureResult {

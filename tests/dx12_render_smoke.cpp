@@ -180,11 +180,24 @@ bool check_pbr_pixels(kami::world::Renderer& renderer) {
             count_magenta(target,out.magenta,&out.hash,&out.sum);
         std::error_code ignored;std::filesystem::remove(target,ignored);return ok;
     };
-    protocol::pbr::Material m;m.double_sided=true;m.unlit=true;m.images[0]=ids[0];
+    // Decode the same standard LLSD envelope as a ViewerAsset response,
+    // then exercise the actual table upload and production pixel shader.
+    const std::string header="<? LLSD/Binary ?>\n";
+    std::vector<std::uint8_t> asset(header.begin(),header.end());asset.push_back('{');
+    const auto size=[&](std::size_t n){for(int shift=24;shift>=0;shift-=8)asset.push_back(static_cast<std::uint8_t>(n>>shift));};
+    const auto string=[&](const std::string& value){size(value.size());asset.insert(asset.end(),value.begin(),value.end());};
+    const std::string json=R"({"asset":{"version":"2.0"},"images":[{"uri":")"+ids[0]+R"("}],"textures":[{"source":0}],"materials":[{"doubleSided":true,"extensions":{"KHR_materials_unlit":{}},"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}}]})";
+    size(3U);
+    for(const auto& [key,value]:std::map<std::string,std::string>{{"version","1.1"},{"type","GLTF 2.0"},{"data",json}}){
+        asset.push_back('k');string(key);asset.push_back('s');string(value);
+    }asset.push_back('}');
+    protocol::pbr::Material m;protocol::pbr::DecodeError error;
+    if(!protocol::pbr::decode_asset(asset,m,&error)||error!=protocol::pbr::DecodeError::None)return false;
     Result opaque,mask,full,half,empty;
     // OPAQUE must ignore image alpha. A green legacy tint must not replace
     // the PBR material's magenta base map.
     if(!render(m,opaque)||opaque.magenta<64U){std::wcerr<<L"PBR pixel check failed at line "<<__LINE__<<L"\n";return false;}
+    std::wcout<<L"KAMI STANDARD LLSD MATERIAL PIXELS VERIFIED: ViewerAsset envelope to DX12 base map\n";
     m.alpha=1U;m.cutoff=.5f;
     if(!render(m,mask)||mask.magenta!=0U){std::wcerr<<L"PBR pixel check failed at line "<<__LINE__<<L"\n";return false;}
     m.images[0]=ids[1];m.base[3]=.5f;m.cutoff=.75f;
@@ -624,4 +637,5 @@ int main(int argc,char** argv) {
         std::wcerr<<L"KAMI DX12 smoke failure stage "<<result<<L"\n";
     return result;
 }
+
 

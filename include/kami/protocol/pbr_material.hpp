@@ -32,8 +32,21 @@ using Overrides=std::map<std::uint32_t,std::map<unsigned,Override>>;
 inline constexpr unsigned kMaxMaterials=256U,kMaxGPURecords=1024U,kRows=15U;
 // SL PARAMS_RENDER_MATERIAL (0x80), count + face/U8 + material/UUID.
 bool decode_face_ids(std::span<const std::uint8_t>,std::array<std::string,32>&) noexcept;
-// Native SL material assets are binary LLSD {version,type,data: glTF JSON}.
-bool decode_asset(std::span<const std::uint8_t>,Material&) noexcept;
+enum class DecodeError { None, Size, Envelope, Version, Type, GLTF };
+inline const wchar_t* decode_error_label(DecodeError error) noexcept {
+    switch(error){
+    case DecodeError::None:return L"OK";
+    case DecodeError::Size:return L"size";
+    case DecodeError::Envelope:return L"LLSD envelope";
+    case DecodeError::Version:return L"asset version";
+    case DecodeError::Type:return L"asset type";
+    case DecodeError::GLTF:return L"glTF data";
+    }return L"unknown";
+}
+// Native SL binary LLSD, with the official spaced/case-insensitive header,
+// its compact historical spelling, or an unframed binary map.
+// Never modifies output on failure; errors expose no downloaded contents.
+bool decode_asset(std::span<const std::uint8_t>,Material&,DecodeError* error=nullptr) noexcept;
 bool decode_probe(std::span<const std::uint8_t>,bool&,float&,float&,std::uint8_t&) noexcept;
 bool decode_json(std::string_view,Material&) noexcept;
 // GenericStreamingMessage High31, Method 0x4175, LLSD notation payload.
