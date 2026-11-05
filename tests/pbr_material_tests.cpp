@@ -51,6 +51,25 @@ int run(){
     }
     auto trailing=canonical;trailing.push_back('x');
     if(!check_bad(trailing,DecodeError::Trailing)||!check_bad({},DecodeError::Size))return 28;
+    // R65: a complete binary LLSD map may have a bounded NUL
+    // terminator, but arbitrary junk, excessive padding or an absent
+    // closing map marker must remain rejected.
+    for(unsigned nul_count=1U;nul_count<=4U;++nul_count){
+        auto nul_terminated=canonical;
+        nul_terminated.insert(nul_terminated.end(),nul_count,0U);
+        Material decoded;auto result_error=DecodeError::Size;
+        if(!decode_asset(nul_terminated,decoded,&result_error)||
+           decoded!=m||result_error!=DecodeError::None)return 47;
+    }
+    auto excess_padding=canonical;
+    excess_padding.insert(excess_padding.end(),5U,0U);
+    if(!check_bad(excess_padding,DecodeError::Trailing))return 48;
+    auto mixed_padding=canonical;
+    mixed_padding.push_back(0U);mixed_padding.push_back('x');
+    if(!check_bad(mixed_padding,DecodeError::Trailing))return 49;
+    auto no_close=canonical;
+    no_close[no_close.size()-1U]=0U;
+    if(!check_bad(no_close,DecodeError::Trailing))return 50;
     auto version_bad=asset(json);const std::string version="1.1";
     const auto where=std::search(version_bad.begin(),version_bad.end(),version.begin(),version.end());
     if(where==version_bad.end())return 29;*where='2';
