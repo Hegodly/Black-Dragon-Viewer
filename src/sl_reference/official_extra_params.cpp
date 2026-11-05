@@ -51,9 +51,12 @@ kami_sl_decode_extra_params_v1(const std::uint8_t* bytes,
     std::uint32_t bytes_length,KamiSlExtraParamsV1* output){
     if(!output)return 0;
     const auto supplied=output->struct_size;
+    // A client with an incompatible ABI version may provide a smaller
+    // output buffer: never overwrite beyond the declared struct size.
+    if(supplied!=sizeof(*output))return 0;
     std::memset(output,0,sizeof(*output));
     output->struct_size=sizeof(*output);
-    if(supplied!=sizeof(*output)||bytes_length>8192U||
+    if(bytes_length>8192U||
        (bytes_length!=0U&&!bytes))return 0;
     if(bytes_length==0U)return 1; // Empty optional extra field.
     KamiSlExtraParamsV1 tmp{};
