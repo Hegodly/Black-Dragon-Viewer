@@ -95,6 +95,10 @@ add_executable(kami_sl_texture_entry_tests
 target_link_libraries(kami_sl_texture_entry_tests PRIVATE kami_core)
 add_test(NAME KamiSLTextureEntryDefaultTintAndBounds
     COMMAND kami_sl_texture_entry_tests)
+add_executable(kami_sl_jpeg2000_tests tests/texture_decode_tests.cpp)
+target_link_libraries(kami_sl_jpeg2000_tests PRIVATE kami_core)
+add_test(NAME KamiGenuineSecondLifeJPEG2000LosslessDecode
+    COMMAND kami_sl_jpeg2000_tests)
 add_executable(kami_official_login_identity_tests tests/official_login_identity_tests.cpp)
 target_link_libraries(kami_official_login_identity_tests PRIVATE kami_sl_login_identity)
 add_test(NAME KamiOfficialWindowsLoginIdentityCompatibility
