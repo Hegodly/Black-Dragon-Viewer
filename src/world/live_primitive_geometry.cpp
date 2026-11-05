@@ -130,7 +130,7 @@ struct Emitter {
         const std::uint16_t layer=name.empty()||found==layers.end()?
             0U:found->second;
         protocol::texture::UVTransform uv_param{};
-        if(face<material.face_uv.size()&&material.base_tint_present)
+        if(face<material.face_uv.size()&&material.face_rgba_present)
             uv_param=material.face_uv[face];
         UV coords[]={uvx,uvy,uvz};
         V positions[]={a,b,c};
