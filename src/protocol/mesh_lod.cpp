@@ -121,12 +121,29 @@ private:
 };
 bool read_llsd(std::span<const std::uint8_t> bytes,Value& out,
                std::size_t& consumed) {
+    if(bytes.empty())return false;
+    // Linden Lab's LLSDSerialize::toBinary (used for SL mesh headers
+    // and zipped LOD blocks) emits a RAW binary map/array, not the
+    // optional "<?llsd/binary?>" transport header. Requiring that
+    // prefix rejected valid GetMesh/ViewerAsset HTTP 200 responses.
+    // Continue to accept previously supported prefixed fixtures.
     constexpr char binary[]="<?llsd/binary?>";
-    if(bytes.size()<sizeof(binary)-1U||
-       std::memcmp(bytes.data(),binary,sizeof(binary)-1U)!=0)return false;
-    std::size_t at=sizeof(binary)-1U;
-    if(at<bytes.size()&&bytes[at]=='\r')++at;
-    if(at<bytes.size()&&bytes[at]=='\n')++at;
+    constexpr char deprecated[]="<? LLSD/Binary ?>";
+    std::size_t at=0U;
+    if(bytes.size()>=sizeof(binary)-1U &&
+       std::memcmp(bytes.data(),binary,sizeof(binary)-1U)==0)
+        at=sizeof(binary)-1U;
+    else if(bytes.size()>=sizeof(deprecated)-1U &&
+            std::memcmp(bytes.data(),deprecated,sizeof(deprecated)-1U)==0)
+        at=sizeof(deprecated)-1U;
+    if(at!=0U){
+        if(at<bytes.size()&&bytes[at]=='\r')++at;
+        if(at<bytes.size()&&bytes[at]=='\n')++at;
+    }
+    // Mesh root is a map; a decoded LOD is an array. No arbitrary
+    // primitive/value prefixes in this untrusted HTTP mesh path.
+    if(at>=bytes.size()||
+       (bytes[at]!='{'&&bytes[at]!='['))return false;
     Reader reader(bytes.subspan(at));
     if(!reader.parse(out))return false;
     consumed=at+reader.offset();
