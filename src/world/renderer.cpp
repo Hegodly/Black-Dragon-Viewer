@@ -505,6 +505,21 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
         error_=L"Could not create command buffers";
         return false;
     }
+    // Texture copies are ordered on the same graphics queue but have
+    // their own allocator/list. This makes it safe to submit a J2C slice
+    // upload before the normal draw without resetting an in-flight
+    // allocator or waiting for its completion on the UI thread.
+    if(FAILED(device_.native_device()->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(texture_copy_allocator_.ReleaseAndGetAddressOf())))||
+       FAILED(device_.native_device()->CreateCommandList(
+            0,D3D12_COMMAND_LIST_TYPE_DIRECT,
+            texture_copy_allocator_.Get(),nullptr,
+            IID_PPV_ARGS(texture_copy_commands_.ReleaseAndGetAddressOf())))||
+       FAILED(texture_copy_commands_->Close())){
+        error_=L"Could not create independent DX12 texture copy commands";
+        return false;
+    }
     if(FAILED(device_.native_device()->CreateFence(
             0,D3D12_FENCE_FLAG_NONE,
             IID_PPV_ARGS(fence_.ReleaseAndGetAddressOf())))) {
