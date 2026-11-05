@@ -65,6 +65,7 @@ on:
       - feature/kami-r59-pbr-environment-terrain-streaming-20261105
       - fix/kami-r60-standard-material-envelope-20261105
       - fix/kami-r61-material-envelope-formats-20261105
+      - feature/kami-r62-4080-primitives-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -172,7 +173,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KAMI-R61-Forced-WARP-PBR-Pixel-Verification-Result
+          name: KAMI-R62-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
       - name: Package test executable
@@ -197,7 +198,7 @@ jobs:
           Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
-          Copy-Item R61_STATUS.md dist/KAMI
+          Copy-Item R62_STATUS.md dist/KAMI
           Copy-Item LICENSE.PicoJSON.txt dist/KAMI
           Copy-Item LICENSE.TinyXML2.txt dist/KAMI
           Copy-Item R57_STATUS.md dist/KAMI
@@ -218,10 +219,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R61-SL-Material-Formats-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R62-4080-Primitives-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R61-SL-Material-Formats-DX12
-          path: dist/KAMI-R61-SL-Material-Formats-DX12.zip
+          name: KAMI-R62-4080-Primitives-DX12
+          path: dist/KAMI-R62-4080-Primitives-DX12.zip
           retention-days: 14
 
