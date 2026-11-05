@@ -12,6 +12,8 @@
 #include <string>
 
 namespace kami::world {
+// Hard upper bound for the Quality live-region primitive draw budget.
+inline constexpr std::size_t kMaxQualityPrimitiveShapes=4080U;
 struct PrimitiveBatch {
     SceneMesh scene{};
     std::size_t root_shapes=0,linked_shapes=0;
@@ -36,7 +38,8 @@ struct PrimitiveBatch {
     std::size_t limit=128U,
     const std::set<std::uint32_t>& avatar_roots={},
     const std::map<std::string,std::uint16_t>& texture_layers={},
-    const PBRFaceIndices& pbr_faces={});
+    const PBRFaceIndices& pbr_faces={},
+    std::size_t max_vertices=4000000U);
 // Select decoded JPEG2000 image IDs actually used by visible static mesh
 // AND supported simple prim faces. Prioritize distance, not UUID ordering of
 // the CPU cache. Preserve existing DX12 array slice numbers when possible
