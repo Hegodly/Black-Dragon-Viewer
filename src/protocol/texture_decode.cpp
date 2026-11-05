@@ -64,7 +64,6 @@ bool compatible(const opj_image_t& image,bool pixel_storage_ready){
     if(width>2048U||height>2048U||
        static_cast<std::uint64_t>(width)*height>4U*1024U*1024U)
         return false;
-    if(image.numcomps==2U)return false; // unsupported gray+alpha
     for(std::uint32_t c=0;c<image.numcomps;++c){
         const auto& comp=image.comps[c];
         if((pixel_storage_ready&&!comp.data)||comp.w!=width||comp.h!=height||
@@ -121,10 +120,11 @@ bool decode_jpeg2000(std::span<const std::uint8_t> j2c,
         ready.rgba.resize(pixels*4U);
         for(std::size_t i=0;i<pixels;++i){
             auto* p=ready.rgba.data()+i*4U;
-            if(image->numcomps==1U){
+            if(image->numcomps<=2U){
                 p[0]=p[1]=p[2]=to_byte(image->comps[0].data[i],
                                         image->comps[0]);
-                p[3]=255U;
+                p[3]=image->numcomps==2U?
+                    to_byte(image->comps[1].data[i],image->comps[1]):255U;
             }else{
                 for(std::size_t c=0;c<3U;++c)
                     p[c]=to_byte(image->comps[c].data[i],
@@ -179,3 +179,4 @@ bool downscale_preview(DecodedTexture& image,
     }catch(...){return false;}
 }
 } // namespace kami::protocol::texture
+

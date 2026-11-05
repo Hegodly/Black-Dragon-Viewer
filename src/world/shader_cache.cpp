@@ -324,9 +324,12 @@ bool ShaderCache::prepare_shadow(
     }
     const fs::path directory=cache_path(device,report);
     const fs::path shader_path=directory.empty()?fs::path{}:directory/L"shadow_vs.cso";
+    const fs::path pixel_path=directory.empty()?fs::path{}:directory/L"shadow_ps.cso";
     const fs::path pipeline_path=directory.empty()?fs::path{}:directory/L"shadow.pso";
     std::vector<char> vs=directory.empty()?std::vector<char>{}:read(shader_path,kMaxShaderBytes);
-    const bool shader_cached=!vs.empty();
+    std::vector<char> ps=directory.empty()?std::vector<char>{}:read(pixel_path,kMaxShaderBytes);
+    const bool shader_cached=!vs.empty()&&!ps.empty();
+    if(ps.empty()&&!compile("shadow_pixel_main","ps_5_0",ps,report.error))return false;
     if(vs.empty() && !compile("shadow_vertex_main","vs_5_0",vs,report.error))
         return false;
     static constexpr D3D12_INPUT_ELEMENT_DESC input[]={
@@ -352,6 +355,7 @@ bool ShaderCache::prepare_shadow(
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature=signature;
     desc.VS={vs.data(),vs.size()};
+    desc.PS={ps.data(),ps.size()};
     desc.InputLayout={input,9};
     desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
@@ -383,11 +387,13 @@ bool ShaderCache::prepare_shadow(
     if(FAILED(device->CreateGraphicsPipelineState(
             &desc,IID_PPV_ARGS(shadow.ReleaseAndGetAddressOf())))) {
         // Retry with a fresh shader in case cached bytecode was corrupted.
-        if(!shader_cached || !compile("shadow_vertex_main","vs_5_0",vs,report.error)) {
+        if(!shader_cached || !compile("shadow_vertex_main","vs_5_0",vs,report.error)||
+           !compile("shadow_pixel_main","ps_5_0",ps,report.error)) {
             report.error=L"DX12 shadow pipeline creation failed";
             return false;
         }
         desc.VS={vs.data(),vs.size()};
+        desc.PS={ps.data(),ps.size()};
         if(FAILED(device->CreateGraphicsPipelineState(
                 &desc,IID_PPV_ARGS(shadow.ReleaseAndGetAddressOf())))) {
             report.error=L"DX12 shadow pipeline creation failed after recompiling";
@@ -396,7 +402,8 @@ bool ShaderCache::prepare_shadow(
     }
     if(!directory.empty()) {
         bool saved=shader_cached ||
-            write(shader_path,vs.data(),vs.size());
+            (write(shader_path,vs.data(),vs.size())&&
+             write(pixel_path,ps.data(),ps.size()));
         Microsoft::WRL::ComPtr<ID3DBlob> blob;
         if(SUCCEEDED(shadow->GetCachedBlob(blob.GetAddressOf())) &&
            blob && blob->GetBufferSize()>0 &&
@@ -477,3 +484,4 @@ bool ShaderCache::prepare_sky(
 }
 
 } // namespace kami::world
+

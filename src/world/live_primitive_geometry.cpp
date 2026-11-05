@@ -123,6 +123,9 @@ struct Emitter {
         if(len<1.e-6f||!std::isfinite(len))return;
         normal=scale(normal,1.f/len);
         if(!finite(a)||!finite(b)||!finite(c))return;
+        // A fully invisible SL face must neither occlude nor cast shadows.
+        if(material.face_rgba_present&&face<material.face_rgba.size()&&
+           material.face_rgba[face][3]<=0.f)return;
         const auto& name=face<material.face_texture_override.size()&&
                            material.face_texture_override[face]?
             material.face_texture_asset_ids[face]:
@@ -496,6 +499,8 @@ MeshBatch build_live_mesh_geometry(
             // explicit null override must never fall back to its parent.
             const unsigned face=triangle.face_index;
             const auto& obj=*item.transform;
+            if(obj.face_rgba_present&&face<obj.face_rgba.size()&&
+               obj.face_rgba[face][3]<=0.f)continue;
             const std::string& texture_id=
                 face<obj.face_texture_override.size()&&
                 obj.face_texture_override[face]?
@@ -568,3 +573,4 @@ MeshBatch build_live_mesh_geometry(
     return batch;
 }
 } // namespace kami::world
+

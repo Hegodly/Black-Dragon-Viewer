@@ -76,5 +76,27 @@ int main(){
     full.rgba.pop_back();
     if(kami::protocol::texture::downscale_preview(full,512U))
         return 13;
+    // Two-channel grayscale plus alpha is valid JPEG2000, not an RGB
+    // image with missing channels. Preserve its distinct coverage values.
+    const std::string gray_alpha_hex=
+      "ff4fff51002c000000000002000000020000000000000000000000020000000200000000000000000002070101070101ff52000c00000001000104040001ff5c00074040484850ff640025000143726561746564206279204f70656e4a5045472076657273696f6e20322e352e34ff90000a0000000000330001ff93c7d404047fc3e70208c07c20cfc00a1f681007049f004fc7da050fa8067e604002d70505afffd9";
+    std::vector<std::uint8_t> gray_alpha;
+    for(std::size_t i=0U;i<gray_alpha_hex.size();i+=2U)
+        gray_alpha.push_back(static_cast<std::uint8_t>(
+            nibble(gray_alpha_hex[i])*16+nibble(gray_alpha_hex[i+1U])));
+    if(!kami::protocol::texture::decode_jpeg2000(gray_alpha,decoded)||
+       decoded.width!=2U||decoded.height!=2U)return 14;
+    constexpr std::array<unsigned,4> gray{128U,64U,200U,255U};
+    constexpr std::array<unsigned,4> alpha{0U,255U,128U,32U};
+    for(std::size_t i=0U;i<4U;++i)
+        if(decoded.rgba[i*4U]!=gray[i]||
+           decoded.rgba[i*4U+1U]!=gray[i]||
+           decoded.rgba[i*4U+2U]!=gray[i]||
+           decoded.rgba[i*4U+3U]!=alpha[i])return 15;
+    const auto retained=decoded.rgba;
+    gray_alpha.resize(20U);
+    if(kami::protocol::texture::decode_jpeg2000(gray_alpha,decoded)||
+       decoded.rgba!=retained)return 16;
     return 0;
 }
+

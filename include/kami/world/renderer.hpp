@@ -218,6 +218,7 @@ public:
     }
 
 private:
+    friend struct RendererPixelTestAccess;
     static constexpr UINT kBuffers = 2;
     static constexpr UINT kShadowSize = 1024;
     [[nodiscard]] bool make_pipeline();
@@ -321,3 +322,4 @@ private:
     HANDLE fence_event_ = nullptr;
 };
 } // namespace kami::world
+

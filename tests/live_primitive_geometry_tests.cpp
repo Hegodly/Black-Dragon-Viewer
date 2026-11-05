@@ -389,6 +389,28 @@ int run_primitive_tests(){
         dense,{}, {},{},dense_images,128.f,140.f,35.f,
         protocol::texture::kGPUImageLayers,expanded);
     if(repeated!=expanded)return 48;
+    // Fully invisible SL faces must not enter either color or shadow
+    // geometry, while the neighboring opaque faces remain renderable.
+    Transform alpha_box{777U,128.f,140.f,35.f,2.f,2.f,2.f};
+    alpha_box.primitive=Kind::Box;alpha_box.face_rgba_present=true;
+    for(auto& color:alpha_box.face_rgba)color={1.f,1.f,1.f,1.f};
+    alpha_box.face_rgba[0][3]=0.f;
+    const auto invisible_top=world::build_live_primitive_geometry(
+        {{777U,alpha_box}},{},128.f,140.f,35.f,128U);
+    if(invisible_top.scene.vertices.size()!=30U)return 49;
+    for(auto& color:alpha_box.face_rgba)color[3]=0.f;
+    const auto invisible_box=world::build_live_primitive_geometry(
+        {{777U,alpha_box}},{},128.f,140.f,35.f,128U);
+    if(!invisible_box.scene.vertices.empty())return 50;
+    alpha_box.mesh_asset_id=asset_id;
+    alpha_box.primitive=Kind::Unknown;
+    const auto invisible_mesh=world::build_live_mesh_geometry(
+        {{777U,alpha_box}}, {},{},assets,128.f,140.f,35.f,10U);
+    if(invisible_mesh.emitted_triangles!=0U)return 51;
+    for(auto& color:alpha_box.face_rgba)color[3]=1.f;
+    const auto restored_mesh=world::build_live_mesh_geometry(
+        {{777U,alpha_box}}, {},{},assets,128.f,140.f,35.f,10U);
+    if(restored_mesh.emitted_triangles!=1U)return 52;
     return 0;
 }
 
@@ -398,3 +420,4 @@ int main(){
         "KAMI prim/material regression failed: check %d\n",code);
     return code;
 }
+

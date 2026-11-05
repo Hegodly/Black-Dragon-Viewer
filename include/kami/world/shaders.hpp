@@ -126,10 +126,30 @@ Interpolant vertex_main(VertexIn input) {
     output.textureLayer = input.textureLayer;
     return output;
 }
-float4 shadow_vertex_main(VertexIn input) : SV_POSITION {
+struct ShadowInterpolant {
+    float4 clip : SV_POSITION;
+    float2 uv : TEXCOORD0;
+    nointerpolation float textureLayer : TEXCOORD1;
+};
+float4 sample_material(float2 uv,float sourceLayer) {
+    uint width,height,layers;
+    materialTexture.GetDimensions(width,height,layers);
+    float layer=clamp(round(sourceLayer),0.0,float(layers-1U));
+    float4 texel=materialTexture.Sample(materialSampler,float3(uv,layer));
+    // Layer zero is KAMI's procedural fallback and is always opaque.
+    if(layer>0.5)clip(texel.a-0.0001);
+    return texel;
+}
+ShadowInterpolant shadow_vertex_main(VertexIn input) {
     float3 skinned,skinnedNormal;
     skin_vertex(input,skinned,skinnedNormal);
-    return mul(float4(avatar_position(skinned,input.region),1.0),lightViewProjection);
+    ShadowInterpolant output;
+    output.clip=mul(float4(avatar_position(skinned,input.region),1.0),lightViewProjection);
+    output.uv=input.uv;output.textureLayer=input.textureLayer;
+    return output;
+}
+void shadow_pixel_main(ShadowInterpolant input) {
+    sample_material(input.uv,input.textureLayer);
 }
 float shadow_factor(float3 position,float3 normal) {
     if(frame.w<0.5) return 1.0;
@@ -176,8 +196,7 @@ float4 pixel_main(Interpolant input) : SV_TARGET {
     uint imageWidth,imageHeight,imageLayers;
     materialTexture.GetDimensions(imageWidth,imageHeight,imageLayers);
     float layer=clamp(round(input.textureLayer),0.0,float(imageLayers-1U));
-    float3 texel=materialTexture.Sample(materialSampler,
-        float3(input.uv,layer)).rgb;
+    float3 texel=sample_material(input.uv,layer).rgb;
     // Layer 0 is KAMI's old procedural material. Other slices contain
     // genuinely decoded SL default TextureEntry images (not PBR overrides).
     float3 base=layer<0.5?
@@ -283,3 +302,4 @@ float4 sky_pixel_main(SkyVertexOutput input) : SV_TARGET {
 }
 )";
 }
+

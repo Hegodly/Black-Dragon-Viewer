@@ -11,6 +11,146 @@
 #include <string_view>
 #include <filesystem>
 #include <objbase.h>
+#include <wincodec.h>
+
+
+// Test-only access: exercise the production atlas uploader and scene shader
+// with synthetic pixels. No account, bearer token or network is involved.
+namespace kami::world {
+struct RendererPixelTestAccess {
+    static bool shadow_writes(Renderer& r,std::size_t& writes) {
+        r.wait_for_gpu();
+        auto* device=r.device_.native_device();
+        const auto desc=r.shadow_map_->GetDesc();
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+        UINT rows=0U;UINT64 row_bytes=0U,bytes=0U;
+        device->GetCopyableFootprints(&desc,0U,1U,0U,&footprint,&rows,&row_bytes,&bytes);
+        D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC buffer{};
+        buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=bytes;
+        buffer.Height=1U;buffer.DepthOrArraySize=1U;buffer.MipLevels=1U;
+        buffer.SampleDesc.Count=1U;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+        if(!bytes||bytes>16U*1024U*1024U||row_bytes!=desc.Width*4U||
+           FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,
+            &buffer,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
+            IID_PPV_ARGS(readback.GetAddressOf())))||
+           FAILED(r.texture_copy_allocator_->Reset())||
+           FAILED(r.texture_copy_commands_->Reset(r.texture_copy_allocator_.Get(),nullptr)))
+            return false;
+        auto* cmd=r.texture_copy_commands_.Get();
+        D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource=r.shadow_map_.Get();
+        barrier.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+        cmd->ResourceBarrier(1U,&barrier);
+        D3D12_TEXTURE_COPY_LOCATION from{},to{};
+        from.pResource=r.shadow_map_.Get();from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        to.pResource=readback.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        to.PlacedFootprint=footprint;
+        cmd->CopyTextureRegion(&to,0U,0U,0U,&from,nullptr);
+        std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);
+        cmd->ResourceBarrier(1U,&barrier);
+        if(FAILED(cmd->Close()))return false;
+        ID3D12CommandList* lists[]={cmd};r.device_.graphics_queue()->ExecuteCommandLists(1U,lists);
+        r.wait_for_gpu();
+        void* data=nullptr;const D3D12_RANGE range{0U,static_cast<SIZE_T>(bytes)};
+        if(FAILED(readback->Map(0U,&range,&data))||!data)return false;
+        writes=0U;
+        for(UINT y=0U;y<rows;++y){
+            const auto* row=reinterpret_cast<const float*>(
+                static_cast<const std::uint8_t*>(data)+footprint.Offset+
+                std::size_t(y)*footprint.Footprint.RowPitch);
+            for(UINT x=0U;x<desc.Width;++x)if(row[x]<0.999999f)++writes;
+        }
+        const D3D12_RANGE no_write{0U,0U};readback->Unmap(0U,&no_write);return true;
+    }
+    static bool upload(Renderer& r,const std::string& id,std::uint8_t alpha) {
+        r.wait_for_gpu();
+        const auto previous=r.live_texture_layers_;
+        r.live_texture_layers_={{id,protocol::texture::kGPUImageLayers}};
+        protocol::texture::DecodedTexture image{};
+        image.width=image.height=1U;image.rgba={255U,0U,255U,alpha};
+        const std::map<std::string,protocol::texture::DecodedTexture> images{{id,image}};
+        return r.make_material_texture(&images,&previous)==TextureUploadStatus::Committed;
+    }
+};
+}
+namespace {
+bool count_magenta(const std::wstring& file,std::size_t& result) {
+    Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+    Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+    if(FAILED(CoCreateInstance(CLSID_WICImagingFactory,nullptr,
+        CLSCTX_INPROC_SERVER,IID_PPV_ARGS(factory.GetAddressOf())))||
+       FAILED(factory->CreateDecoderFromFilename(file.c_str(),nullptr,
+        GENERIC_READ,WICDecodeMetadataCacheOnLoad,decoder.GetAddressOf()))||
+       FAILED(decoder->GetFrame(0U,frame.GetAddressOf()))||
+       FAILED(factory->CreateFormatConverter(converter.GetAddressOf()))||
+       FAILED(converter->Initialize(frame.Get(),GUID_WICPixelFormat32bppRGBA,
+        WICBitmapDitherTypeNone,nullptr,0.,WICBitmapPaletteTypeCustom)))return false;
+    UINT w=0U,h=0U;
+    if(FAILED(converter->GetSize(&w,&h))||!w||!h||w>4096U||h>4096U)return false;
+    std::vector<std::uint8_t> rgba(std::size_t(w)*h*4U);
+    if(FAILED(converter->CopyPixels(nullptr,w*4U,
+        static_cast<UINT>(rgba.size()),rgba.data())))return false;
+    result=0U;
+    for(std::size_t at=0U;at<rgba.size();at+=4U)
+        if(rgba[at]>40U&&rgba[at+2U]>40U&&
+           unsigned(rgba[at])>unsigned(rgba[at+1U])+40U&&
+           unsigned(rgba[at+2U])>unsigned(rgba[at+1U])+40U)++result;
+    return true;
+}
+bool check_sampled_pixels(kami::world::Renderer& renderer) {
+    auto graphics=kami::graphics::Settings{};
+    graphics.pbr=false;graphics.shadows=true;graphics.animate_avatar=false;
+    renderer.set_graphics(graphics);renderer.reset_camera();
+    auto scene=kami::world::build_test_scene(8);
+    for(auto& v:scene.vertices){
+        v.r=v.g=v.b=1.f;v.metallic=0.f;
+        v.bone_weights=0U;v.body_region=0.f;
+        v.texture_layer=float(kami::protocol::texture::kGPUImageLayers);
+    }
+    if(!renderer.set_creator_preview(scene))return false;
+    wchar_t folder[MAX_PATH]{};
+    if(!GetTempPathW(MAX_PATH,folder))return false;
+    const std::wstring target=std::wstring(folder)+L"KAMI-Texture-Pixel-Test.png";
+    const auto capture=[&](std::size_t& count){
+        if(!renderer.capture_png(target))return false;
+        renderer.draw();
+        const bool ok=renderer.ready()&&
+            renderer.capture_status()==kami::world::CaptureStatus::Saved&&
+            count_magenta(target,count);
+        std::error_code ignored;std::filesystem::remove(target,ignored);
+        return ok;
+    };
+    std::size_t opaque=0U,transparent=0U;
+    if(!kami::world::RendererPixelTestAccess::upload(renderer,"opaque",255U)||
+       !capture(opaque)||opaque<64U){
+        std::wcerr<<L"Opaque texture color pixel check failed: "<<opaque<<L"\n";
+        return false;
+    }
+    std::size_t opaque_depth=0U;
+    if(!kami::world::RendererPixelTestAccess::shadow_writes(renderer,opaque_depth)||
+       opaque_depth==0U){std::wcerr<<L"Opaque shadow pixel check failed\n";return false;}
+    if(!kami::world::RendererPixelTestAccess::upload(renderer,"transparent",0U)||
+       !capture(transparent)||transparent!=0U){
+        std::wcerr<<L"Transparent texels incorrectly remain visible: "<<transparent<<L"\n";
+        return false;
+    }
+    std::size_t transparent_depth=0U;
+    if(!kami::world::RendererPixelTestAccess::shadow_writes(renderer,transparent_depth)||
+       transparent_depth!=0U){std::wcerr<<L"Invisible texels cast solid shadows\n";return false;}
+    renderer.clear_creator_preview();
+    std::wcout<<L"KAMI TEXTURE PIXELS VERIFIED: "<<opaque
+              <<L" opaque color pixels, "<<transparent<<L" invisible pixels; "
+              <<opaque_depth<<L" opaque shadow pixels, "<<transparent_depth
+              <<L" invisible shadow pixels\n";
+    return true;
+}
+}
 
 namespace {
 LRESULT CALLBACK smoke_window(HWND window,UINT message,WPARAM wp,LPARAM lp) {
@@ -307,6 +447,7 @@ int main(int argc,char** argv) {
                         std::filesystem::remove(target,ignored);
                     }
                 }
+                if(!result&&!check_sampled_pixels(renderer))result=32;
                 if(!result) std::wcout
                     <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":L"KAMI DX12 SMOKE PASS")
                     <<L" - adapter: "<<renderer.adapter_name()
@@ -323,3 +464,4 @@ int main(int argc,char** argv) {
         std::wcerr<<L"KAMI DX12 smoke failure stage "<<result<<L"\n";
     return result;
 }
+
