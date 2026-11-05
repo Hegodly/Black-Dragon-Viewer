@@ -72,6 +72,7 @@ on:
       - diagnostics/kami-r66-mesh-visibility-20261105
       - fix/kami-r67-mesh-lod-fallback-20261105
       - fix/kami-r68-priority-parent-recovery-20261105
+      - diagnostics/kami-r69-missing-geometry-breakdown-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -179,7 +180,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KAMI-R68-Forced-WARP-PBR-Pixel-Verification-Result
+          name: KAMI-R69-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
       - name: Package test executable
@@ -204,7 +205,7 @@ jobs:
           Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
-          Copy-Item R68_STATUS.md dist/KAMI
+          Copy-Item R69_STATUS.md dist/KAMI
           Copy-Item LICENSE.PicoJSON.txt dist/KAMI
           Copy-Item LICENSE.TinyXML2.txt dist/KAMI
           Copy-Item R57_STATUS.md dist/KAMI
@@ -225,10 +226,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R68-4096-Missing-Parent-Recovery-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R69-Mesh-Geometry-Diagnostics-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R68-4096-Missing-Parent-Recovery-DX12
-          path: dist/KAMI-R68-4096-Missing-Parent-Recovery-DX12.zip
+          name: KAMI-R69-Mesh-Geometry-Diagnostics-DX12
+          path: dist/KAMI-R69-Mesh-Geometry-Diagnostics-DX12.zip
           retention-days: 14
 
