@@ -51,7 +51,8 @@ select_visible_mesh_texture_layers(
     float agent_x,float agent_y,float agent_z,
     std::size_t max_layers=protocol::texture::kGPUImageLayers,
     const std::map<std::string,std::uint16_t>& previous={},
-    const protocol::pbr::Materials& materials={},const protocol::pbr::Overrides& overrides={});
+    const protocol::pbr::Materials& materials={},const protocol::pbr::Overrides& overrides={},
+    const std::vector<std::string>& extra_images={});
 
 struct MeshBatch {
     SceneMesh scene{};

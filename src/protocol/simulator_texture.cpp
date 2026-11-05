@@ -105,6 +105,12 @@ void Circuit::schedule_visible_textures() noexcept {
         };
         scan(spatial_objects_);
         scan(linked_objects_);
+        if(region_metadata_.terrain_metadata)for(const auto& id:region_metadata_.terrain_assets){
+            pbr::Material material;
+            if(pbr::effective(id,0U,0U,loaded_materials_,{},material)){
+                for(const auto& image:material.images)record(image,0.f);
+            }else record(id,0.f);
+        }
         std::vector<std::pair<std::string,float>> ranked(
             nearest.begin(),nearest.end());
         std::sort(ranked.begin(),ranked.end(),

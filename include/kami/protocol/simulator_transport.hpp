@@ -347,8 +347,8 @@ private:
     // signed capability URLs are kept in these retry records.
     std::map<std::string,std::chrono::steady_clock::time_point>
         mesh_retry_after_;
-    static constexpr std::size_t kMaxWorldMeshAssets=96U;
-    static constexpr std::size_t kMaxWorldMeshTriangles=240000U;
+    static constexpr std::size_t kMaxWorldMeshAssets=2048U;
+    static constexpr std::size_t kMaxWorldMeshTriangles=2000000U;
     std::map<std::string,mesh::LOD> loaded_meshes_;
     std::size_t loaded_mesh_triangle_count_=0U;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;

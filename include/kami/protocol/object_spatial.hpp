@@ -37,6 +37,9 @@ struct Transform {
     float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
     std::array<std::string,32U> face_material_ids{};
     bool material_params_seen=false;
+    bool reflection_probe=false;
+    float probe_ambiance=1.f,probe_clip=.1f;
+    std::uint8_t probe_flags=0U;
 };
 // Apply a compressed update without incorrectly restoring stale mesh and
 // primitive metadata from an earlier full update. Offline unit-testable.

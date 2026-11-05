@@ -32,6 +32,10 @@ public:
         ID3D12Device* device,ID3D12RootSignature* signature,
         Microsoft::WRL::ComPtr<ID3D12PipelineState>& shadow,
         ShaderPreparation& report);
+    [[nodiscard]] static bool prepare_environment(ID3D12Device*,ID3D12RootSignature*,
+        Microsoft::WRL::ComPtr<ID3D12PipelineState>& capture,
+        Microsoft::WRL::ComPtr<ID3D12PipelineState>& sky,
+        Microsoft::WRL::ComPtr<ID3D12PipelineState>& filter,ShaderPreparation&);
     // R20 no-vertex-buffer, depth-free gradient sky pass.
     [[nodiscard]] static bool prepare_sky(
         ID3D12Device* device,ID3D12RootSignature* signature,

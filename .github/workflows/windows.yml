@@ -62,6 +62,7 @@ on:
       - fix/kami-r56-texture-coverage-recovery-20261105
       - fix/kami-r57-texture-alpha-pixel-verification-20261105
       - feature/kami-r58-live-gltf-pbr-20261105
+      - feature/kami-r59-pbr-environment-terrain-streaming-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -148,6 +149,9 @@ jobs:
             throw "WARP software GPU render/resize/texture test failed (exit $LASTEXITCODE)"
           }
           $output = Get-Content warp-gpu-result.txt -Raw
+          if ($output -notmatch "KAMI PBR ENVIRONMENT TERRAIN PIXELS VERIFIED") {
+            throw "The WARP run did not verify scene capture, IBL and terrain output pixels"
+          }
           if ($output -notmatch "KAMI PBR PIXELS VERIFIED") {
             throw "The WARP run did not verify PBR map and alpha output pixels"
           }
@@ -160,7 +164,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KAMI-R58-Forced-WARP-PBR-Pixel-Verification-Result
+          name: KAMI-R59-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
       - name: Package test executable
@@ -185,7 +189,7 @@ jobs:
           Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
           Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
           Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
-          Copy-Item R58_STATUS.md dist/KAMI
+          Copy-Item R59_STATUS.md dist/KAMI
           Copy-Item LICENSE.PicoJSON.txt dist/KAMI
           Copy-Item R57_STATUS.md dist/KAMI
           Copy-Item R56_STATUS.md dist/KAMI
@@ -205,10 +209,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R58-Live-glTF-PBR-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R59-PBR-Environment-Terrain-DX12.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R58-Live-glTF-PBR-DX12
-          path: dist/KAMI-R58-Live-glTF-PBR-DX12.zip
+          name: KAMI-R59-PBR-Environment-Terrain-DX12
+          path: dist/KAMI-R59-PBR-Environment-Terrain-DX12.zip
           retention-days: 14
 

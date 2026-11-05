@@ -34,6 +34,7 @@ inline constexpr unsigned kMaxMaterials=256U,kMaxGPURecords=1024U,kRows=15U;
 bool decode_face_ids(std::span<const std::uint8_t>,std::array<std::string,32>&) noexcept;
 // Native SL material assets are binary LLSD {version,type,data: glTF JSON}.
 bool decode_asset(std::span<const std::uint8_t>,Material&) noexcept;
+bool decode_probe(std::span<const std::uint8_t>,bool&,float&,float&,std::uint8_t&) noexcept;
 bool decode_json(std::string_view,Material&) noexcept;
 // GenericStreamingMessage High31, Method 0x4175, LLSD notation payload.
 bool decode_override(std::span<const std::uint8_t>,std::uint32_t&,

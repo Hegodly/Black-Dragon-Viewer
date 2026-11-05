@@ -129,7 +129,7 @@ bool root_signature(ID3D12Device* device,
     constants.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_DESCRIPTOR_RANGE shadow_range{};
     shadow_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    shadow_range.NumDescriptors=5;
+    shadow_range.NumDescriptors=10;
     shadow_range.BaseShaderRegister=0;
     shadow_range.OffsetInDescriptorsFromTableStart=D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     D3D12_ROOT_PARAMETER parameters[2]{};
@@ -430,6 +430,47 @@ bool ShaderCache::prepare_shadow(
         else saved=false;
         report.written_to_disk=saved;
     }
+    return true;
+}
+
+bool ShaderCache::prepare_environment(ID3D12Device* device,ID3D12RootSignature* signature,
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>& capture,
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>& sky,
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>& filter,ShaderPreparation& report){
+    if(!device||!signature)return false;
+    const auto directory=cache_path(device,report);
+    const auto shader=[&](const char* entry,const char* profile,std::vector<char>& bytes){
+        const auto path=directory/(std::string(entry)+".cso");
+        if(!directory.empty())bytes=read(path,kMaxShaderBytes);
+        if(bytes.empty()){
+            if(!compile(entry,profile,bytes,report.error))return false;
+            if(!directory.empty())(void)write(path,bytes.data(),bytes.size());
+        }return true;
+    };
+    std::vector<char> vs,ps,sv,sp,fp;
+    if(!shader("vertex_main","vs_5_0",vs)||!shader("pixel_main","ps_5_0",ps)||
+       !shader("sky_vertex_main","vs_5_0",sv)||!shader("sky_pixel_main","ps_5_0",sp)||
+       !shader("environment_filter_pixel","ps_5_0",fp))return false;
+    static constexpr D3D12_INPUT_ELEMENT_DESC input[]={
+        {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"COLOR",0,DXGI_FORMAT_R32G32B32_FLOAT,0,24,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"MATERIAL",0,DXGI_FORMAT_R32G32_FLOAT,0,36,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,44,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",1,DXGI_FORMAT_R32_FLOAT,0,52,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"BLENDINDICES",0,DXGI_FORMAT_R32_UINT,0,56,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"BLENDWEIGHT",0,DXGI_FORMAT_R32_UINT,0,60,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",2,DXGI_FORMAT_R32_FLOAT,0,64,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+        {"TEXCOORD",3,DXGI_FORMAT_R32_UINT,0,68,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}};
+    auto desc=pipeline_desc(signature,vs,ps,input,false);
+    desc.RTVFormats[0]=DXGI_FORMAT_R16G16B16A16_FLOAT;
+    if(FAILED(device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(capture.ReleaseAndGetAddressOf()))))return false;
+    desc.InputLayout={nullptr,0};desc.VS={sv.data(),sv.size()};desc.PS={sp.data(),sp.size()};
+    desc.DepthStencilState.DepthEnable=FALSE;desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO;
+    desc.DSVFormat=DXGI_FORMAT_UNKNOWN;
+    if(FAILED(device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(sky.ReleaseAndGetAddressOf()))))return false;
+    desc.PS={fp.data(),fp.size()};
+    if(FAILED(device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(filter.ReleaseAndGetAddressOf()))))return false;
     return true;
 }
 

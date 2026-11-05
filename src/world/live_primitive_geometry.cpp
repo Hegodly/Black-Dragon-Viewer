@@ -262,12 +262,12 @@ PrimitiveBatch build_live_primitive_geometry(
     if(!finite(origin))return result;
     // R32: larger closest-first batch with an upper bound on the DX12
     // vertex workload. Mesh asset geometry remains a separate pipeline.
-    limit=std::min<std::size_t>(limit,128U);
+    limit=std::min<std::size_t>(limit,1024U);
     struct Draw {const Transform* item;Pose pose;bool child;float distance;};
     std::vector<Draw> chosen;
     chosen.reserve(roots.size()+children.size());
     const auto collect=[&](const Transform& t,Pose p,bool child){
-        if(t.primitive==Kind::Unknown)return;
+        if(t.reflection_probe||t.primitive==Kind::Unknown)return;
         if(!finite(p.pos)||!valid_quat(p.rot)){
             ++result.invalid_pose_shapes;
             return;
@@ -342,7 +342,8 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     float agent_x,float agent_y,float agent_z,
     std::size_t max_layers,
     const std::map<std::string,std::uint16_t>& previous,
-    const protocol::pbr::Materials& materials,const protocol::pbr::Overrides& overrides) {
+    const protocol::pbr::Materials& materials,const protocol::pbr::Overrides& overrides,
+    const std::vector<std::string>& extra_images) {
     // Keep the original single-draw DX12 array budget (slice 0 is the
     // procedural fallback). Never select textures based on UUID sorting.
     max_layers=std::min<std::size_t>(max_layers,protocol::texture::kGPUImageLayers);
@@ -407,6 +408,13 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
             }
         }
     };
+    for(const auto& uuid:extra_images){
+        const auto image=decoded.find(uuid);
+        if(image!=decoded.end()&&image->second.width&&image->second.height&&
+           image->second.width<=2048U&&image->second.height<=2048U&&
+           image->second.rgba.size()==std::uint64_t(image->second.width)*image->second.height*4U)
+            nearest.insert_or_assign(uuid,-1.f);
+    }
     for(const auto& [id,root]:roots){
         (void)id;
         if(root.parent_id==0U&&
@@ -464,7 +472,7 @@ MeshBatch build_live_mesh_geometry(
     MeshBatch batch{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return batch;
-    max_triangles=std::min<std::size_t>(max_triangles,24000U);
+    max_triangles=std::min<std::size_t>(max_triangles,500000U);
     struct Item {
         const Transform* transform;
         const protocol::mesh::LOD* lod;
@@ -474,7 +482,7 @@ MeshBatch build_live_mesh_geometry(
     };
     std::vector<Item> chosen;
     const auto try_add=[&](const Transform& t,Pose pose,bool child){
-        if(t.mesh_asset_id.empty())return;
+        if(t.reflection_probe||t.mesh_asset_id.empty())return;
         const auto found=loaded.find(t.mesh_asset_id);
         if(found==loaded.end()||found->second.triangles.empty())return;
         if(!finite(pose.pos)||!valid_quat(pose.rot))return;

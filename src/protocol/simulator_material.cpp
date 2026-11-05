@@ -15,7 +15,8 @@ void Circuit::maybe_fetch_material() noexcept {
                 loaded_materials_.insert_or_assign(result.id,std::move(result.material));
                 ++spatial_object_revision_;texture_scan_revision_=~std::uint64_t{0};
             }else{
-                ++material_failures_;
+                const bool terrain=std::find(region_metadata_.terrain_assets.begin(),region_metadata_.terrain_assets.end(),result.id)!=region_metadata_.terrain_assets.end();
+                if(!terrain||result.status==0U||result.status>=500U)++material_failures_;
                 const auto s=result.status;
                 const bool transient=!result.fetched&&(s==0U||s==408U||s==429U||s==500U||s==502U||s==503U||s==504U);
                 if(!transient)attempt.tries=4U;
@@ -41,6 +42,8 @@ void Circuit::maybe_fetch_material() noexcept {
             }
         };
         scan(spatial_objects_);scan(linked_objects_);
+        if(region_metadata_.terrain_metadata)for(const auto& id:region_metadata_.terrain_assets)
+            if(!id.empty())wanted.insert_or_assign(id,0.f);
         std::vector<std::pair<std::string,float>> ranked(wanted.begin(),wanted.end());
         std::sort(ranked.begin(),ranked.end(),[](const auto& a,const auto& b){return a.second<b.second;});
         if(ranked.size()>pbr::kMaxMaterials)ranked.resize(pbr::kMaxMaterials);

@@ -249,6 +249,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         if(extras_valid){
             t.mesh_asset_id=mesh::mesh_asset_from_extras(extras);
             t.material_params_seen=pbr::decode_face_ids(extras,t.face_material_ids);
+            (void)pbr::decode_probe(extras,t.reflection_probe,t.probe_ambiance,t.probe_clip,t.probe_flags);
         }
         else t.primitive=PrimitiveKind::Unknown;
         if(!t.mesh_asset_id.empty()){

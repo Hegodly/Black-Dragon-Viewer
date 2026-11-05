@@ -10,6 +10,7 @@
 #include "kami/features/rig_diagnostics.hpp"
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
+#include "kami/world/environment.hpp"
 #include "kami/world/pbr_material_table.hpp"
 #include "kami/protocol/texture_decode.hpp"
 #include "kami/protocol/texture_budget.hpp"
@@ -148,6 +149,10 @@ public:
     [[nodiscard]] std::size_t bound_sl_texture_assets() const noexcept {
         return region_mesh_?live_texture_layers_.size():0U;
     }
+    [[nodiscard]] unsigned terrain_texture_layers() const noexcept {return terrain_texture_layers_;}
+    [[nodiscard]] unsigned terrain_pbr_layers() const noexcept {return terrain_pbr_layers_;}
+    [[nodiscard]] bool environment_lighting_ready() const noexcept {return environment_ready_;}
+    [[nodiscard]] unsigned environment_updates() const noexcept {return environment_updates_;}
     [[nodiscard]] std::size_t bound_pbr_faces() const noexcept {return region_mesh_?bound_pbr_faces_:0U;}
     [[nodiscard]] std::size_t uploaded_textured_triangles() const noexcept {
         return region_mesh_?uploaded_textured_triangles_:0U;
@@ -233,6 +238,9 @@ private:
     [[nodiscard]] TextureUploadStatus make_material_texture(
         const std::map<std::string,protocol::texture::DecodedTexture>* images=nullptr,
         const std::map<std::string,std::uint16_t>* previous_layers=nullptr);
+    [[nodiscard]] bool make_environment();
+    [[nodiscard]] bool record_environment(const std::array<float,63>& constants);
+    void write_environment_probe();
     [[nodiscard]] bool make_material_records(const std::vector<PBRRow>& rows);
     [[nodiscard]] bool sort_blended_geometry(float x,float y,float z);
     [[nodiscard]] bool make_skin_palette();
@@ -273,6 +281,15 @@ private:
     std::size_t bound_pbr_faces_=0U;
     std::vector<Vertex> transparent_vertices_;
     bool texture_upload_pending_=false;
+    unsigned terrain_texture_layers_=0U,terrain_pbr_layers_=0U;
+    bool environment_ready_=false,environment_test_=false,environment_frozen_=false,environment_dirty_=true;
+    unsigned environment_face_=0U,environment_updates_=0U;
+    std::chrono::steady_clock::time_point environment_last_{};
+    EnvironmentProbe environment_capture_probe_{};
+    std::map<std::uint32_t,protocol::objectspatial::Transform> environment_server_probes_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> environment_raw_,environment_filtered_,environment_diffuse_,environment_brdf_,environment_depth_,environment_data_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> environment_rtv_,environment_dsv_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> environment_capture_pipeline_,environment_sky_pipeline_,environment_filter_pipeline_;
     static constexpr UINT kLiveTextureLayers=protocol::texture::kGPUImageLayers;
     static constexpr UINT kLiveTextureSize=protocol::texture::kPreviewExtent;
     std::size_t primitive_eligible_=0;

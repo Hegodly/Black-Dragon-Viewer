@@ -434,8 +434,10 @@ bool Renderer::make_pipeline() {
         device_.native_device(),signature_.Get(),shadow_pipeline_,shadow_report))
         return false;
     ShaderPreparation sky_report;
-    return ShaderCache::prepare_sky(
-        device_.native_device(),signature_.Get(),sky_pipeline_,sky_report);
+    if(!ShaderCache::prepare_sky(device_.native_device(),signature_.Get(),sky_pipeline_,sky_report))return false;
+    ShaderPreparation environment_report;
+    return ShaderCache::prepare_environment(device_.native_device(),signature_.Get(),
+        environment_capture_pipeline_,environment_sky_pipeline_,environment_filter_pipeline_,environment_report);
 }
 
 bool Renderer::make_geometry() {
@@ -561,7 +563,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     dsv.NumDescriptors=2;
     D3D12_DESCRIPTOR_HEAP_DESC srv{};
     srv.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srv.NumDescriptors=5;
+    srv.NumDescriptors=10;
     srv.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if(FAILED(device_.native_device()->CreateDescriptorHeap(
             &dsv,IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf()))) ||
@@ -624,6 +626,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
         error_=L"Could not create DX12 skinned-avatar palette";
         return false;
     }
+    if(!make_environment()){error_=L"Could not create HDR PBR environment resources";return false;}
     ready_=true;
     return true;
 }
@@ -791,7 +794,7 @@ bool Renderer::set_verified_live_terrain(
     // supported simple primitives get actual finite solid geometry.
     std::map<std::uint32_t,protocol::objectspatial::Transform> bounds;
     for(const auto& [id,root]:circuit.decoded_spatial_objects()){
-        if(root.primitive==protocol::objectspatial::PrimitiveKind::Unknown)
+        if(!root.reflection_probe&&root.primitive==protocol::objectspatial::PrimitiveKind::Unknown)
             bounds.emplace(id,root);
     }
     const auto proxies=build_live_object_spatial_proxies(
@@ -807,6 +810,13 @@ bool Renderer::set_verified_live_terrain(
     // textures of nearby buildings. Select only decoded mesh-face assets
     // that can actually draw near the avatar, distance first; keep
     // existing array slots stable when the visible set is unchanged.
+    std::vector<std::string> terrain_images;
+    if(region.terrain_metadata)for(const auto& id:region.terrain_assets){
+        protocol::pbr::Material material;
+        if(protocol::pbr::effective(id,0U,0U,circuit.decoded_materials(),{},material))
+            terrain_images.insert(terrain_images.end(),material.images.begin(),material.images.end());
+        else terrain_images.push_back(id);
+    }
     const auto next_layers=select_visible_mesh_texture_layers(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
@@ -814,7 +824,7 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_mesh_assets(),
         circuit.decoded_texture_assets(),
         agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_,
-        circuit.decoded_materials(),circuit.material_overrides());
+        circuit.decoded_materials(),circuit.material_overrides(),terrain_images);
     texture_upload_pending_=false;
     if(next_layers!=live_texture_layers_){
         auto previous=std::move(live_texture_layers_);
@@ -836,15 +846,33 @@ bool Renderer::set_verified_live_terrain(
             }
         }
     }
-    const auto pbr_table=build_pbr_table(circuit.decoded_spatial_objects(),
+    auto pbr_table=build_pbr_table(circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),circuit.decoded_materials(),
-        circuit.material_overrides(),live_texture_layers_);
+        circuit.material_overrides(),live_texture_layers_,region.terrain_assets);
+    terrain_texture_layers_=terrain_pbr_layers_=0U;
+    std::array<PBRRow,protocol::pbr::kRows> terrain_record{};
+    for(unsigned i=0U;i<4U;++i){
+        const auto material=pbr_table.faces.find(pbr_face_key(0U,i));
+        if(material!=pbr_table.faces.end()){terrain_record[0][i]=float(material->second);++terrain_pbr_layers_;}
+        const auto image=live_texture_layers_.find(region.terrain_assets[i]);
+        if(image!=live_texture_layers_.end()){terrain_record[1][i]=float(image->second);++terrain_texture_layers_;}
+    }
+    terrain_record[2]=region.terrain_start;terrain_record[3]=region.terrain_range;
+    const auto land_origin=live_region_origin_valid_?live_region_origin_:std::array<float,3>{agent.x,agent.y,agent.z};
+    terrain_record[4]={-1.f,land_origin[0],land_origin[2],land_origin[1]};
+    if(region.terrain_metadata&&(terrain_pbr_layers_||terrain_texture_layers_)){
+        const auto index=static_cast<std::uint32_t>(pbr_table.rows.size()/protocol::pbr::kRows);
+        pbr_table.rows.insert(pbr_table.rows.end(),terrain_record.begin(),terrain_record.end());
+        for(std::size_t i=0U;i<built.scene.terrain_count;++i)scene.vertices[i].pbr_material=index;
+    }
     // Build the prim geometry AFTER GPU image residency is chosen, so
     // each real face has the appropriate DX12 texture array layer.
     const auto primitives=build_live_primitive_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z,128U,circuit.known_avatar_roots(),
+        agent.x,agent.y,agent.z,graphics_.preset==graphics::Preset::Quality?1024U:
+            graphics_.preset==graphics::Preset::Balanced?512U:
+            graphics_.preset==graphics::Preset::Performance?256U:128U,circuit.known_avatar_roots(),
         live_texture_layers_,pbr_table.faces);
     const auto new_primitive_vertices=primitives.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
@@ -858,7 +886,8 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_linked_objects(),
         circuit.known_avatar_roots(),
         circuit.decoded_mesh_assets(),
-        agent.x,agent.y,agent.z,18000U,live_texture_layers_,pbr_table.faces);
+        agent.x,agent.y,agent.z,std::min<std::size_t>(graphics_.mesh_triangles(),
+            scene.vertices.size()<1999000U?(1999000U-scene.vertices.size())/3U:0U),live_texture_layers_,pbr_table.faces);
     const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
         mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
@@ -871,7 +900,7 @@ bool Renderer::set_verified_live_terrain(
         scene.vertices.insert(scene.vertices.end(),
                               marker.vertices.begin(),marker.vertices.end());
     }
-    if(scene.vertices.empty()||scene.vertices.size()>750000U){
+    if(scene.vertices.empty()||scene.vertices.size()>2000000U){
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
@@ -915,6 +944,18 @@ bool Renderer::set_verified_live_terrain(
         live_region_origin_=stable_origin;
         live_region_origin_valid_=true;
     }
+    std::map<std::uint32_t,protocol::objectspatial::Transform> probes;
+    for(const auto& [id,t]:circuit.decoded_spatial_objects())if(t.reflection_probe&&probes.size()<64U)
+        probes.emplace(id,t);
+    bool probes_changed=probes.size()!=environment_server_probes_.size();
+    if(!probes_changed)for(const auto& [id,t]:probes){
+        const auto old=environment_server_probes_.find(id);
+        if(old==environment_server_probes_.end()||!protocol::objectspatial::same_spatial_transform(t,old->second)){
+            probes_changed=true;break;
+        }
+    }
+    environment_server_probes_=std::move(probes);
+    environment_dirty_=environment_dirty_||!unchanged||probes_changed;
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;
     uploaded_linked_primitive_shapes_=primitives.linked_shapes;
@@ -1025,6 +1066,9 @@ void Renderer::clear_decoded_region_geometry() {
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
+    environment_ready_=false;environment_face_=0U;environment_dirty_=true;
+    environment_server_probes_.clear();write_environment_probe();
+    terrain_texture_layers_=terrain_pbr_layers_=0U;
     uploaded_root_bounds_=0;
     uploaded_root_primitive_shapes_=0;
     uploaded_linked_primitive_shapes_=0;
@@ -1250,6 +1294,7 @@ void Renderer::draw() {
         commands_->ResourceBarrier(1,&to_srv);
     }
 
+    if(!record_environment(constants)){ready_=false;error_=L"PBR environment capture failed";return;}
     const UINT index=swapchain_->GetCurrentBackBufferIndex();
     auto begin=barrier(buffers_[index].Get(),
         D3D12_RESOURCE_STATE_PRESENT,D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -1412,6 +1457,9 @@ void Renderer::shutdown() noexcept {
     material_upload_.Reset();
     skin_palette_buffer_.Reset();
     material_records_.Reset();transparent_vertices_.clear();
+    environment_raw_.Reset();environment_filtered_.Reset();environment_diffuse_.Reset();environment_brdf_.Reset();
+    environment_depth_.Reset();environment_data_.Reset();environment_rtv_.Reset();environment_dsv_.Reset();
+    environment_capture_pipeline_.Reset();environment_sky_pipeline_.Reset();environment_filter_pipeline_.Reset();
     for(auto& buffer:buffers_) buffer.Reset();
     swapchain_.Reset();
     geometry_.Reset();
