@@ -31,6 +31,8 @@ namespace kami::world {
 // Independent DX12 viewport renderer. It draws an original offline scene.
 // It is NOT an SL simulator or asset renderer.
 enum class CaptureStatus { Idle, Pending, Saved, Failed };
+// A still-in-flight DX12 copy is retryable, not a rendering failure.
+enum class TextureUploadStatus { Committed, Deferred, Failed };
 class Renderer final {
 public:
     Renderer() = default;
@@ -137,6 +139,9 @@ public:
     [[nodiscard]] std::size_t uploaded_mesh_triangles() const noexcept {
         return region_mesh_?uploaded_mesh_triangles_:0U;
     }
+    [[nodiscard]] bool texture_upload_pending() const noexcept {
+        return texture_upload_pending_;
+    }
     [[nodiscard]] std::size_t bound_sl_texture_assets() const noexcept {
         return region_mesh_?live_texture_layers_.size():0U;
     }
@@ -217,7 +222,7 @@ private:
     [[nodiscard]] bool make_shadow();
     // Layer zero is the original procedural fallback. Other slices are
     // authenticated, CPU-decoded SL default TextureEntry images.
-    [[nodiscard]] bool make_material_texture(
+    [[nodiscard]] TextureUploadStatus make_material_texture(
         const std::map<std::string,protocol::texture::DecodedTexture>* images=nullptr,
         const std::map<std::string,std::uint16_t>* previous_layers=nullptr);
     [[nodiscard]] bool make_skin_palette();
@@ -249,6 +254,7 @@ private:
     std::size_t uploaded_mesh_triangles_=0;
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
+    bool texture_upload_pending_=false;
     static constexpr UINT kLiveTextureLayers=24U;
     static constexpr UINT kLiveTextureSize=256U;
     std::size_t primitive_eligible_=0;
