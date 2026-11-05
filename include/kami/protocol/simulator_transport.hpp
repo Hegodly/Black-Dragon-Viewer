@@ -200,6 +200,7 @@ private:
     void maybe_send_missing_object_requests() noexcept;
     void maybe_fetch_mesh() noexcept;
     void schedule_visible_meshes() noexcept;
+    void prune_unreferenced_meshes() noexcept;
     void remember_missing_object(std::uint32_t id) noexcept;
     void handle_packet(const lludp::Packet& incoming) noexcept;
     void maybe_retry() noexcept;
@@ -248,7 +249,10 @@ private:
     // signed capability URLs are kept in these retry records.
     std::map<std::string,std::chrono::steady_clock::time_point>
         mesh_retry_after_;
+    static constexpr std::size_t kMaxWorldMeshAssets=96U;
+    static constexpr std::size_t kMaxWorldMeshTriangles=240000U;
     std::map<std::string,mesh::LOD> loaded_meshes_;
+    std::size_t loaded_mesh_triangle_count_=0U;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
     std::uint64_t mesh_scan_revision_=~std::uint64_t{0};
