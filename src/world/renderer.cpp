@@ -4,6 +4,7 @@
 #include "kami/world/object_proxies.hpp"
 #include "kami/world/live_primitive_geometry.hpp"
 #include "kami/world/texture_atlas.hpp"
+#include "kami/world/scene_diff.hpp"
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/features/creator_limits.hpp"
 #include "kami/protocol/bootstrap.hpp"
@@ -174,7 +175,17 @@ bool Renderer::make_material_texture(
     constexpr UINT tw=kLiveTextureSize,th=kLiveTextureSize;
     constexpr UINT slices=kLiveTextureLayers+1U;
     auto* dev=device_.native_device();
-    if(!dev||!shadow_srv_heap_||!allocator_||!commands_)return false;
+    if(!dev||!shadow_srv_heap_||!texture_copy_allocator_||
+       !texture_copy_commands_||!fence_)return false;
+    // Never reset a copy command allocator while the GPU still uses it.
+    // The normal draw loop fences after presenting, so this branch only
+    // defers an unusually rapid second texture update, without stalling.
+    if(texture_copy_submitted_fence_!=0U){
+        if(fence_->GetCompletedValue()<texture_copy_submitted_fence_)
+            return false;
+        material_upload_.Reset();
+        texture_copy_submitted_fence_=0U;
+    }
     const bool incremental=material_texture_&&previous_layers;
     std::vector<std::uint16_t> dirty;
     if(incremental)
@@ -270,14 +281,16 @@ bool Renderer::make_material_texture(
     }
     const D3D12_RANGE written{0,static_cast<SIZE_T>(upload_size)};
     staging->Unmap(0,&written);
-    if(FAILED(allocator_->Reset())||
-       FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get())))
+    if(FAILED(texture_copy_allocator_->Reset())||
+       FAILED(texture_copy_commands_->Reset(
+           texture_copy_allocator_.Get(),nullptr)))
        return false;
+    auto* copy=texture_copy_commands_.Get();
     if(incremental){
         const auto copying=barrier(image_gpu.Get(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_COPY_DEST);
-        commands_->ResourceBarrier(1,&copying);
+        copy->ResourceBarrier(1,&copying);
     }
     for(std::size_t index=0U;index<dirty.size();++index){
         const UINT layer=dirty[index];
@@ -290,18 +303,27 @@ bool Renderer::make_material_texture(
         src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src.PlacedFootprint=footprint;
         src.PlacedFootprint.Offset=UINT64(index)*one_size;
-        commands_->CopyTextureRegion(&dest,0,0,0,&src,nullptr);
+        copy->CopyTextureRegion(&dest,0,0,0,&src,nullptr);
     }
     const auto ready=barrier(image_gpu.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    commands_->ResourceBarrier(1,&ready);
-    if(FAILED(commands_->Close()))return false;
-    ID3D12CommandList* lists[]={commands_.Get()};
+    copy->ResourceBarrier(1,&ready);
+    if(FAILED(copy->Close()))return false;
+    ID3D12CommandList* lists[]={copy};
+    // Copy and graphics draw use the SAME ordered queue. No CPU wait is
+    // required here: the following draw sees the updated texture state.
     device_.graphics_queue()->ExecuteCommandLists(1,lists);
-    // Fence the staging upload. Existing SRV remains valid when doing a
-    // partial update, so other textures and descriptor handles are stable.
-    wait_for_gpu();
+    // Hold the upload heap until the copy fence completes. Do not free
+    // it at function scope or reuse the allocator before that fence.
+    material_upload_=std::move(staging);
+    const auto signal=++fence_counter_;
+    if(FAILED(device_.graphics_queue()->Signal(fence_.Get(),signal))){
+        ready_=false;
+        error_=L"DX12 texture copy fence signal failed";
+        return false;
+    }
+    texture_copy_submitted_fence_=signal;
     if(!incremental){
         D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
         srv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -315,7 +337,6 @@ bool Renderer::make_material_texture(
         dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
         material_texture_=std::move(image_gpu);
     }
-    material_upload_.Reset();
     return true;
 }
 
@@ -503,6 +524,21 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
             IID_PPV_ARGS(commands_.ReleaseAndGetAddressOf()))) ||
        FAILED(commands_->Close())) {
         error_=L"Could not create command buffers";
+        return false;
+    }
+    // Texture copies are ordered on the same graphics queue but have
+    // their own allocator/list. This makes it safe to submit a J2C slice
+    // upload before the normal draw without resetting an in-flight
+    // allocator or waiting for its completion on the UI thread.
+    if(FAILED(device_.native_device()->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(texture_copy_allocator_.ReleaseAndGetAddressOf())))||
+       FAILED(device_.native_device()->CreateCommandList(
+            0,D3D12_COMMAND_LIST_TYPE_DIRECT,
+            texture_copy_allocator_.Get(),nullptr,
+            IID_PPV_ARGS(texture_copy_commands_.ReleaseAndGetAddressOf())))||
+       FAILED(texture_copy_commands_->Close())){
+        error_=L"Could not create independent DX12 texture copy commands";
         return false;
     }
     if(FAILED(device_.native_device()->CreateFence(
@@ -727,7 +763,8 @@ bool Renderer::set_verified_live_terrain(
         auto previous=std::move(live_texture_layers_);
         live_texture_layers_=std::move(next_layers);
         if(ready_){
-            wait_for_gpu();
+            // The copy list is independent and the graphics queue orders
+            // transfers before the next draw. No redundant UI-thread wait.
             if(!make_material_texture(&circuit.decoded_texture_assets(),
                                      &previous)){
                 live_texture_layers_=std::move(previous);
@@ -760,13 +797,23 @@ bool Renderer::set_verified_live_terrain(
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
-    if(ready_)wait_for_gpu();
-    auto previous=std::move(region_mesh_);
-    region_mesh_=std::move(scene);
-    if(ready_&&!make_geometry()){
-        region_mesh_=std::move(previous);
-        error_=L"R12 DX12 land mesh upload failed";
-        return false;
+    // Revisions include frequent simulator interest-list packets and
+    // decoded images which may never become drawable. Build a finite
+    // candidate once, but skip the DX12 vertex buffer allocation, copy,
+    // and associated GPU synchronization if its actual content is equal.
+    // This also preserves the previous known-good resource on failure.
+    const bool unchanged=region_mesh_&&same_scene_geometry(*region_mesh_,scene);
+    if(!unchanged){
+        auto previous=std::move(region_mesh_);
+        region_mesh_=std::move(scene);
+        // draw() already synchronizes the previous frame. New buffers are
+        // immutable upload resources: replacing the pointer does not
+        // require waiting for the independent texture-copy queue.
+        if(ready_&&!make_geometry()){
+            region_mesh_=std::move(previous);
+            error_=L"R12 DX12 land mesh upload failed";
+            return false;
+        }
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;
@@ -1244,6 +1291,9 @@ void Renderer::shutdown() noexcept {
     geometry_.Reset();
     commands_.Reset();
     allocator_.Reset();
+    texture_copy_commands_.Reset();
+    texture_copy_allocator_.Reset();
+    texture_copy_submitted_fence_=0U;
     pipeline_.Reset();
     shadow_pipeline_.Reset();
     sky_pipeline_.Reset();

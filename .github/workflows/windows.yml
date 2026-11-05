@@ -53,6 +53,7 @@ on:
       - feature/kami-r48-dx12-mesh-texture-preview-20261105
       - fix/kami-r49-nearest-texture-streaming-20261105
       - opt/kami-r50-dx12-streaming-cpu-20261105
+      - fix/kami-r51-gpu-synchronization-geometry-coalescing-20261105
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
@@ -162,9 +163,9 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R50-DX12-Atlas-Optimized.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R51-DX12-Fence-World-Coalescing.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R50-DX12-Atlas-Optimized
-          path: dist/KAMI-R50-DX12-Atlas-Optimized.zip
+          name: KAMI-R51-DX12-Fence-World-Coalescing
+          path: dist/KAMI-R51-DX12-Fence-World-Coalescing.zip
           retention-days: 14

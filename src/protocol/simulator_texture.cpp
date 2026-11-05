@@ -41,7 +41,7 @@ void Circuit::schedule_visible_textures() noexcept {
             movement_position_.x-texture_last_scan_x_,
             movement_position_.y-texture_last_scan_y_),
             movement_position_.z-texture_last_scan_z_)>=12.f;
-    if(texture_scan_revision_==spatial_object_revision_&&!moved)return;
+    if(texture_scan_revision_==spatial_render_revision()&&!moved)return;
     try{
         // Aggregate nearest visible demand PER UUID across all root/linkset
         // objects. The old scan requested every ID until the cache filled.
@@ -98,7 +98,7 @@ void Circuit::schedule_visible_textures() noexcept {
         texture_desired_ids_.swap(wanted);
         prune_decoded_textures();
         // Record revision AFTER pruning, which can increment it.
-        texture_scan_revision_=spatial_object_revision_;
+        texture_scan_revision_=spatial_render_revision();
         texture_last_scan_x_=movement_position_.x;
         texture_last_scan_y_=movement_position_.y;
         texture_last_scan_z_=movement_position_.z;

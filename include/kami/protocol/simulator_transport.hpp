@@ -114,6 +114,12 @@ public:
     [[nodiscard]] std::uint64_t spatial_object_revision() const noexcept {
         return spatial_object_revision_;
     }
+    // Tiny own-avatar position packets do not modify world meshes. Keep
+    // the original all-updates revision for networking, but exclude own
+    // movement when scheduling geometry/texture-interest rescans.
+    [[nodiscard]] std::uint64_t spatial_render_revision() const noexcept {
+        return spatial_object_revision_-own_avatar_pose_revisions_;
+    }
     [[nodiscard]] const std::map<std::uint32_t,objectspatial::Transform>&
     decoded_spatial_objects() const noexcept {return spatial_objects_;}
     [[nodiscard]] const std::map<std::uint32_t,objectspatial::Transform>&
@@ -343,6 +349,7 @@ private:
     std::uint32_t requested_object_ids_=0,cached_object_ids_=0;
     std::chrono::steady_clock::time_point last_object_request_{};
     std::uint64_t spatial_object_revision_=0;
+    std::uint64_t own_avatar_pose_revisions_=0;
     std::uint32_t spatial_object_frames_=0,rejected_spatial_frames_=0;
     std::uint32_t decoded_full_spatial_frames_=0;
     objectspatial::FullDecodeAudit full_decode_audit_{};

@@ -180,9 +180,9 @@ void Circuit::schedule_visible_meshes() noexcept {
             movement_position_.x-mesh_last_scan_x_,
             movement_position_.y-mesh_last_scan_y_),
             movement_position_.z-mesh_last_scan_z_)>=12.f;
-    if(mesh_scan_revision_==spatial_object_revision_&&!moved)return;
+    if(mesh_scan_revision_==spatial_render_revision()&&!moved)return;
     prune_unreferenced_meshes();
-    mesh_scan_revision_=spatial_object_revision_;
+    mesh_scan_revision_=spatial_render_revision();
     mesh_last_scan_x_=movement_position_.x;
     mesh_last_scan_y_=movement_position_.y;
     mesh_last_scan_z_=movement_position_.z;
@@ -506,6 +506,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                                 movement_position_.y=avatar.y;
                                 movement_position_.z=avatar.z;
                                 ++spatial_object_revision_;
+                                ++own_avatar_pose_revisions_;
                             }
                             break;
                         }
@@ -671,6 +672,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                                     movement_position_.y=pose.y;
                                     movement_position_.z=pose.z;
                                     ++spatial_object_revision_;
+                                    ++own_avatar_pose_revisions_;
                                 }
                             }
                             continue;
@@ -862,7 +864,7 @@ void Circuit::stop() noexcept {
     terrain_packets_=wind_packets_=cloud_packets_=unknown_layer_packets_=0;
     decoded_land_packets_=rejected_land_packets_=0;
     land_revision_=0;land_patches_.clear();
-    spatial_object_revision_=0;
+    spatial_object_revision_=0;own_avatar_pose_revisions_=0;
     spatial_object_frames_=rejected_spatial_frames_=0;
     decoded_full_spatial_frames_=0;
     full_decode_audit_={};

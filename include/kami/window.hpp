@@ -6,6 +6,7 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 #include <string_view>
+#include <array>
 #include <chrono>
 #include <future>
 #include <cstdint>
@@ -114,6 +115,10 @@ private:
     std::uint64_t live_land_uploaded_revision_=0;
     std::uint64_t live_spatial_uploaded_revision_=0;
     std::chrono::steady_clock::time_point live_land_last_upload_{};
+    // Last verified scene origin. Local avatar movement must not force
+    // a full terrain/mesh rebase every 800 ms; 12m travel still does.
+    std::array<float,3> live_scene_uploaded_origin_{};
+    bool live_scene_origin_valid_=false;
     // Bearer CAPS URLs are retained only for the authenticated region
     // connection. Never display signed URLs or event payloads.
     std::wstring caps_seed_url_;
