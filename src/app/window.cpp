@@ -2028,6 +2028,9 @@ void Window::update_sl_connection() {
             if(result.mesh_granted)
                 (void)sl_circuit_.set_mesh_capability(
                     std::move(result.mesh_capability_url));
+            if(result.texture_granted)
+                (void)sl_circuit_.set_texture_capability(
+                    std::move(result.texture_capability_url));
             if(result.event_queue_granted){
                 caps_poll_started_=true;
                 caps_event_queue_url_=std::move(result.event_queue_url);
@@ -2040,6 +2043,9 @@ void Window::update_sl_connection() {
         if(!result.mesh_capability_url.empty())
             SecureZeroMemory(result.mesh_capability_url.data(),
                  result.mesh_capability_url.size()*sizeof(wchar_t));
+        if(!result.texture_capability_url.empty())
+            SecureZeroMemory(result.texture_capability_url.data(),
+                result.texture_capability_url.size()*sizeof(wchar_t));
         if(!result.event_queue_url.empty())
             SecureZeroMemory(result.event_queue_url.data(),
                 result.event_queue_url.size()*sizeof(wchar_t));
