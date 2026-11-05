@@ -37,7 +37,7 @@ int main() {
     // Catch regressions to the old 512/1024 object retention limits.
     static_assert(sim::Circuit::kMaxRootObjects>=2048U);
     static_assert(sim::Circuit::kMaxLinkedObjects>=8192U);
-    static_assert(sim::Circuit::kMaxMissingObjectRequests==256U);
+    static_assert(sim::Circuit::kMaxMissingObjectRequests==1024U);
     const auto now=std::chrono::steady_clock::now();
     const auto recent=now-std::chrono::seconds(30);
     const auto stale=now-std::chrono::seconds(95);
