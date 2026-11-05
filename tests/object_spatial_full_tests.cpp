@@ -196,11 +196,25 @@ int main(){
     if(!objectspatial::decode_full_transforms(
            packet({block(102U,0U,9U,128.f,flex)}),out,&audit)||
        audit.flexible_records!=1U||audit.mesh_sculpt_records!=0U)return 17;
-    Bytes project{1U,0x40U,0U,16U,0U,0U,0U};
-    project.insert(project.end(),16U,0U);
+    // Official LLNetworkData requires 28 bytes for light-image parameters.
+    Bytes project{1U,0x40U,0U,28U,0U,0U,0U};
+    project.insert(project.end(),28U,0U);
     if(!objectspatial::decode_full_transforms(
            packet({block(103U,0U,9U,128.f,project)}),out,&audit)||
        audit.projector_records!=1U||audit.mesh_references!=0U)return 18;
+    Bytes materials{1U,0x80U,0U,12U,0U,0U,0U};
+    materials.insert(materials.end(),12U,0x22U);
+    if(!objectspatial::decode_full_transforms(
+           packet({block(106U,0U,9U,128.f,materials)}),out,&audit)||
+       audit.render_material_records!=1U||
+       audit.other_extra_records!=0U||
+       audit.mesh_references!=0U)return 22;
+    Bytes xmesh{1U,0x70U,0U,4U,0U,0U,0U,0U,0U,0U,0U};
+    if(!objectspatial::decode_full_transforms(
+           packet({block(107U,0U,9U,128.f,xmesh)}),out,&audit)||
+       audit.extended_mesh_records!=1U||
+       audit.mesh_sculpt_records!=0U||
+       audit.mesh_references!=0U)return 23;
     Bytes unknown{1U,0x99U,0U,1U,0U,0U,0U,0U};
     if(!objectspatial::decode_full_transforms(
            packet({block(104U,0U,9U,128.f,unknown)}),out,&audit)||
