@@ -42,7 +42,8 @@ public:
 
     // Software DX12 WARP may be enabled explicitly by test hosts only.
     [[nodiscard]] bool initialize(HWND window, UINT width, UINT height,
-                                  bool allow_software_dx12=false);
+                                  bool allow_software_dx12=false,
+                                  bool force_software_dx12=false);
     void resize(UINT width, UINT height);
     void set_graphics(graphics::Settings settings);
     void draw();
