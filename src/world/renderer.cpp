@@ -741,15 +741,6 @@ bool Renderer::set_verified_live_terrain(
     // R26 renders only verified root-space or correctly composed
     // linked shapes. Unknown mesh/sculpt/cut/hollow content remains
     // unrendered, not replaced with incorrect speculative geometry.
-    const auto primitives=build_live_primitive_geometry(
-        circuit.decoded_spatial_objects(),
-        circuit.decoded_linked_objects(),
-        agent.x,agent.y,agent.z,128U,circuit.known_avatar_roots());
-    const auto new_primitive_vertices=primitives.scene.vertices.size();
-    scene.vertices.insert(scene.vertices.end(),
-                          primitives.scene.vertices.begin(),
-                          primitives.scene.vertices.end());
-    scene.terrain_count+=new_primitive_vertices;
     // R49: the first 24 UUIDs in a std::map are not necessarily the
     // textures of nearby buildings. Select only decoded mesh-face assets
     // that can actually draw near the avatar, distance first; keep
@@ -782,6 +773,18 @@ bool Renderer::set_verified_live_terrain(
             }
         }
     }
+    // Build the prim geometry AFTER GPU image residency is chosen, so
+    // each real face has the appropriate DX12 texture array layer.
+    const auto primitives=build_live_primitive_geometry(
+        circuit.decoded_spatial_objects(),
+        circuit.decoded_linked_objects(),
+        agent.x,agent.y,agent.z,128U,circuit.known_avatar_roots(),
+        live_texture_layers_);
+    const auto new_primitive_vertices=primitives.scene.vertices.size();
+    scene.vertices.insert(scene.vertices.end(),
+                          primitives.scene.vertices.begin(),
+                          primitives.scene.vertices.end());
+    scene.terrain_count+=new_primitive_vertices;
     // Real mesh asset triangles, decoded off-thread and validated against
     // the session's authenticated object roots/child hierarchy.
     const auto mesh_objects=build_live_mesh_geometry(
@@ -846,7 +849,8 @@ bool Renderer::set_verified_live_terrain(
     uploaded_mesh_vertices_=new_mesh_vertices;
     uploaded_mesh_shapes_=mesh_objects.root_meshes+mesh_objects.linked_meshes;
     uploaded_mesh_triangles_=mesh_objects.emitted_triangles;
-    uploaded_textured_triangles_=mesh_objects.textured_triangles;
+    uploaded_textured_triangles_=mesh_objects.textured_triangles+
+                                 primitives.textured_triangles;
     primitive_eligible_=primitives.eligible_shapes;
     primitive_unresolved_=primitives.unresolved_parent_shapes;
     primitive_missing_anchor_=primitives.missing_anchor_shapes;
