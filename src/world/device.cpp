@@ -28,7 +28,8 @@ bool Device::make_device(IDXGIAdapter1* adapter, bool software) noexcept {
     return true;
 }
 
-DeviceStatus Device::initialize(bool allow_software_fallback) noexcept {
+DeviceStatus Device::initialize(bool allow_software_fallback,
+                                bool force_software) noexcept {
     if (is_ready()) return status_;
     status_ = DeviceStatus::Unavailable;
     device_.Reset();
@@ -39,6 +40,15 @@ DeviceStatus Device::initialize(bool allow_software_fallback) noexcept {
     if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(factory.GetAddressOf()))))
         return status_;
 
+    // Explicit software-only test: never silently accept a hardware GPU
+    // when CI requests WARP. Shipped viewer still prefers hardware.
+    if(force_software){
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> warp;
+        if(SUCCEEDED(factory->EnumWarpAdapter(
+               IID_PPV_ARGS(warp.GetAddressOf())))&&
+           make_device(warp.Get(),true))return status_;
+        return status_;
+    }
     // Discover hardware adapters through DXGI instead of vendor-specific code.
     // Do not silently initialize an OpenGL or D3D11 world renderer.
     for (UINT index = 0; ; ++index) {
