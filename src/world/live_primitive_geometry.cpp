@@ -1,4 +1,5 @@
 #include "kami/world/live_primitive_geometry.hpp"
+#include "kami/world/texture_uv.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -86,11 +87,15 @@ RootResult resolve(const Transform& t,
     }
     return RootResult::TooDeep;
 }
+using UV=std::array<float,2U>;
 struct Emitter {
     std::vector<Vertex>& out;
+    const Transform& material;
+    const std::map<std::string,std::uint16_t>& layers;
     Pose pose;
     V half;
     V origin;
+    std::size_t& textured_triangles;
     float red=.78f,green=.83f,blue=.92f;
     V transform(V v) const noexcept {
         return add(pose.pos,rotate(pose.rot,
@@ -99,44 +104,76 @@ struct Emitter {
     V render(V v) const noexcept {
         return {v.x-origin.x,v.z-origin.z,v.y-origin.y};
     }
-    void tri(V x,V y,V z){
-        // Construct normals from the final DX12 Y-up transform.
-        // The SL->DX12 axis permutation reverses handedness.
+    void tri(V x,V y,V z,unsigned face,UV uvx,UV uvy,UV uvz){
         const V local_center=scale(add(add(x,y),z),1.f/3.f);
         V a=render(transform(x)),b=render(transform(y)),c=render(transform(z));
-        const V normal=cross(sub(b,a),sub(c,a));
-        // Point outward on convex elementary primitives, including
-        // caps and the sphere poles, despite the handedness conversion.
+        V normal=cross(sub(b,a),sub(c,a));
         const V expected=render(add(pose.pos,rotate(pose.rot,
             {local_center.x*half.x*2.f,
              local_center.y*half.y*2.f,
              local_center.z*half.z*2.f})));
         const V center=render(pose.pos);
-        V n=normal;
-        if(dot(n,sub(expected,center))<0.f){std::swap(b,c);n=scale(n,-1.f);}
-        const float len=std::sqrt(dot(n,n));
+        if(dot(normal,sub(expected,center))<0.f){
+            std::swap(b,c);
+            std::swap(uvy,uvz);
+            normal=scale(normal,-1.f);
+        }
+        const float len=std::sqrt(dot(normal,normal));
         if(len<1.e-6f||!std::isfinite(len))return;
-        n=scale(n,1.f/len);
+        normal=scale(normal,1.f/len);
         if(!finite(a)||!finite(b)||!finite(c))return;
-        for(const V p:{a,b,c})
-            out.push_back({p.x,p.y,p.z,n.x,n.y,n.z,
-                red,green,blue,.06f,.79f,0.f,0.f});
+        const auto& name=face<material.face_texture_override.size()&&
+                           material.face_texture_override[face]?
+            material.face_texture_asset_ids[face]:
+            material.default_texture_asset_id;
+        const auto found=layers.find(name);
+        const std::uint16_t layer=name.empty()||found==layers.end()?
+            0U:found->second;
+        protocol::texture::UVTransform uv_param{};
+        if(face<material.face_uv.size()&&material.base_tint_present)
+            uv_param=material.face_uv[face];
+        UV coords[]={uvx,uvy,uvz};
+        V positions[]={a,b,c};
+        float r=red,g=green,bl=blue;
+        if(face<material.face_rgba.size()&&material.base_tint_present){
+            r=material.face_rgba[face][0];
+            g=material.face_rgba[face][1];
+            bl=material.face_rgba[face][2];
+        }
+        for(unsigned i=0U;i<3U;++i){
+            const auto uv=transform_diffuse_uv(coords[i][0],coords[i][1],uv_param);
+            out.push_back({positions[i].x,positions[i].y,positions[i].z,
+                normal.x,normal.y,normal.z,r,g,bl,.06f,.79f,
+                uv[0],uv[1],0.f,0U,0U,static_cast<float>(layer)});
+        }
+        if(layer>0U)++textured_triangles;
     }
-    void quad(V a,V b,V c,V d){tri(a,b,c);tri(a,c,d);}
+    void quad(V a,V b,V c,V d,unsigned face,
+              UV ua={0.f,1.f},UV ub={1.f,1.f},
+              UV uc={1.f,0.f},UV ud={0.f,0.f}){
+        tri(a,b,c,face,ua,ub,uc);
+        tri(a,c,d,face,ua,uc,ud);
+    }
 };
 void build_box(Emitter& e) {
     const std::array<V,8> p={{
       {-.5f,-.5f,-.5f},{.5f,-.5f,-.5f},
       {.5f,.5f,-.5f},{-.5f,.5f,-.5f},
-      {-.5f,-.5f,.5f},{.5f,-.5f,.5f},
-      {.5f,.5f,.5f},{-.5f,.5f,.5f}
+      {-.5f,-.5f,.5f},{.5f,-.5f,.5f}
     }};
-    e.quad(p[4],p[5],p[6],p[7]);
-    e.quad(p[1],p[0],p[3],p[2]);
-    e.quad(p[0],p[4],p[7],p[3]);
-    e.quad(p[5],p[1],p[2],p[6]);
-    e.quad(p[3],p[7],p[6],p[2]);
-    e.quad(p[0],p[1],p[5],p[4]);
+    // 6 independently addressable planar SL diffuse faces.
+    const std::array<V,2> top_left{{{-.5f,.5f,.5f},{.5f,.5f,.5f}}};
+    (void)top_left;
+    const V z0{-.5f,-.5f,-.5f},z1{.5f,-.5f,-.5f},
+            z2{.5f,.5f,-.5f},z3{-.5f,.5f,-.5f},
+            z4{-.5f,-.5f,.5f},z5{.5f,-.5f,.5f},
+            z6{.5f,.5f,.5f},z7{-.5f,.5f,.5f};
+    e.quad(z4,z5,z6,z7,0U);
+    e.quad(z1,z0,z3,z2,1U);
+    e.quad(z0,z4,z7,z3,2U);
+    e.quad(z5,z1,z2,z6,3U);
+    e.quad(z3,z7,z6,z2,4U);
+    e.quad(z0,z1,z5,z4,5U);
 }
 void build_cylinder(Emitter& e){
     constexpr unsigned kSides=20U;
@@ -148,18 +185,26 @@ void build_cylinder(Emitter& e){
         const V hi{lo.x,lo.y,.5f};
         const V lon{std::cos(b)*.5f,std::sin(b)*.5f,-.5f};
         const V hin{lon.x,lon.y,.5f};
-        e.quad(lo,lon,hin,hi);
-        e.tri({0,0,.5f},hi,hin);
-        e.tri({0,0,-.5f},lon,lo);
+        const float u0=float(i)/kSides,u1=float(i+1U)/kSides;
+        e.quad(lo,lon,hin,hi,0U,{u0,1.f},{u1,1.f},
+               {u1,0.f},{u0,0.f});
+        e.tri({0,0,.5f},hi,hin,1U,
+              {.5f,.5f},{hi.x+.5f,1.f-(hi.y+.5f)},
+              {hin.x+.5f,1.f-(hin.y+.5f)});
+        e.tri({0,0,-.5f},lon,lo,2U,
+              {.5f,.5f},{lon.x+.5f,1.f-(lon.y+.5f)},
+              {lo.x+.5f,1.f-(lo.y+.5f)});
     }
 }
 void build_prism(Emitter& e){
-    // Strictly classified straight, uncut, unhollowed triangular prism.
     constexpr float y=-0.2886751346f;
     const V a{-.5f,y,-.5f}, b{.5f,y,-.5f},c{0.f,-2.f*y,-.5f};
     const V d{a.x,a.y,.5f},f{b.x,b.y,.5f},g{c.x,c.y,.5f};
-    e.tri(a,c,b);e.tri(d,f,g);
-    e.quad(a,b,f,d);e.quad(b,c,g,f);e.quad(c,a,d,g);
+    e.tri(a,c,b,0U,{0.f,1.f},{.5f,0.f},{1.f,1.f});
+    e.tri(d,f,g,1U,{0.f,1.f},{1.f,1.f},{.5f,0.f});
+    e.quad(a,b,f,d,2U);
+    e.quad(b,c,g,f,3U);
+    e.quad(c,a,d,g,4U);
 }
 void build_sphere(Emitter& e){
     constexpr unsigned lat=10U,lon=20U;
@@ -169,23 +214,26 @@ void build_sphere(Emitter& e){
                 std::sin(t)*std::sin(p)*.5f,std::cos(t)*.5f};
     };
     for(unsigned row=0;row<lat;++row){
-        const float a=pi*static_cast<float>(row)/lat;
-        const float b=pi*static_cast<float>(row+1)/lat;
+        const float a=pi*float(row)/lat,b=pi*float(row+1)/lat;
         for(unsigned col=0;col<lon;++col){
-            const float x=2*pi*static_cast<float>(col)/lon;
-            const float y=2*pi*static_cast<float>(col+1)/lon;
-            e.quad(vertex(a,x),vertex(a,y),vertex(b,y),vertex(b,x));
+            const float x=2.f*pi*float(col)/lon;
+            const float y=2.f*pi*float(col+1U)/lon;
+            const float u0=float(col)/lon,u1=float(col+1U)/lon;
+            const float v0=float(row)/lat,v1=float(row+1U)/lat;
+            e.quad(vertex(a,x),vertex(a,y),vertex(b,y),vertex(b,x),
+                   0U,{u0,v0},{u1,v0},{u1,v1},{u0,v1});
         }
     }
 }
-bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin){
+bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
+          const std::map<std::string,std::uint16_t>& layers,
+          std::size_t& textured_triangles){
     if(t.primitive==Kind::Unknown||!valid_quat(p.rot)||!finite(p.pos))
         return false;
     const std::size_t start=out.size();
-    Emitter e{out,p,{t.sx*.5f,t.sy*.5f,t.sz*.5f},origin};
+    Emitter e{out,t,layers,p,
+              {t.sx*.5f,t.sy*.5f,t.sz*.5f},origin,textured_triangles};
     if(t.base_tint_present){
-        // Use the actual region-provided default face tint. This is a
-        // solid-color approximation, NOT a substitute for JPEG2000/PBR.
         e.red=std::clamp(t.base_r,0.f,1.f);
         e.green=std::clamp(t.base_g,0.f,1.f);
         e.blue=std::clamp(t.base_b,0.f,1.f);
@@ -204,7 +252,8 @@ PrimitiveBatch build_live_primitive_geometry(
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& roots,
     const std::map<std::uint32_t,protocol::objectspatial::Transform>& children,
     float agent_x,float agent_y,float agent_z,std::size_t limit,
-    const std::set<std::uint32_t>& avatar_roots){
+    const std::set<std::uint32_t>& avatar_roots,
+    const std::map<std::string,std::uint16_t>& texture_layers){
     PrimitiveBatch result{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return result;
@@ -271,7 +320,8 @@ PrimitiveBatch build_live_primitive_geometry(
     auto& vertices=result.scene.vertices;
     vertices.reserve(chosen.size()*1200U);
     for(const auto& item:chosen){
-        if(emit(vertices,*item.item,item.pose,origin)){
+        if(emit(vertices,*item.item,item.pose,origin,
+                texture_layers,result.textured_triangles)){
             if(item.child)++result.linked_shapes;
             else ++result.root_shapes;
         }
