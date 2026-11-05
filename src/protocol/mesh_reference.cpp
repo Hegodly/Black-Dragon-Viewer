@@ -39,9 +39,10 @@ std::string mesh_asset_from_extras(std::span<const std::uint8_t> extras)
         at+=6U;
         if(length>extras.size()-at||length>4096U)return {};
         auto value=extras.subspan(at,length);
-        // 0x30 is LLNetworkData::PARAMS_SCULPT. Byte 17 is the
-        // sculpt type; its lower six bits = 5 for real mesh.
-        if(kind==0x30U){
+        // Linden Lab accepts both PARAMS_SCULPT (0x30) and
+        // PARAMS_MESH (0x60) as LLSculptParams on the wire.
+        // The 17th byte identifies a real mesh (type 5, flags masked).
+        if(kind==0x30U||kind==0x60U){
             if(length!=17U)return {};
             if((value[16]&0x3fU)==5U&&
                std::any_of(value.begin(),value.begin()+16U,
