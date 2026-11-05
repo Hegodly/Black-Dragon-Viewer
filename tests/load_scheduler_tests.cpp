@@ -78,5 +78,25 @@ int main(){
        queue.statistics().gpu_uploaded_bytes!=0U)return 25;
     if(!queue.request(a,Kind::VisibleMesh,2.f,true,20U)||
        !queue.next_download())return 26;
+    // Worker completion may differ from priority order. A downloaded
+    // visible texture must only transition its own UUID to Decoding.
+    queue.clear();
+    if(!queue.request(a,Kind::VisibleTexture,20.f,true,20U)||
+       !queue.request(b,Kind::OwnAvatar,1.f,true,20U))return 27;
+    auto high_priority=queue.next_download();
+    auto lower_priority=queue.next_download();
+    if(!high_priority||!lower_priority||
+       high_priority->id!=b||lower_priority->id!=a)return 28;
+    if(!queue.download_finished(b,20U,true)||
+       !queue.download_finished(a,20U,true))return 29;
+    if(!queue.begin_decode(a)||queue.begin_decode(a)||
+       queue.begin_decode(d)||
+       queue.find(b)->stage!=Stage::DecodeQueued||
+       queue.find(a)->stage!=Stage::Decoding)return 30;
+    if(!queue.decode_finished(a,true)||
+       !queue.begin_decode(b)||!queue.decode_finished(b,true))
+       return 31;
+    queue.clear();
+    if(queue.begin_decode(a))return 32;
     return 0;
 }

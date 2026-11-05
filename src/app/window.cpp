@@ -1780,38 +1780,6 @@ void Window::begin_sl_login() {
         InvalidateRect(hwnd_,nullptr,FALSE);
         return;
     }
-    if(caps_seed_future_.valid()){
-        auto previous=caps_seed_future_.get();
-        if(!previous.mesh_capability_url.empty())
-            SecureZeroMemory(previous.mesh_capability_url.data(),
-                 previous.mesh_capability_url.size()*sizeof(wchar_t));
-        if(!previous.event_queue_url.empty())
-            SecureZeroMemory(previous.event_queue_url.data(),
-                 previous.event_queue_url.size()*sizeof(wchar_t));
-    }
-    if(caps_poll_future_.valid())(void)caps_poll_future_.get();
-    if(!caps_seed_url_.empty())
-        SecureZeroMemory(caps_seed_url_.data(),
-                          caps_seed_url_.size()*sizeof(wchar_t));
-    if(!caps_event_queue_url_.empty())
-        SecureZeroMemory(caps_event_queue_url_.data(),
-                         caps_event_queue_url_.size()*sizeof(wchar_t));
-    if(!caps_ack_.token.empty())
-        SecureZeroMemory(caps_ack_.token.data(),caps_ack_.token.size());
-    caps_seed_url_.clear();
-    caps_event_queue_url_.clear();
-    caps_ack_={};
-    caps_completed_polls_=0;
-    caps_events_observed_=caps_events_unsupported_=0;
-    caps_notifications_handled_=0;
-    caps_last_notice_.clear();
-    caps_consecutive_failures_=0;
-    caps_dispatch_blocked_=false;
-    caps_next_poll_={};
-    caps_status_.clear();
-    caps_seed_summary_.clear();
-    caps_recent_types_.clear();
-    caps_seed_started_=caps_poll_started_=false;
     // No hidden account collection, saved secrets, or identity spoofing.
     // Explicit acceptance and Windows native credential input only.
     const int choice=MessageBoxW(hwnd_,
@@ -1864,6 +1832,50 @@ void Window::begin_sl_login() {
     std::wstring password=secret.data();
     SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
     SecureZeroMemory(account.data(),account.size()*sizeof(wchar_t));
+    // Only end the existing CAPS session AFTER the user has accepted
+    // the Terms and supplied replacement credentials. Cancelling either
+    // dialog must never destroy a working Second Life session.
+    if(caps_seed_future_.valid()){
+        try{
+            auto previous=caps_seed_future_.get();
+            if(!previous.mesh_capability_url.empty())
+                SecureZeroMemory(previous.mesh_capability_url.data(),
+                     previous.mesh_capability_url.size()*sizeof(wchar_t));
+            if(!previous.event_queue_url.empty())
+                SecureZeroMemory(previous.event_queue_url.data(),
+                     previous.event_queue_url.size()*sizeof(wchar_t));
+        }catch(...){
+            // A failed previous CAPS worker cannot crash a new login.
+            caps_status_=L"Previous CAPS seed worker failed";
+        }
+    }
+    if(caps_poll_future_.valid()){
+        try{(void)caps_poll_future_.get();}catch(...){}
+    }
+    if(!caps_seed_url_.empty())
+        SecureZeroMemory(caps_seed_url_.data(),
+                          caps_seed_url_.size()*sizeof(wchar_t));
+    if(!caps_event_queue_url_.empty())
+        SecureZeroMemory(caps_event_queue_url_.data(),
+                         caps_event_queue_url_.size()*sizeof(wchar_t));
+    if(!caps_ack_.token.empty())
+        SecureZeroMemory(caps_ack_.token.data(),caps_ack_.token.size());
+    caps_seed_url_.clear();
+    caps_event_queue_url_.clear();
+    caps_ack_={};
+    caps_completed_polls_=0;
+    caps_events_observed_=caps_events_unsupported_=0;
+    caps_notifications_handled_=0;
+    caps_last_notice_.clear();
+    caps_consecutive_failures_=0;
+    caps_dispatch_blocked_=false;
+    caps_next_poll_={};
+    caps_seed_retry_after_={};
+    caps_seed_attempts_=0U;
+    caps_status_.clear();
+    caps_seed_summary_.clear();
+    caps_recent_types_.clear();
+    caps_seed_started_=caps_poll_started_=false;
     sl_circuit_.stop();
     world_renderer_.clear_decoded_region_geometry();
     world_renderer_.clear_live_water_preview();
@@ -1877,7 +1889,8 @@ void Window::begin_sl_login() {
     sl_login_response_kind_.clear();
     sl_login_message_=L"Authenticating with Second Life over HTTPS...";
     sl_login_pending_=true;
-    sl_login_future_=std::async(std::launch::async,
+    try{
+        sl_login_future_=std::async(std::launch::async,
         [req=std::move(request),password=std::move(password)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             protocol::LoginResult answer{};
@@ -1892,6 +1905,13 @@ void Window::begin_sl_login() {
                                  password.size()*sizeof(wchar_t));
             return answer;
         });
+    }catch(...){
+        // Creating a worker can fail when Windows is out of threads or
+        // address space. Never leave the account stuck in LOGIN PENDING.
+        sl_login_pending_=false;
+        sl_login_status_=protocol::LoginStatus::NetworkError;
+        sl_login_message_=L"Windows could not start the SL login worker";
+    }
     (void)SetTimer(hwnd_,203,100,nullptr);
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
@@ -1899,7 +1919,7 @@ void Window::start_caps_poll() {
     if(!caps_poll_started_||caps_dispatch_blocked_||
        caps_event_queue_url_.empty()||caps_poll_future_.valid()||
        sl_login_status_!=protocol::LoginStatus::Accepted||
-       !sl_circuit_.movement_seen()||
+       sl_circuit_.state()!=protocol::sim::CircuitState::MovementConfirmed||
        std::chrono::steady_clock::now()<caps_next_poll_)
         return;
     auto url=caps_event_queue_url_; // keep trusted URL only for this session
@@ -1911,7 +1931,8 @@ void Window::start_caps_poll() {
         L" notices delivered";
     if(!caps_recent_types_.empty())
         caps_status_+=L" ("+caps_recent_types_+L")";
-    caps_poll_future_=std::async(std::launch::async,
+    try{
+        caps_poll_future_=std::async(std::launch::async,
         [url=std::move(url),ack=std::move(ack)]() mutable {
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             protocol::caps::PollResponse response{};
@@ -1925,6 +1946,13 @@ void Window::start_caps_poll() {
                 SecureZeroMemory(ack.token.data(),ack.token.size());
             return response;
         });
+    }catch(...){
+        // No future was created. Preserve the authoritative EventQueue URL
+        // and ACK cursor, then retry at a restrained interval.
+        caps_next_poll_=std::chrono::steady_clock::now()+
+            std::chrono::seconds(2);
+        caps_status_=L"CAPS: Windows worker unavailable; retrying poll";
+    }
 }
 void Window::update_sl_connection() {
     if(sl_login_pending_&&sl_login_future_.valid()&&
@@ -1991,8 +2019,8 @@ void Window::update_sl_connection() {
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
        world_renderer_.ready()&&land_revision>0U&&
        (land_revision!=live_land_uploaded_revision_||
-        (spatial_revision!=live_spatial_uploaded_revision_||
-         scene_rebase))&&
+        spatial_revision!=live_spatial_uploaded_revision_||
+        scene_rebase||world_renderer_.texture_upload_pending())&&
        (live_land_last_upload_==std::chrono::steady_clock::time_point{}||
         now-live_land_last_upload_>=std::chrono::milliseconds(800))){
         live_land_last_upload_=now;
@@ -2002,7 +2030,9 @@ void Window::update_sl_connection() {
             live_scene_uploaded_origin_={
                 scene_agent.x,scene_agent.y,scene_agent.z};
             live_scene_origin_valid_=scene_agent.verified;
-            live_water_status_=L"R51 DX12 coalesced land and mesh world";
+            live_water_status_=world_renderer_.texture_upload_pending()?
+                L"R52 DX12 atlas update deferred until GPU copy completes":
+                L"R52 DX12 coalesced land and mesh world";
         }else{
             live_water_status_=L"R12 land geometry could not be uploaded";
         }
@@ -2026,23 +2056,37 @@ void Window::update_sl_connection() {
        // one-shot seed fetch then could discard a successful grant before
        // Circuit reaches MovementConfirmed, leaving CAP NO indefinitely.
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
-       !caps_seed_started_&&!caps_seed_url_.empty()){
-        caps_seed_started_=true;
+       !caps_seed_started_&&!caps_seed_url_.empty()&&
+       std::chrono::steady_clock::now()>=caps_seed_retry_after_){
         caps_status_=L"CAPS: requesting region seed over HTTPS...";
-        auto url=std::move(caps_seed_url_);
-        caps_seed_url_.clear();
-        caps_seed_future_=std::async(std::launch::async,
-            [url=std::move(url)]()mutable {
-                const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
-                protocol::caps::SeedResponse response{};
-                if(SUCCEEDED(init)){
-                    response=protocol::caps::request_seed(url);
-                    CoUninitialize();
-                }else response.diagnostic=L"CAPS COM initialization failed";
-                if(!url.empty())
-                    SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
-                return response;
-            });
+        // Preserve the trusted seed URL until worker launch succeeds.
+        // Thread creation may fail; dropping the only seed URL then
+        // permanently leaves the session on CAP NO.
+        auto url=caps_seed_url_;
+        try{
+            caps_seed_future_=std::async(std::launch::async,
+                [url=std::move(url)]()mutable {
+                    const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+                    protocol::caps::SeedResponse response{};
+                    if(SUCCEEDED(init)){
+                        response=protocol::caps::request_seed(url);
+                        CoUninitialize();
+                    }else response.diagnostic=L"CAPS COM initialization failed";
+                    if(!url.empty())
+                        SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+                    return response;
+                });
+            caps_seed_started_=true;
+            ++caps_seed_attempts_;
+            // Retain the trusted URL for a bounded retry if the HTTPS
+            // worker returns a transient failure. Clear it on success or
+            // permanent rejection, not immediately after thread launch.
+        }catch(...){
+            caps_seed_started_=false;
+            caps_seed_retry_after_=std::chrono::steady_clock::now()+
+                std::chrono::seconds(3);
+            caps_status_=L"CAPS: Windows worker unavailable; retrying seed";
+        }
     }
     if(caps_seed_started_&&caps_seed_future_.valid()&&
        caps_seed_future_.wait_for(std::chrono::seconds(0))==
@@ -2080,6 +2124,21 @@ void Window::update_sl_connection() {
         if(!result.event_queue_url.empty())
             SecureZeroMemory(result.event_queue_url.data(),
                 result.event_queue_url.size()*sizeof(wchar_t));
+        if(!result.granted&&
+           sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
+           protocol::caps::retry_seed_response(
+               result.http_status,caps_seed_attempts_)&&
+           !caps_seed_url_.empty()){
+            caps_seed_started_=false;
+            caps_seed_retry_after_=std::chrono::steady_clock::now()+
+                std::chrono::seconds(1U<<caps_seed_attempts_);
+            caps_status_+=L"; retrying seed";
+        }else{
+            if(!caps_seed_url_.empty())
+                SecureZeroMemory(caps_seed_url_.data(),
+                    caps_seed_url_.size()*sizeof(wchar_t));
+            caps_seed_url_.clear();
+        }
     }
     if(caps_poll_started_&&caps_poll_future_.valid()&&
        caps_poll_future_.wait_for(std::chrono::seconds(0))==

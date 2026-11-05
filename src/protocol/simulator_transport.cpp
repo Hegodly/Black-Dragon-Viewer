@@ -171,6 +171,7 @@ void Circuit::prune_unreferenced_meshes() noexcept {
     }
 }
 void Circuit::schedule_visible_meshes() noexcept {
+    try {
     if(mesh_capability_url_.empty()||!movement_position_.verified)return;
     // Spatial-object revision alone is insufficient: walking from one
     // house to another must discover newly visible mesh assets even if
@@ -209,6 +210,12 @@ void Circuit::schedule_visible_meshes() noexcept {
     };
     schedule(spatial_objects_);
     schedule(linked_objects_);
+    }catch(...){
+        // A bounded scheduler may still allocate when a new UUID is queued.
+        // Retry on the next simulator poll; never terminate under memory
+        // pressure inside this noexcept worker path.
+        mesh_scan_revision_=~std::uint64_t{0};
+    }
 }
 void Circuit::maybe_fetch_mesh() noexcept {
     schedule_visible_meshes();
@@ -218,12 +225,13 @@ void Circuit::maybe_fetch_mesh() noexcept {
            std::future_status::ready)return;
         try{
             auto result=mesh_worker_.get();
-            (void)mesh_scheduler_.download_finished(
+            const bool accepted=mesh_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
-            if(result.fetched){
+            if(result.fetched&&accepted){
                 ++mesh_download_count_;
-                const auto item=mesh_scheduler_.next_decode();
-                if(item&&item->id==result.id){
+                // The async decoder has already completed this exact UUID.
+                // Never pop an unrelated decode job by scheduler priority.
+                if(mesh_scheduler_.begin_decode(result.id)){
                     const auto old=loaded_meshes_.find(result.id);
                     const auto prior=old==loaded_meshes_.end()?0U:
                         old->second.triangles.size();
@@ -284,18 +292,28 @@ void Circuit::maybe_fetch_mesh() noexcept {
     if(!selected)return;
     mesh_last_start_=now;
     auto cap=mesh_capability_url_;
-    mesh_worker_=std::async(std::launch::async,
-       [url=std::move(cap),id=selected->id]()mutable{
-        MeshResult result{};
-        result.id=id;
-        const auto reply=caps::fetch_mesh_asset(std::move(url),id);
-        result.fetched=reply.fetched;
-        result.http_status=reply.status;
-        result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
-        if(reply.fetched)
-            result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
-        return result;
-    });
+    // std::async may throw bad_alloc or system_error under thread/VM
+    // pressure. This function is noexcept: without handling, KAMI
+    // terminates during busy mesh streaming instead of recovering.
+    try{
+        mesh_worker_=std::async(std::launch::async,
+           [url=std::move(cap),id=selected->id]()mutable{
+            MeshResult result{};
+            result.id=id;
+            const auto reply=caps::fetch_mesh_asset(std::move(url),id);
+            result.fetched=reply.fetched;
+            result.http_status=reply.status;
+            result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
+            if(reply.fetched)
+                result.decoded=mesh::decode_mesh_lod(reply.bytes,result.lod);
+            return result;
+        });
+    }catch(...){
+        (void)mesh_scheduler_.download_finished(selected->id,0U,false);
+        ++mesh_failure_count_;
+        // The next simulator update can retry a different mesh; never
+        // strand this UUID in the Downloading state.
+    }
 }
 bool Circuit::send_nearby_chat(std::wstring_view text) noexcept {
     if(state_!=CircuitState::MovementConfirmed||
@@ -396,6 +414,7 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
     }
 }
 void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
+    try {
     ++packets_received_;
     // Acknowledge all outbound packet sequences, not only the two login
     // handshake packets. Appended LLUDP ACKs and PacketAck blocks may
@@ -761,6 +780,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
         texture_scheduler_.set_online(true);
     }
     else if(region_seen_)state_=CircuitState::RegionHandshakeReceived;
+    }catch(...){
+        // A malformed or memory-pressure packet must not terminate the
+        // entire DX12 viewer. Its partial payload is never trusted.
+        ++invalid_world_packets_;
+    }
 }
 void Circuit::retry_unacknowledged() noexcept {
     if(socket_==INVALID_SOCKET||state_==CircuitState::Failed)return;
@@ -801,10 +825,14 @@ void Circuit::poll(unsigned budget) noexcept {
             break;
         }
         if(got<=0)break;
-        lludp::Packet packet{};
-        if(lludp::decode(
-            std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
-            packet))handle_packet(packet);
+        try{
+            lludp::Packet packet{};
+            if(lludp::decode(
+                std::span<const std::uint8_t>(bytes.data(),static_cast<std::size_t>(got)),
+                packet))handle_packet(packet);
+        }catch(...){
+            ++invalid_world_packets_;
+        }
     }
     retry_unacknowledged();
     maybe_retry();

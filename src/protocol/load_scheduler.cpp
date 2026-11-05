@@ -125,6 +125,17 @@ std::optional<Asset> Scheduler::next_decode() {
     next->stage=Stage::Decoding;
     return *next;
 }
+bool Scheduler::begin_decode(std::string_view id) noexcept {
+    if(!online_)return false;
+    unsigned active=0U;
+    for(const auto& entry:entries_)
+        if(entry.stage==Stage::Decoding)++active;
+    if(active>=kMaxConcurrentDecodes)return false;
+    auto* asset=mutable_find(id);
+    if(!asset||asset->stage!=Stage::DecodeQueued)return false;
+    asset->stage=Stage::Decoding;
+    return true;
+}
 bool Scheduler::decode_finished(std::string_view id,bool success) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Decoding)return false;

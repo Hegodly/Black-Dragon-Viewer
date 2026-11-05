@@ -48,6 +48,10 @@ public:
                                          std::uint32_t actual_bytes,
                                          bool success) noexcept;
     [[nodiscard]] std::optional<Asset> next_decode();
+    // Worker result IDs must only advance THEIR OWN decode job. Picking
+    // an unrelated queued decode can leave an item stuck in Decoding
+    // forever when jobs complete out of priority order or are evicted.
+    [[nodiscard]] bool begin_decode(std::string_view uuid) noexcept;
     [[nodiscard]] bool decode_finished(std::string_view uuid,bool success) noexcept;
     // Explicit bounded retry of a failed *transient HTTP* fetch.
     // Caller enforces per-asset backoff; corrupt asset decodes are not retried.

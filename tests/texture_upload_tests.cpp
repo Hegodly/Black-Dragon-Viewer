@@ -62,6 +62,30 @@ int main() {
     if(world_scene_rebase_due(
            {std::numeric_limits<float>::infinity(),96.f,32.f},
            previous_pose,true))return 21;
+    // A 12m simulator movement refresh must NOT shift buildings away
+    // from the camera, and must NEVER translate the local avatar marker.
+    kami::world::SceneMesh rebased{};
+    kami::world::Vertex world_v{},avatar_v{};
+    world_v.px=7.f;world_v.py=2.f;world_v.pz=5.f;
+    avatar_v.px=3.f;avatar_v.py=4.f;avatar_v.pz=5.f;
+    rebased.vertices={world_v,avatar_v};
+    rebased.terrain_count=1U;rebased.avatar_count=1U;
+    if(!kami::world::align_world_vertices_to_origin(
+        rebased,{146.f,150.f,44.f},{128.f,128.f,40.f}))
+        return 22;
+    if(rebased.vertices[0].px!=25.f||
+       rebased.vertices[0].py!=6.f||
+       rebased.vertices[0].pz!=27.f||
+       rebased.vertices[1].px!=avatar_v.px||
+       rebased.vertices[1].py!=avatar_v.py||
+       rebased.vertices[1].pz!=avatar_v.pz)return 23;
+    auto malformed_rebase=rebased;
+    malformed_rebase.terrain_count=3U;
+    if(kami::world::align_world_vertices_to_origin(
+        malformed_rebase,{1.f,2.f,3.f},{1.f,2.f,3.f}))return 24;
+    if(kami::world::align_world_vertices_to_origin(
+        rebased,{std::numeric_limits<float>::infinity(),150.f,44.f},
+        {128.f,128.f,40.f}))return 25;
     kami::world::Device device;
     if(device.initialize(true)==kami::world::DeviceStatus::Unavailable)
         return 0; // The hosted VM may not have a DX12 adapter.

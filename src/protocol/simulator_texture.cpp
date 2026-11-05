@@ -120,12 +120,13 @@ void Circuit::maybe_fetch_texture() noexcept {
            std::future_status::ready)return;
         try {
             auto result=texture_worker_.get();
-            (void)texture_scheduler_.download_finished(
+            const bool accepted=texture_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
-            if(result.fetched){
+            if(result.fetched&&accepted){
                 ++texture_download_count_;
-                const auto selected=texture_scheduler_.next_decode();
-                if(selected&&selected->id==result.id){
+                // The async decoder has already completed this exact UUID.
+                // Never pop an unrelated decode job by scheduler priority.
+                if(texture_scheduler_.begin_decode(result.id)){
                     const auto old=decoded_textures_.find(result.id);
                     const std::size_t prior=old==decoded_textures_.end()?0U:
                         old->second.rgba.size();

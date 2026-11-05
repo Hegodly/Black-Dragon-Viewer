@@ -166,7 +166,7 @@ bool Renderer::update_skin_palette() noexcept {
 }
 
 
-bool Renderer::make_material_texture(
+TextureUploadStatus Renderer::make_material_texture(
     const std::map<std::string,protocol::texture::DecodedTexture>* images,
     const std::map<std::string,std::uint16_t>* previous_layers) {
     // R50: retain the GPU Texture2DArray and SRV. Only upload layers whose
@@ -176,13 +176,13 @@ bool Renderer::make_material_texture(
     constexpr UINT slices=kLiveTextureLayers+1U;
     auto* dev=device_.native_device();
     if(!dev||!shadow_srv_heap_||!texture_copy_allocator_||
-       !texture_copy_commands_||!fence_)return false;
+       !texture_copy_commands_||!fence_)return TextureUploadStatus::Failed;
     // Never reset a copy command allocator while the GPU still uses it.
     // The normal draw loop fences after presenting, so this branch only
     // defers an unusually rapid second texture update, without stalling.
     if(texture_copy_submitted_fence_!=0U){
         if(fence_->GetCompletedValue()<texture_copy_submitted_fence_)
-            return false;
+            return TextureUploadStatus::Deferred;
         material_upload_.Reset();
         texture_copy_submitted_fence_=0U;
     }
@@ -195,7 +195,7 @@ bool Renderer::make_material_texture(
         for(UINT i=0;i<slices;++i)
             dirty.push_back(static_cast<std::uint16_t>(i));
     }
-    if(dirty.empty())return true;
+    if(dirty.empty())return TextureUploadStatus::Committed;
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     desc.Width=tw;
@@ -213,7 +213,7 @@ bool Renderer::make_material_texture(
         if(FAILED(dev->CreateCommittedResource(
             &heap_default,D3D12_HEAP_FLAG_NONE,&desc,
             D3D12_RESOURCE_STATE_COPY_DEST,nullptr,
-            IID_PPV_ARGS(image_gpu.GetAddressOf()))))return false;
+            IID_PPV_ARGS(image_gpu.GetAddressOf()))))return TextureUploadStatus::Failed;
     }
     // One upload footprint per changed layer (not the entire array).
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
@@ -223,7 +223,7 @@ bool Renderer::make_material_texture(
         &desc,0U,1U,0U,&footprint,&rows,&row_bytes,&one_size);
     if(rows!=th||row_bytes!=tw*4U||one_size==0U||
        one_size>1024U*1024U||dirty.size()>slices||
-       dirty.size()>16U*1024U*1024U/one_size)return false;
+       dirty.size()>16U*1024U*1024U/one_size)return TextureUploadStatus::Failed;
     const UINT64 upload_size=one_size*dirty.size();
     const auto heap_upload=heap(D3D12_HEAP_TYPE_UPLOAD);
     const auto upload_desc=buffer_desc(upload_size);
@@ -231,7 +231,7 @@ bool Renderer::make_material_texture(
     if(FAILED(dev->CreateCommittedResource(
         &heap_upload,D3D12_HEAP_FLAG_NONE,&upload_desc,
         D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
-        IID_PPV_ARGS(staging.GetAddressOf()))))return false;
+        IID_PPV_ARGS(staging.GetAddressOf()))))return TextureUploadStatus::Failed;
 
     std::array<const protocol::texture::DecodedTexture*,slices> decoded{};
     if(images){
@@ -251,7 +251,7 @@ bool Renderer::make_material_texture(
     std::uint8_t* mapped=nullptr;
     const D3D12_RANGE no_read{0,0};
     if(FAILED(staging->Map(0,&no_read,
-        reinterpret_cast<void**>(&mapped)))||!mapped)return false;
+        reinterpret_cast<void**>(&mapped)))||!mapped)return TextureUploadStatus::Failed;
     std::memset(mapped,0,static_cast<std::size_t>(upload_size));
     for(std::size_t index=0U;index<dirty.size();++index){
         const UINT layer=dirty[index];
@@ -284,7 +284,7 @@ bool Renderer::make_material_texture(
     if(FAILED(texture_copy_allocator_->Reset())||
        FAILED(texture_copy_commands_->Reset(
            texture_copy_allocator_.Get(),nullptr)))
-       return false;
+       return TextureUploadStatus::Failed;
     auto* copy=texture_copy_commands_.Get();
     if(incremental){
         const auto copying=barrier(image_gpu.Get(),
@@ -309,7 +309,7 @@ bool Renderer::make_material_texture(
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     copy->ResourceBarrier(1,&ready);
-    if(FAILED(copy->Close()))return false;
+    if(FAILED(copy->Close()))return TextureUploadStatus::Failed;
     ID3D12CommandList* lists[]={copy};
     // Copy and graphics draw use the SAME ordered queue. No CPU wait is
     // required here: the following draw sees the updated texture state.
@@ -321,7 +321,7 @@ bool Renderer::make_material_texture(
     if(FAILED(device_.graphics_queue()->Signal(fence_.Get(),signal))){
         ready_=false;
         error_=L"DX12 texture copy fence signal failed";
-        return false;
+        return TextureUploadStatus::Failed;
     }
     texture_copy_submitted_fence_=signal;
     if(!incremental){
@@ -337,7 +337,7 @@ bool Renderer::make_material_texture(
         dev->CreateShaderResourceView(image_gpu.Get(),&srv,handle);
         material_texture_=std::move(image_gpu);
     }
-    return true;
+    return TextureUploadStatus::Committed;
 }
 
 bool Renderer::make_targets() {
@@ -552,7 +552,7 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
         error_=L"Could not create GPU event";
         return false;
     }
-    if(!make_material_texture()) {
+    if(make_material_texture()!=TextureUploadStatus::Committed) {
         error_=L"Could not upload DX12 material texture";
         return false;
     }
@@ -759,17 +759,24 @@ bool Renderer::set_verified_live_terrain(
         circuit.decoded_mesh_assets(),
         circuit.decoded_texture_assets(),
         agent.x,agent.y,agent.z,kLiveTextureLayers,live_texture_layers_);
+    texture_upload_pending_=false;
     if(next_layers!=live_texture_layers_){
         auto previous=std::move(live_texture_layers_);
         live_texture_layers_=std::move(next_layers);
         if(ready_){
-            // The copy list is independent and the graphics queue orders
-            // transfers before the next draw. No redundant UI-thread wait.
-            if(!make_material_texture(&circuit.decoded_texture_assets(),
-                                     &previous)){
+            // Previous DX12 upload may still be executing. A busy copy
+            // allocator is retryable: keep the old GPU atlas and old
+            // texture mappings instead of inventing a fatal renderer error.
+            const auto outcome=make_material_texture(
+                &circuit.decoded_texture_assets(),&previous);
+            if(outcome!=TextureUploadStatus::Committed){
                 live_texture_layers_=std::move(previous);
-                error_=L"DX12 could not stage decoded SL texture array";
-                return false;
+                if(outcome==TextureUploadStatus::Deferred)
+                    texture_upload_pending_=true;
+                else{
+                    error_=L"DX12 could not stage decoded SL texture array";
+                    return false;
+                }
             }
         }
     }
@@ -797,6 +804,17 @@ bool Renderer::set_verified_live_terrain(
         error_=L"R13 decoded land has no contiguous terrain mesh";
         return false;
     }
+    // The DX12 camera and local avatar marker use the original simulator
+    // spawn. Every subsequent interest refresh decodes geometry relative
+    // to the *current* agent position. Re-align only world vertices to
+    // the stable spawn origin before comparing/uploading GPU geometry.
+    const std::array<float,3> current_origin{agent.x,agent.y,agent.z};
+    const auto stable_origin=live_region_origin_valid_?
+        live_region_origin_:current_origin;
+    if(!align_world_vertices_to_origin(scene,current_origin,stable_origin)){
+        error_=L"R52 invalid live region coordinate rebase";
+        return false;
+    }
     // Revisions include frequent simulator interest-list packets and
     // decoded images which may never become drawable. Build a finite
     // candidate once, but skip the DX12 vertex buffer allocation, copy,
@@ -814,6 +832,10 @@ bool Renderer::set_verified_live_terrain(
             error_=L"R12 DX12 land mesh upload failed";
             return false;
         }
+    }
+    if(!live_region_origin_valid_){
+        live_region_origin_=stable_origin;
+        live_region_origin_valid_=true;
     }
     uploaded_root_bounds_=new_proxy_count;
     uploaded_root_primitive_shapes_=primitives.root_shapes;
@@ -836,9 +858,12 @@ bool Renderer::set_verified_live_terrain(
     if(!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;
-        const float ground=patch.elevation[middle*patch.size+middle]-agent.z;
-        const float x=static_cast<float>(patch.x)*patch.size+middle-agent.x;
-        const float z=static_cast<float>(patch.y)*patch.size+middle-agent.y;
+        const float ground=patch.elevation[middle*patch.size+middle]-
+                           stable_origin[2];
+        const float x=static_cast<float>(patch.x)*patch.size+middle-
+                      stable_origin[0];
+        const float z=static_cast<float>(patch.y)*patch.size+middle-
+                      stable_origin[1];
         // Anchor near a real decoded land patch, even if the avatar is
         // over water or the nearest patch is beyond the 200m far plane.
         // System::update adds the 2.77m head offset when head-tracking
@@ -927,6 +952,9 @@ void Renderer::clear_decoded_region_geometry() {
     uploaded_primitive_vertices_=0;
     uploaded_textured_triangles_=0;
     live_texture_layers_.clear();
+    texture_upload_pending_=false;
+    live_region_origin_={};
+    live_region_origin_valid_=false;
     primitive_eligible_=0;
     primitive_unresolved_=0;
     primitive_distant_=0;
@@ -1248,9 +1276,15 @@ void Renderer::draw() {
         if(copying_photo)capture_status_=CaptureStatus::Failed;
         return;
     }
-    // Safe single-frame synchronization; multiframe scheduling is still
-    // pending performance measurements on a real GPU.
+    // The usual frame fence also completes any earlier texture copy
+    // submitted on the same ordered queue. Safely free its staging heap
+    // after completion; never before the GPU reads it.
     wait_for_gpu();
+    if(texture_copy_submitted_fence_!=0U&&fence_&&
+       fence_->GetCompletedValue()>=texture_copy_submitted_fence_){
+        material_upload_.Reset();
+        texture_copy_submitted_fence_=0U;
+    }
     if(copying_photo) {
         bool saved=false;
         BYTE* mapped=nullptr;
@@ -1294,6 +1328,9 @@ void Renderer::shutdown() noexcept {
     texture_copy_commands_.Reset();
     texture_copy_allocator_.Reset();
     texture_copy_submitted_fence_=0U;
+    live_region_origin_={};
+    live_region_origin_valid_=false;
+    texture_upload_pending_=false;
     pipeline_.Reset();
     shadow_pipeline_.Reset();
     sky_pipeline_.Reset();
