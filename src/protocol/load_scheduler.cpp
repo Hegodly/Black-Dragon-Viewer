@@ -88,6 +88,15 @@ bool Scheduler::download_finished(std::string_view id,
     asset->stage=Stage::DecodeQueued;
     return true;
 }
+bool Scheduler::retry_failed(std::string_view id) noexcept {
+    auto* asset=online_?mutable_find(id):nullptr;
+    if(!asset||asset->stage!=Stage::Failed||
+       asset->retry_count>=kMaxTransientRetries)return false;
+    ++asset->retry_count;
+    asset->actual_bytes=0U;
+    asset->stage=Stage::Queued;
+    return true;
+}
 std::optional<Asset> Scheduler::next_decode() {
     // In the initial pipeline the download completion moves directly to
     // decoding; real workers take the resulting jobs off-thread.
