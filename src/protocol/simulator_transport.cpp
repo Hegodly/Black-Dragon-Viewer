@@ -393,6 +393,16 @@ void Circuit::maybe_send_missing_object_requests() noexcept {
        !movement_position_.verified||socket_==INVALID_SOCKET||
        missing_objects_.empty())return;
     const auto now=std::chrono::steady_clock::now();
+    // Age out exhausted requests even when the queue is not yet full.
+    // Otherwise a stalled batch remains "Missing" indefinitely and
+    // hides subsequent recovery progress from the diagnostics.
+    for(auto it=missing_objects_.begin();it!=missing_objects_.end();){
+        if(detail::reclaim_missing_request(
+                it->second.attempts,it->second.sent_at,now))
+            it=missing_objects_.erase(it);
+        else ++it;
+    }
+    if(missing_objects_.empty())return;
     if(last_object_request_!=std::chrono::steady_clock::time_point{}&&
        now-last_object_request_<std::chrono::milliseconds(400))return;
     // Prioritize explicit simulator cache misses and unresolved linkset
