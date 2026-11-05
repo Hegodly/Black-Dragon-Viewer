@@ -218,7 +218,8 @@ private:
     // Layer zero is the original procedural fallback. Other slices are
     // authenticated, CPU-decoded SL default TextureEntry images.
     [[nodiscard]] bool make_material_texture(
-        const std::map<std::string,protocol::texture::DecodedTexture>* images=nullptr);
+        const std::map<std::string,protocol::texture::DecodedTexture>* images=nullptr,
+        const std::map<std::string,std::uint16_t>* previous_layers=nullptr);
     [[nodiscard]] bool make_skin_palette();
     [[nodiscard]] bool update_skin_palette() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
