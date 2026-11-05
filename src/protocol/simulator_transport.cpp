@@ -348,9 +348,8 @@ void Circuit::remember_missing_object(std::uint32_t id) noexcept {
         // out; previously 256 exhausted entries could block every new root.
         const auto now=std::chrono::steady_clock::now();
         for(auto it=missing_objects_.begin();it!=missing_objects_.end();){
-            if(it->second.attempts>=5U&&
-               it->second.sent_at!=std::chrono::steady_clock::time_point{}&&
-               now-it->second.sent_at>=std::chrono::seconds(90))
+            if(detail::reclaim_missing_request(
+                   it->second.attempts,it->second.sent_at,now))
                 it=missing_objects_.erase(it);
             else ++it;
         }
