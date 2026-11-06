@@ -142,6 +142,21 @@ public:
     [[nodiscard]] std::size_t uploaded_live_meshes() const noexcept {
         return region_mesh_?uploaded_mesh_shapes_:0U;
     }
+    // R90 diagnostics: report the actual DX12 residency allocation and
+    // scene draw-count changes, not a claimed per-asset renderer count.
+    [[nodiscard]] std::size_t gpu_mesh_cache_entries() const noexcept {
+        return mesh_gpu_cache_.size();
+    }
+    [[nodiscard]] std::uint64_t gpu_mesh_cache_bytes() const noexcept {
+        return mesh_gpu_cache_.allocated_bytes();
+    }
+    [[nodiscard]] std::size_t previous_mesh_draw_count() const noexcept {
+        return previous_mesh_draw_count_;
+    }
+    [[nodiscard]] std::size_t mesh_draw_count_drop() const noexcept {
+        return uploaded_mesh_shapes_<previous_mesh_draw_count_?
+            previous_mesh_draw_count_-uploaded_mesh_shapes_:0U;
+    }
     [[nodiscard]] std::size_t uploaded_mesh_triangles() const noexcept {
         return region_mesh_?uploaded_mesh_triangles_:0U;
     }
@@ -402,6 +417,7 @@ private:
     MeshResidencyPlanner mesh_residency_{};
     Dx12MeshBufferCache mesh_gpu_cache_{};
     std::uint64_t scene_gpu_revision_=0;
+    std::size_t previous_mesh_draw_count_=0;
     Microsoft::WRL::ComPtr<ID3D12Resource> geometry_;
     D3D12_VERTEX_BUFFER_VIEW vertex_view_{};
     std::size_t terrain_count_ = 0;
