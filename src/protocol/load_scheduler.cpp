@@ -91,7 +91,7 @@ bool Scheduler::download_finished(std::string_view id,
 bool Scheduler::retry_failed(std::string_view id) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Failed||
-       asset->retry_count>=kMaxTransientRetries)return false;
+       asset->retry_count>=kMaxTransientRetries||asset->actual_bytes!=0U)return false;
     ++asset->retry_count;
     asset->actual_bytes=0U;
     asset->stage=Stage::Queued;
@@ -139,6 +139,8 @@ bool Scheduler::begin_decode(std::string_view id) noexcept {
 bool Scheduler::decode_finished(std::string_view id,bool success) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Decoding)return false;
+    // A decode failure is terminal; retain its downloaded byte count to
+    // distinguish corrupt data from a transient download failure.
     asset->stage=success?Stage::ReadyForGPU:Stage::Failed;
     return true;
 }
