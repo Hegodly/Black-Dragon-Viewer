@@ -250,7 +250,11 @@ bool decode_faces(const Value& root,LOD& out) {
             if(empty->kind!=Value::Kind::Boolean||!empty->boolean)return false;
             continue;
         }
-        if(face.get("Weights"))continue; // no rigged avatar mesh fallback
+        // Skin weights do not invalidate the mesh geometry itself. Decode
+        // its faces for the static world path; avatar skinning remains a
+        // separate DX12 task. Skipping every weighted face silently dropped
+        // legitimate attachment and rigged-mesh geometry.
+        // Do not discard the face solely because Weights is present.
         const auto* position=face.get("Position");
         const auto* triangles=face.get("TriangleList");
         if(!position||!triangles||
