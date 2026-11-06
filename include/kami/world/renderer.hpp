@@ -401,6 +401,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     MeshResidencyPlanner mesh_residency_{};
     Dx12MeshBufferCache mesh_gpu_cache_{};
+    std::uint64_t scene_gpu_revision_=0;
     Microsoft::WRL::ComPtr<ID3D12Resource> geometry_;
     D3D12_VERTEX_BUFFER_VIEW vertex_view_{};
     std::size_t terrain_count_ = 0;
