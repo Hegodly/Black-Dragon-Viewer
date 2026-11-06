@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 #include <set>
+#include <map>
 
 namespace kami::world {
 namespace {
@@ -578,17 +579,30 @@ MeshBatch build_live_mesh_geometry(
         const auto triangles=chosen[i].lod->triangles.size();
         return triangles<=1024U?0U:triangles<=per_object_cap?1U:2U;
     };
-    std::array<std::vector<std::size_t>,3> queues;
-    for(std::size_t i=0U;i<chosen.size();++i)
-        queues[class_of(i)].push_back(i);
-    std::array<std::size_t,3> cursor{0U,0U,0U};
-    // Every cycle offers a slot to complex architecture before spending
-    // the entire budget on low-cost decorations. Retain near-first order
-    // within each class; each instance appears exactly once.
-    while(draw_order.size()<chosen.size()){
-        for(const unsigned category:{2U,0U,1U}){
-            if(cursor[category]<queues[category].size())
-                draw_order.push_back(queues[category][cursor[category]++]);
+    // Preserve 16m distance bands across ALL complexity classes. The
+    // previous R87 round robin let far-away complex meshes outrank nearby
+    // walls because its three queues were global to the entire region.
+    // A single object must never enter draw_order more than once.
+    std::map<unsigned,std::array<std::vector<std::size_t>,3>> bands;
+    for(std::size_t i=0U;i<chosen.size();++i){
+        const auto band=static_cast<unsigned>(
+            std::sqrt(chosen[i].distance)/16.f);
+        bands[band][class_of(i)].push_back(i);
+    }
+    for(const auto& [band,queues]:bands){
+        (void)band;
+        std::array<std::size_t,3> cursor{0U,0U,0U};
+        const std::size_t total=queues[0].size()+queues[1].size()+
+                                queues[2].size();
+        std::size_t admitted=0U;
+        while(admitted<total){
+            for(const unsigned category:{2U,0U,1U}){
+                if(cursor[category]<queues[category].size()){
+                    draw_order.push_back(
+                        queues[category][cursor[category]++]);
+                    ++admitted;
+                }
+            }
         }
     }
     // Per-object caps apply to ordinary meshes; complex meshes are
