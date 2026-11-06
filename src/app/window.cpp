@@ -1,6 +1,7 @@
 #include "kami/window.hpp"
 #include "kami/appearance.hpp"
 #include "kami/features/viewer_foundation.hpp"
+#include "kami/features/inventory.hpp"
 #include "kami/diagnostics/seven_systems.hpp"
 #include "kami/world/scene_diff.hpp"
 
@@ -1193,8 +1194,27 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 break;
             }
         }
-        label(L"Account login, remote chat, editing and inventory actions are not connected.",
-              box(contentX+28,height-105,contentWidth-48,31),
+        // Smart Sort is an actual local planning feature, not a server mutation.
+        // The demonstration item is explicitly synthetic until inventory sync exists.
+        const std::vector<inventory::Item> sample_items{
+            {L"[HAYABUSA] Reed FATPACK UNPACKER",L"",false},
+            {L"Sample DEMO Jacket",L"",false}
+        };
+        const auto moves=inventory::preview_smart_sort(sample_items);
+        const auto demos=inventory::preview_demo_deletions(sample_items);
+        if(!moves.empty()) {
+            const auto& plan=moves.front();
+            const std::wstring preview=L"Smart Sort sample: "+
+                sample_items[plan.item_index].name+L"  ->  "+plan.destination;
+            label(preview,box(contentX+28,height-150,contentWidth-48,27),
+                  small_font_.Get(),p.accent);
+        }
+        const std::wstring demo_label=L"Demo cleanup preview: "+
+            std::to_wstring(demos.size())+L" sample item(s), nothing deleted";
+        label(demo_label,box(contentX+28,height-123,contentWidth-48,25),
+              small_font_.Get(),p.muted);
+        label(L"Live inventory sync and server-side moves/deletions are not connected.",
+              box(contentX+28,height-95,contentWidth-48,31),
               small_font_.Get(),p.muted);
         return;
     }
