@@ -30,7 +30,7 @@ struct Stats {
 };
 class Scheduler final {
 public:
-    static constexpr std::size_t kMaxAssets=8192U;
+    static constexpr std::size_t kMaxAssets=32768U;
     static constexpr unsigned kMaxConcurrentDownloads=8U;
     static constexpr unsigned kMaxConcurrentDecodes=4U;
     static constexpr unsigned kMaxTransientRetries=3U;

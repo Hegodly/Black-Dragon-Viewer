@@ -386,8 +386,8 @@ private:
         mesh_retry_after_;
     // Expanded CPU-side decoded mesh cache for dense populated regions.
     // Keep bounded; DX12 upload and draw budgets remain independent.
-    static constexpr std::size_t kMaxWorldMeshAssets=8192U;
-    static constexpr std::size_t kMaxWorldMeshTriangles=12000000U;
+    static constexpr std::size_t kMaxWorldMeshAssets=32768U;
+    static constexpr std::size_t kMaxWorldMeshTriangles=48000000U;
     bool maximum_world_detail_=false;
     std::map<std::string,mesh::LOD> loaded_meshes_;
     std::size_t loaded_mesh_triangle_count_=0U;
