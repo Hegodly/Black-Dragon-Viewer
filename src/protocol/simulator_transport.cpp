@@ -281,7 +281,17 @@ void Circuit::maybe_fetch_mesh() noexcept {
        now-mesh_last_start_<std::chrono::milliseconds(
            maximum_world_detail_?50:350))return;
     if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
-       loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles)return;
+       loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles){
+        // Re-evaluate retention even when the agent is stationary. A full
+        // cache must not permanently prevent newly visible mesh downloads.
+        prune_unreferenced_meshes();
+        if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
+           loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles)return;
+        // Re-discover visible IDs after eviction; previous scans may have
+        // been rejected while the scheduler/cache was at capacity.
+        mesh_scan_revision_=~std::uint64_t{0};
+        schedule_visible_meshes();
+    }
     // At most four independent mesh fetch+decode futures. Fill free
     // worker slots at the existing throttled launch interval; preserve
     // the scheduler's nearest-visible priority and bounded HTTP retries.
