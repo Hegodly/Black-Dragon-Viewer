@@ -554,13 +554,19 @@ MeshBatch build_live_mesh_geometry(
         const auto& item=chosen[index];
         const auto triangles=item.lod->triangles.size();
         const auto remaining=max_triangles-batch.emitted_triangles;
-        if(triangles>remaining||triangles>per_object_cap){
+        // Preserve the established single-instance quality behavior:
+        // emit as many real triangles as fit when there is no competition.
+        // In crowded scenes, skip oversized instances intact so one
+        // dense mesh cannot starve thousands of smaller neighbors.
+        if(chosen.size()>1U &&
+           (triangles>remaining||triangles>per_object_cap)){
             ++batch.undrawn_budget_instances;
             continue;
         }
         std::size_t object_triangles=0U;
         std::size_t transparent=0U,invalid_geometry=0U;
         for(const auto& triangle:item.lod->triangles){
+            if(batch.emitted_triangles>=max_triangles)break;
             // Every mesh face is an independent SL material slot. An
             // explicit null override must never fall back to its parent.
             const unsigned face=triangle.face_index;
