@@ -30,7 +30,7 @@ struct Settings {
         switch(preset){
         case Preset::Potato:return 24000U;
         case Preset::Performance:return 80000U;
-        case Preset::Balanced:return 180000U;
+        case Preset::Balanced:return 400000U;
         case Preset::Quality:return 1000000U;
         }return 180000U;
     }
