@@ -79,9 +79,15 @@ public:
             const std::uint64_t previous=existing!=buffers_.end()&&
                 existing->second.resource?
                 existing->second.resource->GetDesc().Width:0U;
-            desc.Width=std::min<std::uint64_t>(
-                std::numeric_limits<UINT>::max(),
-                std::max<std::uint64_t>(bytes,previous+previous/2U));
+            // Growth is bounded before addition to avoid overflow. Keep
+            // allocations aligned for future per-asset DX12 buffer streams.
+            const std::uint64_t limit=std::numeric_limits<UINT>::max();
+            const std::uint64_t growth=previous<=limit-previous/2U?
+                previous+previous/2U:limit;
+            const std::uint64_t wanted=std::max<std::uint64_t>(bytes,growth);
+            desc.Width=(std::min(wanted,limit)+255U)&~std::uint64_t{255U};
+            if(desc.Width>limit)desc.Width=limit&~std::uint64_t{255U};
+            if(desc.Width<bytes)return false;
             desc.Height=1;
             desc.DepthOrArraySize=1;
             desc.MipLevels=1;
