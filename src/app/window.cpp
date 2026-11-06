@@ -1574,9 +1574,12 @@ void Window::advance_graphics(unsigned row) {
     case 2:
         switch(graphics_.fps_limit) {
         case 30: graphics_.fps_limit=60; break;
-        case 60: graphics_.fps_limit=120; break;
+        case 60: graphics_.fps_limit=90; break;
+        case 90: graphics_.fps_limit=120; break;
         case 120: graphics_.fps_limit=144; break;
-        case 144: graphics_.fps_limit=0; break;
+        case 144: graphics_.fps_limit=165; break;
+        case 165: graphics_.fps_limit=240; break;
+        case 240: graphics_.fps_limit=0; break;
         default: graphics_.fps_limit=30; break;
         }
         break;
@@ -1606,7 +1609,9 @@ void Window::advance_graphics_effects(unsigned row) {
         graphics_.target_fps=graphics_.target_fps==30?60:
             graphics_.target_fps==60?90:
             graphics_.target_fps==90?120:
-            graphics_.target_fps==120?144:30;
+            graphics_.target_fps==120?144:
+            graphics_.target_fps==144?165:
+            graphics_.target_fps==165?240:30;
         adaptive_.reset();
         break;
     case 2: graphics_.atmosphere_haze=!graphics_.atmosphere_haze; break;
