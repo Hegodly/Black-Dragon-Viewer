@@ -637,6 +637,7 @@ MeshBatch build_live_mesh_geometry(
             else ++batch.undrawn_object_limit;
             continue;
         }
+        const std::size_t first_object_vertex=verts.size();
         std::size_t object_triangles=0U;
         std::size_t transparent=0U,invalid_geometry=0U;
         for(const auto& triangle:item.lod->triangles){
@@ -717,6 +718,11 @@ MeshBatch build_live_mesh_geometry(
             if(textured)++batch.textured_triangles;
         }
         if(object_triangles){
+            // Preserve exact admitted spans; fully transparent and malformed
+            // instances have no drawable range. Local IDs are region-scoped.
+            batch.instance_ranges.push_back({item.transform->local_id,
+                item.transform->mesh_asset_id,first_object_vertex,
+                verts.size()-first_object_vertex});
             if(item.child)++batch.linked_meshes;
             else ++batch.root_meshes;
         }else if(transparent){
