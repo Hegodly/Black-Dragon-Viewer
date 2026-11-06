@@ -87,6 +87,31 @@ int main() {
     if(kami::world::align_world_vertices_to_origin(
         rebased,{std::numeric_limits<float>::infinity(),150.f,44.f},
         {128.f,128.f,40.f}))return 25;
+    // Failed live-origin alignment must not partially move previously
+    // visible terrain while the simulator retries a malformed update.
+    kami::world::SceneMesh malformed_positions{};
+    kami::world::Vertex valid{},invalid{};
+    valid.px=1.f;valid.py=2.f;valid.pz=3.f;
+    invalid.px=std::numeric_limits<float>::max();
+    malformed_positions.vertices={valid,invalid};
+    malformed_positions.terrain_count=2U;
+    // Translating a finite FLT_MAX by -2 is still finite (often rounds
+    // back to FLT_MAX). Use an offset large enough to overflow the
+    // transformed vertex, rather than asserting that any large input
+    // must fail.
+    if(kami::world::align_world_vertices_to_origin(
+           malformed_positions,{std::numeric_limits<float>::max(),0.f,0.f},
+           {-std::numeric_limits<float>::max(),0.f,0.f}))
+        return 27;
+    if(malformed_positions.vertices[0].px!=1.f||
+       malformed_positions.vertices[1].px!=invalid.px)
+        return 28;
+    malformed_positions.vertices[1].px=
+        std::numeric_limits<float>::quiet_NaN();
+    if(kami::world::align_world_vertices_to_origin(
+           malformed_positions,{2.f,0.f,0.f},{0.f,0.f,0.f}))
+        return 29;
+    if(malformed_positions.vertices[0].px!=1.f)return 30;
     // Layers above the old limit must be copied on reassignment, with
     // unchanged material slots left untouched.
     const std::map<std::string,std::uint16_t> high_before{
