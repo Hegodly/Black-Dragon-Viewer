@@ -95,8 +95,13 @@ int main() {
     invalid.px=std::numeric_limits<float>::max();
     malformed_positions.vertices={valid,invalid};
     malformed_positions.terrain_count=2U;
+    // Translating a finite FLT_MAX by -2 is still finite (often rounds
+    // back to FLT_MAX). Use an offset large enough to overflow the
+    // transformed vertex, rather than asserting that any large input
+    // must fail.
     if(kami::world::align_world_vertices_to_origin(
-           malformed_positions,{2.f,0.f,0.f},{0.f,0.f,0.f}))
+           malformed_positions,{std::numeric_limits<float>::max(),0.f,0.f},
+           {-std::numeric_limits<float>::max(),0.f,0.f}))
         return 27;
     if(malformed_positions.vertices[0].px!=1.f||
        malformed_positions.vertices[1].px!=invalid.px)
