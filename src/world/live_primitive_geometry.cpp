@@ -590,6 +590,7 @@ MeshBatch build_live_mesh_geometry(
         const auto remaining=max_triangles-batch.emitted_triangles;
         if(remaining==0U){
             batch.undrawn_budget_instances+=draw_order.size()-index;
+            batch.undrawn_global_limit+=draw_order.size()-index;
             break;
         }
         // The first pass is guaranteed the first opportunity to fill the
@@ -604,6 +605,8 @@ MeshBatch build_live_mesh_geometry(
         if(chosen.size()>1U &&
            (triangles>remaining||triangles>allowed_cap)){
             ++batch.undrawn_budget_instances;
+            if(triangles>remaining)++batch.undrawn_global_limit;
+            else ++batch.undrawn_object_limit;
             continue;
         }
         std::size_t object_triangles=0U;
