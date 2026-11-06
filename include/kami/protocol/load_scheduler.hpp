@@ -23,6 +23,7 @@ struct Asset {
     Stage stage=Stage::Queued;
     std::uint64_t queued_order=0;
     unsigned retry_count=0; // transient fetches only; bounded per asset
+    bool retryable_fetch_failure=false; // decoding/corrupt payloads must never retry
 };
 struct Stats {
     std::size_t queued=0,downloading=0,decoding=0,ready_gpu=0,resident=0;
