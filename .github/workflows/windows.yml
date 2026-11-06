@@ -198,10 +198,22 @@ jobs:
           name: KAMI-R69-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
-      - name: Package live-world integration candidate
+      - name: Package explicitly incomplete integration test candidate
         shell: pwsh
         run: |
+          # Do not distribute this native workspace as the complete SL viewer.
+          # A successful WARP/CTest run does not establish live SL feature parity.
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
+          @'
+          KAMI LIVE WORLD INTEGRATION TEST BUILD — NOT THE COMPLETE VIEWER
+
+          This executable is an incomplete independent KAMI workspace.
+          DX12 smoke tests and synthetic protocol tests do not verify a
+          populated Second Life region, full avatar, inventory or messaging.
+          Do not label, announce, or distribute it as a finished KAMI viewer.
+          Release remains blocked pending real SL login, populated-world
+          geometry/PBR validation, avatar, inventory and messaging integration.
+          '@ | Set-Content -Path dist/KAMI/NOT_A_COMPLETE_VIEWER.txt -Encoding UTF8
           Copy-Item build/Release/KAMIViewer.exe dist/KAMI
           Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
           Copy-Item build/Release/KAMI_SL_LLUdpCodec.dll dist/KAMI
@@ -241,10 +253,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Live-World-Integration-Candidate.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-Live-World-Integration-Candidate
-          path: dist/KAMI-Live-World-Integration-Candidate.zip
+          name: KAMI-INCOMPLETE-Live-Integration-TEST
+          path: dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
           retention-days: 14
 
