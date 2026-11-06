@@ -82,6 +82,21 @@ int main() {
         if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,0}}))return 38;
         if(cache.can_draw_exact_instance_batch("",1,{Requirement{17,3}}))return 39;
         if(cache.can_draw_exact_instance_batch("region",1,{}))return 40;
+        // Coverage is stricter than nonoverlap: a missing triangle must
+        // never disappear when the per-object draw path is activated.
+        using Span=kami::world::Dx12MeshBufferCache::InstanceSourceSpan;
+        if(!kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
+                6,{Span{17,0,3},Span{18,3,3}}))return 45;
+        if(!kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
+                6,{Span{18,3,3},Span{17,0,3}}))return 46;
+        if(kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
+                9,{Span{17,0,3},Span{18,6,3}}))return 47;
+        if(kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
+                9,{Span{17,0,3},Span{18,3,3}}))return 48;
+        if(kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
+                6,{Span{17,0,3},Span{18,0,3}}))return 49;
+        if(kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
+                6,{}))return 50;
         // A region generation change must invalidate old mesh residency until
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();
