@@ -454,7 +454,12 @@ bool Renderer::make_geometry() {
        scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
         return false;
     const auto audit=rig::inspect(scene.vertices);
-    if(audit.status==rig::Compatibility::Invalid)return false;
+    if(audit.status==rig::Compatibility::Invalid){
+        error_=L"DX12 geometry rejected by rig audit: "+
+            std::to_wstring(audit.corrupt_vertices)+L" invalid vertices / "+
+            std::to_wstring(scene.vertices.size())+L" total";
+        return false;
+    }
     if(scene.terrain_count%3U!=0U||scene.avatar_count%3U!=0U)return false;
     std::vector<Vertex> upload,transparent;
     upload.reserve(scene.vertices.size());
@@ -941,7 +946,7 @@ bool Renderer::set_verified_live_terrain(
         // require waiting for the independent texture-copy queue.
         if(ready_&&!make_geometry()){
             region_mesh_=std::move(previous);pbr_rows_=previous_rows;
-            error_=L"R12 DX12 land mesh upload failed";
+            if(error_.empty())error_=L"R72 DX12 land mesh upload failed";
             return false;
         }
     }

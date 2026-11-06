@@ -6,7 +6,7 @@ namespace kami::rig {
 Audit inspect(std::span<const world::Vertex> vertices) noexcept {
     Audit result{};
     result.vertex_count=vertices.size();
-    if(vertices.empty()||vertices.size()>2000000U) {
+    if(vertices.empty()||vertices.size()>4000000U) {
         result.status=Compatibility::Invalid;
         result.corrupt_vertices=vertices.size();
         return result;
