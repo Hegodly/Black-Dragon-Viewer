@@ -451,8 +451,10 @@ bool Renderer::make_geometry() {
         region_mesh_?*region_mesh_:
         live_water_mesh_?*live_water_mesh_:generated;
     if(scene.vertices.empty() ||
-       scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex))
+       scene.vertices.size()>std::numeric_limits<UINT>::max()/sizeof(Vertex)){
+        error_=L"DX12 geometry vertex count invalid: "+std::to_wstring(scene.vertices.size());
         return false;
+    }
     const auto audit=rig::inspect(scene.vertices);
     if(audit.status==rig::Compatibility::Invalid){
         error_=L"DX12 geometry rejected by rig audit: "+
@@ -460,7 +462,12 @@ bool Renderer::make_geometry() {
             std::to_wstring(scene.vertices.size())+L" total";
         return false;
     }
-    if(scene.terrain_count%3U!=0U||scene.avatar_count%3U!=0U)return false;
+    if(scene.terrain_count%3U!=0U||scene.avatar_count%3U!=0U||
+       scene.terrain_count>scene.vertices.size()||
+       scene.avatar_count>scene.vertices.size()-scene.terrain_count){
+        error_=L"DX12 geometry section counts invalid";
+        return false;
+    }
     std::vector<Vertex> upload,transparent;
     upload.reserve(scene.vertices.size());
     for(std::size_t at=0U;at<scene.terrain_count;at+=3U){
@@ -479,14 +486,24 @@ bool Renderer::make_geometry() {
     // GPU uploads are transactional. Never release a known-good world
     // buffer until CreateCommittedResource AND Map both succeed.
     Microsoft::WRL::ComPtr<ID3D12Resource> candidate;
-    if(FAILED(device_.native_device()->CreateCommittedResource(
+    const HRESULT allocation_result=device_.native_device()->CreateCommittedResource(
             &properties,D3D12_HEAP_FLAG_NONE,&desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
-            IID_PPV_ARGS(candidate.GetAddressOf()))))
+            IID_PPV_ARGS(candidate.GetAddressOf()));
+    if(FAILED(allocation_result)){
+        error_=L"DX12 world vertex buffer allocation failed HRESULT "+
+            std::to_wstring(static_cast<unsigned long>(allocation_result))+
+            L" bytes "+std::to_wstring(bytes);
         return false;
+    }
     void* mapped=nullptr;
     const D3D12_RANGE no_read{0,0};
-    if(FAILED(candidate->Map(0,&no_read,&mapped))||!mapped)return false;
+    const HRESULT map_result=candidate->Map(0,&no_read,&mapped);
+    if(FAILED(map_result)||!mapped){
+        error_=L"DX12 world vertex buffer Map failed HRESULT "+
+            std::to_wstring(static_cast<unsigned long>(map_result));
+        return false;
+    }
     std::memcpy(mapped,upload.data(),bytes);
     const D3D12_RANGE written{0,bytes};
     candidate->Unmap(0,&written);
