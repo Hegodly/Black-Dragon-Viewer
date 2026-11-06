@@ -103,13 +103,14 @@ int main(){
     if(!queue.request(a,Kind::VisibleMesh,1.f,true,64U)||
        !queue.next_download()||!queue.download_finished(a,64U,true)||
        !queue.begin_decode(a)||!queue.decode_finished(a,false)||
-       queue.retry_failed(a))return 33;
+       queue.retry_failed(a)||queue.find(a)->retryable_fetch_failure)return 33;
     if(!queue.request(b,Kind::VisibleTexture,1.f,true,64U)||
        !queue.next_download()||!queue.download_finished(b,0U,true)||
-       queue.retry_failed(b))return 34;
+       queue.retry_failed(b)||queue.find(b)->retryable_fetch_failure)return 34;
     if(!queue.request(c,Kind::VisibleTexture,1.f,true,64U)||
        !queue.next_download()||!queue.download_finished(c,0U,false)||
-       !queue.retry_failed(c))return 35;
+       !queue.find(c)->retryable_fetch_failure||
+       !queue.retry_failed(c)||queue.find(c)->retryable_fetch_failure)return 35;
     // Dense region: terminal corrupt assets must not permanently block
     // a newly visible mesh when the bounded scheduler reaches capacity.
     queue.clear();
