@@ -10,7 +10,7 @@
 
 namespace kami::world {
 
-// DX12-owned immutable asset buffers. The cache deliberately does not alter
+// DX12-owned persistent asset buffers. The cache deliberately does not alter
 // the existing shader ABI: the renderer will bind these as ordinary vertex
 // streams in both its depth and PBR passes when the instance path is wired.
 class Dx12MeshBufferCache final {
@@ -48,23 +48,36 @@ public:
             existing->second.generation=generation_;
             return true;
         }
-        D3D12_HEAP_PROPERTIES heap{};
-        heap.Type=D3D12_HEAP_TYPE_UPLOAD;
-        heap.CreationNodeMask=1;
-        heap.VisibleNodeMask=1;
-        D3D12_RESOURCE_DESC desc{};
-        desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width=bytes;
-        desc.Height=1;
-        desc.DepthOrArraySize=1;
-        desc.MipLevels=1;
-        desc.SampleDesc.Count=1;
-        desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        // In-place updates are legal only after the caller fences GPU work.
+        // Retain capacity to avoid reallocating on every simulator update.
+        const bool reuse=existing!=buffers_.end()&&
+            existing->second.resource&&
+            existing->second.resource->GetDesc().Width>=bytes;
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-        if(FAILED(device->CreateCommittedResource(
-            &heap,D3D12_HEAP_FLAG_NONE,&desc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
-            IID_PPV_ARGS(resource.GetAddressOf()))))return false;
+        if(reuse)resource=existing->second.resource;
+        else {
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type=D3D12_HEAP_TYPE_UPLOAD;
+            heap.CreationNodeMask=1;
+            heap.VisibleNodeMask=1;
+            D3D12_RESOURCE_DESC desc{};
+            desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+            const std::uint64_t previous=existing!=buffers_.end()&&
+                existing->second.resource?
+                existing->second.resource->GetDesc().Width:0U;
+            desc.Width=std::min<std::uint64_t>(
+                std::numeric_limits<UINT>::max(),
+                std::max<std::uint64_t>(bytes,previous+previous/2U));
+            desc.Height=1;
+            desc.DepthOrArraySize=1;
+            desc.MipLevels=1;
+            desc.SampleDesc.Count=1;
+            desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if(FAILED(device->CreateCommittedResource(
+                &heap,D3D12_HEAP_FLAG_NONE,&desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+                IID_PPV_ARGS(resource.GetAddressOf()))))return false;
+        }
         void* mapped=nullptr;
         const D3D12_RANGE no_read{0,0};
         if(FAILED(resource->Map(0,&no_read,&mapped))||!mapped)return false;
