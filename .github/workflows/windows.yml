@@ -80,6 +80,7 @@ on:
       - feature/kami-r77-world-completeness
       - feature/kami-r78-mesh-budget-optimization
       - feature/kami-r79-adaptive-mesh-budget
+      - feature/kami-r80-two-pass-mesh-scheduler
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
       - feature/kami-sl-xmlrpc-login-and-sim-handshake
