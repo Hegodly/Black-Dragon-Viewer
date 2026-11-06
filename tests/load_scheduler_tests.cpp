@@ -98,5 +98,16 @@ int main(){
        return 31;
     queue.clear();
     if(queue.begin_decode(a))return 32;
+    // A successful fetch followed by a corrupt/unsupported decode is
+    // terminal. It must not enter the transient HTTP retry loop.
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(a,64U,true)||
+       !queue.begin_decode(a)||!queue.decode_finished(a,false)||
+       queue.retry_failed(a)||queue.find(a)->stage!=Stage::Failed)
+       return 33;
+    // A transport failure is still eligible for bounded retry.
+    if(!queue.request(b,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(b,0U,false)||
+       !queue.retry_failed(b))return 34;
     return 0;
 }
