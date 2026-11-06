@@ -443,10 +443,10 @@ int run_primitive_tests(){
         }
         const auto quality=world::build_live_primitive_geometry(
             crowded,{},0.f,0.f,0.f,9000U);
-        if(!valid(quality)||quality.root_shapes!=2048U||
+        if(!valid(quality)||quality.root_shapes!=world::kMaxQualityPrimitiveShapes||
            quality.eligible_shapes!=4200U||
-           quality.budget_deferred_shapes!=2152U||
-           quality.scene.vertices.size()!=2048U*36U)return 56;
+           quality.budget_deferred_shapes!=4200U-world::kMaxQualityPrimitiveShapes||
+           quality.scene.vertices.size()!=world::kMaxQualityPrimitiveShapes*36U)return 56;
         const auto balanced=world::build_live_primitive_geometry(
             crowded,{},0.f,0.f,0.f,512U);
         if(!valid(balanced)||balanced.root_shapes!=512U||
