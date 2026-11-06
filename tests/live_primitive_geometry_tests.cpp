@@ -571,6 +571,45 @@ int run_primitive_tests(){
            cycle.parent_cycle_instances!=1U||
            cycle.parent_missing_instances!=0U)return 68;
     }
+    // Dense-region regression A: object-ID ordering must never outrank
+    // a closer building in the same 16m band when only one fits.
+    {
+        protocol::mesh::LOD building;
+        building.triangles.assign(1000U,triangle);
+        auto farther=dense_root;farther.local_id=100U;farther.x=139.f;
+        auto nearer=dense_root;nearer.local_id=200U;nearer.x=129.f;
+        const auto prioritized=world::build_live_mesh_geometry(
+            {{farther.local_id,farther},{nearer.local_id,nearer}},
+            {},{},{{asset_id,building}},128.f,140.f,35.f,1000U);
+        if(prioritized.emitted_triangles!=1000U||
+           prioritized.root_meshes!=1U||
+           prioritized.undrawn_budget_instances!=1U||
+           prioritized.scene.vertices.size()!=3000U)return 69;
+        // Check actual emitted world-space X rather than just counters.
+        float sum_x=0.f;
+        for(const auto& v:prioritized.scene.vertices)sum_x+=v.px;
+        if(std::abs(sum_x/3000.f)>5.f)return 70;
+    }
+    // Dense-region regression B: repeated instances of one asset must
+    // remain distinct, but no instance may be partially emitted at a cap.
+    {
+        protocol::mesh::LOD shared;
+        shared.triangles.assign(1000U,triangle);
+        auto a=dense_root;a.local_id=300U;a.x=128.f;
+        auto b=dense_root;b.local_id=301U;b.x=130.f;
+        const auto both=world::build_live_mesh_geometry(
+            {{a.local_id,a},{b.local_id,b}}, {},{},
+            {{asset_id,shared}},128.f,140.f,35.f,2000U);
+        if(both.root_meshes!=2U||both.emitted_triangles!=2000U||
+           both.scene.vertices.size()!=6000U||
+           both.undrawn_budget_instances!=0U)return 71;
+        const auto capped=world::build_live_mesh_geometry(
+            {{a.local_id,a},{b.local_id,b}}, {},{},
+            {{asset_id,shared}},128.f,140.f,35.f,1500U);
+        if(capped.root_meshes!=1U||capped.emitted_triangles!=1000U||
+           capped.scene.vertices.size()!=3000U||
+           capped.undrawn_budget_instances!=1U)return 72;
+    }
     dense_root.reflection_probe=true;
     const auto invisible_probe=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,lod}},128,140,35,28000U);
     if(invisible_probe.emitted_triangles!=0U)return 54;
