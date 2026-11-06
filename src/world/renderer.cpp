@@ -1009,7 +1009,12 @@ bool Renderer::set_verified_live_terrain(
         // be matched or those passes would omit or double-draw surfaces.
         std::vector<Dx12MeshBufferCache::InstanceDrawRequirement> required;
         required.reserve(mesh_objects.instance_ranges.size());
-        bool valid_batch=!mesh_objects.instance_ranges.empty();
+        std::vector<Dx12MeshBufferCache::InstanceSourceSpan> source_spans;
+        source_spans.reserve(mesh_objects.instance_ranges.size());
+        for(const auto& range:mesh_objects.instance_ranges)
+            source_spans.push_back({range.local_id,range.first_vertex,range.vertex_count});
+        bool valid_batch=Dx12MeshBufferCache::validate_instance_source_spans(
+            new_mesh_vertices,source_spans);
         for(const auto& range:mesh_objects.instance_ranges){
             if(!range.local_id||!range.vertex_count||
                range.vertex_count>std::numeric_limits<UINT>::max()){
