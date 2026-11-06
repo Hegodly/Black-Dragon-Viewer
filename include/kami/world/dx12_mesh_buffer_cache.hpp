@@ -210,7 +210,8 @@ public:
             if(!item.local_id||!item.vertex_count||
                !seen.insert(item.local_id).second)return false;
             const auto* resident=find(region_key+":"+std::to_string(item.local_id));
-            if(!resident||!resident->resource||resident->revision!=revision||
+            if(!resident||!resident->resource||resident->generation!=generation_||
+               resident->revision!=revision||
                !resident->view.StrideInBytes||
                resident->view.SizeInBytes%resident->view.StrideInBytes||
                resident->view.SizeInBytes/resident->view.StrideInBytes!=item.vertex_count)
