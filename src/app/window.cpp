@@ -34,8 +34,8 @@ constexpr std::array<std::wstring_view, 8> kPages = {
     L"CREATOR STUDIO", L"PHOTO STUDIO"
 };
 constexpr std::array<std::wstring_view, 8> kDescriptions = {
-    L"Single integrated KAMI development build, seven workstreams tracked.",
-    L"Experimental SL connection renders live land; objects and avatars pending.",
+    L"KAMI viewer workspace. Open WORLD to enter the live DX12 scene.",
+    L"Live Second Life region streaming through the DX12 world renderer.",
     L"Native avatar locomotion, gait and terrain contact. Live avatar assets pending.",
     L"Inventory is not connected. No inventory items can be changed.",
     L"Messages and delivery receipts are not implemented yet.",
@@ -45,7 +45,7 @@ constexpr std::array<std::wstring_view, 8> kDescriptions = {
 };
 constexpr std::array<std::wstring_view, 8> kExplanations = {
     L"Written for KAMI  /  Native Direct2D + DirectWrite",
-    L"Live untextured land DX12 preview; real object and asset pipeline pending.",
+    L"DX12 region terrain, decoded meshes, texture layers and PBR materials; incomplete assets are reported.",
     L"Avatar identity will be shown only after real server login.",
     L"Future inventory operations will honor server permissions.",
     L"Nothing on this screen sends a message to another resident.",
@@ -490,13 +490,13 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         label(kPages[index],box(49,y+10,175,28),body_font_.Get(),
               page_==index?p.accent:p.muted);
     }
-    label(L"7 SYSTEMS TEST [F9]",box(41,height-93,200,25),
+    label(L"DEVELOPER TOOLS [F9]",box(41,height-93,200,25),
           small_font_.Get(),p.accent);
-    label(L"ORIGINAL CORE / R69",box(42,height-65,189,25),small_font_.Get(),p.muted);
+    label(L"KAMI VIEWER / DX12",box(42,height-65,189,25),small_font_.Get(),p.muted);
 
     const float contentX = 279.f;
     const float contentWidth = width - 305.f;
-    label(L"KAMI  /  INDEPENDENT WINDOWS APPLICATION",box(contentX,28,620,24),
+    label(L"KAMI  /  SECOND LIFE VIEWER",box(contentX,28,620,24),
           small_font_.Get(),p.muted);
     round_rect(box(width-195,23,163,44),22.f,p.surface);
     label(light_?L"LIGHT MODE   [T]":L"DARK MODE   [T]",
@@ -1282,7 +1282,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
           small_font_.Get(),p.muted);
     if(page_==0) {
         round_rect(box(contentX+22,493,cardWidth-44,33),11.f,p.accent_soft);
-        label(L"TEST SECURE SL ROUTE [N]",
+        label(L"CHECK CONNECTION [N]",
               box(contentX+31,500,cardWidth-62,22),
               small_font_.Get(),p.accent);
     }
@@ -1348,7 +1348,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX,y,contentWidth,rowH),20.f,p.surface);
         round_rect(box(contentX+18,y+19,216.f,42.f),13.f,p.accent_soft);
         label(sl_login_pending_?L"AUTHENTICATING...":
-              L"SL LOGIN TEST [L]",
+              L"CONNECT TO SECOND LIFE [L]",
               box(contentX+27,y+29,202.f,24.f),
               small_font_.Get(),p.accent);
         if(!sl_login_pending_ &&
@@ -1416,7 +1416,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
               box(contentX,height-35,contentWidth,23),
               small_font_.Get(),p.muted);
     }else{
-        label(L"ALPHA 0.1 / Experimental SL login + UDP; region content not connected.",
+        label(L"KAMI DX12 viewer / Connect to Second Life to stream region content.",
               box(contentX,height-35,contentWidth,23),
               small_font_.Get(),p.muted);
     }
