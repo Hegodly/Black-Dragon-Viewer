@@ -394,6 +394,7 @@ private:
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
     std::uint64_t mesh_scan_revision_=~std::uint64_t{0};
+    std::chrono::steady_clock::time_point mesh_last_discovery_scan_{};
     // Asset discovery must refresh when the camera avatar walks, even if
     // object data has not changed; otherwise mesh loading freezes on move.
     float mesh_last_scan_x_=0.f,mesh_last_scan_y_=0.f,
