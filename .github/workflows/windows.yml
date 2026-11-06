@@ -75,6 +75,7 @@ on:
       - diagnostics/kami-r69-missing-geometry-breakdown-20261105
       - feature/kami-sl-login-http-diagnostics
       - diagnostics/kami-r70-geometry-pipeline-20261105
+      - feature/kami-r71-world-render-overhaul
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
       - feature/kami-sl-xmlrpc-login-and-sim-handshake
