@@ -109,6 +109,33 @@ public:
         return true;
     }
 
+    // Budgeted residency for future per-asset mesh streams. Call only after
+    // the graphics fence completes. Never evict assets used in the current
+    // generation, nor the active combined-scene fallback buffer.
+    // Returns the number of bytes actually released; if live assets alone
+    // exceed the budget, report zero rather than discarding visible meshes.
+    [[nodiscard]] std::uint64_t evict_stale_to_budget(
+        std::uint64_t budget_bytes) {
+        std::uint64_t used=allocated_bytes();
+        std::uint64_t released=0U;
+        while(used>budget_bytes){
+            auto victim=buffers_.end();
+            for(auto it=buffers_.begin();it!=buffers_.end();++it){
+                if(it->first=="__kami_scene__"||
+                   it->second.generation==generation_)continue;
+                if(victim==buffers_.end()||
+                   it->second.generation<victim->second.generation)
+                    victim=it;
+            }
+            if(victim==buffers_.end())break;
+            const auto bytes=victim->second.resource?
+                victim->second.resource->GetDesc().Width:0U;
+            used-=bytes;
+            released+=bytes;
+            buffers_.erase(victim);
+        }
+        return released;
+    }
     // Evict only after the graphics queue fence has completed.
     void evict_unseen() {
         for(auto it=buffers_.begin();it!=buffers_.end();){
