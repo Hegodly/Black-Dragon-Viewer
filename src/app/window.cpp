@@ -596,6 +596,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 // frame counts. This row previously overflowed the panel,
                 // hiding the reason hundreds of mesh references could
                 // produce only a few DX12-visible objects.
+                const auto mesh_stats=sl_circuit_.mesh_asset_stats();
                 const std::wstring reasons=
                     L"MeshID "+std::to_wstring(sl_circuit_.mesh_object_count())+
                     L" | LOD "+std::to_wstring(sl_circuit_.decoded_mesh_assets().size())+
@@ -605,7 +606,12 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Far "+std::to_wstring(world_renderer_.mesh_out_of_range_instances())+
                     L" | BadPose "+std::to_wstring(world_renderer_.mesh_invalid_pose_instances())+
                     L" | Undrawn "+std::to_wstring(world_renderer_.mesh_undrawn_instances())+
-                    L" | Tris "+std::to_wstring(world_renderer_.uploaded_mesh_triangles());
+                    L" | Q "+std::to_wstring(mesh_stats.queued)+
+                    L" DL "+std::to_wstring(mesh_stats.downloading)+
+                    L" Decode "+std::to_wstring(mesh_stats.decoding)+
+                    L" GPU "+std::to_wstring(mesh_stats.ready_gpu)+
+                    L" Resident "+std::to_wstring(mesh_stats.resident)+
+                    L" Fail "+std::to_wstring(sl_circuit_.mesh_failure_count());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
             }
