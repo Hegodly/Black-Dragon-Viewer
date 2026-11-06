@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - feature/kami-live-viewer-integration
       - fix/kami-sl-login-http400-protocol-fields
       - fix/kami-login-xmlrpc-types-timeouts-response-20261103
       - fix/kami-official-login-identifier-bridge-20261103
@@ -197,7 +198,7 @@ jobs:
           name: KAMI-R69-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
-      - name: Package test executable
+      - name: Package live-world integration candidate
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
@@ -240,10 +241,10 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-R72-Full-Windows-Viewer-DX12.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Live-World-Integration-Candidate.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-R72-Full-Windows-Viewer-DX12
-          path: dist/KAMI-R72-Full-Windows-Viewer-DX12.zip
+          name: KAMI-Live-World-Integration-Candidate
+          path: dist/KAMI-Live-World-Integration-Candidate.zip
           retention-days: 14
 
