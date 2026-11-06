@@ -1013,7 +1013,7 @@ bool Renderer::set_verified_live_terrain(
         source_spans.reserve(mesh_objects.instance_ranges.size());
         for(const auto& range:mesh_objects.instance_ranges)
             source_spans.push_back({range.local_id,range.first_vertex,range.vertex_count});
-        bool valid_batch=Dx12MeshBufferCache::validate_instance_source_spans(
+        bool valid_batch=Dx12MeshBufferCache::covers_complete_mesh_scene(
             new_mesh_vertices,source_spans);
         for(const auto& range:mesh_objects.instance_ranges){
             if(!range.local_id||!range.vertex_count||
