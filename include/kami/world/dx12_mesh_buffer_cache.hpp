@@ -139,7 +139,8 @@ public:
     // Evict only after the graphics queue fence has completed.
     void evict_unseen() {
         for(auto it=buffers_.begin();it!=buffers_.end();){
-            if(it->second.generation!=generation_)it=buffers_.erase(it);
+            if(it->first!="__kami_scene__"&&
+               it->second.generation!=generation_)it=buffers_.erase(it);
             else ++it;
         }
     }
