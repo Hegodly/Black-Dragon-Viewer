@@ -481,24 +481,39 @@ bool Renderer::make_geometry() {
     upload.insert(upload.end(),scene.vertices.begin()+scene.terrain_count,scene.vertices.end());
     upload.insert(upload.end(),transparent.begin(),transparent.end());
     const UINT bytes=static_cast<UINT>(upload.size()*sizeof(Vertex));
-    const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
-    const auto desc=buffer_desc(bytes);
-    // GPU uploads are transactional. Never release a known-good world
-    // buffer until CreateCommittedResource AND Map both succeed.
+    // Migration phase 2: retain the DX12 vertex allocation across scene
+    // updates. The shader input layout, material indices, shadow and PBR
+    // passes remain unchanged. This avoids repeated GPU resource creation
+    // when SL streams a few more objects into an already-sized scene.
+    // The draw scheduler fences the graphics queue before scene updates.
+    const bool reuse=geometry_&&
+        geometry_->GetDesc().Width>=static_cast<UINT64>(bytes);
     Microsoft::WRL::ComPtr<ID3D12Resource> candidate;
-    const HRESULT allocation_result=device_.native_device()->CreateCommittedResource(
-            &properties,D3D12_HEAP_FLAG_NONE,&desc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
-            IID_PPV_ARGS(candidate.GetAddressOf()));
-    if(FAILED(allocation_result)){
-        error_=L"DX12 world vertex buffer allocation failed HRESULT "+
-            std::to_wstring(static_cast<unsigned long>(allocation_result))+
-            L" bytes "+std::to_wstring(bytes);
-        return false;
+    if(!reuse){
+        const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
+        // Grow geometrically to amortize simulator object arrivals, while
+        // respecting the D3D12 vertex-buffer view's 32-bit byte limit.
+        const UINT64 previous=geometry_?geometry_->GetDesc().Width:0U;
+        const UINT64 target=std::min<UINT64>(
+            std::numeric_limits<UINT>::max(),
+            std::max<UINT64>(bytes,previous+previous/2U));
+        const auto desc=buffer_desc(target);
+        const HRESULT allocation_result=
+            device_.native_device()->CreateCommittedResource(
+                &properties,D3D12_HEAP_FLAG_NONE,&desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+                IID_PPV_ARGS(candidate.GetAddressOf()));
+        if(FAILED(allocation_result)){
+            error_=L"DX12 world vertex buffer allocation failed HRESULT "+
+                std::to_wstring(static_cast<unsigned long>(allocation_result))+
+                L" bytes "+std::to_wstring(bytes);
+            return false;
+        }
     }
+    auto* destination=reuse?geometry_.Get():candidate.Get();
     void* mapped=nullptr;
     const D3D12_RANGE no_read{0,0};
-    const HRESULT map_result=candidate->Map(0,&no_read,&mapped);
+    const HRESULT map_result=destination->Map(0,&no_read,&mapped);
     if(FAILED(map_result)||!mapped){
         error_=L"DX12 world vertex buffer Map failed HRESULT "+
             std::to_wstring(static_cast<unsigned long>(map_result));
@@ -506,8 +521,8 @@ bool Renderer::make_geometry() {
     }
     std::memcpy(mapped,upload.data(),bytes);
     const D3D12_RANGE written{0,bytes};
-    candidate->Unmap(0,&written);
-    geometry_=std::move(candidate);
+    destination->Unmap(0,&written);
+    if(!reuse)geometry_=std::move(candidate);
     skin_audit_=audit;
     terrain_count_=opaque_count;
     transparent_vertices_=std::move(transparent);
