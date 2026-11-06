@@ -542,16 +542,25 @@ MeshBatch build_live_mesh_geometry(
     batch.eligible_instances=chosen.size();
     auto& verts=batch.scene.vertices;
     verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
+    // R74: never spend the entire scene budget on a few dense meshes.
+    // Give each nearby instance a bounded share, so small furnishings and
+    // buildings can continue to draw even after a large mesh is skipped.
+    // Do not truncate a mesh mid-object: partial triangles create holes.
+    const std::size_t fair_share=std::max<std::size_t>(24U,
+        max_triangles/std::max<std::size_t>(1U,chosen.size()));
+    const std::size_t per_object_cap=std::min<std::size_t>(
+        max_triangles,std::max<std::size_t>(fair_share*4U,2048U));
     for(std::size_t index=0U;index<chosen.size();++index){
-        if(batch.emitted_triangles>=max_triangles){
-            batch.undrawn_budget_instances+=chosen.size()-index;
-            break;
-        }
         const auto& item=chosen[index];
+        const auto triangles=item.lod->triangles.size();
+        const auto remaining=max_triangles-batch.emitted_triangles;
+        if(triangles>remaining||triangles>per_object_cap){
+            ++batch.undrawn_budget_instances;
+            continue;
+        }
         std::size_t object_triangles=0U;
         std::size_t transparent=0U,invalid_geometry=0U;
         for(const auto& triangle:item.lod->triangles){
-            if(batch.emitted_triangles>=max_triangles)break;
             // Every mesh face is an independent SL material slot. An
             // explicit null override must never fall back to its parent.
             const unsigned face=triangle.face_index;
