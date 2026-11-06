@@ -1008,6 +1008,8 @@ bool Renderer::set_verified_live_terrain(
     mesh_undrawn_transparent_instances_=mesh_objects.undrawn_transparent_instances;
     mesh_undrawn_bad_geometry_instances_=mesh_objects.undrawn_bad_geometry_instances;
     mesh_undrawn_budget_instances_=mesh_objects.undrawn_budget_instances;
+    mesh_undrawn_global_limit_=mesh_objects.undrawn_global_limit;
+    mesh_undrawn_object_limit_=mesh_objects.undrawn_object_limit;
     uploaded_textured_triangles_=mesh_objects.textured_triangles+
                                  primitives.textured_triangles;
     primitive_eligible_=primitives.eligible_shapes;
