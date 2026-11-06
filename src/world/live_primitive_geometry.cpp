@@ -560,8 +560,14 @@ MeshBatch build_live_mesh_geometry(
     // Do not truncate a mesh mid-object: partial triangles create holes.
     const std::size_t fair_share=std::max<std::size_t>(24U,
         max_triangles/std::max<std::size_t>(1U,chosen.size()));
+    // R79: reserve a modest share for complex nearby building meshes.
+    // Keep the R78 small-mesh priority, but allow authentic 4K-8K triangle
+    // assets in the closest 16m band when there is enough headroom.
+    // The global triangle ceiling remains unchanged.
     const std::size_t per_object_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(fair_share*4U,4096U));
+    const std::size_t near_complex_cap=std::min<std::size_t>(
+        max_triangles,std::max<std::size_t>(per_object_cap,8192U));
     for(std::size_t index=0U;index<chosen.size();++index){
         const auto& item=chosen[index];
         const auto triangles=item.lod->triangles.size();
@@ -574,8 +580,12 @@ MeshBatch build_live_mesh_geometry(
         // emit as many real triangles as fit when there is no competition.
         // In crowded scenes, skip oversized instances intact so one
         // dense mesh cannot starve thousands of smaller neighbors.
+        const bool close_to_camera=item.distance<256.f;
+        const bool spare_budget=remaining>=max_triangles/4U;
+        const std::size_t allowed_cap=
+            close_to_camera&&spare_budget?near_complex_cap:per_object_cap;
         if(chosen.size()>1U &&
-           (triangles>remaining||triangles>per_object_cap)){
+           (triangles>remaining||triangles>allowed_cap)){
             ++batch.undrawn_budget_instances;
             continue;
         }
