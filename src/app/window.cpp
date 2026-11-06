@@ -628,7 +628,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" D:"+std::to_wstring(world_renderer_.mesh_parent_deep_instances())+
                     L" | Undrawn Alpha:"+std::to_wstring(world_renderer_.mesh_undrawn_transparent_instances())+
                     L" Geom:"+std::to_wstring(world_renderer_.mesh_undrawn_bad_geometry_instances())+
-                    L" Budget:"+std::to_wstring(world_renderer_.mesh_undrawn_budget_instances());
+                    L" Budget:"+std::to_wstring(world_renderer_.mesh_undrawn_budget_instances())+
+                    L" Global:"+std::to_wstring(world_renderer_.mesh_undrawn_global_limit())+
+                    L" PerObj:"+std::to_wstring(world_renderer_.mesh_undrawn_object_limit());
                 label(causes,box(contentX+36,y+43,contentWidth-76,19),
                       small_font_.Get(),p.accent);
             }
