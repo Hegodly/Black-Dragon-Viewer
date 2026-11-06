@@ -1122,12 +1122,14 @@ bool Renderer::set_decoded_region_geometry(
     return true;
 }
 void Renderer::clear_decoded_region_geometry() {
+    // Always invalidate simulator-local instance identities on disconnect,
+    // even if no region vertex buffer was successfully uploaded yet.
+    mesh_residency_.clear_instances();
     if(!region_mesh_)return;
     if(ready_)wait_for_gpu();
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
-    mesh_residency_.clear_instances();
     environment_ready_=false;environment_face_=0U;environment_dirty_=true;
     environment_server_probes_.clear();write_environment_probe();
     terrain_texture_layers_=terrain_pbr_layers_=0U;
