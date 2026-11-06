@@ -864,6 +864,25 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     }
 
     if (page_ == 1) {
+        // R86: visible mesh coverage, NOT a claim that the entire SL scene
+        // has loaded. The simulator can discover additional objects later.
+        const auto drawn=world_renderer_.uploaded_live_meshes();
+        const auto pending=world_renderer_.mesh_undrawn_instances()+
+                           world_renderer_.mesh_missing_lod_instances();
+        const auto total=drawn+pending;
+        const unsigned coverage=total?
+            static_cast<unsigned>(100U*drawn/total):0U;
+        const float bar_width=std::max(0.f,contentWidth-320.f);
+        round_rect(box(contentX+30,184,bar_width,9),4.f,p.muted);
+        if(coverage>0U)
+            round_rect(box(contentX+30,184,
+                bar_width*static_cast<float>(coverage)/100.f,9),
+                4.f,p.accent);
+        label(L"Visible mesh coverage ~"+std::to_wstring(coverage)+
+              L"% (known objects)",
+              box(contentX+38+bar_width,175,280,26),
+              small_font_.Get(),p.accent);
+
         round_rect(box(contentX,90,contentWidth,height-178),30.f,p.elevated);
         label(L"WORLD  /  DIRECTX 12",box(contentX+28,105,contentWidth-55,45),
               title_font_.Get(),p.text);
@@ -1829,7 +1848,7 @@ void Window::begin_sl_login() {
         L"to send credentials to the official SL login server over HTTPS.\n"
         L"NO: Open the official Terms in my browser.\n"
         L"CANCEL: Do not sign in.\n\n"
-        L"KAMI does not save credentials. MFA challenges are not yet supported.",
+        L"Windows can remember credentials if Save is checked. MFA is not yet supported.",
         L"KAMI Beyond Reality / Experimental Login",
         MB_YESNOCANCEL|MB_ICONINFORMATION|MB_DEFBUTTON3);
     if(choice==IDNO){
@@ -1846,7 +1865,7 @@ void Window::begin_sl_login() {
     prompt.pszCaptionText=L"KAMI Beyond Reality / Second Life";
     prompt.pszMessageText=
         L"Experimental login for login.agni.lindenlab.com only. "
-        L"Credentials are used once and never saved.";
+        L"Check Save to remember login securely in Windows Credential Manager.";
     std::array<wchar_t,CREDUI_MAX_USERNAME_LENGTH+1> account{};
     std::array<wchar_t,CREDUI_MAX_PASSWORD_LENGTH+1> secret{};
     BOOL save=FALSE;
@@ -1855,7 +1874,8 @@ void Window::begin_sl_login() {
         account.data(),static_cast<ULONG>(account.size()),
         secret.data(),static_cast<ULONG>(secret.size()),&save,
         CREDUI_FLAGS_GENERIC_CREDENTIALS|
-        CREDUI_FLAGS_ALWAYS_SHOW_UI|CREDUI_FLAGS_DO_NOT_PERSIST);
+        CREDUI_FLAGS_ALWAYS_SHOW_UI|CREDUI_FLAGS_SHOW_SAVE_CHECK_BOX|
+        CREDUI_FLAGS_EXPECT_CONFIRMATION);
     if(status!=NO_ERROR){
         SecureZeroMemory(secret.data(),secret.size()*sizeof(wchar_t));
         if(status!=ERROR_CANCELLED){
@@ -2004,6 +2024,9 @@ void Window::update_sl_connection() {
             result.status=protocol::LoginStatus::NetworkError;
         }
         sl_login_pending_=false;
+        // Confirm persistence only after the SL server accepts the login.
+        (void)CredUIConfirmCredentialsW(L"login.agni.lindenlab.com",
+            result.accepted()?TRUE:FALSE);
         sl_login_status_=result.status;
         sl_login_http_status_=result.http_status;
         sl_login_response_kind_=result.http_response_kind;
