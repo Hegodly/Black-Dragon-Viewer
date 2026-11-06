@@ -82,7 +82,10 @@ assert "src/protocol/simulator_transport.cpp" in cmake
 assert "ws2_32" in cmake
 app=(root/"src/app/window.cpp").read_text(encoding="utf-8")
 assert "CredUIPromptForCredentialsW" in app
-assert "CREDUI_FLAGS_DO_NOT_PERSIST" in app
+assert "CREDUI_FLAGS_DO_NOT_PERSIST" not in app
+assert "CREDUI_FLAGS_SHOW_SAVE_CHECK_BOX" in app
+assert "CREDUI_FLAGS_EXPECT_CONFIRMATION" in app
+assert "CredUIConfirmCredentialsW" in app
 assert "CREDUI_FLAGS_ALWAYS_SHOW_UI" in app
 assert "std::async(std::launch::async" in app
 assert "sl_circuit_.poll()" in app
