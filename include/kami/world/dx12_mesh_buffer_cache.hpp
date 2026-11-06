@@ -308,17 +308,20 @@ public:
         for(const auto& plane:planes){
             if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
                !std::isfinite(plane.z)||!std::isfinite(plane.d))return true;
-            const float length=std::sqrt(plane.x*plane.x+
-                plane.y*plane.y+plane.z*plane.z);
-            if(!std::isfinite(length)||length<=0.f)return true;
+            // Evaluate extreme simulator coordinates in double precision:
+            // float dot products can overflow and make visibility unreliable.
+            const double nx=plane.x,ny=plane.y,nz=plane.z;
+            const double length=std::sqrt(nx*nx+ny*ny+nz*nz);
+            if(!std::isfinite(length)||length<=0.0)return true;
         }
         for(const auto& plane:planes){
-            const float length=std::sqrt(plane.x*plane.x+
-                plane.y*plane.y+plane.z*plane.z);
-            const float distance=plane.x*sphere.x+plane.y*sphere.y+
-                plane.z*sphere.z+plane.d;
+            const double nx=plane.x,ny=plane.y,nz=plane.z;
+            const double length=std::sqrt(nx*nx+ny*ny+nz*nz);
+            const double distance=nx*static_cast<double>(sphere.x)+
+                ny*static_cast<double>(sphere.y)+
+                nz*static_cast<double>(sphere.z)+plane.d;
             if(!std::isfinite(distance))return true;
-            if(distance < -sphere.radius*length)return false;
+            if(distance < -static_cast<double>(sphere.radius)*length)return false;
         }
         return true;
     }
