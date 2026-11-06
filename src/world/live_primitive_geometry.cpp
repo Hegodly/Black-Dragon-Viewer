@@ -572,14 +572,19 @@ MeshBatch build_live_mesh_geometry(
     const std::size_t near_complex_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(
             per_object_cap,quality_budget?32768U:8192U));
-    // R80: schedule two real-geometry passes without duplicating instances.
-    // Pass one draws inexpensive meshes across the full visible scene.
-    // Pass two spends the remaining budget on detailed buildings/furniture.
-    // Keep R78 distance-band priority within each pass.
+    // R81: three bounded passes for dense landscaping. Draw lightweight
+    // vegetation/decor first, then ordinary furnishings, then costly
+    // buildings and detailed plants. All passes retain distance-band order
+    // and use genuine mesh LODs; no object is emitted twice.
     std::vector<std::size_t> draw_order;
     draw_order.reserve(chosen.size());
     for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()<=per_object_cap)
+        if(chosen[i].lod->triangles.size()<=1024U)
+            draw_order.push_back(i);
+    const std::size_t medium_start=draw_order.size();
+    for(std::size_t i=0U;i<chosen.size();++i)
+        if(chosen[i].lod->triangles.size()>1024U&&
+           chosen[i].lod->triangles.size()<=per_object_cap)
             draw_order.push_back(i);
     const std::size_t complex_start=draw_order.size();
     for(std::size_t i=0U;i<chosen.size();++i)
