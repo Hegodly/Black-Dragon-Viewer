@@ -244,6 +244,12 @@ void Circuit::maybe_fetch_mesh() noexcept {
                         loaded_meshes_.insert_or_assign(
                             result.id,std::move(result.lod));
                         ++spatial_object_revision_;
+                    }else if(!room&&result.decoded){
+                        // Cache pressure is not malformed geometry. A failed
+                        // scheduler entry would otherwise permanently hide
+                        // this mesh even after the agent moves or space frees.
+                        (void)mesh_scheduler_.forget_finished(result.id);
+                        mesh_scan_revision_=~std::uint64_t{0};
                     }else ++mesh_failure_count_;
                 }
             }else {
