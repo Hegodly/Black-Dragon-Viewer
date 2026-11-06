@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/kami-original-core
+      - feature/kami-original-viewer-reintegration
       - fix/kami-sl-login-http400-protocol-fields
       - feature/kami-sl-login-http-diagnostics
       - feature/kami-live-simulator-udp-and-login-ui
@@ -38,16 +39,15 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test native core
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Package test executable
+      - name: Package original viewer foundation
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
           Copy-Item build/Release/KAMIViewer.exe dist/KAMI
-          Copy-Item build/Release/KAMI-DX12-Smoke.exe dist/KAMI
           Copy-Item README.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Original-Core-Test.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Original-Viewer-Foundation.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-Original-Core-TEST-not-yet-SL-viewer
+          name: KAMI-Original-Viewer-Foundation-NOT-FULL
           path: dist/KAMI-Original-Core-Test.zip
           retention-days: 14
