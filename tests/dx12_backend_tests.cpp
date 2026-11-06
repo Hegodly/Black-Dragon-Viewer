@@ -9,6 +9,19 @@ int main() {
     if (device.native_device() != nullptr) return 2;
     if (device.graphics_queue() != nullptr) return 3;
 
+    // Source-span parity checks are CPU-only and must run even without WARP.
+    using Span=kami::world::Dx12MeshBufferCache::InstanceSourceSpan;
+    using Cache=kami::world::Dx12MeshBufferCache;
+    if(!Cache::validate_instance_source_spans(12,{Span{1,0,3},Span{2,3,6}}))return 45;
+    if(Cache::validate_instance_source_spans(12,{Span{1,0,6},Span{2,3,3}}))return 46;
+    if(Cache::validate_instance_source_spans(12,{Span{1,0,3},Span{1,3,3}}))return 47;
+    if(Cache::validate_instance_source_spans(12,{Span{1,9,6}}))return 48;
+    if(Cache::validate_instance_source_spans(12,{Span{1,1,3}}))return 49;
+    if(Cache::validate_instance_source_spans(12,{Span{1,0,4}}))return 50;
+    if(Cache::validate_instance_source_spans(12,{Span{0,0,3}}))return 51;
+    if(Cache::validate_instance_source_spans(12,{}))return 52;
+    if(!Cache::validate_instance_source_spans(12,{Span{1,9,3},Span{2,0,3}}))return 53;
+
     // GitHub CI may lack a hardware GPU. This tests safe initialization
     // without claiming that a rendered Second Life world exists.
     const auto status = device.initialize(true);
