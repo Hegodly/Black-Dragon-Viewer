@@ -283,9 +283,16 @@ void Circuit::maybe_fetch_mesh() noexcept {
     }
     if(mesh_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
+    // Keep a short inter-batch cooldown while allowing available worker
+    // slots to refill promptly. The previous 350 ms delay in normal mode
+    // serialized successive batches even after downloads completed, making
+    // densely meshed homes appear to rez one batch at a time. Bound active
+    // concurrency by mesh_workers_ below rather than by a long timer.
+    // Preserve a longer cooldown after HTTP failures to avoid hammering CAPS.
+    const auto mesh_launch_cooldown=std::chrono::milliseconds(
+        mesh_retry_after_.empty()?(maximum_world_detail_?25:75):350);
     if(mesh_last_start_!=std::chrono::steady_clock::time_point{}&&
-       now-mesh_last_start_<std::chrono::milliseconds(
-           maximum_world_detail_?50:350))return;
+       now-mesh_last_start_<mesh_launch_cooldown)return;
     if(loaded_meshes_.size()>=kMaxWorldMeshAssets||
        loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles){
         // Re-evaluate retention even when the agent is stationary. A full

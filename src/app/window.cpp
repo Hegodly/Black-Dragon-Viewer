@@ -610,8 +610,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" | Q "+std::to_wstring(mesh_stats.queued)+
                     L" DL "+std::to_wstring(mesh_stats.downloading)+
                     L" Decode "+std::to_wstring(mesh_stats.decoding)+
-                    L" GPU "+std::to_wstring(mesh_stats.ready_gpu)+
-                    L" Resident "+std::to_wstring(mesh_stats.resident)+
+                    L" DecodedReady "+std::to_wstring(mesh_stats.ready_gpu)+
+                    L" SchedulerResident "+std::to_wstring(mesh_stats.resident)+
                     L" Fail "+std::to_wstring(sl_circuit_.mesh_failure_count());
                 label(reasons,box(contentX+36,y+43,
                       contentWidth-76,19),small_font_.Get(),p.accent);
