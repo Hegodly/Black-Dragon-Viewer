@@ -115,6 +115,24 @@ public:
         return true;
     }
 
+    // Submit an already-resident vertex stream using the caller's current
+    // root signature, pipeline state, material descriptors and shader ABI.
+    // The caller owns command-list lifetime and must fence GPU work before
+    // replacing or evicting this resource. No upload occurs in this path.
+    [[nodiscard]] bool record_draw(ID3D12GraphicsCommandList* commands,
+                                   const std::string& asset_id,
+                                   UINT vertex_count,
+                                   UINT first_vertex=0U) const noexcept {
+        if(!commands||!vertex_count)return false;
+        const auto* buffer=find(asset_id);
+        if(!buffer||!buffer->resource||!buffer->view.StrideInBytes)return false;
+        const UINT capacity=buffer->view.SizeInBytes/buffer->view.StrideInBytes;
+        if(first_vertex>capacity||vertex_count>capacity-first_vertex)return false;
+        commands->IASetVertexBuffers(0,1,&buffer->view);
+        commands->DrawInstanced(vertex_count,1,first_vertex,0);
+        return true;
+    }
+
     // Budgeted residency for future per-asset mesh streams. Call only after
     // the graphics fence completes. Never evict assets used in the current
     // generation, nor the active combined-scene fallback buffer.
