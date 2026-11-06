@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cstddef>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -41,6 +42,16 @@ public:
     [[nodiscard]] MeshDrawSchedule schedule_draws(
         std::vector<MeshDrawCandidate> candidates,
         std::size_t triangle_budget) const {
+        // NaN and infinity cannot participate in a strict weak ordering.
+        // Reject corrupt camera distances before sorting the draw list.
+        const auto invalid=std::remove_if(candidates.begin(),candidates.end(),
+            [](const auto& candidate){
+                return !std::isfinite(candidate.distance_squared)||
+                       candidate.distance_squared<0.f;
+            });
+        const std::size_t invalid_count=static_cast<std::size_t>(
+            std::distance(invalid,candidates.end()));
+        candidates.erase(invalid,candidates.end());
         std::sort(candidates.begin(),candidates.end(),
             [](const auto& a,const auto& b){
                 if(a.distance_squared!=b.distance_squared)
@@ -48,6 +59,7 @@ public:
                 return a.local_id<b.local_id;
             });
         MeshDrawSchedule result;
+        result.deferred=invalid_count;
         std::set<std::uint32_t> scheduled;
         for(const auto& candidate:candidates){
             const auto instance=instances_.find(candidate.local_id);
