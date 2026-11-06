@@ -631,7 +631,6 @@ MeshBatch build_live_mesh_geometry(
         }
         // The first pass is guaranteed the first opportunity to fill the
         // scene. The second pass cannot displace its already emitted meshes.
-        const bool complex_pass=class_of(draw_order[index])==2U;
         // R85: keep the inexpensive-first R81 pass, but permit a complex
         // mesh that fits the remaining GLOBAL budget even when it exceeds
         // the old per-object cap. Otherwise complete building sections
@@ -640,9 +639,11 @@ MeshBatch build_live_mesh_geometry(
         // fair-share cap is smaller than the available global budget. Keep
         // the global triangle ceiling and full-object admission invariant.
         // More distant objects retain fair-share scheduling to protect FPS.
-        const bool nearby_structure=item.distance<=16.f*16.f;
-        const std::size_t allowed_cap=(complex_pass||nearby_structure)?
-            remaining:per_object_cap;
+        // The global budget is the authoritative capacity guard. Once a
+        // complete mesh fits it, rejecting that mesh solely on fair-share
+        // size leaves real walls/floors invisible despite available space.
+        // Distance-band ordering already prioritizes nearby structures.
+        const std::size_t allowed_cap=remaining;
         // Never partially draw a decoded mesh, even when it is the only
         // eligible object. A partial object can look like missing walls.
         if(triangles>remaining||
