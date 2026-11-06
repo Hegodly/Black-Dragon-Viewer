@@ -993,6 +993,7 @@ bool Renderer::set_verified_live_terrain(
     uploaded_linked_primitive_shapes_=primitives.linked_shapes;
     uploaded_primitive_vertices_=new_primitive_vertices;
     uploaded_mesh_vertices_=new_mesh_vertices;
+    previous_mesh_draw_count_=uploaded_mesh_shapes_;
     uploaded_mesh_shapes_=mesh_objects.root_meshes+mesh_objects.linked_meshes;
     uploaded_mesh_triangles_=mesh_objects.emitted_triangles;
     mesh_eligible_instances_=mesh_objects.eligible_instances;
@@ -1112,6 +1113,7 @@ void Renderer::clear_decoded_region_geometry() {
     // Always invalidate simulator-local instance identities on disconnect,
     // even if no region vertex buffer was successfully uploaded yet.
     mesh_residency_.clear_instances();
+    previous_mesh_draw_count_=0;
     if(!region_mesh_)return;
     if(ready_)wait_for_gpu();
     // Clear server data immediately on disconnect. If restoring the local
