@@ -277,8 +277,7 @@ PrimitiveBatch build_live_primitive_geometry(
         const V d=sub(p.pos,origin);
         // Allow structures beyond the old 96m horizontal / 60m vertical
         // gate. The 128-shape closest-first budget caps GPU uploads.
-        if(std::abs(d.x)>144.f||std::abs(d.y)>144.f||
-           std::abs(d.z)>128.f){
+        if(dot(d,d)>128.f*128.f){
             ++result.out_of_range_shapes;
             return;
         }
@@ -380,8 +379,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
         if(is_mesh&&mesh==loaded.end())return;
         if(!is_mesh&&t.primitive==Kind::Unknown)return;
         const V delta=sub(pose.pos,origin);
-        if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
-           std::abs(delta.z)>128.f)return;
+        if(dot(delta,delta)>128.f*128.f)return;
         const float distance=dot(delta,delta);
         std::uint32_t mask=0U;
         if(is_mesh){
@@ -505,8 +503,7 @@ MeshBatch build_live_mesh_geometry(
             ++batch.invalid_pose_instances;return;
         }
         const V delta=sub(pose.pos,origin);
-        if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
-           std::abs(delta.z)>128.f){
+        if(dot(delta,delta)>128.f*128.f){
             ++batch.out_of_range_instances;return;
         }
         const auto found=loaded.find(t.mesh_asset_id);
