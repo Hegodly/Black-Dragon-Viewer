@@ -24,11 +24,11 @@ Settings normalize(Settings value) noexcept {
         default: value.render_scale_percent=100; break;
     }
     switch(value.fps_limit) {
-        case 0: case 30: case 60: case 120: case 144: break;
+        case 0: case 30: case 60: case 90: case 120: case 144: case 165: case 240: break;
         default: value.fps_limit=60; break;
     }
     switch(value.target_fps) {
-        case 30: case 60: case 90: case 120: case 144: break;
+        case 30: case 60: case 90: case 120: case 144: case 165: case 240: break;
         default: value.target_fps=60; break;
     }
     return value;
