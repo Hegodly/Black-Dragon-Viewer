@@ -21,10 +21,14 @@ void Circuit::maybe_fetch_material() noexcept {
                     if(result.fetched)++material_decode_failures_;else ++material_http_failures_;
                 }
             }
-            if(result.decoded){
+            // An HTTP result can arrive after the region/object interest set
+            // changed. Do not resurrect a stale PBR material or force a
+            // needless texture-atlas rebuild for an obsolete object.
+            const bool still_wanted=material_attempts_.contains(result.id);
+            if(result.decoded&&still_wanted){
                 loaded_materials_.insert_or_assign(result.id,std::move(result.material));
                 ++spatial_object_revision_;texture_scan_revision_=~std::uint64_t{0};
-            }else{
+            }else if(still_wanted){
                 if(!terrain||result.status==0U||result.status>=500U)++material_failures_;
                 const auto s=result.status;
                 const bool transient=!result.fetched&&(s==0U||s==408U||s==429U||s==500U||s==502U||s==503U||s==504U);
