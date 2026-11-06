@@ -916,6 +916,7 @@ bool Renderer::set_verified_live_terrain(
                 scene.vertices.size())/3U),
         live_texture_layers_,pbr_table.faces);
     const auto new_mesh_vertices=mesh_objects.scene.vertices.size();
+    const auto mesh_scene_first=scene.vertices.size();
     scene.vertices.insert(scene.vertices.end(),
         mesh_objects.scene.vertices.begin(),mesh_objects.scene.vertices.end());
     scene.terrain_count+=new_mesh_vertices;
@@ -978,6 +979,31 @@ bool Renderer::set_verified_live_terrain(
             if(error_.empty())error_=L"R72 DX12 land mesh upload failed";
             return false;
         }
+    }
+    // R94: stage real per-instance resident DX12 vertex streams after the
+    // combined scene has been accepted. This is deliberately non-authoritative:
+    // the established PBR/shadow draw path remains the visible fallback until
+    // parity and GPU-driven submission tests pass. Scene-relative spans are
+    // preserved through the origin rebase above.
+    if(!unchanged&&ready_&&region_mesh_){
+        wait_for_gpu(); // required before reusing resident upload allocations
+        mesh_gpu_cache_.begin_generation();
+        for(const auto& range:mesh_objects.instance_ranges){
+            if(range.first_vertex>new_mesh_vertices||
+               range.vertex_count>new_mesh_vertices-range.first_vertex)
+                continue;
+            const auto first=mesh_scene_first+range.first_vertex;
+            if(first>region_mesh_->vertices.size()||
+               range.vertex_count>region_mesh_->vertices.size()-first)
+                continue;
+            // Failure leaves the original combined-scene draw untouched.
+            (void)mesh_gpu_cache_.upload_instance(device_.native_device(),
+                "__kami_live_region__",range.local_id,scene_gpu_revision_,
+                region_mesh_->vertices.data(),region_mesh_->vertices.size(),
+                first,range.vertex_count);
+        }
+        // No eviction here: region transitions and memory budgeting require
+        // separate fence-aware lifecycle validation before enabling them.
     }
     if(material_changed&&ready_&&!make_material_records(pbr_rows_)){
         ready_=false;error_=L"DX12 glTF material record upload failed";return false;
