@@ -82,6 +82,10 @@ bool Scheduler::download_finished(std::string_view id,
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Downloading)return false;
     if(!success||bytes>kMaxBytesPerAsset||bytes==0){
+        // A successful but empty/oversized response is malformed, not a
+        // transient network failure. Keep a nonzero sentinel so the
+        // retry gate rejects it without scheduling another fetch.
+        asset->actual_bytes=success?1U:0U;
         asset->stage=Stage::Failed;return true;
     }
     asset->actual_bytes=bytes;
