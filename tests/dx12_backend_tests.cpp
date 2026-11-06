@@ -97,6 +97,14 @@ int main() {
                 6,{Span{17,0,3},Span{18,0,3}}))return 49;
         if(kami::world::Dx12MeshBufferCache::covers_complete_mesh_scene(
                 6,{}))return 50;
+        // Material parity must preserve opaque/shadow and alpha-blend paths.
+        using Cache=kami::world::Dx12MeshBufferCache;
+        if(!Cache::opaque_material_parity({1,1,1,0,0,0},{false,false}))return 51;
+        if(Cache::opaque_material_parity({1,1,1},{false,true}))return 52;
+        if(Cache::opaque_material_parity({1,1,0},{false,false}))return 53;
+        if(Cache::opaque_material_parity({2,2,2},{false,false}))return 54;
+        if(Cache::opaque_material_parity({1,1},{false,false}))return 55;
+        if(Cache::opaque_material_parity({},{false,false}))return 56;
         // A region generation change must invalidate old mesh residency until
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();
