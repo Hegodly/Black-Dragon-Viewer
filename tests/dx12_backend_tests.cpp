@@ -105,6 +105,18 @@ int main() {
         if(Cache::opaque_material_parity({2,2,2},{false,false}))return 54;
         if(Cache::opaque_material_parity({1,1},{false,false}))return 55;
         if(Cache::opaque_material_parity({},{false,false}))return 56;
+        // Conservative frustum checks: never discard missing or corrupt
+        // simulator bounds, and reject only definitely outside spheres.
+        using Cache=kami::world::Dx12MeshBufferCache;
+        const std::vector<Cache::VisibilityPlane> cube{
+            {1,0,0,1},{-1,0,0,1},{0,1,0,1},
+            {0,-1,0,1},{0,0,1,1},{0,0,-1,1}};
+        if(!Cache::potentially_visible({0,0,0,.5f,true},cube))return 51;
+        if(Cache::potentially_visible({3,0,0,.5f,true},cube))return 52;
+        if(!Cache::potentially_visible({1.5f,0,0,.5f,true},cube))return 53;
+        if(!Cache::potentially_visible({3,0,0,.5f,false},cube))return 54;
+        if(!Cache::potentially_visible({3,0,0,.5f,true},{}))return 55;
+        if(!Cache::potentially_visible({3,0,0,-1.f,true},cube))return 56;
         // A region generation change must invalidate old mesh residency until
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();
