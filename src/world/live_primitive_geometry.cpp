@@ -592,8 +592,18 @@ MeshBatch build_live_mesh_geometry(
             std::sqrt(chosen[i].distance)/16.f);
         bands[band][class_of(i)].push_back(i);
     }
-    for(const auto& [band,queues]:bands){
+    // Within each 16m band, favor the genuinely closest structural meshes.
+    // Map iteration order is object-ID order, not distance order; in dense
+    // scenes that could spend the last available triangles on farther walls
+    // while nearer walls remained invisible. Stable sorting keeps tie order.
+    for(auto& [band,queues]:bands){
         (void)band;
+        for(auto& queue:queues){
+            std::stable_sort(queue.begin(),queue.end(),
+                [&](std::size_t a,std::size_t b){
+                    return chosen[a].distance<chosen[b].distance;
+                });
+        }
         std::array<std::size_t,3> cursor{0U,0U,0U};
         const std::size_t total=queues[0].size()+queues[1].size()+
                                 queues[2].size();
