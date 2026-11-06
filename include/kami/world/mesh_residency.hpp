@@ -21,8 +21,55 @@ struct ResidentMeshInstance {
     std::uint32_t parent_id=0;
     std::string asset_id;
 };
+// Deterministic per-instance draw admission for the upcoming persistent
+// DX12 per-asset path. A candidate references an asset once, not a copied
+// triangle stream. The caller supplies camera-relative squared distance.
+struct MeshDrawCandidate {
+    std::uint32_t local_id=0;
+    std::string asset_id;
+    float distance_squared=0.f;
+};
+struct MeshDrawSchedule {
+    std::vector<MeshDrawCandidate> admitted;
+    std::size_t triangles=0;
+    std::size_t deferred=0;
+};
 class MeshResidencyPlanner {
 public:
+    // Never split a mesh mid-object: partial draws cause missing walls.
+    // Stable distance order prevents frame-to-frame draw-list flicker.
+    [[nodiscard]] MeshDrawSchedule schedule_draws(
+        std::vector<MeshDrawCandidate> candidates,
+        std::size_t triangle_budget) const {
+        std::sort(candidates.begin(),candidates.end(),
+            [](const auto& a,const auto& b){
+                if(a.distance_squared!=b.distance_squared)
+                    return a.distance_squared<b.distance_squared;
+                return a.local_id<b.local_id;
+            });
+        MeshDrawSchedule result;
+        std::set<std::uint32_t> scheduled;
+        for(const auto& candidate:candidates){
+            const auto instance=instances_.find(candidate.local_id);
+            const auto asset=assets_.find(candidate.asset_id);
+            if(candidate.local_id==0||candidate.asset_id.empty()||
+               !scheduled.insert(candidate.local_id).second||
+               instance==instances_.end()||
+               instance->second.asset_id!=candidate.asset_id||
+               asset==assets_.end()||asset->second.triangles==0){
+                ++result.deferred;
+                continue;
+            }
+            const auto count=asset->second.triangles;
+            if(count>triangle_budget-result.triangles){
+                ++result.deferred;
+                continue;
+            }
+            result.admitted.push_back(candidate);
+            result.triangles+=count;
+        }
+        return result;
+    }
     void begin_generation() noexcept { ++generation_; }
     void see_asset(const std::string& id,std::size_t triangles,
                    std::size_t bytes) {
