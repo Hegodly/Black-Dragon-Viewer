@@ -87,6 +87,7 @@ on:
       - feature/kami-r86-visibility-diagnostics
       - feature/kami-r87-persistent-world-geometry
       - feature/kami-r88-dx12-renderer-migration
+      - feature/kami-r89-dx12-renderer-phase2
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
       - feature/kami-sl-xmlrpc-login-and-sim-handshake
