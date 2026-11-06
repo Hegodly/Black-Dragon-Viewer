@@ -1340,7 +1340,12 @@ void Renderer::draw() {
         commands_->RSSetScissorRects(1,&shadowRect);
         commands_->SetPipelineState(shadow_pipeline_.Get());
         commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
-        commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
+        if(!mesh_gpu_cache_.record_draw(commands_.Get(),"__kami_scene__",
+                                        static_cast<UINT>(terrain_count_))) {
+            // Preserve the previous draw path if residency is unavailable.
+            commands_->IASetVertexBuffers(0,1,&vertex_view_);
+            commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
+        }
         if(!preview_mesh_&&!region_mesh_) {
             const auto& a=avatar_.state();
             constants[25]=graphics_.animate_avatar && a.motion==avatar::Motion::Idle?
@@ -1400,7 +1405,12 @@ void Renderer::draw() {
     commands_->SetGraphicsRootDescriptorTable(
         1,shadow_srv_heap_->GetGPUDescriptorHandleForHeapStart());
     commands_->SetGraphicsRoot32BitConstants(0,63,constants.data(),0);
-    commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
+    if(!mesh_gpu_cache_.record_draw(commands_.Get(),"__kami_scene__",
+                                        static_cast<UINT>(terrain_count_))) {
+            // Preserve the previous draw path if residency is unavailable.
+            commands_->IASetVertexBuffers(0,1,&vertex_view_);
+            commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
+        }
     if(!preview_mesh_&&!region_mesh_) {
         const auto& a=avatar_.state();
         constants[25]=graphics_.animate_avatar && a.motion==avatar::Motion::Idle?
