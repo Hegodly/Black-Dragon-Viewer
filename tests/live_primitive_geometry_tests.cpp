@@ -527,7 +527,16 @@ int run_primitive_tests(){
            sample.parent_missing_instances!=1U||
            sample.undrawn_eligible_instances!=1U||
            sample.undrawn_budget_instances!=1U||
-           sample.emitted_triangles!=0U)return 64;
+           sample.emitted_triangles!=0U){
+            std::fprintf(stderr,
+                "R81 mesh diagnostics: eligible=%zu missing=%zu range=%zu pose=%zu waiting=%zu parent=%zu undrawn=%zu budget=%zu triangles=%zu\\n",
+                sample.eligible_instances,sample.missing_lod_instances,
+                sample.out_of_range_instances,sample.invalid_pose_instances,
+                sample.waiting_for_parent,sample.parent_missing_instances,
+                sample.undrawn_eligible_instances,
+                sample.undrawn_budget_instances,sample.emitted_triangles);
+            return 64;
+        }
         const auto drawn=world::build_live_mesh_geometry(
             {{near.local_id,near}}, {}, {}, {{asset_id,lod}},
             128.f,140.f,35.f,1U);
