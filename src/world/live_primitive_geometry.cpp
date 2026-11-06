@@ -566,24 +566,33 @@ MeshBatch build_live_mesh_geometry(
     // The global triangle ceiling remains unchanged.
     const std::size_t per_object_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(fair_share*4U,4096U));
-    // R81: three bounded passes for dense landscaping. Draw lightweight
-    // vegetation/decor first, then ordinary furnishings, then costly
-    // buildings and detailed plants. All passes retain distance-band order
-    // and use genuine mesh LODs; no object is emitted twice.
+    // R87: balanced near-to-far admission. The previous three-pass
+    // scheduler always emitted all cheap foliage/decor before ANY complex
+    // building mesh. On dense regions it exhausted the global budget before
+    // architecture got a chance. Interleave lightweight, medium and complex
+    // objects within distance bands instead, so nearby buildings compete
+    // fairly for capacity without fabricating or truncating geometry.
     std::vector<std::size_t> draw_order;
     draw_order.reserve(chosen.size());
+    const auto class_of=[&](std::size_t i)->unsigned {
+        const auto triangles=chosen[i].lod->triangles.size();
+        return triangles<=1024U?0U:triangles<=per_object_cap?1U:2U;
+    };
+    std::array<std::vector<std::size_t>,3> queues;
     for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()<=1024U)
-            draw_order.push_back(i);
-    for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()>1024U&&
-           chosen[i].lod->triangles.size()<=per_object_cap)
-            draw_order.push_back(i);
-    const std::size_t complex_start=draw_order.size();
-    for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()>1024U&&
-           chosen[i].lod->triangles.size()>per_object_cap)
-            draw_order.push_back(i);
+        queues[class_of(i)].push_back(i);
+    std::array<std::size_t,3> cursor{0U,0U,0U};
+    // Every cycle offers a slot to complex architecture before spending
+    // the entire budget on low-cost decorations. Retain near-first order
+    // within each class; each instance appears exactly once.
+    while(draw_order.size()<chosen.size()){
+        for(const unsigned category:{2U,0U,1U}){
+            if(cursor[category]<queues[category].size())
+                draw_order.push_back(queues[category][cursor[category]++]);
+        }
+    }
+    // Per-object caps apply to ordinary meshes; complex meshes are
+    // independently admitted against the actual remaining global budget.
     for(std::size_t index=0U;index<draw_order.size();++index){
         const auto& item=chosen[draw_order[index]];
         const auto triangles=item.lod->triangles.size();
@@ -595,7 +604,7 @@ MeshBatch build_live_mesh_geometry(
         }
         // The first pass is guaranteed the first opportunity to fill the
         // scene. The second pass cannot displace its already emitted meshes.
-        const bool complex_pass=index>=complex_start;
+        const bool complex_pass=class_of(draw_order[index])==2U;
         // R85: keep the inexpensive-first R81 pass, but permit a complex
         // mesh that fits the remaining GLOBAL budget even when it exceeds
         // the old per-object cap. Otherwise complete building sections
