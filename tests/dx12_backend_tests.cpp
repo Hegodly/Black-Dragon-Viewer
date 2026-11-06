@@ -39,6 +39,16 @@ int main() {
                                  scene.data(),scene.size(),0,3))return 14;
         if(cache.record_draw(nullptr,"region:17",3))return 15;
         if(cache.size()!=1)return 16;
+        // Per-instance draw API must fail safely without a command list,
+        // including missing IDs and absent region identities.
+        if(cache.record_instance_draw(nullptr,"region",17))return 17;
+        if(cache.record_instance_draw(nullptr,"region",18))return 18;
+        if(cache.record_instance_draw(nullptr,"",17))return 19;
+        if(cache.record_instance_draw(nullptr,"region",0))return 20;
+        if(cache.record_draw(nullptr,"region:17",4))return 21;
+        if(cache.record_draw(nullptr,"region:17",3,1))return 22;
+        if(cache.record_draw(nullptr,"region:17",0))return 23;
+        if(cache.size()!=1)return 24;
     } else {
         if (status != kami::world::DeviceStatus::Unavailable) return 7;
         if (device.native_device() || device.graphics_queue()) return 8;
