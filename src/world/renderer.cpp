@@ -121,8 +121,19 @@ bool Renderer::make_shadow() {
 
 
 
+// Preserve the input ABI consumed by KAMI's existing DX12 terrain,
+// shadow, avatar and PBR shaders when changing mesh admission/scheduling.
+// A compatible stride alone does not catch reordered material/UV fields.
 static_assert(sizeof(Vertex)==72U,
               "KAMI GPU vertex input layout must match 72-byte packed vertices");
+static_assert(offsetof(Vertex,px)==0U && offsetof(Vertex,nx)==12U &&
+              offsetof(Vertex,r)==24U && offsetof(Vertex,metallic)==36U &&
+              offsetof(Vertex,u)==44U && offsetof(Vertex,body_region)==52U &&
+              offsetof(Vertex,bone_indices)==56U &&
+              offsetof(Vertex,bone_weights)==60U &&
+              offsetof(Vertex,texture_layer)==64U &&
+              offsetof(Vertex,pbr_material)==68U,
+              "KAMI DX12 shader input ABI changed: update shader input layout and all passes together");
 static_assert(sizeof(rig::Matrix)==64U,
               "KAMI GPU skinning palette must pack four float4 rows per joint");
 
