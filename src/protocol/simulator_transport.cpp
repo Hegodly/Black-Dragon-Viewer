@@ -177,6 +177,7 @@ void Circuit::schedule_visible_meshes() noexcept {
             std::abs(p[1]-movement_position_.y)<=144.f&&
             std::abs(p[2]-movement_position_.z)<=96.f;
     };
+    bool retry_discovery=false;
     const auto schedule=[&](const auto& objects) noexcept {
         for(const auto& [id,t]:objects){
             (void)id;
@@ -189,12 +190,16 @@ void Circuit::schedule_visible_meshes() noexcept {
                 std::hypot(position[0]-movement_position_.x,
                            position[1]-movement_position_.y),
                 position[2]-movement_position_.z);
-            (void)mesh_scheduler_.request(t.mesh_asset_id,
-                                         load::Kind::VisibleMesh,d,true,0U);
+            if(!mesh_scheduler_.request(t.mesh_asset_id,
+                                        load::Kind::VisibleMesh,d,true,0U))
+                retry_discovery=true;
         }
     };
     schedule(spatial_objects_);
     schedule(linked_objects_);
+    // A full scheduler must not permanently suppress newly visible mesh IDs.
+    // Rescan on the next poll after capacity becomes available.
+    if(retry_discovery)mesh_scan_revision_=~std::uint64_t{0};
     }catch(...){
         // A bounded scheduler may still allocate when a new UUID is queued.
         // Retry on the next simulator poll; never terminate under memory
