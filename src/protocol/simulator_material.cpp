@@ -48,11 +48,18 @@ void Circuit::maybe_fetch_material() noexcept {
                 if(!objectspatial::resolve_world_position(
                         t,spatial_objects_,linked_objects_,avatar_root_ids_,
                         position))continue;
-                const float distance=std::hypot(
-                    std::hypot(position[0]-movement_position_.x,
-                               position[1]-movement_position_.y),
-                    position[2]-movement_position_.z);
-                if(!std::isfinite(distance)||distance>220.f)continue;
+                // Keep PBR material demand aligned with the same visible
+                // object interest window used by mesh/texture discovery.
+                // A distant building must not displace a nearby material
+                // from the bounded material cache.
+                const float dx=position[0]-movement_position_.x;
+                const float dy=position[1]-movement_position_.y;
+                const float dz=position[2]-movement_position_.z;
+                if(!std::isfinite(dx)||!std::isfinite(dy)||
+                   !std::isfinite(dz)||std::abs(dx)>144.f||
+                   std::abs(dy)>144.f||std::abs(dz)>96.f)continue;
+                const float distance=std::hypot(std::hypot(dx,dy),dz);
+                if(!std::isfinite(distance))continue;
                 for(const auto& material:t.face_material_ids){
                     if(material.empty())continue;
                     const auto [it,inserted]=wanted.try_emplace(material,distance);
