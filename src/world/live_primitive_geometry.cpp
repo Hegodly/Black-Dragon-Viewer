@@ -572,22 +572,35 @@ MeshBatch build_live_mesh_geometry(
     const std::size_t near_complex_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(
             per_object_cap,quality_budget?32768U:8192U));
-    for(std::size_t index=0U;index<chosen.size();++index){
-        const auto& item=chosen[index];
+    // R80: schedule two real-geometry passes without duplicating instances.
+    // Pass one draws inexpensive meshes across the full visible scene.
+    // Pass two spends the remaining budget on detailed buildings/furniture.
+    // Keep R78 distance-band priority within each pass.
+    std::vector<std::size_t> draw_order;
+    draw_order.reserve(chosen.size());
+    for(std::size_t i=0U;i<chosen.size();++i)
+        if(chosen[i].lod->triangles.size()<=per_object_cap)
+            draw_order.push_back(i);
+    const std::size_t complex_start=draw_order.size();
+    for(std::size_t i=0U;i<chosen.size();++i)
+        if(chosen[i].lod->triangles.size()>per_object_cap)
+            draw_order.push_back(i);
+    for(std::size_t index=0U;index<draw_order.size();++index){
+        const auto& item=chosen[draw_order[index]];
         const auto triangles=item.lod->triangles.size();
         const auto remaining=max_triangles-batch.emitted_triangles;
         if(remaining==0U){
-            batch.undrawn_budget_instances+=chosen.size()-index;
+            batch.undrawn_budget_instances+=draw_order.size()-index;
             break;
         }
-        // Preserve the established single-instance quality behavior:
-        // emit as many real triangles as fit when there is no competition.
-        // In crowded scenes, skip oversized instances intact so one
-        // dense mesh cannot starve thousands of smaller neighbors.
+        // The first pass is guaranteed the first opportunity to fill the
+        // scene. The second pass cannot displace its already emitted meshes.
+        const bool complex_pass=index>=complex_start;
         const bool close_to_camera=item.distance<256.f;
         const bool spare_budget=remaining>=max_triangles/4U;
         const std::size_t allowed_cap=
-            close_to_camera&&spare_budget?near_complex_cap:per_object_cap;
+            complex_pass&&close_to_camera&&spare_budget?
+                near_complex_cap:per_object_cap;
         if(chosen.size()>1U &&
            (triangles>remaining||triangles>allowed_cap)){
             ++batch.undrawn_budget_instances;
