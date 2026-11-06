@@ -60,6 +60,17 @@ bool Scheduler::request(std::string_view id,Kind kind,float distance,
         }
         return true;
     }
+    // A dense region may exhaust the bounded scheduler with permanently
+    // failed assets. Reclaim an exhausted failure before rejecting a new
+    // visible mesh; never evict active, decoded or resident geometry.
+    if(entries_.size()>=kMaxAssets){
+        const auto stale=std::find_if(entries_.begin(),entries_.end(),
+            [](const Asset& asset){
+                return asset.stage==Stage::Failed&&
+                    asset.retry_count>=kMaxTransientRetries;
+            });
+        if(stale!=entries_.end())entries_.erase(stale);
+    }
     if(entries_.size()>=kMaxAssets||next_order_==0)return false;
     entries_.push_back({std::string(id),kind,distance,visible,estimate,0U,
                         Stage::Queued,next_order_++});
