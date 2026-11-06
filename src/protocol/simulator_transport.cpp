@@ -171,7 +171,9 @@ void Circuit::schedule_visible_meshes() noexcept {
     mesh_last_scan_y_=movement_position_.y;
     mesh_last_scan_z_=movement_position_.z;
     mesh_last_scan_position_valid_=true;
-    // Match the renderer's vertical visibility range (128m). Otherwise\n    // tall condo sections can be visible to DX12 but never requested.\n    const auto close_to_agent=[&](
+    // Match the renderer's vertical visibility range (128m). Otherwise
+    // tall condo sections can be visible to DX12 but never requested.
+    const auto close_to_agent=[&](
         const std::array<float,3>& p) noexcept {
         return std::abs(p[0]-movement_position_.x)<=144.f&&
             std::abs(p[1]-movement_position_.y)<=144.f&&
