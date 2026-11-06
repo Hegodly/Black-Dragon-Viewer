@@ -601,11 +601,12 @@ MeshBatch build_live_mesh_geometry(
         // The first pass is guaranteed the first opportunity to fill the
         // scene. The second pass cannot displace its already emitted meshes.
         const bool complex_pass=index>=complex_start;
-        const bool close_to_camera=item.distance<256.f;
-        const bool spare_budget=remaining>=max_triangles/4U;
-        const std::size_t allowed_cap=
-            complex_pass&&close_to_camera&&spare_budget?
-                near_complex_cap:per_object_cap;
+        // R85: keep the inexpensive-first R81 pass, but permit a complex
+        // mesh that fits the remaining GLOBAL budget even when it exceeds
+        // the old per-object cap. Otherwise complete building sections
+        // vanish despite having decoded LOD geometry.
+        const std::size_t allowed_cap=complex_pass?
+            remaining:per_object_cap;
         if(chosen.size()>1U &&
            (triangles>remaining||triangles>allowed_cap)){
             ++batch.undrawn_budget_instances;
