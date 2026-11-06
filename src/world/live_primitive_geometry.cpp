@@ -572,24 +572,34 @@ MeshBatch build_live_mesh_geometry(
     const std::size_t near_complex_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(
             per_object_cap,quality_budget?32768U:8192U));
-    // R81: three bounded passes for dense landscaping. Draw lightweight
-    // vegetation/decor first, then ordinary furnishings, then costly
-    // buildings and detailed plants. All passes retain distance-band order
-    // and use genuine mesh LODs; no object is emitted twice.
+    // R82: distribute mesh coverage across nearby distance bands before
+    // filling the whole region with tiny landscaping. Alternate affordable
+    // and detailed meshes within each band; no asset is duplicated.
+    // Triangle count is a cost proxy, not a reliable building classifier.
     std::vector<std::size_t> draw_order;
     draw_order.reserve(chosen.size());
-    for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()<=1024U)
-            draw_order.push_back(i);
-    for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()>1024U&&
-           chosen[i].lod->triangles.size()<=per_object_cap)
-            draw_order.push_back(i);
-    const std::size_t complex_start=draw_order.size();
-    for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()>1024U&&
-           chosen[i].lod->triangles.size()>per_object_cap)
-            draw_order.push_back(i);
+    for(std::size_t first=0U;first<chosen.size();){
+        const auto band=static_cast<unsigned>(
+            std::sqrt(chosen[first].distance)/16.f);
+        std::size_t last=first;
+        while(last<chosen.size()&&static_cast<unsigned>(
+            std::sqrt(chosen[last].distance)/16.f)==band)++last;
+        std::vector<std::size_t> light,detail;
+        for(std::size_t i=first;i<last;++i){
+            if(chosen[i].lod->triangles.size()<=1024U)
+                light.push_back(i);
+            else detail.push_back(i);
+        }
+        // A detail slot for every three lightweight objects prevents
+        // foliage from monopolizing the visible-world triangle budget.
+        std::size_t li=0U,di=0U;
+        while(li<light.size()||di<detail.size()){
+            for(unsigned n=0U;n<3U&&li<light.size();++n)
+                draw_order.push_back(light[li++]);
+            if(di<detail.size())draw_order.push_back(detail[di++]);
+        }
+        first=last;
+    }
     for(std::size_t index=0U;index<draw_order.size();++index){
         const auto& item=chosen[draw_order[index]];
         const auto triangles=item.lod->triangles.size();
@@ -600,7 +610,7 @@ MeshBatch build_live_mesh_geometry(
         }
         // The first pass is guaranteed the first opportunity to fill the
         // scene. The second pass cannot displace its already emitted meshes.
-        const bool complex_pass=index>=complex_start;
+        const bool complex_pass=triangles>per_object_cap;
         const bool close_to_camera=item.distance<256.f;
         const bool spare_budget=remaining>=max_triangles/4U;
         const std::size_t allowed_cap=
