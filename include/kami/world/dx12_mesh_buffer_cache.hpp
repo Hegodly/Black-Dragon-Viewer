@@ -1,5 +1,6 @@
 #pragma once
 #include <d3d12.h>
+#include <algorithm>
 #include <wrl/client.h>
 #include <cstdint>
 #include <cstring>
@@ -217,6 +218,35 @@ public:
                resident->view.SizeInBytes/resident->view.StrideInBytes!=item.vertex_count)
                 return false;
         }
+        return true;
+    }
+
+    // Validate that source mesh spans form a non-overlapping subset of the
+    // decoded scene. A resident GPU batch alone cannot prove this: duplicate
+    // source ranges can produce double-drawn triangles after path switching.
+    struct InstanceSourceSpan {
+        std::uint32_t local_id=0;
+        std::size_t first_vertex=0;
+        std::size_t vertex_count=0;
+    };
+    [[nodiscard]] static bool validate_instance_source_spans(
+        std::size_t scene_vertex_count,
+        const std::vector<InstanceSourceSpan>& spans) noexcept {
+        if(!scene_vertex_count||spans.empty())return false;
+        std::set<std::uint32_t> ids;
+        std::vector<std::pair<std::size_t,std::size_t>> intervals;
+        intervals.reserve(spans.size());
+        for(const auto& span:spans){
+            if(!span.local_id||!ids.insert(span.local_id).second||
+               !span.vertex_count||span.first_vertex>scene_vertex_count||
+               span.vertex_count>scene_vertex_count-span.first_vertex||
+               span.first_vertex%3U||span.vertex_count%3U)return false;
+            intervals.emplace_back(span.first_vertex,
+                                   span.first_vertex+span.vertex_count);
+        }
+        std::sort(intervals.begin(),intervals.end());
+        for(std::size_t i=1;i<intervals.size();++i)
+            if(intervals[i].first<intervals[i-1].second)return false;
         return true;
     }
 
