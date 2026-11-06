@@ -1002,6 +1002,26 @@ bool Renderer::set_verified_live_terrain(
                 region_mesh_->vertices.data(),region_mesh_->vertices.size(),
                 first,range.vertex_count);
         }
+        // Verify that the entire decoded region mesh batch survived upload.
+        // This is an all-or-nothing preflight for the future authoritative
+        // per-object draw path. Do not switch the current combined-scene PBR
+        // and shadow passes here: opaque/transparent partitioning must first
+        // be matched or those passes would omit or double-draw surfaces.
+        std::vector<Dx12MeshBufferCache::InstanceDrawRequirement> required;
+        required.reserve(mesh_objects.instance_ranges.size());
+        bool valid_batch=!mesh_objects.instance_ranges.empty();
+        for(const auto& range:mesh_objects.instance_ranges){
+            if(!range.local_id||!range.vertex_count||
+               range.vertex_count>std::numeric_limits<UINT>::max()){
+                valid_batch=false;
+                break;
+            }
+            required.push_back({range.local_id,static_cast<UINT>(range.vertex_count)});
+        }
+        const bool resident_batch_ready=valid_batch&&
+            mesh_gpu_cache_.can_draw_exact_instance_batch(
+                "__kami_live_region__",scene_gpu_revision_,required);
+        (void)resident_batch_ready; // combined-scene fallback remains authoritative
         // No eviction here: region transitions and memory budgeting require
         // separate fence-aware lifecycle validation before enabling them.
     }
