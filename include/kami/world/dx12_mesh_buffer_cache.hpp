@@ -133,6 +133,28 @@ public:
         return true;
     }
 
+    // Upload a fully transformed instance span from the decoded scene.
+    // Each simulator-local instance receives its own resident vertex stream;
+    // the original Vertex layout, texture layers and PBR material indices
+    // remain byte-for-byte unchanged. Call only after fencing GPU readers.
+    template<class VertexT>
+    [[nodiscard]] bool upload_instance(ID3D12Device* device,
+                                       const std::string& region_key,
+                                       std::uint32_t local_id,
+                                       std::uint64_t revision,
+                                       const VertexT* scene_vertices,
+                                       std::size_t scene_count,
+                                       std::size_t first_vertex,
+                                       std::size_t vertex_count) {
+        if(region_key.empty()||!local_id||!scene_vertices||!vertex_count||
+           first_vertex>scene_count||vertex_count>scene_count-first_vertex||
+           vertex_count>std::numeric_limits<UINT>::max()/sizeof(VertexT))
+            return false;
+        const auto key=region_key+":"+std::to_string(local_id);
+        return upload(device,key,revision,scene_vertices+first_vertex,
+                      vertex_count*sizeof(VertexT),sizeof(VertexT));
+    }
+
     // Budgeted residency for future per-asset mesh streams. Call only after
     // the graphics fence completes. Never evict assets used in the current
     // generation, nor the active combined-scene fallback buffer.
