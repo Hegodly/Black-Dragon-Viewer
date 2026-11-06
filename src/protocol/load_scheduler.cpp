@@ -68,7 +68,7 @@ bool Scheduler::request(std::string_view id,Kind kind,float distance,
             [](const Asset& asset){
                 return asset.stage==Stage::Failed&&
                     (asset.retry_count>=kMaxTransientRetries||
-                     asset.actual_bytes!=0U);
+                     !asset.retryable_fetch_failure);
             });
         if(stale!=entries_.end())entries_.erase(stale);
     }
@@ -96,18 +96,22 @@ bool Scheduler::download_finished(std::string_view id,
     if(!success||bytes>kMaxBytesPerAsset||bytes==0){
         // Successful malformed payloads must not be retried as transport errors.
         asset->actual_bytes=success?1U:0U;
+        asset->retryable_fetch_failure=!success;
         asset->stage=Stage::Failed;return true;
     }
     asset->actual_bytes=bytes;
+    asset->retryable_fetch_failure=false;
     asset->stage=Stage::DecodeQueued;
     return true;
 }
 bool Scheduler::retry_failed(std::string_view id) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Failed||
-       asset->retry_count>=kMaxTransientRetries||asset->actual_bytes!=0U)return false;
+       asset->retry_count>=kMaxTransientRetries||
+       !asset->retryable_fetch_failure)return false;
     ++asset->retry_count;
     asset->actual_bytes=0U;
+    asset->retryable_fetch_failure=false;
     asset->stage=Stage::Queued;
     return true;
 }
@@ -153,6 +157,7 @@ bool Scheduler::begin_decode(std::string_view id) noexcept {
 bool Scheduler::decode_finished(std::string_view id,bool success) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Decoding)return false;
+    asset->retryable_fetch_failure=false;
     asset->stage=success?Stage::ReadyForGPU:Stage::Failed;
     return true;
 }
