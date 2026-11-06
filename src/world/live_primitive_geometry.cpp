@@ -550,7 +550,10 @@ MeshBatch build_live_mesh_geometry(
            const auto triangles_a=a.lod->triangles.size();
            const auto triangles_b=b.lod->triangles.size();
            if(triangles_a!=triangles_b)return triangles_a<triangles_b;
-           return a.distance<b.distance;
+           if(a.distance!=b.distance)return a.distance<b.distance;
+           // Stable identity breaks exact ties, preventing objects from
+           // changing draw priority when decoded-asset maps are refreshed.
+           return a.transform->local_id<b.transform->local_id;
        });
     batch.eligible_instances=chosen.size();
     auto& verts=batch.scene.vertices;
@@ -625,8 +628,10 @@ MeshBatch build_live_mesh_geometry(
         // vanish despite having decoded LOD geometry.
         const std::size_t allowed_cap=complex_pass?
             remaining:per_object_cap;
-        if(chosen.size()>1U &&
-           (triangles>remaining||triangles>allowed_cap)){
+        // Never partially draw a decoded mesh, even when it is the only
+        // eligible object. A partial object can look like missing walls.
+        if(triangles>remaining||
+           (chosen.size()>1U&&triangles>allowed_cap)){
             ++batch.undrawn_budget_instances;
             if(triangles>remaining)++batch.undrawn_global_limit;
             else ++batch.undrawn_object_limit;
