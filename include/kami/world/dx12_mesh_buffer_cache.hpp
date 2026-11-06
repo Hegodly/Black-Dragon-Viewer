@@ -192,6 +192,33 @@ public:
         return true;
     }
 
+    // Exact preflight for switching a complete region mesh batch away from
+    // the combined-scene draw. Reject stale revisions and mismatched vertex
+    // counts: otherwise a successful residency lookup can silently omit
+    // triangles after a simulator geometry update.
+    struct InstanceDrawRequirement {
+        std::uint32_t local_id=0;
+        UINT vertex_count=0;
+    };
+    [[nodiscard]] bool can_draw_exact_instance_batch(
+        const std::string& region_key,
+        std::uint64_t revision,
+        const std::vector<InstanceDrawRequirement>& required) const noexcept {
+        if(region_key.empty()||required.empty())return false;
+        std::set<std::uint32_t> seen;
+        for(const auto& item:required){
+            if(!item.local_id||!item.vertex_count||
+               !seen.insert(item.local_id).second)return false;
+            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            if(!resident||!resident->resource||resident->revision!=revision||
+               !resident->view.StrideInBytes||
+               resident->view.SizeInBytes%resident->view.StrideInBytes||
+               resident->view.SizeInBytes/resident->view.StrideInBytes!=item.vertex_count)
+                return false;
+        }
+        return true;
+    }
+
     // Budgeted residency for future per-asset mesh streams. Call only after
     // the graphics fence completes. Never evict assets used in the current
     // generation, nor the active combined-scene fallback buffer.
