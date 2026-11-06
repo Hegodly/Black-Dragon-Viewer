@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <type_traits>
 
 namespace kami::world {
@@ -57,13 +58,26 @@ namespace kami::world {
     const float dx=current_agent[0]-stable_origin[0];
     const float dy=current_agent[2]-stable_origin[2]; // SL vertical Z to DX12 Y
     const float dz=current_agent[1]-stable_origin[1]; // SL ground Y to DX12 Z
+    // Validate the complete terrain span before mutating any vertex.
+    // A malformed remote coordinate must not leave half the live scene
+    // translated while the caller retries missing-object recovery.
+    if(!std::isfinite(dx)||!std::isfinite(dy)||!std::isfinite(dz))
+        return false;
+    for(std::size_t i=0U;i<scene.terrain_count;++i){
+        const auto& v=scene.vertices[i];
+        if(!std::isfinite(double(v.px)+dx)||
+           !std::isfinite(double(v.py)+dy)||
+           !std::isfinite(double(v.pz)+dz)||
+           std::abs(double(v.px)+dx)>std::numeric_limits<float>::max()||
+           std::abs(double(v.py)+dy)>std::numeric_limits<float>::max()||
+           std::abs(double(v.pz)+dz)>std::numeric_limits<float>::max())
+            return false;
+    }
     for(std::size_t i=0U;i<scene.terrain_count;++i){
         auto& v=scene.vertices[i];
         v.px+=dx;
         v.py+=dy;
         v.pz+=dz;
-        if(!std::isfinite(v.px)||!std::isfinite(v.py)||
-           !std::isfinite(v.pz))return false;
     }
     // Never translate the local avatar marker section; it is already
     // anchored at the original simulator spawn.
