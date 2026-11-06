@@ -1030,12 +1030,12 @@ bool Renderer::set_verified_live_terrain(
         mesh_material_ids.reserve(new_mesh_vertices);
         for(const auto& vertex:mesh_objects.scene.vertices)
             mesh_material_ids.push_back(vertex.pbr_material);
-        const auto material_count=pbr_rows_.size()/protocol::pbr::kRows+1U;
+        const auto material_count=pbr_table.rows.size()/protocol::pbr::kRows+1U;
         std::vector<bool> blended_materials(material_count,false);
         for(std::size_t material=1;material<material_count;++material){
             const auto row=material*protocol::pbr::kRows+4U;
-            if(row<pbr_rows_.size())
-                blended_materials[material]=pbr_rows_[row][0]>1.5f;
+            if(row<pbr_table.rows.size())
+                blended_materials[material]=pbr_table.rows[row][0]>1.5f;
         }
         const bool opaque_parity=Dx12MeshBufferCache::opaque_material_parity(
             mesh_material_ids,blended_materials);
