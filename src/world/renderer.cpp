@@ -894,6 +894,20 @@ bool Renderer::set_verified_live_terrain(
     // zero capacity for nearby real buildings. Preserve actual mesh LODs
     // first, then fill spare DX12 scene capacity with closest primitives.
     // Both paths still bind the same already-selected SL texture/PBR atlas.
+    // R87 migration phase 1: track shared decoded asset identities and
+    // simulator instances without changing the known-good DX12 draw path.
+    // GPU buffer reuse will be introduced only after parity tests.
+    mesh_residency_.begin_generation();
+    for(const auto& [asset_id,lod]:circuit.decoded_mesh_assets())
+        mesh_residency_.see_asset(asset_id,lod.triangles.size(),
+                                  lod.decoded_bytes);
+    for(const auto& [id,root]:circuit.decoded_spatial_objects())
+        if(!root.mesh_asset_id.empty())
+            mesh_residency_.see_instance(id,root.parent_id,root.mesh_asset_id);
+    for(const auto& [id,child]:circuit.decoded_linked_objects())
+        if(!child.mesh_asset_id.empty())
+            mesh_residency_.see_instance(id,child.parent_id,child.mesh_asset_id);
+    mesh_residency_.end_generation();
     const auto mesh_objects=build_live_mesh_geometry(
         circuit.decoded_spatial_objects(),
         circuit.decoded_linked_objects(),
@@ -1113,6 +1127,7 @@ void Renderer::clear_decoded_region_geometry() {
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
+    mesh_residency_.clear_instances();
     environment_ready_=false;environment_face_=0U;environment_dirty_=true;
     environment_server_probes_.clear();write_environment_probe();
     terrain_texture_layers_=terrain_pbr_layers_=0U;
