@@ -68,7 +68,16 @@ select_visible_mesh_texture_layers(
     const protocol::pbr::Materials& materials={},const protocol::pbr::Overrides& overrides={},
     const std::vector<std::string>& extra_images={});
 
+// Exact vertex spans for authentic decoded SL mesh instances. These are
+// metadata only until the renderer binds separate per-object GPU buffers.
+struct MeshInstanceRange {
+    std::uint32_t local_id=0;
+    std::string asset_id;
+    std::size_t first_vertex=0;
+    std::size_t vertex_count=0;
+};
 struct MeshBatch {
+    std::vector<MeshInstanceRange> instance_ranges;
     SceneMesh scene{};
     std::size_t root_meshes=0,linked_meshes=0;
     std::size_t emitted_triangles=0,waiting_for_parent=0;
