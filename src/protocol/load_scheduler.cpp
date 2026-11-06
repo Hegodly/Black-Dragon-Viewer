@@ -93,6 +93,8 @@ bool Scheduler::download_finished(std::string_view id,
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Downloading)return false;
     if(!success||bytes>kMaxBytesPerAsset||bytes==0){
+        // Successful malformed payloads must not be retried as transport errors.
+        asset->actual_bytes=success?1U:0U;
         asset->stage=Stage::Failed;return true;
     }
     asset->actual_bytes=bytes;
@@ -102,7 +104,7 @@ bool Scheduler::download_finished(std::string_view id,
 bool Scheduler::retry_failed(std::string_view id) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Failed||
-       asset->retry_count>=kMaxTransientRetries)return false;
+       asset->retry_count>=kMaxTransientRetries||asset->actual_bytes!=0U)return false;
     ++asset->retry_count;
     asset->actual_bytes=0U;
     asset->stage=Stage::Queued;
