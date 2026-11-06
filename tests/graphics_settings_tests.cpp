@@ -22,5 +22,13 @@ int main() {
     }
     if(Settings{Preset::Performance}.sun_strength()>=Settings{Preset::Quality}.sun_strength())
         return 5;
+    // Quality can admit more nearby SL meshes than the previous 1M
+    // triangle cap, but must stay below the global 4M-vertex scene limit.
+    Settings quality;quality.preset=Preset::Quality;
+    Settings balanced;balanced.preset=Preset::Balanced;
+    if(quality.mesh_triangles()!=1300000U||
+       quality.mesh_triangles()<=balanced.mesh_triangles()||
+       quality.mesh_triangles()*3U>4000000U)return 7;
+    if(normalize(quality).mesh_triangles()!=1300000U)return 8;
     return 0;
 }
