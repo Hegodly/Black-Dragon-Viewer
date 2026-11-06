@@ -491,7 +491,7 @@ MeshBatch build_live_mesh_geometry(
     MeshBatch batch{};
     const V origin{agent_x,agent_y,agent_z};
     if(!finite(origin))return batch;
-    max_triangles=std::min<std::size_t>(max_triangles,1000000U);
+    // Keep a bounded safety ceiling, but allow the caller's configured DX12\n    // vertex budget to admit complete dense-region building sections.\n    // The previous one-million-triangle hard stop excluded decoded walls\n    // and floors even when the scene still had GPU vertex capacity.\n    max_triangles=std::min<std::size_t>(max_triangles,2000000U);
     struct Item {
         const Transform* transform;
         const protocol::mesh::LOD* lod;
@@ -643,11 +643,9 @@ MeshBatch build_live_mesh_geometry(
         // complete mesh fits it, rejecting that mesh solely on fair-share
         // size leaves real walls/floors invisible despite available space.
         // Distance-band ordering already prioritizes nearby structures.
-        const std::size_t allowed_cap=remaining;
         // Never partially draw a decoded mesh, even when it is the only
         // eligible object. A partial object can look like missing walls.
-        if(triangles>remaining||
-           (chosen.size()>1U&&triangles>allowed_cap)){
+        if(triangles>remaining){
             ++batch.undrawn_budget_instances;
             if(triangles>remaining)++batch.undrawn_global_limit;
             else ++batch.undrawn_object_limit;
