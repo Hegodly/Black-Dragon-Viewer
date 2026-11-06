@@ -164,7 +164,16 @@ void Circuit::schedule_visible_meshes() noexcept {
             movement_position_.x-mesh_last_scan_x_,
             movement_position_.y-mesh_last_scan_y_),
             movement_position_.z-mesh_last_scan_z_)>=12.f;
-    if(mesh_scan_revision_==spatial_render_revision()&&!moved)return;
+    // A stationary avatar still needs periodic rediscovery: the scheduler
+    // may have rejected UUIDs while full, or a parent/asset may become
+    // available without a new ObjectUpdate revision. Bound scan frequency.
+    const auto scan_now=std::chrono::steady_clock::now();
+    const bool scan_expired=mesh_last_discovery_scan_==
+        std::chrono::steady_clock::time_point{}||
+        scan_now-mesh_last_discovery_scan_>=std::chrono::seconds(5);
+    if(mesh_scan_revision_==spatial_render_revision()&&!moved&&
+       !scan_expired)return;
+    mesh_last_discovery_scan_=scan_now;
     prune_unreferenced_meshes();
     mesh_scan_revision_=spatial_render_revision();
     mesh_last_scan_x_=movement_position_.x;
