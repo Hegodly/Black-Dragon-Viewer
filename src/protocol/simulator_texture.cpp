@@ -200,10 +200,14 @@ void Circuit::maybe_fetch_texture() noexcept {
             }else{
                 ++texture_failure_count_;
                 const auto status=result.http_status;
-                const bool transient=status==0U||status==429U||
+                const bool transient=status==0U||status==408U||status==429U||
                     status==500U||status==502U||status==503U||status==504U;
                 const auto* job=texture_scheduler_.find(result.id);
-                if(accepted&&transient&&job&&
+                // A 2xx response with an empty or oversized payload is
+                // terminal, even if its status happens to look retryable.
+                // Retry only failures classified by the scheduler as HTTP.
+                if(accepted&&!result.fetched&&transient&&job&&
+                   job->retryable_fetch_failure&&
                    job->retry_count<load::Scheduler::kMaxTransientRetries&&
                    texture_retry_after_.size()<kMaxDecodedTextureAssets){
                     const auto delay=std::chrono::seconds(
