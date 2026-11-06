@@ -60,6 +60,17 @@ bool Scheduler::request(std::string_view id,Kind kind,float distance,
         }
         return true;
     }
+    // Reclaim terminal corrupt or exhausted assets before rejecting a
+    // newly visible object in dense regions. Preserve retryable failures.
+    if(entries_.size()>=kMaxAssets){
+        const auto stale=std::find_if(entries_.begin(),entries_.end(),
+            [](const Asset& asset){
+                return asset.stage==Stage::Failed&&
+                    (asset.retry_count>=kMaxTransientRetries||
+                     asset.actual_bytes!=0U);
+            });
+        if(stale!=entries_.end())entries_.erase(stale);
+    }
     if(entries_.size()>=kMaxAssets||next_order_==0)return false;
     entries_.push_back({std::string(id),kind,distance,visible,estimate,0U,
                         Stage::Queued,next_order_++});
