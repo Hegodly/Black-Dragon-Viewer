@@ -31,7 +31,7 @@ struct Settings {
         case Preset::Potato:return 24000U;
         case Preset::Performance:return 80000U;
         case Preset::Balanced:return 400000U;
-        case Preset::Quality:return 1000000U;
+        case Preset::Quality:return 1300000U; // bounded by the global 4M-vertex scene cap
         }return 180000U;
     }
     [[nodiscard]] float sun_strength() const noexcept {
