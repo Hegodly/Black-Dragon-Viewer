@@ -1023,7 +1023,23 @@ bool Renderer::set_verified_live_terrain(
             }
             required.push_back({range.local_id,static_cast<UINT>(range.vertex_count)});
         }
-        const bool resident_batch_ready=valid_batch&&
+        // Match the production opaque/alpha partition before any future
+        // resident draw substitution. The combined scene remains the safe
+        // fallback for alpha-blended or malformed material triangles.
+        std::vector<std::uint32_t> mesh_material_ids;
+        mesh_material_ids.reserve(new_mesh_vertices);
+        for(const auto& vertex:mesh_objects.scene.vertices)
+            mesh_material_ids.push_back(vertex.pbr_material);
+        const auto material_count=pbr_rows_.size()/protocol::pbr::kRows+1U;
+        std::vector<bool> blended_materials(material_count,false);
+        for(std::size_t material=1;material<material_count;++material){
+            const auto row=material*protocol::pbr::kRows+4U;
+            if(row<pbr_rows_.size())
+                blended_materials[material]=pbr_rows_[row][0]>1.5f;
+        }
+        const bool opaque_parity=Dx12MeshBufferCache::opaque_material_parity(
+            mesh_material_ids,blended_materials);
+        const bool resident_batch_ready=valid_batch&&opaque_parity&&
             mesh_gpu_cache_.can_draw_exact_instance_batch(
                 "__kami_live_region__",scene_gpu_revision_,required);
         (void)resident_batch_ready; // combined-scene fallback remains authoritative
