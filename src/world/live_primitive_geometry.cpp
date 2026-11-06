@@ -537,9 +537,20 @@ MeshBatch build_live_mesh_geometry(
             ++batch.waiting_for_parent;break;
         }
     }
-    // Restore R74's known-good distance ordering after R75 regression.
+    // R78: preserve near-first ordering across 16-metre distance bands,
+    // but favor lower-cost meshes inside each band. This helps small
+    // furnishings draw instead of losing the entire budget to a handful
+    // of dense assets at nearly the same distance. No geometry is faked.
     std::sort(chosen.begin(),chosen.end(),
-       [](const Item& a,const Item& b){return a.distance<b.distance;});
+       [](const Item& a,const Item& b){
+           const auto band_a=static_cast<unsigned>(std::sqrt(a.distance)/16.f);
+           const auto band_b=static_cast<unsigned>(std::sqrt(b.distance)/16.f);
+           if(band_a!=band_b)return band_a<band_b;
+           const auto triangles_a=a.lod->triangles.size();
+           const auto triangles_b=b.lod->triangles.size();
+           if(triangles_a!=triangles_b)return triangles_a<triangles_b;
+           return a.distance<b.distance;
+       });
     batch.eligible_instances=chosen.size();
     auto& verts=batch.scene.vertices;
     verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
