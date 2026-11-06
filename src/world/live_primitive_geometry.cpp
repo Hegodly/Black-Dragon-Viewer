@@ -566,8 +566,12 @@ MeshBatch build_live_mesh_geometry(
     // The global triangle ceiling remains unchanged.
     const std::size_t per_object_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(fair_share*4U,4096U));
+    // R79 Quality: permit complete high-detail SL mesh LODs when the
+    // scene has enough headroom. Keep lower presets' conservative caps.
+    const bool quality_budget=max_triangles>=750000U;
     const std::size_t near_complex_cap=std::min<std::size_t>(
-        max_triangles,std::max<std::size_t>(per_object_cap,8192U));
+        max_triangles,std::max<std::size_t>(
+            per_object_cap,quality_budget?32768U:8192U));
     for(std::size_t index=0U;index<chosen.size();++index){
         const auto& item=chosen[index];
         const auto triangles=item.lod->triangles.size();
