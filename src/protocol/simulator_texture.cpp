@@ -189,6 +189,12 @@ void Circuit::maybe_fetch_texture() noexcept {
                         // Notify the 800 ms coalesced DX12 region uploader:
                         // a new J2C image must also rebuild the texture atlas.
                         ++spatial_object_revision_;
+                    }else if(result.decoded&&!fits){
+                        // Cache pressure is not corrupt JPEG2000. Release
+                        // the finished scheduler entry and retry discovery
+                        // after eviction instead of permanently hiding it.
+                        (void)texture_scheduler_.forget_finished(result.id);
+                        texture_scan_revision_=~std::uint64_t{0};
                     }else ++texture_failure_count_;
                 }
             }else{
