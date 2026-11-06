@@ -350,3 +350,7 @@ add_test(NAME KamiSLTerrainPatchStitchAndNoInventedHeights
 add_executable(kami_pbr_material_tests tests/pbr_material_tests.cpp)
 target_link_libraries(kami_pbr_material_tests PRIVATE kami_core)
 add_test(NAME KamiSLPBRMaterialPipeline COMMAND kami_pbr_material_tests)
+
+add_executable(kami_mesh_residency_tests tests/mesh_residency_tests.cpp)
+target_link_libraries(kami_mesh_residency_tests PRIVATE kami_core)
+add_test(NAME KamiPersistentMeshResidencyScheduling COMMAND kami_mesh_residency_tests)
