@@ -62,10 +62,16 @@ public:
         result.deferred=invalid_count;
         std::set<std::uint32_t> scheduled;
         for(const auto& candidate:candidates){
+            // Claim an instance before asset validation: duplicate candidates
+            // must not consume the draw budget or cause duplicate geometry.
+            if(candidate.local_id==0||
+               !scheduled.insert(candidate.local_id).second){
+                ++result.deferred;
+                continue;
+            }
             const auto instance=instances_.find(candidate.local_id);
             const auto asset=assets_.find(candidate.asset_id);
-            if(candidate.local_id==0||candidate.asset_id.empty()||
-               !scheduled.insert(candidate.local_id).second||
+            if(candidate.asset_id.empty()||
                instance==instances_.end()||
                instance->second.asset_id!=candidate.asset_id||
                asset==assets_.end()||asset->second.triangles==0){
@@ -116,7 +122,11 @@ public:
         }
         std::size_t used=0;
         for(const auto& [id,asset]:assets_){
-            (void)id;used+=asset.decoded_bytes;
+            (void)id;
+            // Saturate rather than wrap on corrupt or oversized cache metadata.
+            if(asset.decoded_bytes>static_cast<std::size_t>(-1)-used)
+                used=static_cast<std::size_t>(-1);
+            else used+=asset.decoded_bytes;
         }
         while(used>max_decoded_bytes){
             auto oldest=assets_.end();
