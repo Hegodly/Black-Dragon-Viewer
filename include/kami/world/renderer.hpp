@@ -11,6 +11,7 @@
 #include "kami/features/photo_studio.hpp"
 #include "kami/world/scene.hpp"
 #include "kami/world/mesh_residency.hpp"
+#include "kami/world/dx12_mesh_buffer_cache.hpp"
 #include "kami/world/environment.hpp"
 #include "kami/world/pbr_material_table.hpp"
 #include "kami/protocol/texture_decode.hpp"
@@ -399,6 +400,7 @@ private:
     UINT64 texture_copy_submitted_fence_=0U;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     MeshResidencyPlanner mesh_residency_{};
+    Dx12MeshBufferCache mesh_gpu_cache_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> geometry_;
     D3D12_VERTEX_BUFFER_VIEW vertex_view_{};
     std::size_t terrain_count_ = 0;
