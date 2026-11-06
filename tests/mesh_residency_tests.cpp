@@ -32,5 +32,21 @@ int main(){
     assert(invalid_distances.admitted.size()==1);
     assert(invalid_distances.admitted[0].local_id==2);
     assert(invalid_distances.deferred==3);
+    // Duplicate draw submissions are rejected even with ample capacity.
+    const auto duplicates=planner.schedule_draws({
+        {2,"chair",1.f},{2,"chair",2.f}},100);
+    assert(duplicates.admitted.size()==1);
+    assert(duplicates.triangles==10);
+    assert(duplicates.deferred==1);
+    // Missing asset candidates must not be admitted or consume capacity.
+    const auto absent=planner.schedule_draws({
+        {2,"missing",0.f},{2,"chair",1.f}},100);
+    assert(absent.admitted.empty());
+    assert(absent.deferred==2);
+    // Saturated metadata accounting must never wrap to a small value.
+    planner.see_asset("huge",1,std::numeric_limits<std::size_t>::max());
+    planner.see_asset("extra",1,1024);
+    planner.evict_unreferenced(1024);
+    assert(planner.asset_count()<=2);
     return 0;
 }
