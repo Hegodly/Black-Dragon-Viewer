@@ -185,6 +185,12 @@ public:
     [[nodiscard]] std::size_t mesh_undrawn_budget_instances() const noexcept {
         return region_mesh_?mesh_undrawn_budget_instances_:0U;
     }
+    [[nodiscard]] std::size_t mesh_undrawn_global_limit() const noexcept {
+        return region_mesh_?mesh_undrawn_global_limit_:0U;
+    }
+    [[nodiscard]] std::size_t mesh_undrawn_object_limit() const noexcept {
+        return region_mesh_?mesh_undrawn_object_limit_:0U;
+    }
     [[nodiscard]] bool texture_upload_pending() const noexcept {
         return texture_upload_pending_;
     }
@@ -326,6 +332,7 @@ private:
     std::size_t mesh_undrawn_transparent_instances_=0;
     std::size_t mesh_undrawn_bad_geometry_instances_=0;
     std::size_t mesh_undrawn_budget_instances_=0;
+    std::size_t mesh_undrawn_global_limit_=0,mesh_undrawn_object_limit_=0;
     std::size_t uploaded_textured_triangles_=0;
     std::map<std::string,std::uint16_t> live_texture_layers_;
     std::vector<PBRRow> pbr_rows_=std::vector<PBRRow>(protocol::pbr::kRows);
