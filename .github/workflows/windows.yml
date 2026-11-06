@@ -83,6 +83,7 @@ on:
       - feature/kami-r80-two-pass-mesh-scheduler
       - feature/kami-r81-landscape-mesh-fairness
       - feature/kami-r82-architecture-coverage
+      - feature/kami-r83-dual-mesh-queues
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
       - feature/kami-sl-xmlrpc-login-and-sim-handshake
