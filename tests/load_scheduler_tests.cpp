@@ -1,5 +1,6 @@
 #include "kami/protocol/load_scheduler.hpp"
 #include <cmath>
+#include <cstdio>
 #include <limits>
 using namespace kami::protocol::load;
 static constexpr auto a="12345678-90ab-4cde-8fab-000000000010";
@@ -109,5 +110,24 @@ int main(){
     if(!queue.request(c,Kind::VisibleTexture,1.f,true,64U)||
        !queue.next_download()||!queue.download_finished(c,0U,false)||
        !queue.retry_failed(c))return 35;
+    // Dense region: terminal corrupt assets must not permanently block
+    // a newly visible mesh when the bounded scheduler reaches capacity.
+    queue.clear();
+    for(std::size_t i=0;i<Scheduler::kMaxAssets;++i){
+        char uuid[37]{};
+        std::snprintf(uuid,sizeof(uuid),
+            "12345678-90ab-4cde-8fab-%012llx",
+            static_cast<unsigned long long>(i+256U));
+        if(!queue.request(uuid,Kind::VisibleMesh,1.f,true,64U))
+            return 36;
+    }
+    if(queue.request("12345678-90ab-4cde-8fab-ffffffffffff",
+                     Kind::VisibleMesh,1.f,true,64U))return 37;
+    const auto full_first=queue.next_download();
+    if(!full_first||!queue.download_finished(full_first->id,0U,true))
+        return 38;
+    if(!queue.request("12345678-90ab-4cde-8fab-ffffffffffff",
+                      Kind::VisibleMesh,1.f,true,64U)||
+       queue.find(full_first->id)!=nullptr)return 39;
     return 0;
 }
