@@ -59,6 +59,16 @@ int main() {
         if(!cache.upload_instance(device.native_device(),"region",18,1,
                                   scene.data(),scene.size(),0,3))return 31;
         if(!cache.can_draw_instance_batch("region",{17,18}))return 32;
+        using Requirement=kami::world::Dx12MeshBufferCache::InstanceDrawRequirement;
+        if(!cache.can_draw_exact_instance_batch("region",1,
+                                                {Requirement{17,3},Requirement{18,3}}))return 33;
+        if(cache.can_draw_exact_instance_batch("region",2,{Requirement{17,3}}))return 34;
+        if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,4}}))return 35;
+        if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,3},Requirement{17,3}}))return 36;
+        if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,3},Requirement{19,3}}))return 37;
+        if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,0}}))return 38;
+        if(cache.can_draw_exact_instance_batch("",1,{Requirement{17,3}}))return 39;
+        if(cache.can_draw_exact_instance_batch("region",1,{}))return 40;
 
     } else {
         if (status != kami::world::DeviceStatus::Unavailable) return 7;
