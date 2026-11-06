@@ -630,7 +630,10 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                     L" Geom:"+std::to_wstring(world_renderer_.mesh_undrawn_bad_geometry_instances())+
                     L" Budget:"+std::to_wstring(world_renderer_.mesh_undrawn_budget_instances())+
                     L" Global:"+std::to_wstring(world_renderer_.mesh_undrawn_global_limit())+
-                    L" PerObj:"+std::to_wstring(world_renderer_.mesh_undrawn_object_limit());
+                    L" PerObj:"+std::to_wstring(world_renderer_.mesh_undrawn_object_limit())+
+                    L" DrawDrop:"+std::to_wstring(world_renderer_.mesh_draw_count_drop())+
+                    L" GPUcache:"+std::to_wstring(world_renderer_.gpu_mesh_cache_entries())+
+                    L" GPUmemMB:"+std::to_wstring(world_renderer_.gpu_mesh_cache_bytes()/(1024U*1024U));
                 label(causes,box(contentX+36,y+43,contentWidth-76,19),
                       small_font_.Get(),p.accent);
             }
