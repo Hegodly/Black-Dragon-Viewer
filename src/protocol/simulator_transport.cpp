@@ -133,10 +133,14 @@ void Circuit::prune_unreferenced_meshes() noexcept {
                 (void)id;
                 if(t.mesh_asset_id!=asset)continue;
                 std::array<float,3> position{};
-                if(objectspatial::resolve_world_position(
+                // A temporarily unresolved linked-parent transform is not
+                // evidence that its already decoded mesh is out of range.
+                // Keep it resident until the simulator supplies a usable
+                // world position; otherwise it flashes then vanishes.
+                if(!objectspatial::resolve_world_position(
                        t,spatial_objects_,linked_objects_,avatar_root_ids_,
-                       position)&&within_retention_radius(position))
-                    return true;
+                       position))return true;
+                if(within_retention_radius(position))return true;
             }
             return false;
         };
