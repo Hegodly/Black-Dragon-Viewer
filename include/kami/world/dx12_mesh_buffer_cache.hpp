@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <wrl/client.h>
 #include <cstdint>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -285,6 +286,39 @@ public:
             if(material_ids[i+1U]!=material||material_ids[i+2U]!=material||
                material>=blended_materials.size()||
                blended_materials[material])return false;
+        }
+        return true;
+    }
+
+    // Conservative CPU-side visibility preflight for future GPU-driven draws.
+    // Unknown or invalid bounds remain visible: never cull a simulator object
+    // simply because its metadata has not arrived yet.
+    struct VisibilitySphere {
+        float x=0.f,y=0.f,z=0.f,radius=0.f;
+        bool valid=false;
+    };
+    struct VisibilityPlane { float x=0.f,y=0.f,z=0.f,d=0.f; };
+    [[nodiscard]] static bool potentially_visible(
+        const VisibilitySphere& sphere,
+        const std::vector<VisibilityPlane>& planes) noexcept {
+        if(!sphere.valid||!std::isfinite(sphere.x)||
+           !std::isfinite(sphere.y)||!std::isfinite(sphere.z)||
+           !std::isfinite(sphere.radius)||sphere.radius<0.f||
+           planes.size()!=6U)return true;
+        for(const auto& plane:planes){
+            if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
+               !std::isfinite(plane.z)||!std::isfinite(plane.d))return true;
+            const float length=std::sqrt(plane.x*plane.x+
+                plane.y*plane.y+plane.z*plane.z);
+            if(!std::isfinite(length)||length<=0.f)return true;
+        }
+        for(const auto& plane:planes){
+            const float length=std::sqrt(plane.x*plane.x+
+                plane.y*plane.y+plane.z*plane.z);
+            const float distance=plane.x*sphere.x+plane.y*sphere.y+
+                plane.z*sphere.z+plane.d;
+            if(!std::isfinite(distance))return true;
+            if(distance < -sphere.radius*length)return false;
         }
         return true;
     }
