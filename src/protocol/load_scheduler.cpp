@@ -67,7 +67,8 @@ bool Scheduler::request(std::string_view id,Kind kind,float distance,
         const auto stale=std::find_if(entries_.begin(),entries_.end(),
             [](const Asset& asset){
                 return asset.stage==Stage::Failed&&
-                    asset.retry_count>=kMaxTransientRetries;
+                    (asset.retry_count>=kMaxTransientRetries||
+                     asset.actual_bytes!=0U);
             });
         if(stale!=entries_.end())entries_.erase(stale);
     }
