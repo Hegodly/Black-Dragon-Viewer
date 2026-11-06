@@ -581,7 +581,6 @@ MeshBatch build_live_mesh_geometry(
     for(std::size_t i=0U;i<chosen.size();++i)
         if(chosen[i].lod->triangles.size()<=1024U)
             draw_order.push_back(i);
-    const std::size_t medium_start=draw_order.size();
     for(std::size_t i=0U;i<chosen.size();++i)
         if(chosen[i].lod->triangles.size()>1024U&&
            chosen[i].lod->triangles.size()<=per_object_cap)
