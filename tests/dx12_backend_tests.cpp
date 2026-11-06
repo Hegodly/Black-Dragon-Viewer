@@ -1,4 +1,7 @@
 #include "kami/world/device.hpp"
+#include "kami/world/dx12_mesh_buffer_cache.hpp"
+#include <array>
+#include <cstdint>
 
 int main() {
     kami::world::Device device;
@@ -14,6 +17,28 @@ int main() {
             status != kami::world::DeviceStatus::ReadySoftware) return 4;
         if (!device.native_device() || !device.graphics_queue()) return 5;
         if (device.adapter_name().empty()) return 6;
+        // Validate persistent per-instance DX12 buffers on hardware or WARP.
+        struct Vertex { float x,y,z; std::uint32_t material; };
+        const std::array<Vertex,6> scene{{{0,0,0,1},{1,0,0,1},
+            {0,1,0,1},{2,0,0,2},{3,0,0,2},{2,1,0,2}}};
+        kami::world::Dx12MeshBufferCache cache;
+        cache.begin_generation();
+        if(!cache.upload_instance(device.native_device(),"region",17,1,
+                                  scene.data(),scene.size(),3,3))return 9;
+        const auto* resident=cache.find("region:17");
+        if(!resident||!resident->resource||
+           resident->view.SizeInBytes!=3*sizeof(Vertex)||
+           resident->view.StrideInBytes!=sizeof(Vertex))return 10;
+        const auto before=resident->resource.Get();
+        if(!cache.upload_instance(device.native_device(),"region",17,1,
+                                  scene.data(),scene.size(),3,3))return 11;
+        if(cache.find("region:17")->resource.Get()!=before)return 12;
+        if(cache.upload_instance(device.native_device(),"region",18,1,
+                                 scene.data(),scene.size(),5,2))return 13;
+        if(cache.upload_instance(device.native_device(),"region",0,1,
+                                 scene.data(),scene.size(),0,3))return 14;
+        if(cache.record_draw(nullptr,"region:17",3))return 15;
+        if(cache.size()!=1)return 16;
     } else {
         if (status != kami::world::DeviceStatus::Unavailable) return 7;
         if (device.native_device() || device.graphics_queue()) return 8;
