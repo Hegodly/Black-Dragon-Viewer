@@ -273,6 +273,22 @@ public:
         return cursor==mesh_vertex_count;
     }
 
+    // An authoritative mesh draw must not reuse the opaque shadow/PBR path
+    // for alpha-blended triangles. This checks material classification before
+    // replacing the combined scene, retaining its established blend ordering.
+    [[nodiscard]] static bool opaque_material_parity(
+        const std::vector<std::uint32_t>& material_ids,
+        const std::vector<bool>& blended_materials) noexcept {
+        if(material_ids.empty()||material_ids.size()%3U)return false;
+        for(std::size_t i=0;i<material_ids.size();i+=3U){
+            const auto material=material_ids[i];
+            if(material_ids[i+1U]!=material||material_ids[i+2U]!=material||
+               material>=blended_materials.size()||
+               blended_materials[material])return false;
+        }
+        return true;
+    }
+
     // Budgeted residency for future per-asset mesh streams. Call only after
     // the graphics fence completes. Never evict assets used in the current
     // generation, nor the active combined-scene fallback buffer.
