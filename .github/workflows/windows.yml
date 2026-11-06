@@ -78,6 +78,7 @@ on:
       - feature/kami-r71-world-render-overhaul
       - feature/kami-r72-black-dragon-geometry-port
       - feature/kami-r77-world-completeness
+      - feature/kami-r78-mesh-budget-optimization
       - feature/kami-live-simulator-udp-and-login-ui
       - feature/kami-dx12-only-live-region-bridge
       - feature/kami-sl-xmlrpc-login-and-sim-handshake
