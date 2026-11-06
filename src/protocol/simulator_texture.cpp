@@ -165,7 +165,9 @@ void Circuit::maybe_fetch_texture() noexcept {
             if(!texture_desired_ids_.contains(result.id)){
                 (void)texture_scheduler_.forget_finished(result.id);
                 texture_retry_after_.erase(result.id);
-            }else if(result.fetched&&accepted){
+            }else if(result.fetched&&accepted&&
+                     texture_scheduler_.find(result.id)&&
+                     texture_scheduler_.find(result.id)->stage==load::Stage::DecodeQueued){
                 ++texture_download_count_;
                 // The async decoder has already completed this exact UUID.
                 // Never pop an unrelated decode job by scheduler priority.
