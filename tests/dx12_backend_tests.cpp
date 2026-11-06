@@ -49,6 +49,17 @@ int main() {
         if(cache.record_draw(nullptr,"region:17",3,1))return 22;
         if(cache.record_draw(nullptr,"region:17",0))return 23;
         if(cache.size()!=1)return 24;
+        // Batch preflight must never accept a partially resident scene.
+        if(!cache.can_draw_instance_batch("region",{17}))return 25;
+        if(cache.can_draw_instance_batch("region",{17,18}))return 26;
+        if(cache.can_draw_instance_batch("region",{17,17}))return 27;
+        if(cache.can_draw_instance_batch("region",{0}))return 28;
+        if(cache.can_draw_instance_batch("",{17}))return 29;
+        if(cache.can_draw_instance_batch("region",{}))return 30;
+        if(!cache.upload_instance(device.native_device(),"region",18,1,
+                                  scene.data(),scene.size(),0,3))return 31;
+        if(!cache.can_draw_instance_batch("region",{17,18}))return 32;
+
     } else {
         if (status != kami::world::DeviceStatus::Unavailable) return 7;
         if (device.native_device() || device.graphics_queue()) return 8;
