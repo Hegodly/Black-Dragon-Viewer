@@ -1,5 +1,6 @@
 #include "kami/world/mesh_residency.hpp"
 #include <cassert>
+#include <limits>
 int main(){
     kami::world::MeshResidencyPlanner planner;
     planner.begin_generation();
@@ -24,5 +25,12 @@ int main(){
     const auto next=planner.schedule_draws(candidates,200);
     assert(next.admitted.size()==1);
     assert(next.admitted[0].local_id==2);
+    const auto invalid_distances=planner.schedule_draws({
+        {2,"chair",std::numeric_limits<float>::quiet_NaN()},
+        {2,"chair",std::numeric_limits<float>::infinity()},
+        {2,"chair",-1.f},{2,"chair",1.f}},100);
+    assert(invalid_distances.admitted.size()==1);
+    assert(invalid_distances.admitted[0].local_id==2);
+    assert(invalid_distances.deferred==3);
     return 0;
 }
