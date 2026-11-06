@@ -2,6 +2,7 @@
 #include "kami/world/dx12_mesh_buffer_cache.hpp"
 #include <array>
 #include <cstdint>
+#include <limits>
 
 int main() {
     kami::world::Device device;
@@ -117,6 +118,16 @@ int main() {
         if(!Cache::potentially_visible({3,0,0,.5f,false},cube))return 54;
         if(!Cache::potentially_visible({3,0,0,.5f,true},{}))return 55;
         if(!Cache::potentially_visible({3,0,0,-1.f,true},cube))return 56;
+        // Large but finite region/frustum coordinates must be evaluated
+        // without float dot-product overflow or accidental mesh loss.
+        const float huge=std::numeric_limits<float>::max();
+        const std::vector<Cache::VisibilityPlane> extreme{
+            {huge,0,0,huge},{-huge,0,0,huge},
+            {0,huge,0,huge},{0,-huge,0,huge},
+            {0,0,huge,huge},{0,0,-huge,huge}};
+        if(!Cache::potentially_visible({0,0,0,1.f,true},extreme))return 70;
+        if(Cache::potentially_visible({3.f,0,0,.5f,true},extreme))return 71;
+        if(!Cache::potentially_visible({1.5f,0,0,.5f,true},extreme))return 72;
         // A region generation change must invalidate old mesh residency until
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();
