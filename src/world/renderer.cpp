@@ -1538,6 +1538,7 @@ void Renderer::draw() {
 }
 void Renderer::shutdown() noexcept {
     if(device_.graphics_queue()) wait_for_gpu();
+    mesh_gpu_cache_.clear();
     ready_=false;
     if(fence_event_) { CloseHandle(fence_event_); fence_event_=nullptr; }
     depth_.Reset();
