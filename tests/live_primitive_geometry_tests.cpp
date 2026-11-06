@@ -419,7 +419,11 @@ int run_primitive_tests(){
     dense_root.default_texture_asset_id.clear();
     protocol::mesh::LOD dense_lod;dense_lod.triangles.assign(30000U,triangle);
     const auto expanded_mesh=world::build_live_mesh_geometry({{101U,dense_root}}, {}, {},{{asset_id,dense_lod}},128,140,35,28000U);
-    if(expanded_mesh.emitted_triangles!=28000U||expanded_mesh.scene.vertices.size()!=84000U)return 53;
+    // Whole-object admission: an oversized decoded mesh must not be
+    // truncated into partial walls, even when it is the only instance.
+    if(expanded_mesh.emitted_triangles!=0U||
+       !expanded_mesh.scene.vertices.empty()||
+       expanded_mesh.undrawn_global_limit!=1U)return 53;
     {
         // Many nearby instances sharing a modest real LOD can exceed the
         // previous 500k cap. The explicit caller limit must still win.
