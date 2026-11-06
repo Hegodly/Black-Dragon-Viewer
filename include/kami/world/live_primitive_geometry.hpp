@@ -90,6 +90,7 @@ struct MeshBatch {
     // degenerate geometry, or simply outside the remaining draw budget.
     std::size_t undrawn_transparent_instances=0, undrawn_bad_geometry_instances=0;
     std::size_t undrawn_budget_instances=0;
+    std::size_t undrawn_global_limit=0,undrawn_object_limit=0;
 };
 // Render ONLY vertices decoded from real mesh assets (no surrogate boxes).
 // Shared SL-to-DX12 transforms with the validated prim hierarchy builder.
