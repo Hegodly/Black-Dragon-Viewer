@@ -25,6 +25,20 @@ public:
     void begin_generation() noexcept { ++generation_; }
     void clear() noexcept { buffers_.clear(); generation_=0; }
     [[nodiscard]] std::size_t size() const noexcept { return buffers_.size(); }
+    [[nodiscard]] std::uint64_t allocated_bytes() const noexcept {
+        std::uint64_t total=0;
+        for(const auto& [id,buffer]:buffers_){
+            (void)id;
+            if(buffer.resource)total+=buffer.resource->GetDesc().Width;
+        }
+        return total;
+    }
+    // This is a GPU resource cache, not a mesh draw scheduler. Callers must
+    // submit each resident asset using the original shader input ABI.
+    void touch(const std::string& asset_id) noexcept {
+        const auto it=buffers_.find(asset_id);
+        if(it!=buffers_.end())it->second.generation=generation_;
+    }
     [[nodiscard]] const Buffer* find(const std::string& asset_id) const noexcept {
         auto it=buffers_.find(asset_id);
         return it==buffers_.end()?nullptr:&it->second;
