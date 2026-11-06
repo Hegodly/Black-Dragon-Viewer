@@ -5,6 +5,8 @@
 #include <cstring>
 #include <limits>
 #include <map>
+#include <set>
+#include <vector>
 #include <string>
 #include <utility>
 
@@ -169,6 +171,25 @@ public:
         if(!buffer||!buffer->view.StrideInBytes)return false;
         const UINT count=buffer->view.SizeInBytes/buffer->view.StrideInBytes;
         return record_draw(commands,key,count);
+    }
+
+    // Preflight a complete resident instance batch before recording any draw.
+    // A failed preflight allows the caller to retain the combined-scene path
+    // without partially submitting the mesh batch (which would duplicate or
+    // omit surfaces when switching between paths).
+    [[nodiscard]] bool can_draw_instance_batch(
+        const std::string& region_key,
+        const std::vector<std::uint32_t>& local_ids) const noexcept {
+        if(region_key.empty()||local_ids.empty())return false;
+        std::set<std::uint32_t> unique_ids;
+        for(const auto id:local_ids){
+            if(!id||!unique_ids.insert(id).second)return false;
+            const auto* buffer=find(region_key+":"+std::to_string(id));
+            if(!buffer||!buffer->resource||!buffer->view.StrideInBytes||
+               !buffer->view.SizeInBytes||
+               buffer->view.SizeInBytes%buffer->view.StrideInBytes)return false;
+        }
+        return true;
     }
 
     // Budgeted residency for future per-asset mesh streams. Call only after
