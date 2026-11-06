@@ -69,6 +69,17 @@ int main() {
         if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,0}}))return 38;
         if(cache.can_draw_exact_instance_batch("",1,{Requirement{17,3}}))return 39;
         if(cache.can_draw_exact_instance_batch("region",1,{}))return 40;
+        // A region generation change must invalidate old mesh residency until
+        // the new scene explicitly reuploads or touches its visible assets.
+        cache.begin_generation();
+        if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,3}}))return 41;
+        cache.touch("region:17");
+        if(!cache.can_draw_exact_instance_batch("region",1,{Requirement{17,3}}))return 42;
+        if(cache.can_draw_exact_instance_batch("region",1,
+                                                {Requirement{17,3},Requirement{18,3}}))return 43;
+        cache.touch("region:18");
+        if(!cache.can_draw_exact_instance_batch("region",1,
+                                                 {Requirement{17,3},Requirement{18,3}}))return 44;
 
     } else {
         if (status != kami::world::DeviceStatus::Unavailable) return 7;
