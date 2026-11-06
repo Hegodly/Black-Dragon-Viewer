@@ -155,6 +155,22 @@ public:
                       vertex_count*sizeof(VertexT),sizeof(VertexT));
     }
 
+    // Record an individual simulator mesh instance using the exact same
+    // vertex layout and root bindings as the combined-scene renderer.
+    // The caller must select the correct depth/PBR pipeline and exclude this
+    // span from combined-scene draws to avoid double rendering.
+    [[nodiscard]] bool record_instance_draw(
+        ID3D12GraphicsCommandList* commands,
+        const std::string& region_key,
+        std::uint32_t local_id) const noexcept {
+        if(region_key.empty()||!local_id)return false;
+        const auto key=region_key+":"+std::to_string(local_id);
+        const auto* buffer=find(key);
+        if(!buffer||!buffer->view.StrideInBytes)return false;
+        const UINT count=buffer->view.SizeInBytes/buffer->view.StrideInBytes;
+        return record_draw(commands,key,count);
+    }
+
     // Budgeted residency for future per-asset mesh streams. Call only after
     // the graphics fence completes. Never evict assets used in the current
     // generation, nor the active combined-scene fallback buffer.
