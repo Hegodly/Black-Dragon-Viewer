@@ -212,7 +212,7 @@ int run(){
     const auto fallback=world::select_environment_probe({{77U,volume}},{0,0,0},{1000,0,0});
     if(fallback.server||fallback.center[0]!=1000)return 24;
     graphics::Settings settings;settings.preset=graphics::Preset::Quality;
-    if(settings.mesh_triangles()!=1000000U)return 40;
+    if(settings.mesh_triangles()!=1300000U)return 40;
     settings.preset=graphics::Preset::Balanced;if(settings.mesh_triangles()!=400000U)return 41;
     settings.preset=graphics::Preset::Performance;if(settings.mesh_triangles()!=80000U)return 42;
     settings.preset=graphics::Preset::Potato;if(settings.mesh_triangles()!=24000U)return 43;
