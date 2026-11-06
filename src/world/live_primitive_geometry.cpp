@@ -626,7 +626,12 @@ MeshBatch build_live_mesh_geometry(
         // mesh that fits the remaining GLOBAL budget even when it exceeds
         // the old per-object cap. Otherwise complete building sections
         // vanish despite having decoded LOD geometry.
-        const std::size_t allowed_cap=complex_pass?
+        // Nearby structural meshes must not disappear solely because the
+        // fair-share cap is smaller than the available global budget. Keep
+        // the global triangle ceiling and full-object admission invariant.
+        // More distant objects retain fair-share scheduling to protect FPS.
+        const bool nearby_structure=item.distance<=16.f*16.f;
+        const std::size_t allowed_cap=(complex_pass||nearby_structure)?
             remaining:per_object_cap;
         // Never partially draw a decoded mesh, even when it is the only
         // eligible object. A partial object can look like missing walls.
