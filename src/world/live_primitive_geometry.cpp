@@ -554,6 +554,10 @@ MeshBatch build_live_mesh_geometry(
         const auto& item=chosen[index];
         const auto triangles=item.lod->triangles.size();
         const auto remaining=max_triangles-batch.emitted_triangles;
+        if(remaining==0U){
+            batch.undrawn_budget_instances+=chosen.size()-index;
+            break;
+        }
         // Preserve the established single-instance quality behavior:
         // emit as many real triangles as fit when there is no competition.
         // In crowded scenes, skip oversized instances intact so one
