@@ -537,23 +537,9 @@ MeshBatch build_live_mesh_geometry(
             ++batch.waiting_for_parent;break;
         }
     }
-    // R75: preserve proximity priority, but pack small authentic meshes
-    // first within each 12-metre distance band. A dense decoration near
-    // the camera must not starve dozens of nearby furniture pieces.
-    // Sorting only by distance previously exhausted the triangle budget
-    // before reaching many small meshes in the same room.
+    // Restore R74's known-good distance ordering after R75 regression.
     std::sort(chosen.begin(),chosen.end(),
-       [](const Item& a,const Item& b){
-           const auto band_a=static_cast<std::uint32_t>(
-               std::sqrt(a.distance)/12.f);
-           const auto band_b=static_cast<std::uint32_t>(
-               std::sqrt(b.distance)/12.f);
-           if(band_a!=band_b)return band_a<band_b;
-           if(a.lod->triangles.size()!=b.lod->triangles.size())
-               return a.lod->triangles.size()<b.lod->triangles.size();
-           if(a.distance!=b.distance)return a.distance<b.distance;
-           return a.transform->local_id<b.transform->local_id;
-       });
+       [](const Item& a,const Item& b){return a.distance<b.distance;});
     batch.eligible_instances=chosen.size();
     auto& verts=batch.scene.vertices;
     verts.reserve(std::min<std::size_t>(max_triangles,12000U)*3U);
