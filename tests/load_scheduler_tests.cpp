@@ -98,5 +98,16 @@ int main(){
        return 31;
     queue.clear();
     if(queue.begin_decode(a))return 32;
+    // Decoding failures and malformed successful responses are terminal.
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(a,64U,true)||
+       !queue.begin_decode(a)||!queue.decode_finished(a,false)||
+       queue.retry_failed(a))return 33;
+    if(!queue.request(b,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(b,0U,true)||
+       queue.retry_failed(b))return 34;
+    if(!queue.request(c,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(c,0U,false)||
+       !queue.retry_failed(c))return 35;
     return 0;
 }
