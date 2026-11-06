@@ -384,8 +384,10 @@ private:
     // signed capability URLs are kept in these retry records.
     std::map<std::string,std::chrono::steady_clock::time_point>
         mesh_retry_after_;
-    static constexpr std::size_t kMaxWorldMeshAssets=4096U;
-    static constexpr std::size_t kMaxWorldMeshTriangles=4000000U;
+    // Expanded CPU-side decoded mesh cache for dense populated regions.
+    // Keep bounded; DX12 upload and draw budgets remain independent.
+    static constexpr std::size_t kMaxWorldMeshAssets=8192U;
+    static constexpr std::size_t kMaxWorldMeshTriangles=12000000U;
     bool maximum_world_detail_=false;
     std::map<std::string,mesh::LOD> loaded_meshes_;
     std::size_t loaded_mesh_triangle_count_=0U;
