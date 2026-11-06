@@ -587,7 +587,8 @@ MeshBatch build_live_mesh_geometry(
             draw_order.push_back(i);
     const std::size_t complex_start=draw_order.size();
     for(std::size_t i=0U;i<chosen.size();++i)
-        if(chosen[i].lod->triangles.size()>per_object_cap)
+        if(chosen[i].lod->triangles.size()>1024U&&
+           chosen[i].lod->triangles.size()>per_object_cap)
             draw_order.push_back(i);
     for(std::size_t index=0U;index<draw_order.size();++index){
         const auto& item=chosen[draw_order[index]];
