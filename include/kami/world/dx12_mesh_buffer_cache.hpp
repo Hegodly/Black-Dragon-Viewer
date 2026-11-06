@@ -250,6 +250,29 @@ public:
         return true;
     }
 
+    // Switching from the combined scene is safe only when the individual
+    // resident streams cover every mesh triangle exactly once. The older
+    // overlap-only validation intentionally permits holes for staging, but
+    // an authoritative draw path must reject them to avoid invisible meshes.
+    [[nodiscard]] static bool covers_complete_mesh_scene(
+        std::size_t mesh_vertex_count,
+        const std::vector<InstanceSourceSpan>& spans) noexcept {
+        if(!validate_instance_source_spans(mesh_vertex_count,spans)||
+           mesh_vertex_count%3U)return false;
+        std::vector<std::pair<std::size_t,std::size_t>> intervals;
+        intervals.reserve(spans.size());
+        for(const auto& span:spans)
+            intervals.emplace_back(span.first_vertex,
+                                   span.first_vertex+span.vertex_count);
+        std::sort(intervals.begin(),intervals.end());
+        std::size_t cursor=0;
+        for(const auto& interval:intervals){
+            if(interval.first!=cursor)return false;
+            cursor=interval.second;
+        }
+        return cursor==mesh_vertex_count;
+    }
+
     // Budgeted residency for future per-asset mesh streams. Call only after
     // the graphics fence completes. Never evict assets used in the current
     // generation, nor the active combined-scene fallback buffer.
