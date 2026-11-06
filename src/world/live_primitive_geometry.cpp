@@ -572,33 +572,40 @@ MeshBatch build_live_mesh_geometry(
     const std::size_t near_complex_cap=std::min<std::size_t>(
         max_triangles,std::max<std::size_t>(
             per_object_cap,quality_budget?32768U:8192U));
-    // R82: distribute mesh coverage across nearby distance bands before
-    // filling the whole region with tiny landscaping. Alternate affordable
-    // and detailed meshes within each band; no asset is duplicated.
-    // Triangle count is a cost proxy, not a reliable building classifier.
+    // R83: two coordinated queues feeding the same DX12 geometry buffer.
+    // A mesh's triangle count is only a provisional cost-based proxy:
+    // this is NOT semantic detection of buildings versus vegetation.
+    // Both queues retain the R78 nearest-first ordering.
+    std::vector<std::size_t> structure_queue,environment_queue;
+    structure_queue.reserve(chosen.size());
+    environment_queue.reserve(chosen.size());
+    for(std::size_t i=0U;i<chosen.size();++i){
+        if(chosen[i].lod->triangles.size()>1024U)
+            structure_queue.push_back(i);
+        else environment_queue.push_back(i);
+    }
+    // Aim to allocate 60% of scheduled triangle work to detail and 40%
+    // to lightweight scenery. When either queue empties, the other takes
+    // its unused share. The actual global triangle ceiling is unchanged.
     std::vector<std::size_t> draw_order;
     draw_order.reserve(chosen.size());
-    for(std::size_t first=0U;first<chosen.size();){
-        const auto band=static_cast<unsigned>(
-            std::sqrt(chosen[first].distance)/16.f);
-        std::size_t last=first;
-        while(last<chosen.size()&&static_cast<unsigned>(
-            std::sqrt(chosen[last].distance)/16.f)==band)++last;
-        std::vector<std::size_t> light,detail;
-        for(std::size_t i=first;i<last;++i){
-            if(chosen[i].lod->triangles.size()<=1024U)
-                light.push_back(i);
-            else detail.push_back(i);
-        }
-        // A detail slot for every three lightweight objects prevents
-        // foliage from monopolizing the visible-world triangle budget.
-        std::size_t li=0U,di=0U;
-        while(li<light.size()||di<detail.size()){
-            for(unsigned n=0U;n<3U&&li<light.size();++n)
-                draw_order.push_back(light[li++]);
-            if(di<detail.size())draw_order.push_back(detail[di++]);
-        }
-        first=last;
+    std::size_t structure_index=0U,environment_index=0U;
+    std::size_t planned_structure=0U,planned_environment=0U;
+    while(structure_index<structure_queue.size()||
+          environment_index<environment_queue.size()){
+        const bool has_structure=structure_index<structure_queue.size();
+        const bool has_environment=environment_index<environment_queue.size();
+        const bool take_structure=has_structure&&
+            (!has_environment||
+             planned_structure*2U<=planned_environment*3U);
+        const auto chosen_index=take_structure?
+            structure_queue[structure_index++]:
+            environment_queue[environment_index++];
+        draw_order.push_back(chosen_index);
+        const auto cost=std::min<std::size_t>(
+            chosen[chosen_index].lod->triangles.size(),max_triangles);
+        if(take_structure)planned_structure+=cost;
+        else planned_environment+=cost;
     }
     for(std::size_t index=0U;index<draw_order.size();++index){
         const auto& item=chosen[draw_order[index]];
