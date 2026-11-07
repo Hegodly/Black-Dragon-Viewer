@@ -983,38 +983,6 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         return;
     }
 
-    if(page_==3){
-        const float contentX=534.f,contentWidth=width-contentX-30.f;
-        if(y>=174.f&&y<216.f){
-            if(x>=contentX+contentWidth-270.f&&x<contentX+contentWidth-154.f){start_inventory_refresh();return;}
-            if(x>=contentX+contentWidth-154.f&&x<contentX+contentWidth-20.f){inventory_sort_mode_=(inventory_sort_mode_+1U)%3U;InvalidateRect(hwnd_,nullptr,FALSE);return;}
-            inventory_search_focused_=true;SetFocus(hwnd_);return;
-        }
-        if(y>=222.f&&y<248.f){
-            const auto root=sl_circuit_.inventory_root_id();
-            if(inventory_current_folder_!=root){
-                for(const auto& entry:inventory_root_snapshot_.entries)
-                    if(entry.folder&&entry.id==inventory_current_folder_){inventory_current_folder_=entry.parent_id;break;}
-            }
-            inventory_selected_entry_.clear();inventory_search_.clear();
-            InvalidateRect(hwnd_,nullptr,FALSE);return;
-        }
-        const auto visible=inventory::filter_entries(inventory_root_snapshot_.entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3));
-        const float rowTop=251.f,rowHeight=31.f;
-        const float detailTop=std::max(rowTop+80.f,static_cast<float>(client.bottom)-188.f);
-        if(y>=rowTop&&y<detailTop){
-            const auto row=static_cast<std::size_t>((y-rowTop)/rowHeight);
-            if(row<visible.size()){
-                const auto& e=inventory_root_snapshot_.entries[visible[row]];
-                inventory_selected_entry_=e.id;
-                inventory_selected_details_valid_=false;
-                if(e.folder){inventory_current_folder_=e.id;inventory_search_.clear();}
-                else start_inventory_item_details(e.id);
-                InvalidateRect(hwnd_,nullptr,FALSE);return;
-            }
-        }
-        return;
-    }
     if(page_==4) {
         const float railX=contentX+18.f;
         const float panelX=contentX+255.f;
@@ -2553,6 +2521,38 @@ void Window::click(float x, float y) {
        x>=width-334.f && x<=width-47.f) {
         world_renderer_.reset_avatar();
         InvalidateRect(hwnd_,nullptr,FALSE);
+        return;
+    }
+    if(page_==3){
+        const float contentX=534.f,contentWidth=width-contentX-30.f;
+        if(y>=174.f&&y<216.f){
+            if(x>=contentX+contentWidth-270.f&&x<contentX+contentWidth-154.f){start_inventory_refresh();return;}
+            if(x>=contentX+contentWidth-154.f&&x<contentX+contentWidth-20.f){inventory_sort_mode_=(inventory_sort_mode_+1U)%3U;InvalidateRect(hwnd_,nullptr,FALSE);return;}
+            inventory_search_focused_=true;SetFocus(hwnd_);return;
+        }
+        if(y>=222.f&&y<248.f){
+            const auto root=sl_circuit_.inventory_root_id();
+            if(inventory_current_folder_!=root){
+                for(const auto& entry:inventory_root_snapshot_.entries)
+                    if(entry.folder&&entry.id==inventory_current_folder_){inventory_current_folder_=entry.parent_id;break;}
+            }
+            inventory_selected_entry_.clear();inventory_search_.clear();
+            InvalidateRect(hwnd_,nullptr,FALSE);return;
+        }
+        const auto visible=inventory::filter_entries(inventory_root_snapshot_.entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3));
+        const float rowTop=251.f,rowHeight=31.f;
+        const float detailTop=std::max(rowTop+80.f,static_cast<float>(client.bottom)-188.f);
+        if(y>=rowTop&&y<detailTop){
+            const auto row=static_cast<std::size_t>((y-rowTop)/rowHeight);
+            if(row<visible.size()){
+                const auto& e=inventory_root_snapshot_.entries[visible[row]];
+                inventory_selected_entry_=e.id;
+                inventory_selected_details_valid_=false;
+                if(e.folder){inventory_current_folder_=e.id;inventory_search_.clear();}
+                else start_inventory_item_details(e.id);
+                InvalidateRect(hwnd_,nullptr,FALSE);return;
+            }
+        }
         return;
     }
     if(page_==4) {
