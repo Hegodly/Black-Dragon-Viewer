@@ -2097,6 +2097,7 @@ void Window::start_inventory_refresh(){
             if(SUCCEEDED(init)){
                 result=protocol::caps::fetch_inventory_tree(url,root,owner);
                 CoUninitialize();
+                if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
             }else{
                 result.transport_error=static_cast<unsigned>(init);
                 if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
@@ -2305,8 +2306,9 @@ void Window::update_sl_connection() {
                             fetched=protocol::caps::fetch_inventory_tree(
                                 url,root,owner);
                             CoUninitialize();
+                            if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
                         }else{
-                            fetched.transport_error=static_cast<unsigned>(GetLastError());
+                            fetched.transport_error=static_cast<unsigned>(init);
                             if(!url.empty())
                                 SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
                         }
