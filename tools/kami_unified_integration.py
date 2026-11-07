@@ -17,7 +17,7 @@ from typing import Any
 
 DESTINATION_BRANCH = "feature/kami-live-viewer-integration"
 WINDOWS_WORKFLOW_ID = 405470198
-PROMOTION_BATCH_LIMIT = 3
+PROMOTION_BATCH_LIMIT = 5
 SOURCE_CI_EVENTS = frozenset({"push", "workflow_dispatch"})
 VIEWER_ARTIFACT = "KAMI-Native-Viewer-Candidate"
 REQUIRED_FEATURES = (
@@ -68,6 +68,12 @@ ALREADY_PORTED_SOURCE_PREFIXES = frozenset({
     # R72 namespace-only test adjustment is equivalent in destination; R73 worker pool
     # and its regression coverage are faithfully ported into the newer destination path.
     "4de0d5d8f0a1", "fbf845a18f0a",
+    # R74 two-slot material worker pool and lifecycle tests are now manually
+    # ported with destination-specific bounds and regression coverage. The
+    # source's retry classifier is superseded by the destination's narrower,
+    # explicitly tested transient-status policy.
+    "76849e6f6647", "4ea64bab9067", "1d43302d818d",
+    "a568c0213f39", "67a11ef3b723",
 })
 IMPLEMENTATION_PREFIXES = ("src/", "include/", "resources/", "assets/")
 TEST_PREFIX = "tests/"
@@ -467,6 +473,16 @@ def successful_run_for_sha(
     return latest if latest is not None and windows_job_succeeded(latest) else None
 
 
+def source_commit_validation_run(
+    exact_run: dict[str, Any] | None, verified_head_run: dict[str, Any]
+) -> dict[str, Any]:
+    # Every commit passed to this helper is in the fetched source-head history.
+    # A successful exact-head Windows run tests the complete tree, so it may
+    # cover an ancestor whose own earlier attempt failed. The destination
+    # candidate build remains the final validation of the selected cherry-picks.
+    return exact_run if exact_run is not None else verified_head_run
+
+
 def wait_for_source_head_ci(
     source_branch: str, source_sha: str, after_run_id: int | None = None
 ) -> dict[str, Any] | None:
@@ -556,11 +572,9 @@ def choose_verified_implementations(
         if sha == source_head:
             run = head_run
         else:
-            run = successful_run_for_sha(source_branch, sha)
-            if run is None and not source_windows_runs(source_branch, sha):
-                # The green source-head build includes this ancestor commit;
-                # the destination candidate build then verifies the cherry-pick.
-                run = head_run
+            run = source_commit_validation_run(
+                successful_run_for_sha(source_branch, sha), head_run
+            )
         if run is None:
             continue
         selected.append((details, run))

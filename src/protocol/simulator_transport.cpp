@@ -1060,7 +1060,14 @@ void Circuit::poll(unsigned budget) noexcept {
     maybe_fetch_texture();
 }
 void Circuit::stop() noexcept {
-    if(material_worker_.valid()){try{(void)material_worker_.get();}catch(...){}}
+    for(std::size_t slot=0U;slot<material_workers_.size();++slot){
+        if(material_workers_[slot].valid()){
+            try{(void)material_workers_[slot].get();}catch(...){}
+        }
+        const auto id=material_worker_slots_.id(slot);
+        if(!id.empty())(void)material_worker_slots_.release(slot,id);
+    }
+    material_worker_slots_.clear();
     loaded_materials_.clear();material_overrides_.clear();material_attempts_.clear();
     material_failures_=material_http_failures_=material_decode_failures_=0U;
     material_last_format_=pbr::AssetFormat::Unknown;material_last_http_=0U;material_last_bytes_=0U;material_last_decode_error_=pbr::DecodeError::None;material_last_scan_={};

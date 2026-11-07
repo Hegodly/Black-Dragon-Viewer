@@ -175,6 +175,16 @@ class PromotionPolicyTests(unittest.TestCase):
             )[0]
         )
 
+    def test_known_r74_material_worker_port_is_recorded_as_already_ported(self):
+        for sha in (
+            "76849e6f6647b4be016961f3940c65c842928fba",
+            "4ea64bab90673a1de9433725783c70896a447d0e",
+            "1d43302d818d5f85d19ca1f3993641cf97162bc8",
+            "a568c0213f3940da288ad3b7fcf440f32fcb3fc3",
+            "67a11ef3b72332417d41a9b35ef226950a26cc8f",
+        ):
+            self.assertTrue(is_already_ported_source(sha), sha)
+
     def test_known_r72_fixes_are_recorded_as_already_ported(self):
         self.assertTrue(ALREADY_PORTED_SOURCE_PREFIXES)
         self.assertTrue(is_already_ported_source("cfb1071f96" + "0" * 30))
@@ -220,6 +230,15 @@ class PullRequestEventTests(unittest.TestCase):
 
 
 class SourceCiSelectionTests(unittest.TestCase):
+    def test_green_head_ci_covers_failed_ancestor_attempt(self):
+        head_run = {"id": 42, "status": "completed", "conclusion": "success"}
+        self.assertEqual(source_commit_validation_run(None, head_run), head_run)
+
+    def test_successful_exact_commit_ci_is_preferred(self):
+        exact_run = {"id": 41, "status": "completed", "conclusion": "success"}
+        head_run = {"id": 42, "status": "completed", "conclusion": "success"}
+        self.assertEqual(source_commit_validation_run(exact_run, head_run), exact_run)
+
     def test_newer_failure_overrides_an_older_green_run(self):
         runs = [
             {

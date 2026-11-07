@@ -22,6 +22,7 @@
 #include <map>
 #include <set>
 #include <future>
+#include <optional>
 #include <vector>
 #include <string_view>
 
@@ -61,6 +62,44 @@ namespace detail {
         sent_at!=std::chrono::steady_clock::time_point{}&&
         now>=sent_at&&now-sent_at>=std::chrono::seconds(90);
 }
+
+inline constexpr std::size_t kMaxConcurrentMaterialWorkers=2U;
+// Bounded, UUID-deduplicated material fetch/decode slots. Completion order
+// never releases another material's reservation.
+class MaterialWorkerSlots final {
+public:
+    [[nodiscard]] std::optional<std::size_t> reserve(std::string_view id) noexcept {
+        if(id.empty())return std::nullopt;
+        for(const auto& value:ids_)if(value==id)return std::nullopt;
+        for(std::size_t i=0U;i<ids_.size();++i){
+            if(!ids_[i].empty())continue;
+            try{ids_[i].assign(id.data(),id.size());}
+            catch(...){return std::nullopt;}
+            return i;
+        }
+        return std::nullopt;
+    }
+    [[nodiscard]] bool release(std::size_t slot,std::string_view expected) noexcept {
+        if(slot>=ids_.size()||expected.empty()||ids_[slot]!=expected)return false;
+        ids_[slot].clear();
+        return true;
+    }
+    [[nodiscard]] std::string_view id(std::size_t slot) const noexcept {
+        return slot<ids_.size()?std::string_view(ids_[slot]):std::string_view{};
+    }
+    [[nodiscard]] bool contains(std::string_view value) const noexcept {
+        for(const auto& id:ids_)if(id==value)return true;
+        return false;
+    }
+    [[nodiscard]] std::size_t active() const noexcept {
+        std::size_t count=0U;
+        for(const auto& id:ids_)if(!id.empty())++count;
+        return count;
+    }
+    void clear() noexcept { for(auto& id:ids_)id.clear(); }
+private:
+    std::array<std::string,kMaxConcurrentMaterialWorkers> ids_{};
+};
 }
 class Circuit final {
 public:
@@ -366,7 +405,8 @@ private:
         std::size_t bytes=0U;pbr::DecodeError error=pbr::DecodeError::None;
         pbr::Material material{};
     };
-    std::future<MaterialResult> material_worker_;
+    std::array<std::future<MaterialResult>,detail::kMaxConcurrentMaterialWorkers> material_workers_{};
+    detail::MaterialWorkerSlots material_worker_slots_{};
     struct MaterialAttempt {unsigned tries=0U;std::chrono::steady_clock::time_point next{};};
     std::map<std::string,MaterialAttempt> material_attempts_;
     std::size_t material_failures_=0U,material_http_failures_=0U,material_decode_failures_=0U;
