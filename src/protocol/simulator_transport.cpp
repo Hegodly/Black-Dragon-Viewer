@@ -765,7 +765,13 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         remember_missing_object(child.parent_id,true,true);
                         const bool known_as_root=spatial_objects_.contains(child.local_id);
                         if(linked_objects_.size()>=kMaxLinkedObjects&&
-                            !linked_objects_.contains(child.local_id)&&!known_as_root){
+                            !linked_objects_.contains(child.local_id)){
+                            if(known_as_root&&
+                               objectspatial::erase_conflicting_classification(
+                                   child.local_id,true,spatial_objects_,linked_objects_)){
+                                ++spatial_object_revision_;
+                                remember_missing_object(child.local_id,true,false);
+                            }
                             ++dropped_linked_updates_;continue;
                         }
                         // Preserve full-update mesh/PBR/TextureEntry metadata
@@ -789,7 +795,13 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     for(const auto& obj:objects){
                         const bool known_as_child=linked_objects_.contains(obj.local_id);
                         if(spatial_objects_.size()>=kMaxRootObjects &&
-                            !spatial_objects_.contains(obj.local_id)&&!known_as_child){
+                            !spatial_objects_.contains(obj.local_id)){
+                            if(known_as_child&&
+                               objectspatial::erase_conflicting_classification(
+                                   obj.local_id,false,spatial_objects_,linked_objects_)){
+                                ++spatial_object_revision_;
+                                remember_missing_object(obj.local_id,true,false);
+                            }
                             ++dropped_root_updates_;continue;
                         }
                         auto updated=objectspatial::merge_compressed_transform(
