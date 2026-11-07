@@ -217,7 +217,7 @@ void build_linear_circle_volume(Emitter& e,
     const float end=p.profile_end*2.f*pi;
     const float sweep=end-begin;
     if(!(sweep>0.0001f))return;
-    const bool hollow=p.hollow>0.0001f;
+    const bool hollow=(p.profile_curve&0xf0U)==0x10U&&p.hollow>0.0001f;
     const float inner_radius=std::clamp(p.hollow,0.f,.95f)*.5f;
     const float shear_x=signed_wire(p.shear_x)*.01f;
     const float shear_y=signed_wire(p.shear_y)*.01f;
@@ -334,7 +334,8 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
         if(protocol::volume::decode(t.volume_params,
                                     t.volume_params_full_layout,decoded)&&
            decoded.path_curve==0x10U&&
-           (decoded.profile_curve&0x0fU)==0U){
+           (decoded.profile_curve&0x0fU)==0U&&
+           (decoded.profile_curve&0xf0U)<=0x10U){
             build_linear_circle_volume(e,decoded);
             swept=true;
         }
