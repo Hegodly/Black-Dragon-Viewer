@@ -255,9 +255,9 @@ int run_primitive_tests(){
             const float radius=std::hypot(vertex.px,vertex.pz);
             const float radial_normal=vertex.px*vertex.nx+
                 vertex.pz*vertex.nz;
-            if(radius>.35f&&radius<.45f&&radial_normal<-.01f)
+            if(radius>.75f&&radius<.85f&&radial_normal<-.01f)
                 ++inner_inward;
-            if(radius>.95f&&radial_normal>.01f)
+            if(radius>1.95f&&radial_normal>.01f)
                 ++outer_outward;
         }
         if(inner_inward==0U||outer_outward==0U)return 98;
@@ -268,7 +268,16 @@ int run_primitive_tests(){
                 cap_min_radius=std::min(cap_min_radius,
                     std::hypot(vertex.px,vertex.pz));
         }
-        if(cap_min_radius<.39f||cap_min_radius>.41f)return 99;
+        if(cap_min_radius<.79f||cap_min_radius>.81f)return 99;
+        // Cap UVs follow the actual scaled profile coordinates,
+        // rather than stretching one rectangular UV quad over a ring.
+        for(const auto& vertex:hollow.scene.vertices){
+            if(std::abs(std::abs(vertex.py)-1.f)<.001f){
+                if(std::abs(vertex.u-(vertex.px/4.f+.5f))>.001f||
+                   std::abs(vertex.v-(.5f-vertex.pz/4.f))>.001f)
+                    return 104;
+            }
+        }
         // Profile cut must reduce emitted side surface, not silently fall
         // back to the old uncut 20-sided cylinder.
         volume.volume_params[17U]=0x00U;volume.volume_params[18U]=0x00U;
