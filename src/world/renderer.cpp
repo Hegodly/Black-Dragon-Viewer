@@ -768,13 +768,19 @@ bool Renderer::set_verified_live_terrain(
     }
     const auto patch_nearer=[&](const auto* a,const auto* b){
         auto d=[&](const auto* p){
-            const float cx=static_cast<float>(p->x)*p->size+
-                           p->size*.5f-agent.x;
-            const float cy=static_cast<float>(p->y)*p->size+
-                           p->size*.5f-agent.y;
+            const double cx=static_cast<double>(p->x)*p->size+
+                            p->size*.5-static_cast<double>(agent.x);
+            const double cy=static_cast<double>(p->y)*p->size+
+                            p->size*.5-static_cast<double>(agent.y);
             return cx*cx+cy*cy;
         };
-        return d(a)<d(b);
+        const double da=d(a),db=d(b);
+        // Stable selection at equal distances avoids patch thrashing
+        // and redundant GPU scene uploads when a region is at capacity.
+        if(da!=db)return da<db;
+        if(a->x!=b->x)return a->x<b->x;
+        if(a->y!=b->y)return a->y<b->y;
+        return a->size<b->size;
     };
     // A standard 256 m region can contain 256 16x16 land patches.
     // Capping at 64 silently discarded three quarters of the terrain,
