@@ -3,6 +3,15 @@ on:
   - pull_request_target
 
 jobs:
+  kami-unified-promotion:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'feature/kami-live-viewer-integration'
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
+    uses: ./.github/workflows/kami-unified-integration.yml
+    secrets: inherit
+
   triage:
     permissions:
       contents: read
