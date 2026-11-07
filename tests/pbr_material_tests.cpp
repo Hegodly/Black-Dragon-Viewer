@@ -29,6 +29,15 @@ int run(){
        m.images[2]!=image||m.images[3]!=image||m.images[4]!=image||m.base[2]!=.8f||
        m.metallic!=.7f||m.roughness!=.2f||m.alpha!=1U||m.cutoff!=.25f||
        !m.double_sided||m.normal_scale!=.6f||m.occlusion_strength!=.4f||m.uv[0].scale[1]!=3.f)return 1;
+    // SL mesh/primitive TextureEntry supports 45 faces (0..44), not 32.
+    // The PBR face-ID bridge must retain the final official face slot.
+    std::vector<std::uint8_t> high_face{1U,0x80U,0U,18U,0U,0U,0U,1U,44U};
+    for(unsigned i=0U;i<16U;++i)high_face.push_back(
+        static_cast<std::uint8_t>(i+1U));
+    std::array<std::string,45U> high_face_ids{};
+    if(!decode_face_ids(high_face,high_face_ids)||
+       high_face_ids[44U]!="01020304-0506-0708-090a-0b0c0d0e0f10")
+        return 47;
     const auto bare=asset(json);
     const std::string official_header="<? LLSD/Binary ?>\n";
     auto canonical=bare;canonical.insert(canonical.begin(),official_header.begin(),official_header.end());
