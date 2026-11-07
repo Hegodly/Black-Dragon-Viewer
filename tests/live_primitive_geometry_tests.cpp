@@ -90,6 +90,16 @@ int run_primitive_tests(){
             {{79U,volume}},{},128.f,140.f,35.f);
         if(plain.root_shapes!=1U||plain.scene.vertices.size()<=240U)
             return 76;
+        // A large twist delta must receive denser path sampling than the
+        // untwisted baseline, rather than producing visibly faceted sides.
+        auto twisted=volume;
+        twisted.volume_params[9U]=0x80U;
+        twisted.volume_params[10U]=0x7fU;
+        const auto twist_detail=world::build_live_primitive_geometry(
+            {{79U,twisted}},{},128.f,140.f,35.f);
+        if(twist_detail.root_shapes!=1U||
+           twist_detail.scene.vertices.size()<=plain.scene.vertices.size())
+            return 85;
         // Hollow circle: profile hole code and 25% hollow opening.
         volume.volume_params[16U]=0x10U;
         volume.volume_params[21U]=0x20U;
