@@ -1188,83 +1188,49 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
     }
 
     if(page_==3) {
-        round_rect(box(contentX,90,contentWidth,height-178),29.f,p.elevated);
-        label(kPages[page_],box(contentX+28,111,contentWidth-55,42),
-              title_font_.Get(),p.text);
-        label(L"ORIGINAL KAMI MODULE READINESS / HONEST OFFLINE STATUS",
-              box(contentX+28,151,contentWidth-50,28),small_font_.Get(),p.accent);
-        constexpr viewer::Feature avatar[]={
-            viewer::Feature::AvatarAppearance,viewer::Feature::Gestures,
-            viewer::Feature::OutfitDrafts,viewer::Feature::Camera
-        };
-        constexpr viewer::Feature inventory[]={
-            viewer::Feature::Inventory,viewer::Feature::SmartSort,
-            viewer::Feature::LandmarkDrafts,viewer::Feature::Assets
-        };
-        constexpr viewer::Feature messages[]={
-            viewer::Feature::NearbyChat,viewer::Feature::DirectMessages,
-            viewer::Feature::Friends,viewer::Feature::Groups
-        };
-        const viewer::Feature* selected=page_==2?avatar:page_==3?inventory:messages;
-        const auto& catalog=viewer::feature_catalog();
-        for(unsigned i=0;i<4;++i) {
-            const float y=206.f+73.f*static_cast<float>(i);
-            round_rect(box(contentX+24,y,contentWidth-48,65),14.f,p.surface);
-            const auto f=selected[i];
-            for(const auto& entry:catalog) {
-                if(entry.feature!=f)continue;
-                label(entry.label,box(contentX+42,y+8,contentWidth-85,28),
-                      body_font_.Get(),p.text);
-                const bool local=entry.availability==viewer::Availability::OriginalLocalReady;
-                label(local?L"Local code available / no SL server changes":
-                      entry.availability==viewer::Availability::AssetPipelineRequired?
-                      L"Requires live assets + avatar decoder":
-                      L"Requires authenticated Second Life network adapter",
-                      box(contentX+42,y+36,contentWidth-86,24),
-                      small_font_.Get(),local?p.accent:p.muted);
-                break;
+        round_rect(box(contentX,90,contentWidth,height-178),25.f,p.elevated);
+        label(L"INVENTORY",box(contentX+24,105,contentWidth-48,36),title_font_.Get(),p.text);
+        label(L"Authenticated Second Life inventory / local organization preview only",box(contentX+24,141,contentWidth-48,24),small_font_.Get(),p.muted);
+        const float controlsY=174.f;
+        round_rect(box(contentX+22,controlsY,contentWidth-44,42),10.f,p.surface);
+        label(L"Search: "+inventory_search_+(inventory_search_focused_?L"|":L""),box(contentX+34,controlsY+7,contentWidth-310,28),body_font_.Get(),inventory_search_focused_?p.accent:p.text);
+        label(L"REFRESH [R]",box(contentX+contentWidth-264,controlsY+7,105,28),small_font_.Get(),p.accent);
+        const wchar_t* sort_names[]={L"NAME",L"CREATOR",L"TYPE"};
+        label(std::wstring(L"SORT: ")+sort_names[inventory_sort_mode_%3],box(contentX+contentWidth-151,controlsY+7,120,28),small_font_.Get(),p.accent);
+        const auto& entries=inventory_root_snapshot_.entries;
+        const auto root=sl_circuit_.inventory_root_id();
+        if(inventory_current_folder_.empty()&&!root.empty())inventory_current_folder_=root;
+        const auto visible=inventory::filter_entries(entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3));
+        const auto groups=inventory::group_entries_by_creator(entries,visible);
+        label(L"BACK [BACKSPACE] / "+std::to_wstring(visible.size())+L" entries / "+std::to_wstring(groups.size())+L" creators",box(contentX+24,222,contentWidth-48,25),small_font_.Get(),p.muted);
+        const float rowTop=251.f,rowHeight=31.f;
+        const float detailTop=std::max(rowTop+80.f,height-188.f);
+        const auto maxRows=static_cast<unsigned>(std::max(1.f,(detailTop-rowTop)/rowHeight));
+        for(unsigned row=0;row<maxRows&&row<visible.size();++row){
+            const auto& e=entries[visible[row]];
+            const float y=rowTop+rowHeight*static_cast<float>(row);
+            round_rect(box(contentX+20,y,contentWidth-40,28),7.f,e.id==inventory_selected_entry_?p.accent_soft:p.surface);
+            std::wstring line=e.folder?L"[FOLDER] ":L"[ITEM] ";line+=e.name;
+            if(!e.folder&&inventory_group_creators_){line+=L"  ·  ";line+=e.creator_id.empty()?L"Unknown creator":std::wstring(e.creator_id.begin(),e.creator_id.end());}
+            label(line,box(contentX+32,y+3,contentWidth-64,23),small_font_.Get(),e.id==inventory_selected_entry_?p.accent:p.text);
+        }
+        if(visible.empty())label(inventory_search_.empty()?L"No entries in this folder. Use Refresh after login.":L"No inventory entries match this search.",box(contentX+28,rowTop+18,contentWidth-56,30),body_font_.Get(),p.muted);
+        round_rect(box(contentX+20,detailTop,contentWidth-40,height-detailTop-18),12.f,p.surface);
+        const protocol::caps::InventoryEntry* selected=nullptr;
+        for(const auto& e:entries)if(e.id==inventory_selected_entry_){selected=&e;break;}
+        if(selected){
+            label(selected->name,box(contentX+34,detailTop+8,contentWidth-68,24),body_font_.Get(),p.text);
+            std::wstring detail=selected->folder?L"Folder ID: ":L"Creator: ";
+            if(selected->folder)detail+=std::wstring(selected->id.begin(),selected->id.end());
+            else detail+=selected->creator_id.empty()?L"Unknown":std::wstring(selected->creator_id.begin(),selected->creator_id.end());
+            label(detail,box(contentX+34,detailTop+34,contentWidth-68,22),small_font_.Get(),p.muted);
+            if(!selected->folder){
+                const auto meta=L"Asset type: "+std::to_wstring(selected->asset_type)+L" / Inventory type: "+std::to_wstring(selected->inventory_type);
+                label(meta,box(contentX+34,detailTop+56,contentWidth-68,22),small_font_.Get(),p.muted);
+                label(selected->description,box(contentX+34,detailTop+78,contentWidth-68,22),small_font_.Get(),p.muted);
             }
-        }
-        // Smart Sort previews use only entries returned by the authenticated
-        // Second Life inventory fetch. They never move or delete server items.
-        std::vector<inventory::Item> live_items;
-        live_items.reserve(inventory_root_snapshot_.entries.size());
-        for(const auto& entry:inventory_root_snapshot_.entries){
-            if(entry.folder)continue;
-            live_items.push_back({entry.name,
-                std::wstring(entry.creator_id.begin(),entry.creator_id.end()),false});
-        }
-        const auto moves=inventory::preview_smart_sort(live_items);
-        const auto demos=inventory::preview_demo_deletions(live_items);
-        if(!moves.empty()){
-            const auto& plan=moves.front();
-            const std::wstring preview=L"Live Smart Sort preview: "+
-                live_items[plan.item_index].name+L"  ->  "+plan.destination;
-            label(preview,box(contentX+28,height-150,contentWidth-48,27),
-                  small_font_.Get(),p.accent);
-        }else{
-            label(L"Smart Sort will preview real items after inventory sync.",
-                  box(contentX+28,height-150,contentWidth-48,27),
-                  small_font_.Get(),p.muted);
-        }
-        label(L"Demo cleanup preview: "+std::to_wstring(demos.size())+
-              L" matching server item(s); nothing deleted",
-              box(contentX+28,height-123,contentWidth-48,25),
-              small_font_.Get(),p.muted);
-        label(inventory_status_,box(contentX+28,height-95,contentWidth-48,25),
-              small_font_.Get(),p.accent);
-        if(!inventory_root_snapshot_.entries.empty()){
-            std::wstring sample=L"Inventory: ";
-            const auto count=(std::min)(std::size_t{3},inventory_root_snapshot_.entries.size());
-            for(std::size_t i=0;i<count;++i){
-                if(i)sample+=L"  |  ";
-                const auto& entry=inventory_root_snapshot_.entries[i];
-                sample+=entry.folder?L"[Folder] ":L"[Item] ";
-                sample+=entry.name;
-            }
-            label(sample,box(contentX+28,height-68,contentWidth-48,25),
-                  small_font_.Get(),p.text);
-        }
+        }else label(L"Select an item to inspect metadata, or select a folder to open it.",box(contentX+34,detailTop+12,contentWidth-68,28),small_font_.Get(),p.muted);
+        label(inventory_status_+L" / Smart Sort preview only; no server items moved or deleted.",box(contentX+24,height-35,contentWidth-48,22),small_font_.Get(),p.accent);
         return;
     }
 
