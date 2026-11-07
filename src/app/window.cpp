@@ -991,7 +991,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             inventory_search_focused_=true;SetFocus(hwnd_);return;
         }
         if(y>=222.f&&y<248.f){
-            inventory_current_folder_=sl_circuit_.inventory_root_id();
+            const auto root=sl_circuit_.inventory_root_id();
+            if(inventory_current_folder_!=root){
+                for(const auto& entry:inventory_root_snapshot_.entries)
+                    if(entry.folder&&entry.id==inventory_current_folder_){inventory_current_folder_=entry.parent_id;break;}
+            }
             inventory_selected_entry_.clear();inventory_search_.clear();
             InvalidateRect(hwnd_,nullptr,FALSE);return;
         }
@@ -1275,7 +1279,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             if(!selected->folder){
                 const auto meta=L"Asset type: "+std::to_wstring(selected->asset_type)+L" / Inventory type: "+std::to_wstring(selected->inventory_type);
                 label(meta,box(contentX+34,detailTop+56,contentWidth-68,22),small_font_.Get(),p.muted);
-                label(selected->description,box(contentX+34,detailTop+78,contentWidth-68,22),small_font_.Get(),p.muted);
+                const std::wstring asset=selected->asset_id.empty()?L"Asset ID: unavailable":L"Asset ID: "+std::wstring(selected->asset_id.begin(),selected->asset_id.end());
+                label(asset,box(contentX+34,detailTop+78,contentWidth-68,22),small_font_.Get(),p.muted);
+                label(selected->description,box(contentX+34,detailTop+100,contentWidth-68,22),small_font_.Get(),p.muted);
             }
         }else label(L"Select an item to inspect metadata, or select a folder to open it.",box(contentX+34,detailTop+12,contentWidth-68,28),small_font_.Get(),p.muted);
         label(inventory_status_+L" / Smart Sort preview only; no server items moved or deleted.",box(contentX+24,height-35,contentWidth-48,22),small_font_.Get(),p.accent);
