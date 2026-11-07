@@ -97,12 +97,15 @@ struct Emitter {
     Pose pose;
     V half;
     V origin;
+    V profile_scale{1.f,1.f,1.f};
     std::size_t& textured_triangles;
     const PBRFaceIndices& pbr_faces;
     float red=.78f,green=.83f,blue=.92f;
     V transform(V v) const noexcept {
         return add(pose.pos,rotate(pose.rot,
-            {v.x*half.x*2.f,v.y*half.y*2.f,v.z*half.z*2.f}));
+            {v.x*half.x*2.f*profile_scale.x,
+             v.y*half.y*2.f*profile_scale.y,
+             v.z*half.z*2.f}));
     }
     V render(V v) const noexcept {
         return {v.x-origin.x,v.z-origin.z,v.y-origin.y};
@@ -235,8 +238,20 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
     if(t.primitive==Kind::Unknown||!valid_quat(p.rot)||!finite(p.pos))
         return false;
     const std::size_t start=out.size();
+    V profile_scale{1.f,1.f,1.f};
+    if(t.volume_params_seen){
+        // LLPathParams maps the wire scale bytes as (200 - value) / 100.
+        // High 12 carries PathScaleX/Y at [6]/[7]; packed High 13 at [5]/[6].
+        const unsigned sx=t.volume_params_full_layout?6U:5U;
+        const unsigned sy=sx+1U;
+        if(t.volume_params[sx]>200U||t.volume_params[sy]>200U)return false;
+        profile_scale.x=static_cast<float>(200U-t.volume_params[sx])*.01f;
+        profile_scale.y=static_cast<float>(200U-t.volume_params[sy])*.01f;
+        if(profile_scale.x<.01f||profile_scale.y<.01f)return false;
+    }
     Emitter e{out,t,layers,p,
-              {t.sx*.5f,t.sy*.5f,t.sz*.5f},origin,textured_triangles,pbr_faces};
+              {t.sx*.5f,t.sy*.5f,t.sz*.5f},origin,profile_scale,
+              textured_triangles,pbr_faces};
     if(t.base_tint_present){
         e.red=std::clamp(t.base_r,0.f,1.f);
         e.green=std::clamp(t.base_g,0.f,1.f);
