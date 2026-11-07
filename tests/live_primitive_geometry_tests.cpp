@@ -66,6 +66,39 @@ int run_primitive_tests(){
         if(high13.root_shapes!=1U||std::abs(max_x-1.5f)>.001f||
            std::abs(max_z-.75f)>.001f)return 74;
     }
+    // A real High 13 linear/circular LLVolume now follows profile and
+    // path cuts, hollow radius, taper, twist and shear through tessellation.
+    {
+        Transform volume{79U,128.f,140.f,35.f,2.f,2.f,2.f};
+        volume.primitive=Kind::Cylinder;
+        volume.volume_params_seen=true;
+        volume.volume_params[0U]=0x10U; // LL_PCODE_PATH_LINE
+        volume.volume_params[16U]=0x00U; // circular profile, no hole
+        volume.volume_params[4U]=0x50U;volume.volume_params[3U]=0xc3U;
+        volume.volume_params[6U]=0x50U;volume.volume_params[5U]=0xc3U;
+        for(unsigned i=7U;i<=15U;++i)volume.volume_params[i]=128U;
+        const auto plain=world::build_live_primitive_geometry(
+            {{79U,volume}},{},128.f,140.f,35.f);
+        if(plain.root_shapes!=1U||plain.scene.vertices.size()<=240U)
+            return 76;
+        // Hollow circle: profile hole code and 25% hollow opening.
+        volume.volume_params[16U]=0x10U;
+        volume.volume_params[21U]=0x20U;
+        volume.volume_params[22U]=0x4eU; // 1.0 hollow fraction
+        const auto hollow=world::build_live_primitive_geometry(
+            {{79U,volume}},{},128.f,140.f,35.f);
+        if(hollow.root_shapes!=1U||
+           hollow.scene.vertices.size()<=plain.scene.vertices.size())
+            return 77;
+        // Profile cut must reduce emitted side surface, not silently fall
+        // back to the old uncut 20-sided cylinder.
+        volume.volume_params[17U]=0x00U;volume.volume_params[18U]=0x00U;
+        volume.volume_params[19U]=0x50U;volume.volume_params[20U]=0x61U;
+        const auto cut=world::build_live_primitive_geometry(
+            {{79U,volume}},{},128.f,140.f,35.f);
+        if(cut.root_shapes!=1U||cut.scene.vertices.size()>=hollow.scene.vertices.size())
+            return 78;
+    }
     roots[77U].primitive=Kind::Cylinder;
     auto cylinder=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f);
