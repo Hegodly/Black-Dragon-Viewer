@@ -452,5 +452,52 @@ int main(){
         if(expanded.size()!=8192U||expanded.front()!=1U||
            expanded.back()!=8192U)return 52;
     }
+    // R72: a simulator may reparent a prim between root and child roles.
+    // Its local ID must not remain in both maps, and a compressed pose
+    // must retain the last verified full-update mesh/PBR/TextureEntry data.
+    {
+        using Transform=objectspatial::Transform;
+        constexpr std::uint32_t id=2001U;
+        Transform old_root{id,128.f,140.f,35.f,2.f,2.f,2.f};
+        old_root.primitive=objectspatial::PrimitiveKind::Box;
+        old_root.volume_params_seen=true;
+        old_root.default_texture_present=true;
+        old_root.default_texture_asset_id=
+            "11111111-2222-4333-8444-555555555555";
+        old_root.base_tint_present=true;
+        old_root.face_material_ids[0]=
+            "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+        old_root.material_params_seen=true;
+        std::map<std::uint32_t,Transform> roots{{id,old_root}};
+        std::map<std::uint32_t,Transform> links;
+        Transform as_child{id,1.f,2.f,3.f,2.f,2.f,2.f};
+        as_child.parent_id=1999U;
+        auto merged_child=objectspatial::merge_compressed_transform(
+            as_child,roots,links);
+        if(merged_child.parent_id!=1999U||
+           merged_child.primitive!=objectspatial::PrimitiveKind::Box||
+           !merged_child.volume_params_seen||
+           merged_child.default_texture_asset_id!=old_root.default_texture_asset_id||
+           merged_child.face_material_ids[0]!=old_root.face_material_ids[0]||
+           !merged_child.material_params_seen)return 53;
+        if(!objectspatial::erase_conflicting_classification(
+               id,true,roots,links)||!roots.empty())return 54;
+        links.emplace(id,merged_child);
+        Transform as_root{id,129.f,141.f,36.f,2.f,2.f,2.f};
+        auto merged_root=objectspatial::merge_compressed_transform(
+            as_root,roots,links);
+        if(merged_root.parent_id!=0U||
+           merged_root.primitive!=objectspatial::PrimitiveKind::Box||
+           merged_root.default_texture_asset_id!=old_root.default_texture_asset_id||
+           merged_root.face_material_ids[0]!=old_root.face_material_ids[0])
+            return 55;
+        if(!objectspatial::erase_conflicting_classification(
+               id,false,roots,links)||!links.empty())return 56;
+        roots.emplace(id,merged_root);
+        links.emplace(id,merged_child);
+        if(!objectspatial::erase_object_identity(id,roots,links)||
+           !roots.empty()||!links.empty()||
+           objectspatial::erase_object_identity(id,roots,links))return 57;
+    }
     return 0;
 }
