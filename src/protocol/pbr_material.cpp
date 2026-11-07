@@ -174,10 +174,10 @@ Override override_value(const J& j){
     }return o;
 }
 }
-bool decode_face_ids(std::span<const std::uint8_t> b,std::array<std::string,32>& output) noexcept {
+bool decode_face_ids(std::span<const std::uint8_t> b,std::array<std::string,45>& output) noexcept {
     try{
-        std::array<std::string,32> ids{};if(b.empty()){output=ids;return true;}
-        std::size_t at=1U;const auto count=b[0];if(count>32U)return false;
+        std::array<std::string,45> ids{};if(b.empty()){output=ids;return true;}
+        std::size_t at=1U;const auto count=b[0];if(count>45U)return false;
         bool seen=false;
         for(unsigned i=0;i<count;++i){
             if(b.size()-at<6U)return false;
@@ -187,9 +187,9 @@ bool decode_face_ids(std::span<const std::uint8_t> b,std::array<std::string,32>&
             if(n>b.size()-at)return false;
             if(type==0x80U){
                 if(seen||n<1U||b[at]>14U||n!=1U+unsigned(b[at])*17U)return false;seen=true;
-                std::array<bool,32> faces{};
+                std::array<bool,45> faces{};
                 for(unsigned k=0;k<b[at];++k){const auto p=at+1U+k*17U;const auto face=b[p];
-                    if(face>=32U||faces[face])return false;faces[face]=true;
+                    if(face>=45U||faces[face])return false;faces[face]=true;
                     ids[face]=wire_uuid(b.subspan(p+1U,16U));}
             }at+=n;
         }if(at!=b.size())return false;output=std::move(ids);return true;
@@ -391,9 +391,9 @@ bool decode_override(std::span<const std::uint8_t> b,std::uint32_t& object,std::
         const double num=id->is<double>()?id->get<double>():0.;
         if(num==0.||num< -2147483648.||num>4294967295.||std::floor(num)!=num)return false;
         const auto& faces=te->get<picojson::array>();const auto& values=od->get<picojson::array>();
-        if(faces.size()>32U||faces.size()!=values.size())return false;
+        if(faces.size()>45U||faces.size()!=values.size())return false;
         std::map<unsigned,Override> decoded;
-        for(unsigned i=0;i<faces.size();++i)if(!decoded.emplace(index(faces[i],32U),override_value(values[i])).second)return false;
+        for(unsigned i=0;i<faces.size();++i)if(!decoded.emplace(index(faces[i],45U),override_value(values[i])).second)return false;
         object=static_cast<std::uint32_t>(num<0.?num+4294967296.:num);out=std::move(decoded);return true;
     }catch(...){return false;}
 }
