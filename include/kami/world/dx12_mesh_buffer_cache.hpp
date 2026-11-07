@@ -217,10 +217,13 @@ public:
         const std::vector<InstanceDrawRequirement>& required) const noexcept {
         if(region_key.empty()||
            !within_resident_batch_draw_budget(required.size()))return false;
-        std::set<std::uint32_t> seen;
-        for(const auto& item:required){
-            if(!item.local_id||!item.vertex_count||
-               !seen.insert(item.local_id).second)return false;
+        // This preflight runs every frame. The batch is capped at 256, so use
+        // bounded stack storage instead of allocating one tree node per mesh.
+        std::array<std::uint32_t,kMaxResidentBatchDraws> seen_ids{};
+        for(std::size_t i=0U;i<required.size();++i){
+            const auto& item=required[i];
+            if(!item.local_id||!item.vertex_count)return false;
+            seen_ids[i]=item.local_id;
             const auto* resident=find(region_key+":"+std::to_string(item.local_id));
             if(!resident||!resident->resource||resident->generation!=generation_||
                resident->revision!=revision||
@@ -229,7 +232,9 @@ public:
                resident->view.SizeInBytes/resident->view.StrideInBytes!=item.vertex_count)
                 return false;
         }
-        return true;
+        auto seen_end=seen_ids.begin()+required.size();
+        std::sort(seen_ids.begin(),seen_end);
+        return std::adjacent_find(seen_ids.begin(),seen_end)==seen_end;
     }
 
     // Record an entire resident batch only after one all-or-nothing preflight.
@@ -526,7 +531,8 @@ public:
         std::uint32_t* visible_ids,std::size_t capacity,
         std::size_t& visible_count) noexcept {
         visible_count=0U;
-        if(required.empty()||!visible_ids||capacity<required.size())return false;
+        if(!within_resident_batch_draw_budget(required.size())||
+           !visible_ids||capacity<required.size())return false;
         // Bounds are sorted once when the decoded scene is accepted. Refuse an
         // unsorted cache rather than risk a false-negative lookup; the caller
         // responds by drawing every resident object for this pass.

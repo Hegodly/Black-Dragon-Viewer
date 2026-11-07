@@ -97,6 +97,9 @@ int main() {
         if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,0}}))return 38;
         if(cache.can_draw_exact_instance_batch("",1,{Requirement{17,3}}))return 39;
         if(cache.can_draw_exact_instance_batch("region",1,{}))return 40;
+        std::vector<Requirement> oversized_batch(Cache::kMaxResidentBatchDraws+1U,
+                                                   Requirement{17,3});
+        if(cache.can_draw_exact_instance_batch("region",1,oversized_batch))return 100;
         if(cache.record_instance_batch(nullptr,"region",1,
              {Requirement{17,3},Requirement{18,3}}))return 73;
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> batch_allocator;
@@ -269,6 +272,28 @@ int main() {
         if(Cache::select_visible_instance_ids(
             visibility_requirements,visibility_bounds,extracted,
             visible_ids.data(),1U,visible_count))return 91;
+        // The selector must never write past its fixed 256-ID scratch budget.
+        std::vector<Requirement> oversized_visibility(Cache::kMaxResidentBatchDraws+1U);
+        for(std::size_t i=0U;i<oversized_visibility.size();++i)
+            oversized_visibility[i]={static_cast<std::uint32_t>(i+1U),3U};
+        std::array<std::uint32_t,Cache::kMaxResidentBatchDraws+1U> oversized_output{};
+        oversized_output[0]=0xdeadbeefU;
+        visible_count=123U;
+        if(Cache::select_visible_instance_ids(
+            oversized_visibility,visibility_bounds,extracted,
+            oversized_output.data(),oversized_output.size(),visible_count)||
+           visible_count!=0U||oversized_output[0]!=0xdeadbeefU)return 101;
+        // Exact AABBs take precedence over loose spheres, while unknown bounds
+        // still fall back conservatively to sphere/missing-bound visibility.
+        const std::vector<Visibility> aabb_selection_bounds{
+            {17,{20,0,5.f,.1f,true},{-.1f,-.1f,4.9f,.1f,.1f,5.1f,true}},
+            {18,{0,0,5.f,.1f,true},{6.f,-.5f,4.9f,7.f,.5f,5.1f,true}},
+            {19,{20,0,5.f,.1f,false},{} }};
+        if(!Cache::select_visible_instance_ids(
+            visibility_requirements,aabb_selection_bounds,extracted,
+            visible_ids.data(),visible_ids.size(),visible_count)||
+           visible_count!=3U||visible_ids[0]!=17U||
+           visible_ids[1]!=19U||visible_ids[2]!=20U)return 102;
         // A region generation change must invalidate old mesh residency until
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();
