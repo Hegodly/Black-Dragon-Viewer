@@ -293,6 +293,7 @@ int exercise(){
     const std::string item_reply=
         "<llsd><map><key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"
         "<key>items</key><array><map>"
+        "<key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"
         "<key>item_id</key><uuid>cccccccc-cccc-4ccc-8ccc-cccccccccccc</uuid>"
         "<key>parent_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
         "<key>asset_id</key><uuid>dddddddd-dddd-4ddd-8ddd-dddddddddddd</uuid>"
