@@ -285,7 +285,29 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
             return 0;
         }
         break;
+    case WM_CHAR:
+        if(page_==3&&inventory_search_focused_){
+            if(wp==8){if(!inventory_search_.empty())inventory_search_.pop_back();}
+            else if(wp>=32&&wp<127&&inventory_search_.size()<64)inventory_search_.push_back(static_cast<wchar_t>(wp));
+            InvalidateRect(hwnd_,nullptr,FALSE);return 0;
+        }
+        break;
     case WM_KEYDOWN:
+        if(page_==3){
+            if(wp=='R'){start_inventory_refresh();return 0;}
+            if(wp=='G'){inventory_group_creators_=!inventory_group_creators_;InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
+            if(wp==VK_ESCAPE){inventory_search_focused_=false;inventory_search_.clear();InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
+            if(wp==VK_BACK&&!inventory_search_focused_){
+                const auto root=sl_circuit_.inventory_root_id();
+                if(inventory_current_folder_!=root){
+                    for(const auto& entry:inventory_root_snapshot_.entries)
+                        if(entry.folder&&entry.id==inventory_current_folder_){inventory_current_folder_=entry.parent_id;break;}
+                    inventory_selected_entry_.clear();InvalidateRect(hwnd_,nullptr,FALSE);
+                }
+                return 0;
+            }
+            if(wp==VK_RETURN)inventory_search_focused_=false;
+        }
         if(page_==1&&world_ready_&&wp=='V'){
             // Ignore auto-repeat: only one scenic switch per physical press.
             if((static_cast<unsigned long long>(lp)&(1ULL<<30))==0ULL)
@@ -961,6 +983,32 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         return;
     }
 
+    if(page_==3){
+        const float contentX=534.f,contentWidth=width-contentX-30.f;
+        if(y>=174.f&&y<216.f){
+            if(x>=contentX+contentWidth-270.f&&x<contentX+contentWidth-154.f){start_inventory_refresh();return;}
+            if(x>=contentX+contentWidth-154.f&&x<contentX+contentWidth-20.f){inventory_sort_mode_=(inventory_sort_mode_+1U)%3U;InvalidateRect(hwnd_,nullptr,FALSE);return;}
+            inventory_search_focused_=true;SetFocus(hwnd_);return;
+        }
+        if(y>=222.f&&y<248.f){
+            inventory_current_folder_=sl_circuit_.inventory_root_id();
+            inventory_selected_entry_.clear();inventory_search_.clear();
+            InvalidateRect(hwnd_,nullptr,FALSE);return;
+        }
+        const auto visible=inventory::filter_entries(inventory_root_snapshot_.entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3));
+        const float rowTop=251.f,rowHeight=31.f;
+        const float detailTop=std::max(rowTop+80.f,static_cast<float>(client.bottom)-188.f);
+        if(y>=rowTop&&y<detailTop){
+            const auto row=static_cast<std::size_t>((y-rowTop)/rowHeight);
+            if(row<visible.size()){
+                const auto& e=inventory_root_snapshot_.entries[visible[row]];
+                inventory_selected_entry_=e.id;
+                if(e.folder){inventory_current_folder_=e.id;inventory_search_.clear();}
+                InvalidateRect(hwnd_,nullptr,FALSE);return;
+            }
+        }
+        return;
+    }
     if(page_==4) {
         const float railX=contentX+18.f;
         const float panelX=contentX+255.f;
