@@ -107,7 +107,8 @@ int main(){
            packet({box,cyl,round}),out,&audit,&parents,&linked)||
        out.size()!=1U||linked.size()!=2U||
        out[0].primitive!=objectspatial::PrimitiveKind::Box||
-       !out[0].volume_params_seen||out[0].volume_params[0]!=0x10U||
+       !out[0].volume_params_seen||!out[0].volume_params_full_layout||
+       out[0].volume_params[0]!=0x10U||
        out[0].volume_params[1]!=0x01U||
        out[0].volume_params[6]!=100U||out[0].volume_params[7]!=100U||
        linked[0].primitive!=objectspatial::PrimitiveKind::Cylinder||
@@ -128,7 +129,14 @@ int main(){
     changed_scale[115]=90U;
     if(!objectspatial::decode_full_transforms(
         packet({changed_scale}),out,&audit)||out.size()!=1U||
-        out[0].primitive!=objectspatial::PrimitiveKind::Unknown)return 14;
+        out[0].primitive!=objectspatial::PrimitiveKind::Box||
+        !out[0].volume_params_full_layout||
+        out[0].volume_params[6U]!=90U)return 14;
+    auto invalid_scale=box;
+    invalid_scale[115U]=201U;
+    if(!objectspatial::decode_full_transforms(
+        packet({invalid_scale}),out,&audit)||out.size()!=1U||
+        out[0].primitive!=objectspatial::PrimitiveKind::Unknown)return 16;
     box[121]=20U; // PathRadiusOffset: complex modified shape
     if(!objectspatial::decode_full_transforms(
            packet({box}),out,&audit,&parents,&linked)||
