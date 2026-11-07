@@ -1,6 +1,7 @@
 #include "kami/protocol/object_spatial.hpp"
 #include "kami/world/object_proxies.hpp"
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -377,7 +378,7 @@ int main(){
            std::abs(world_position[2]-35.f)>.001f||
            std::abs(remote_root.x-50.f)<=144.f||
            std::abs(world_position[0]-50.f)>144.f)
-            return 42;
+            std::fprintf(stderr,"spatial regression 42: composed child position\n");return 42;
         constexpr float half=0.7071067811865476f;
         auto rotated_root=remote_root;
         rotated_root.x=128.f;rotated_root.rz=half;rotated_root.rw=half;
@@ -394,27 +395,27 @@ int main(){
                 rotated_child,rotated_roots,rotated_links,{},
                 world_position)||
            std::abs(world_position[0]-128.f)>.001f||
-           std::abs(world_position[1]-141.f)>.001f)return 43;
+           std::abs(world_position[1]-141.f)>.001f)std::fprintf(stderr,"spatial regression 43: rotated child position\n");return 43;
         if(!objectspatial::resolve_world_position(
                 grandchild,rotated_roots,rotated_links,{},
                 world_position)||
            std::abs(world_position[0]-126.f)>.001f||
-           std::abs(world_position[1]-141.f)>.001f)return 44;
+           std::abs(world_position[1]-141.f)>.001f)std::fprintf(stderr,"spatial regression 44: nested grandchild position\n");return 44;
         const auto retained=world_position;
         if(objectspatial::resolve_world_position(
                 near_child,{},links,{},world_position)||
-           world_position!=retained)return 45;
+           world_position!=retained)std::fprintf(stderr,"spatial regression 45: missing parent modified output\n");return 45;
         auto cycle=near_child;cycle.parent_id=1002U;
         if(objectspatial::resolve_world_position(
                 cycle,roots,{{1002U,cycle}},{},world_position)||
-           world_position!=retained)return 46;
+           world_position!=retained)std::fprintf(stderr,"spatial regression 46: hierarchy cycle accepted\n");return 46;
         auto nonunit=rotated_root;nonunit.rw=3.f;
         if(objectspatial::resolve_world_position(
                 near_child,{{1001U,nonunit}},links,{},world_position))
-            return 47;
+            std::fprintf(stderr,"spatial regression 47: non-unit parent accepted\n");return 47;
         if(objectspatial::resolve_world_position(
                 near_child,roots,links,{1001U},world_position))
-            return 48;
+            std::fprintf(stderr,"spatial regression 48: avatar parent accepted\n");return 48;
     }
     return 0;
 }
