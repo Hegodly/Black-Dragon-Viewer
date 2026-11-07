@@ -74,6 +74,12 @@ int main(){
     const auto incomplete=world::build_live_terrain_mesh(patches,selected,0,0,0);
     if(incomplete.quads>=full.quads||incomplete.skipped_quads==0U)
         return 5;
+    float sampled=0.f;
+    if(!world::sample_live_terrain_height(patches,0.f,0.f,0.f,4.25f,6.5f,sampled)||
+       std::fabs(sampled-(20.f+4.25f*.25f+6.5f*.5f))>.001f)return 10;
+    if(!world::sample_live_terrain_height(patches,2.f,1.f,5.f,2.25f,5.5f,sampled)||
+       std::fabs(sampled-(20.f+4.25f*.25f+6.5f*.5f-5.f))>.001f)return 11;
+    if(world::sample_live_terrain_height(patches,0.f,0.f,0.f,40.f,40.f,sampled))return 12;
     const auto invalid=world::build_live_terrain_mesh(patches,selected,
         std::numeric_limits<float>::infinity(),0.f,0.f);
     if(!invalid.scene.vertices.empty())return 6;
