@@ -281,6 +281,37 @@ int exercise(){
        inventory_request.find("<key>fetch_items</key>")!=std::string::npos||
        !build_inventory_folder_post("not-a-uuid","12345678-90ab-4cde-8fab-000000000001").empty())
         return 46;
+    const std::vector<std::string> requested_item_ids{
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc"};
+    const auto item_post=build_inventory_items_post(
+        "12345678-90ab-4cde-8fab-000000000001",
+        "12345678-90ab-4cde-8fab-000000000001",requested_item_ids);
+    if(item_post.find("<key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>")==std::string::npos||
+       item_post.find("<key>item_id</key><uuid>cccccccc-cccc-4ccc-8ccc-cccccccccccc</uuid>")==std::string::npos||
+       !build_inventory_items_post("bad","12345678-90ab-4cde-8fab-000000000001",requested_item_ids).empty())
+        return 49;
+    const std::string item_reply=
+        "<llsd><map><key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"
+        "<key>items</key><array><map>"
+        "<key>item_id</key><uuid>cccccccc-cccc-4ccc-8ccc-cccccccccccc</uuid>"
+        "<key>parent_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
+        "<key>asset_id</key><uuid>dddddddd-dddd-4ddd-8ddd-dddddddddddd</uuid>"
+        "<key>name</key><string>Jacket</string><key>desc</key><string>Creator jacket</string>"
+        "<key>type</key><integer>5</integer><key>inv_type</key><integer>6</integer>"
+        "<key>permissions</key><map><key>creator_id</key><uuid>eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee</uuid></map>"
+        "</map></array></map></llsd>";
+    std::vector<InventoryEntry> detailed_items;
+    if(!parse_inventory_items_llsd(item_reply,
+        "12345678-90ab-4cde-8fab-000000000001",requested_item_ids,detailed_items)||
+       detailed_items.size()!=1||detailed_items[0].name!=L"Jacket"||
+       detailed_items[0].description!=L"Creator jacket"||
+       detailed_items[0].creator_id!="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"||
+       detailed_items[0].asset_id!="dddddddd-dddd-4ddd-8ddd-dddddddddddd"||
+       detailed_items[0].asset_type!=5||detailed_items[0].inventory_type!=6)
+        return 50;
+    if(parse_inventory_items_llsd(item_reply,
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",requested_item_ids,detailed_items))
+        return 51;
     // Inventory CAPS are negotiated separately from mesh/EventQueue and
     // remain bearer URLs; only Linden-owned simulator HTTPS endpoints pass.
     const auto inventory_seed=
