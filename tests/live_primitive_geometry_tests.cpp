@@ -102,6 +102,26 @@ int run_primitive_tests(){
             {{79U,volume}},{},128.f,140.f,35.f);
         if(cut.root_shapes!=1U||cut.scene.vertices.size()>=hollow.scene.vertices.size())
             return 78;
+        // High 12 full ObjectUpdate uses a distinct 23-byte field layout.
+        Transform full_volume{80U,128.f,140.f,35.f,2.f,2.f,2.f};
+        full_volume.primitive=Kind::Cylinder;
+        full_volume.volume_params_seen=true;
+        full_volume.volume_params_full_layout=true;
+        full_volume.volume_params[0U]=0x10U;
+        full_volume.volume_params[1U]=0x10U;
+        full_volume.volume_params[4U]=0x50U;
+        full_volume.volume_params[5U]=0xc3U;
+        full_volume.volume_params[6U]=100U;
+        full_volume.volume_params[7U]=100U;
+        for(unsigned i=8U;i<=16U;++i)full_volume.volume_params[i]=128U;
+        full_volume.volume_params[19U]=0x50U;
+        full_volume.volume_params[20U]=0xc3U;
+        full_volume.volume_params[21U]=0x20U;
+        full_volume.volume_params[22U]=0x4eU;
+        const auto full_sweep=world::build_live_primitive_geometry(
+            {{80U,full_volume}},{},128.f,140.f,35.f);
+        if(full_sweep.root_shapes!=1U||
+           full_sweep.scene.vertices.size()<=240U)return 79;
     }
     roots[77U].primitive=Kind::Cylinder;
     auto cylinder=world::build_live_primitive_geometry(
