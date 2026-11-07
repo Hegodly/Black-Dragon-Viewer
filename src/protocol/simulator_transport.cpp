@@ -177,8 +177,11 @@ void Circuit::schedule_visible_meshes() noexcept {
             std::abs(p[1]-movement_position_.y)<=144.f&&
             std::abs(p[2]-movement_position_.z)<=96.f;
     };
-    bool retry_discovery=false;
-    const auto schedule=[&](const auto& objects) noexcept {
+    // Rebuild the bounded mesh interest set from the current verified
+    // simulator snapshot. Old queued requests must not retain "visible"
+    // priority after the avatar leaves their neighborhood.
+    std::map<std::string,float> nearest;
+    const auto scan=[&](const auto& objects) {
         for(const auto& [id,t]:objects){
             (void)id;
             if(t.mesh_asset_id.empty())continue;
@@ -186,17 +189,36 @@ void Circuit::schedule_visible_meshes() noexcept {
             if(!objectspatial::resolve_world_position(
                    t,spatial_objects_,linked_objects_,avatar_root_ids_,
                    position)||!close_to_agent(position))continue;
-            const float d=std::hypot(
+            const float distance=std::hypot(
                 std::hypot(position[0]-movement_position_.x,
                            position[1]-movement_position_.y),
                 position[2]-movement_position_.z);
-            if(!mesh_scheduler_.request(t.mesh_asset_id,
-                                        load::Kind::VisibleMesh,d,true,0U))
-                retry_discovery=true;
+            const auto [it,inserted]=nearest.try_emplace(
+                t.mesh_asset_id,distance);
+            if(!inserted)it->second=std::min(it->second,distance);
         }
     };
-    schedule(spatial_objects_);
-    schedule(linked_objects_);
+    scan(spatial_objects_);
+    scan(linked_objects_);
+    std::set<std::string> wanted;
+    for(const auto& [id,distance]:nearest){
+        (void)distance;
+        wanted.insert(id);
+    }
+    // Forget stale queued/decoded scheduler entries where safe. An active
+    // HTTP worker is never cancelled; its completion is checked against
+    // mesh_desired_ids_ before decode and cache admission below.
+    for(const auto& old:mesh_desired_ids_)
+        if(!wanted.contains(old)){
+            (void)mesh_scheduler_.forget_finished(old);
+            mesh_retry_after_.erase(old);
+        }
+    mesh_desired_ids_.swap(wanted);
+    bool retry_discovery=false;
+    for(const auto& [id,distance]:nearest)
+        if(!mesh_scheduler_.request(
+               id,load::Kind::VisibleMesh,distance,true,0U))
+            retry_discovery=true;
     // A full scheduler must not permanently suppress newly visible mesh IDs.
     // Rescan on the next poll after capacity becomes available.
     if(retry_discovery)mesh_scan_revision_=~std::uint64_t{0};
