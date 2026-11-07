@@ -53,7 +53,14 @@ bool Scheduler::request(std::string_view id,Kind kind,float distance,
     if(auto* prior=mutable_find(id)){
         // Do not enqueue duplicate HTTP/asset requests for repeat UUIDs.
         // A nearby visible demand may promote a pending low-priority job.
-        if(prior->stage==Stage::Queued) {
+        // Refresh demand priority until an asset is resident. Visibility can
+        // change while HTTP fetch, decode, or GPU upload is already in flight;
+        // keep newly visible geometry from waiting behind stale distant work.
+        const bool pending=prior->stage!=Stage::Resident&&
+            (prior->stage!=Stage::Failed||
+             (prior->retryable_fetch_failure&&
+              prior->retry_count<kMaxTransientRetries));
+        if(pending) {
             if(visible&&!prior->visible)prior->visible=true;
             if(rank(kind)<rank(prior->kind))prior->kind=kind;
             prior->distance_m=std::min(prior->distance_m,distance);

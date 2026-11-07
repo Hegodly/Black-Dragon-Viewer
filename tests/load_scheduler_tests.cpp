@@ -150,5 +150,34 @@ int main(){
     if(!queue.request("12345678-90ab-4cde-8fab-ffffffffffff",
                       Kind::VisibleMesh,1.f,true,64U)||
        queue.find(full_first->id)!=nullptr)return 39;
+    // An asset can become important after its download and decode complete.
+    // Refresh its demand before GPU upload so visible meshes outrank stale,
+    // distant textures without issuing a duplicate asset request.
+    queue.clear();
+    if(!queue.request(a,Kind::DistantTexture,80.f,false,64U)||
+       !queue.request(b,Kind::VisibleTexture,2.f,true,64U))
+        return 42;
+    const auto download_first=queue.next_download();
+    const auto download_second=queue.next_download();
+    if(!download_first||!download_second||download_first->id!=b||
+       download_second->id!=a)return 43;
+    if(!queue.download_finished(a,64U,true)||
+       !queue.download_finished(b,64U,true)||
+       !queue.begin_decode(a)||!queue.begin_decode(b)||
+       !queue.decode_finished(a,true)||!queue.decode_finished(b,true))
+        return 44;
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.find(a)->visible||
+       queue.find(a)->kind!=Kind::VisibleMesh)
+        return 45;
+    const auto promoted=queue.next_gpu_upload(64U);
+    if(!promoted||promoted->id!=a)return 46;
+    // Once uploaded, residency priority is stable: later distant requests
+    // must not demote or hide an asset already resident in the GPU cache.
+    if(!queue.gpu_uploaded(a))return 47;
+    if(!queue.request(a,Kind::DistantTexture,90.f,false,64U)||
+       queue.find(a)->stage!=Stage::Resident||
+       queue.find(a)->kind!=Kind::VisibleMesh||
+       !queue.find(a)->visible)return 48;
     return 0;
 }
