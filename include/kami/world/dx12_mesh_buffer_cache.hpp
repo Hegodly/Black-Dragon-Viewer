@@ -354,21 +354,23 @@ public:
         const auto visible_end=visible_ids+visible_count;
         if(!std::is_sorted(visible_ids,visible_end)||
            std::adjacent_find(visible_ids,visible_end)!=visible_end)return false;
-        std::array<std::uint32_t,kMaxResidentBatchDraws> required_ids{};
-        for(std::size_t i=0U;i<required.size();++i)
-            required_ids[i]=required[i].local_id;
-        auto required_end=required_ids.begin()+required.size();
-        std::sort(required_ids.begin(),required_end);
-        for(auto it=visible_ids;it!=visible_end;++it)
-            if(!std::binary_search(required_ids.begin(),required_end,*it))
-                return false;
+        // Both lists are sorted and unique. Validate subset membership with
+        // a monotonic merge walk rather than sorting a second ID array and
+        // binary-searching every candidate on every frame.
+        if(!visible_ids_are_subset(required,visible_ids,visible_count))return false;
         // No validation below this point can fail: all resources were checked
         // by the all-or-nothing preflight and all IDs are members of required.
+        std::size_t visible_index=0U;
         for(const auto& item:required){
-            if(!std::binary_search(visible_ids,visible_end,item.local_id))continue;
-            const auto* resident=find_instance(region_key,item.local_id);
-            output[command_count++]={resident->view,
-                D3D12_DRAW_ARGUMENTS{item.vertex_count,1U,0U,0U}};
+            while(visible_index<visible_count&&
+                  visible_ids[visible_index]<item.local_id)++visible_index;
+            if(visible_index<visible_count&&
+               visible_ids[visible_index]==item.local_id){
+                const auto* resident=find_instance(region_key,item.local_id);
+                output[command_count++]={resident->view,
+                    D3D12_DRAW_ARGUMENTS{item.vertex_count,1U,0U,0U}};
+                ++visible_index;
+            }
         }
         return true;
     }
@@ -391,19 +393,21 @@ public:
         const auto visible_end=visible_ids+visible_count;
         if(!std::is_sorted(visible_ids,visible_end)||
            std::adjacent_find(visible_ids,visible_end)!=visible_end)return false;
-        std::array<std::uint32_t,kMaxResidentBatchDraws> required_ids{};
-        for(std::size_t i=0;i<required.size();++i)
-            required_ids[i]=required[i].local_id;
-        auto required_end=required_ids.begin()+required.size();
-        std::sort(required_ids.begin(),required_end);
-        for(auto it=visible_ids;it!=visible_end;++it)
-            if(!std::binary_search(required_ids.begin(),required_end,*it))return false;
+        // Requirements and visible IDs are both sorted/unique. A single
+        // merge walk validates membership and records only the visible subset.
+        if(!visible_ids_are_subset(required,visible_ids,visible_count))return false;
+        std::size_t visible_index=0U;
         for(const auto& item:required){
-            if(!std::binary_search(visible_ids,visible_end,item.local_id))continue;
-            const auto* resident=find_instance(region_key,item.local_id);
-            if(!resident||!resident->resource)return false;
-            commands->IASetVertexBuffers(0,1,&resident->view);
-            commands->DrawInstanced(item.vertex_count,1,0,0);
+            while(visible_index<visible_count&&
+                  visible_ids[visible_index]<item.local_id)++visible_index;
+            if(visible_index<visible_count&&
+               visible_ids[visible_index]==item.local_id){
+                const auto* resident=find_instance(region_key,item.local_id);
+                if(!resident||!resident->resource)return false;
+                commands->IASetVertexBuffers(0,1,&resident->view);
+                commands->DrawInstanced(item.vertex_count,1,0,0);
+                ++visible_index;
+            }
         }
         return true;
     }
@@ -728,6 +732,21 @@ public:
         }
     }
 private:
+    [[nodiscard]] static bool visible_ids_are_subset(
+        const std::vector<InstanceDrawRequirement>& required,
+        const std::uint32_t* visible_ids,std::size_t visible_count) noexcept {
+        if(!visible_ids&&visible_count!=0U)return false;
+        std::size_t required_index=0U;
+        for(std::size_t i=0U;i<visible_count;++i){
+            const auto id=visible_ids[i];
+            while(required_index<required.size()&&
+                  required[required_index].local_id<id)++required_index;
+            if(required_index>=required.size()||
+               required[required_index].local_id!=id)return false;
+            ++required_index;
+        }
+        return true;
+    }
     [[nodiscard]] const Buffer* find_instance(
         const std::string& region_key,std::uint32_t local_id) const noexcept {
         if(region_key.empty()||!local_id)return nullptr;
