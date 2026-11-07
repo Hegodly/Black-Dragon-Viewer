@@ -331,8 +331,10 @@ void build_linear_polygon_volume(Emitter& e,
         const float u1=p.path_begin+(p.path_end-p.path_begin)*float(row+1U)/along;
         for(unsigned i=0U;i<sides;++i){
             const unsigned next=(i+1U)%sides;
+            // LLVolume face IDs: path caps 0/1, inner side 2,
+            // profile cuts 3/4, and outer polygon sides begin at 5.
             e.quad(point(u0,i),point(u0,next),point(u1,next),point(u1,i),
-                   i+1U,{0.f,float(row)/along},{1.f,float(row)/along},
+                   5U+i,{0.f,float(row)/along},{1.f,float(row)/along},
                    {1.f,float(row+1U)/along},{0.f,float(row+1U)/along});
         }
     }
@@ -346,7 +348,7 @@ void build_linear_polygon_volume(Emitter& e,
         }
     };
     cap(p.path_begin,0U,true);
-    cap(p.path_end,triangular?4U:5U,false);
+    cap(p.path_end,1U,false);
 }
 void build_prism(Emitter& e){
     constexpr float y=-0.2886751346f;
@@ -418,17 +420,6 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
             }else if(t.primitive==Kind::Prism&&profile==3U){
                 build_linear_polygon_volume(e,decoded,true);swept=true;
             }
-        }
-    }
-    if(!swept)switch(t.primitive){
-        protocol::volume::Parameters decoded{};
-        if(protocol::volume::decode(t.volume_params,
-                                    t.volume_params_full_layout,decoded)&&
-           decoded.path_curve==0x10U&&
-           (decoded.profile_curve&0x0fU)==0U&&
-           (decoded.profile_curve&0xf0U)<=0x10U){
-            build_linear_circle_volume(e,decoded);
-            swept=true;
         }
     }
     if(!swept)switch(t.primitive){
