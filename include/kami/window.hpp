@@ -62,6 +62,7 @@ private:
     void start_caps_poll();
     void update_sl_connection();
     void start_inventory_refresh();
+    void start_inventory_item_details(std::string item_id);
 
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
@@ -150,6 +151,9 @@ private:
     std::future<protocol::caps::SeedResponse> caps_seed_future_;
     std::future<protocol::caps::PollResponse> caps_poll_future_;
     std::future<protocol::caps::InventoryTreeFetchResult> inventory_root_future_;
+    std::future<protocol::caps::InventoryItemsFetchResult> inventory_item_future_;
+    protocol::caps::InventoryEntry inventory_selected_details_{};
+    bool inventory_selected_details_valid_=false;
     protocol::caps::InventoryFolderReply inventory_root_snapshot_{};
     std::wstring inventory_status_=L"Waiting for authenticated inventory";
     std::wstring inventory_search_;

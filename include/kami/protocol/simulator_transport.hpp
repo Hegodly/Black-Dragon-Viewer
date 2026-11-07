@@ -187,6 +187,9 @@ public:
     [[nodiscard]] std::wstring inventory_descendents_capability() const {
         return inventory_descendents_url_;
     }
+    [[nodiscard]] std::wstring inventory_items_capability() const {
+        return inventory_items_url_;
+    }
     [[nodiscard]] const pbr::Materials& decoded_materials() const noexcept {return loaded_materials_;}
     [[nodiscard]] const pbr::Overrides& material_overrides() const noexcept {return material_overrides_;}
     [[nodiscard]] std::size_t material_failures() const noexcept {return material_failures_;}

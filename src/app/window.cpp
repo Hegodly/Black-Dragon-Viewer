@@ -1007,7 +1007,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             if(row<visible.size()){
                 const auto& e=inventory_root_snapshot_.entries[visible[row]];
                 inventory_selected_entry_=e.id;
+                inventory_selected_details_valid_=false;
                 if(e.folder){inventory_current_folder_=e.id;inventory_search_.clear();}
+                else start_inventory_item_details(e.id);
                 InvalidateRect(hwnd_,nullptr,FALSE);return;
             }
         }
@@ -1270,6 +1272,9 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         round_rect(box(contentX+20,detailTop,contentWidth-40,height-detailTop-18),12.f,p.surface);
         const protocol::caps::InventoryEntry* selected=nullptr;
         for(const auto& e:entries)if(e.id==inventory_selected_entry_){selected=&e;break;}
+        if(inventory_selected_details_valid_&&
+           inventory_selected_details_.id==inventory_selected_entry_)
+            selected=&inventory_selected_details_;
         if(selected){
             label(selected->name,box(contentX+34,detailTop+8,contentWidth-68,24),body_font_.Get(),p.text);
             std::wstring detail=selected->folder?L"Folder ID: ":L"Creator: ";
@@ -2106,6 +2111,32 @@ void Window::start_inventory_refresh(){
         });
     InvalidateRect(hwnd_,nullptr,FALSE);
 }
+void Window::start_inventory_item_details(std::string item_id){
+    if(!protocol::valid_uuid(item_id)||!sl_circuit_.inventory_capabilities_ready())return;
+    if(inventory_item_future_.valid()){
+        if(inventory_item_future_.wait_for(std::chrono::seconds(0))!=std::future_status::ready)return;
+        try{(void)inventory_item_future_.get();}catch(...){}
+    }
+    const auto agent=sl_circuit_.inventory_owner_id();
+    const auto owner=sl_circuit_.inventory_owner_id();
+    auto url=sl_circuit_.inventory_items_capability();
+    if(!protocol::valid_uuid(agent)||!protocol::valid_uuid(owner)||url.empty())return;
+    inventory_selected_details_valid_=false;
+    inventory_item_future_=std::async(std::launch::async,
+        [url=std::move(url),agent,owner,item_id=std::move(item_id)]() mutable {
+            const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+            protocol::caps::InventoryItemsFetchResult result{};
+            if(SUCCEEDED(init)){
+                result=protocol::caps::fetch_inventory_items(url,agent,owner,{item_id});
+                CoUninitialize();
+                if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+            }else{
+                result.transport_error=static_cast<unsigned>(init);
+                if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+            }
+            return result;
+        });
+}
 void Window::update_sl_connection() {
     if(sl_login_pending_&&sl_login_future_.valid()&&
        sl_login_future_.wait_for(std::chrono::seconds(0))==
@@ -2375,6 +2406,18 @@ void Window::update_sl_connection() {
         }catch(...){
             inventory_status_=L"Inventory response worker failed";
         }
+    }
+    if(inventory_item_future_.valid()&&
+       inventory_item_future_.wait_for(std::chrono::seconds(0))==std::future_status::ready){
+        try{
+            auto fetched=inventory_item_future_.get();
+            if(fetched.fetched&&fetched.items.size()==1&&
+               fetched.items.front().id==inventory_selected_entry_){
+                inventory_selected_details_=std::move(fetched.items.front());
+                inventory_selected_details_valid_=true;
+            }
+        }catch(...){inventory_selected_details_valid_=false;}
+        if(page_==3)InvalidateRect(hwnd_,nullptr,FALSE);
     }
     if(caps_poll_started_&&caps_poll_future_.valid()&&
        caps_poll_future_.wait_for(std::chrono::seconds(0))==
