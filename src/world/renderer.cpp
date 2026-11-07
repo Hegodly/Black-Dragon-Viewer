@@ -1061,10 +1061,13 @@ bool Renderer::set_verified_live_terrain(
         candidate_spans.push_back({range.local_id,absolute_first,range.vertex_count});
         candidate_requirements.push_back(
             {range.local_id,static_cast<UINT>(range.vertex_count)});
+        const auto* instance_vertices=
+            mesh_objects.scene.vertices.data()+range.first_vertex;
         candidate_visibility.push_back({range.local_id,
             Dx12MeshBufferCache::bounds_for_vertices(
-                mesh_objects.scene.vertices.data()+range.first_vertex,
-                range.vertex_count)});
+                instance_vertices,range.vertex_count),
+            Dx12MeshBufferCache::aabb_for_vertices(
+                instance_vertices,range.vertex_count)});
     }
     std::sort(candidate_visibility.begin(),candidate_visibility.end(),
         [](const auto& a,const auto& b){return a.local_id<b.local_id;});
@@ -1122,7 +1125,11 @@ bool Renderer::set_verified_live_terrain(
             const auto& x=a[i];const auto& y=b[i];
             if(x.local_id!=y.local_id||x.bounds.valid!=y.bounds.valid||
                x.bounds.x!=y.bounds.x||x.bounds.y!=y.bounds.y||
-               x.bounds.z!=y.bounds.z||x.bounds.radius!=y.bounds.radius)return false;
+               x.bounds.z!=y.bounds.z||x.bounds.radius!=y.bounds.radius||
+               x.aabb.valid!=y.aabb.valid||x.aabb.min_x!=y.aabb.min_x||
+               x.aabb.min_y!=y.aabb.min_y||x.aabb.min_z!=y.aabb.min_z||
+               x.aabb.max_x!=y.aabb.max_x||x.aabb.max_y!=y.aabb.max_y||
+               x.aabb.max_z!=y.aabb.max_z)return false;
         }
         return true;
     };

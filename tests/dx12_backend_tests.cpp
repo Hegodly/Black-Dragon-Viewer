@@ -169,6 +169,14 @@ int main() {
         if(!Cache::potentially_visible({3,0,0,.5f,true},
             std::vector<Cache::VisibilityPlane>{}))return 55;
         if(!Cache::potentially_visible({3,0,0,-1.f,true},cube))return 56;
+        const Cache::VisibilityAabb outside_box{
+            1.5f,-.5f,-.5f,2.5f,.5f,.5f,true};
+        const Cache::VisibilityAabb crossing_box{
+            .9f,-.5f,-.5f,1.1f,.5f,.5f,true};
+        if(!Cache::potentially_visible({1.8f,0,0,1.f,true},cube)||
+           Cache::potentially_visible_aabb(outside_box,cube)||
+           !Cache::potentially_visible_aabb(crossing_box,cube)||
+           !Cache::potentially_visible_aabb({},cube))return 98;
         // Large but finite region/frustum coordinates must be evaluated
         // without float dot-product overflow or accidental mesh loss.
         const float huge=std::numeric_limits<float>::max();
@@ -195,15 +203,25 @@ int main() {
             {-1.f,0.f,0.f},{1.f,0.f,0.f},{0.f,2.f,0.f}}};
         const auto triangle_bounds=Cache::bounds_for_vertices(
             triangle.data(),triangle.size());
+        const auto triangle_aabb=Cache::aabb_for_vertices(
+            triangle.data(),triangle.size());
         if(!triangle_bounds.valid||std::fabs(triangle_bounds.x)>1e-6f||
            std::fabs(triangle_bounds.y-1.f)>1e-6f||
-           std::fabs(triangle_bounds.radius-std::sqrt(2.f))>1e-5f)return 86;
+           std::fabs(triangle_bounds.radius-std::sqrt(2.f))>1e-5f||
+           !triangle_aabb.valid||triangle_aabb.min_x!=-1.f||
+           triangle_aabb.min_y!=0.f||triangle_aabb.min_z!=0.f||
+           triangle_aabb.max_x!=1.f||triangle_aabb.max_y!=2.f||
+           triangle_aabb.max_z!=0.f)return 86;
         auto corrupt_triangle=triangle;
         corrupt_triangle[1].px=std::numeric_limits<float>::quiet_NaN();
         const auto corrupt_bounds=Cache::bounds_for_vertices(
             corrupt_triangle.data(),corrupt_triangle.size());
+        const auto corrupt_aabb=Cache::aabb_for_vertices(
+            corrupt_triangle.data(),corrupt_triangle.size());
         if(corrupt_bounds.valid||
-           !Cache::potentially_visible(corrupt_bounds,extracted))return 87;
+           !Cache::potentially_visible(corrupt_bounds,extracted)||
+           corrupt_aabb.valid||
+           !Cache::potentially_visible_aabb(corrupt_aabb,extracted))return 87;
         using Requirement=Cache::InstanceDrawRequirement;
         using Visibility=Cache::InstanceVisibility;
         // Requirements intentionally arrive in a different order from the
@@ -222,6 +240,16 @@ int main() {
             visible_ids.data(),visible_ids.size(),visible_count)||
            visible_count!=3U||visible_ids[0]!=17U||
            visible_ids[1]!=19U||visible_ids[2]!=20U)return 88;
+        const std::array<Cache::VisibilityPlane,6> shadow_frustum{{
+            {1,0,0,100},{-1,0,0,100},{0,1,0,100},
+            {0,-1,0,100},{0,0,1,100},{0,0,-1,100}}};
+        std::array<std::uint32_t,4> shadow_ids{};
+        std::size_t shadow_count=0U;
+        if(!Cache::select_visible_instance_ids(
+            visibility_requirements,visibility_bounds,shadow_frustum,
+            shadow_ids.data(),shadow_ids.size(),shadow_count)||
+           shadow_count!=4U||shadow_ids[0]!=17U||shadow_ids[1]!=18U||
+           shadow_ids[2]!=19U||shadow_ids[3]!=20U)return 99;
         auto ambiguous_bounds=visibility_bounds;
         ambiguous_bounds.insert(ambiguous_bounds.begin()+2,
             {18,{20,0,5.f,.1f,true}});

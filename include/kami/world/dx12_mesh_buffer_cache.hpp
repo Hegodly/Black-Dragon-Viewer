@@ -374,10 +374,16 @@ public:
         float x=0.f,y=0.f,z=0.f,radius=0.f;
         bool valid=false;
     };
+    struct VisibilityAabb {
+        float min_x=0.f,min_y=0.f,min_z=0.f;
+        float max_x=0.f,max_y=0.f,max_z=0.f;
+        bool valid=false;
+    };
     struct VisibilityPlane { float x=0.f,y=0.f,z=0.f,d=0.f; };
     struct InstanceVisibility {
         std::uint32_t local_id=0;
         VisibilitySphere bounds{};
+        VisibilityAabb aabb{};
     };
 
     // Build a conservative sphere from the exact decoded world-space vertices
@@ -412,6 +418,24 @@ public:
         if(static_cast<double>(fr)<radius)
             fr=std::nextafter(fr,std::numeric_limits<float>::infinity());
         return {fx,fy,fz,fr,true};
+    }
+
+    // Build an exact world-space AABB from the same decoded instance span.
+    // Invalid or absent vertices produce unknown bounds, which remain visible.
+    template<class VertexT>
+    [[nodiscard]] static VisibilityAabb aabb_for_vertices(
+        const VertexT* vertices,std::size_t count) noexcept {
+        if(!vertices||!count)return {};
+        float min_x=std::numeric_limits<float>::infinity();
+        float min_y=min_x,min_z=min_x;
+        float max_x=-min_x,max_y=-min_x,max_z=-min_x;
+        for(std::size_t i=0;i<count;++i){
+            const float x=vertices[i].px,y=vertices[i].py,z=vertices[i].pz;
+            if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z))return {};
+            min_x=std::min(min_x,x);min_y=std::min(min_y,y);min_z=std::min(min_z,z);
+            max_x=std::max(max_x,x);max_y=std::max(max_y,y);max_z=std::max(max_z,z);
+        }
+        return {min_x,min_y,min_z,max_x,max_y,max_z,true};
     }
 
     // Extract six Direct3D clip planes from a row-major row-vector matrix.
@@ -465,6 +489,33 @@ public:
         return true;
     }
 
+    // Conservative AABB/frustum test using each plane's positive vertex.
+    // If even the positive vertex is outside, the entire box is outside.
+    // Invalid bounds or planes are never used to hide geometry.
+    template<class PlaneRange>
+    [[nodiscard]] static bool potentially_visible_aabb(
+        const VisibilityAabb& box,const PlaneRange& planes) noexcept {
+        if(!box.valid||!std::isfinite(box.min_x)||!std::isfinite(box.min_y)||
+           !std::isfinite(box.min_z)||!std::isfinite(box.max_x)||
+           !std::isfinite(box.max_y)||!std::isfinite(box.max_z)||
+           box.min_x>box.max_x||box.min_y>box.max_y||box.min_z>box.max_z||
+           planes.size()!=6U)return true;
+        for(const auto& plane:planes){
+            if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
+               !std::isfinite(plane.z)||!std::isfinite(plane.d))return true;
+            const double nx=plane.x,ny=plane.y,nz=plane.z;
+            const double length_squared=nx*nx+ny*ny+nz*nz;
+            if(!std::isfinite(length_squared)||length_squared<=0.0)return true;
+            const double px=nx>=0.0?box.max_x:box.min_x;
+            const double py=ny>=0.0?box.max_y:box.min_y;
+            const double pz=nz>=0.0?box.max_z:box.min_z;
+            const double distance=nx*px+ny*py+nz*pz+plane.d;
+            if(!std::isfinite(distance))return true;
+            if(distance<0.0)return false;
+        }
+        return true;
+    }
+
     // Deterministic per-pass draw selection. Missing, invalid or duplicate
     // bounds are conservative-visible; invalid requirement sets fail so the
     // renderer can fall back to the complete resident batch.
@@ -504,8 +555,11 @@ public:
             const bool missing=found==bounds.end()||found->local_id!=item.local_id;
             const bool ambiguous=!missing&&found+1!=bounds.end()&&
                 (found+1)->local_id==item.local_id;
-            if(missing||ambiguous||potentially_visible(found->bounds,planes))
-                visible_ids[visible_count++]=item.local_id;
+            const bool visible=missing||ambiguous||
+                (found->aabb.valid?
+                    potentially_visible_aabb(found->aabb,planes):
+                    potentially_visible(found->bounds,planes));
+            if(visible)visible_ids[visible_count++]=item.local_id;
         }
         // Stable output makes the record path's membership checks logarithmic;
         // actual draw order remains the original requirements order.
