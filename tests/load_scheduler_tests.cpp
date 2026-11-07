@@ -195,5 +195,24 @@ int main(){
     if(!queue.request(b,Kind::VisibleMesh,3.f,true,64U))return 55;
     const auto reentered=queue.next_download();
     if(!reentered||reentered->id!=b)return 56;
+    // Mesh and texture worker creation failures are transient. The scheduler
+    // exposes the same bounded backoff to both pipelines and exhausts it
+    // after exactly three retries rather than leaving an asset stuck forever.
+    queue.clear();
+    if(!queue.request(a,Kind::VisibleTexture,1.f,true,64U))return 57;
+    for(unsigned failure=0U;failure<=Scheduler::kMaxTransientRetries;++failure){
+        const auto job=queue.next_download();
+        if(!job||job->id!=a)return 58;
+        const auto delay=queue.worker_launch_failed(a);
+        const auto* failed=queue.find(a);
+        if(!failed||failed->stage!=Stage::Failed||
+           !failed->retryable_fetch_failure)return 59;
+        if(failure<Scheduler::kMaxTransientRetries){
+            if(!delay||*delay!=Scheduler::retry_delay_seconds(failure)||
+               !queue.retry_failed(a))return 60;
+        }else if(delay||queue.retry_failed(a)||
+                 failed->retry_count!=Scheduler::kMaxTransientRetries)
+            return 61;
+    }
     return 0;
 }
