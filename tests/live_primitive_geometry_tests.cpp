@@ -122,6 +122,13 @@ int run_primitive_tests(){
             {{80U,full_volume}},{},128.f,140.f,35.f);
         if(full_sweep.root_shapes!=1U||
            full_sweep.scene.vertices.size()<=240U)return 79;
+        // Complex swept cylinders must be admitted atomically: their
+        // tessellation is larger than the legacy 240-vertex cylinder.
+        const auto too_small=world::build_live_primitive_geometry(
+            {{80U,full_volume}},{},128.f,140.f,35.f,8U,{},{},{},1000U);
+        if(!valid(too_small)||too_small.root_shapes!=0U||
+           too_small.budget_deferred_shapes!=1U||
+           !too_small.scene.vertices.empty())return 80;
     }
     roots[77U].primitive=Kind::Cylinder;
     auto cylinder=world::build_live_primitive_geometry(
