@@ -296,6 +296,16 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
         if(page_==3){
             if(wp=='R'){start_inventory_refresh();return 0;}
             if(wp=='G'){inventory_group_creators_=!inventory_group_creators_;if(inventory_group_creators_)inventory_sort_mode_=1U;InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
+            if(wp=='F'){
+                std::vector<int> types;
+                for(const auto& e:inventory_root_snapshot_.entries)
+                    if(!e.folder&&std::find(types.begin(),types.end(),e.asset_type)==types.end())types.push_back(e.asset_type);
+                std::sort(types.begin(),types.end());
+                if(types.empty())inventory_type_filter_=-1;
+                else if(inventory_type_filter_<0)inventory_type_filter_=types.front();
+                else{const auto it=std::find(types.begin(),types.end(),inventory_type_filter_);inventory_type_filter_=(it==types.end()||std::next(it)==types.end())?-1:*std::next(it);}
+                InvalidateRect(hwnd_,nullptr,FALSE);return 0;
+            }
             if(wp==VK_ESCAPE){inventory_search_focused_=false;inventory_search_.clear();InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
             if(wp==VK_BACK&&!inventory_search_focused_){
                 const auto root=sl_circuit_.inventory_root_id();
@@ -1222,7 +1232,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         const auto& entries=inventory_root_snapshot_.entries;
         const auto root=sl_circuit_.inventory_root_id();
         if(inventory_current_folder_.empty()&&!root.empty())inventory_current_folder_=root;
-        const auto visible=inventory::filter_entries(entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3));
+        const auto visible=inventory::filter_entries(entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3),inventory_type_filter_);
         const auto groups=inventory::group_entries_by_creator(entries,visible);
         std::vector<inventory::Item> visible_items;
         for(const auto index:visible)if(!entries[index].folder)

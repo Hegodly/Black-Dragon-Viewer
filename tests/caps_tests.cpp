@@ -461,6 +461,10 @@ int exercise(){
     if(creator_view.size()!=2)return 55;
     const auto type_view=kami::inventory::filter_entries(browser_entries,"root",L"",kami::inventory::SortMode::Type);
     if(type_view.size()!=3||browser_entries[type_view[1]].asset_type!=5)return 56;
+    const auto description_search=kami::inventory::filter_entries(browser_entries,"root",L"jack",kami::inventory::SortMode::Name);
+    if(description_search.size()!=1||browser_entries[description_search[0]].id!="item-a")return 57;
+    const auto type_filtered=kami::inventory::filter_entries(browser_entries,"root",L"",kami::inventory::SortMode::Name,6);
+    if(type_filtered.size()!=1||browser_entries[type_filtered[0]].id!="item-b")return 58;
     return 0;
 }
 }

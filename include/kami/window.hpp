@@ -160,6 +160,7 @@ private:
     std::string inventory_current_folder_;
     std::string inventory_selected_entry_;
     unsigned inventory_sort_mode_=0;
+    int inventory_type_filter_=-1;
     bool inventory_group_creators_=false;
     bool inventory_search_focused_=false;
 
