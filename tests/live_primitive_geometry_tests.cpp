@@ -74,8 +74,8 @@ int run_primitive_tests(){
         volume.volume_params_seen=true;
         volume.volume_params[0U]=0x10U; // LL_PCODE_PATH_LINE
         volume.volume_params[16U]=0x00U; // circular profile, no hole
-        volume.volume_params[4U]=0x50U;volume.volume_params[3U]=0xc3U;
-        volume.volume_params[6U]=0x50U;volume.volume_params[5U]=0xc3U;
+        volume.volume_params[3U]=0x50U;volume.volume_params[4U]=0xc3U;
+        volume.volume_params[19U]=0x50U;volume.volume_params[20U]=0xc3U;
         for(unsigned i=7U;i<=15U;++i)volume.volume_params[i]=128U;
         const auto plain=world::build_live_primitive_geometry(
             {{79U,volume}},{},128.f,140.f,35.f);
@@ -84,7 +84,7 @@ int run_primitive_tests(){
         // Hollow circle: profile hole code and 25% hollow opening.
         volume.volume_params[16U]=0x10U;
         volume.volume_params[21U]=0x20U;
-        volume.volume_params[22U]=0x4eU; // 1.0 hollow fraction
+        volume.volume_params[22U]=0x4eU; // 0.4 hollow fraction
         const auto hollow=world::build_live_primitive_geometry(
             {{79U,volume}},{},128.f,140.f,35.f);
         if(hollow.root_shapes!=1U||
