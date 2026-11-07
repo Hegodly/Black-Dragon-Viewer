@@ -61,6 +61,7 @@ struct CompressedVolume {
     bool reflection_probe=false;float probe_ambiance=1.f,probe_clip=.1f;std::uint8_t probe_flags=0U;
     std::string mesh;
     PrimitiveKind primitive=PrimitiveKind::Unknown;
+    std::array<std::uint8_t,23U> volume_params{};
     bool extras=false,shape=false,unsupported=false;
     bool base_tint_present=false,default_texture_present=false;
     std::string default_texture_asset_id;
@@ -152,6 +153,8 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
     if((special&0x100U)&&!str())return out;
     if(!has(23U))return out;
     out.primitive=classify_simple_shape(data.subspan(at,23U));
+    std::copy_n(data.begin()+static_cast<std::ptrdiff_t>(at),
+                out.volume_params.size(),out.volume_params.begin());
     out.shape=true;
     at+=23U;
     // LLVOVolume unpacks TextureEntry immediately after the volume
@@ -245,6 +248,7 @@ bool decode_compressed_transforms(const lludp::Packet& packet,
         t.probe_clip=shape.probe_clip;t.probe_flags=shape.probe_flags;
         t.primitive=shape.primitive;
         t.volume_params_seen=shape.shape;
+        t.volume_params=shape.volume_params;
         t.default_texture_present=shape.default_texture_present;
         t.default_texture_asset_id=shape.default_texture_asset_id;
         t.face_texture_asset_ids=shape.face_texture_asset_ids;
@@ -345,6 +349,7 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.rx==b.rx&&a.ry==b.ry&&a.rz==b.rz&&a.rw==b.rw&&
         a.primitive==b.primitive&&a.mesh_asset_id==b.mesh_asset_id&&
         a.volume_params_seen==b.volume_params_seen&&
+        a.volume_params==b.volume_params&&
         a.default_texture_present==b.default_texture_present&&
         a.default_texture_asset_id==b.default_texture_asset_id&&
         a.face_texture_asset_ids==b.face_texture_asset_ids&&
@@ -368,6 +373,7 @@ Transform merge_compressed_transform(
         if(merged.mesh_asset_id.empty())
             merged.mesh_asset_id=previous.mesh_asset_id;
         merged.volume_params_seen=previous.volume_params_seen;
+        merged.volume_params=previous.volume_params;
     }
     if(!incoming.material_params_seen){
         merged.face_material_ids=previous.face_material_ids;
