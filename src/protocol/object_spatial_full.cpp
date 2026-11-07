@@ -92,7 +92,7 @@ PrimitiveKind classify_supported_sweep(std::span<const std::uint8_t> s,
     const unsigned extras=full_layout?8U:7U;
     if(p.path_curve!=0x10U||(p.profile_curve&0x0fU)!=0U||
        (p.profile_curve&0xf0U)>0x10U||
-       s[extras+4U]!=128U||s[extras+7U]!=128U||s[extras+8U]!=128U)
+       s[extras+4U]!=0U||s[extras+7U]!=0U||s[extras+8U]!=0U)
         return PrimitiveKind::Unknown;
     return PrimitiveKind::Cylinder;
 }
