@@ -1256,7 +1256,11 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         if(inventory_current_folder_.empty()&&!root.empty())inventory_current_folder_=root;
         const auto visible=inventory::filter_entries(entries,inventory_current_folder_,inventory_search_,static_cast<inventory::SortMode>(inventory_sort_mode_%3));
         const auto groups=inventory::group_entries_by_creator(entries,visible);
-        label(L"BACK [BACKSPACE] / "+std::to_wstring(visible.size())+L" entries / "+std::to_wstring(groups.size())+L" creators",box(contentX+24,222,contentWidth-48,25),small_font_.Get(),p.muted);
+        std::vector<inventory::Item> visible_items;
+        for(const auto index:visible)if(!entries[index].folder)
+            visible_items.push_back({entries[index].name,std::wstring(entries[index].creator_id.begin(),entries[index].creator_id.end()),false});
+        const auto demo_matches=inventory::preview_demo_deletions(visible_items);
+        label(L"BACK [BACKSPACE] / "+std::to_wstring(visible.size())+L" entries / "+std::to_wstring(groups.size())+L" creators / "+std::to_wstring(demo_matches.size())+L" demo-trial matches",box(contentX+24,222,contentWidth-48,25),small_font_.Get(),p.muted);
         const float rowTop=251.f,rowHeight=31.f;
         const float detailTop=std::max(rowTop+80.f,height-188.f);
         const auto maxRows=static_cast<unsigned>(std::max(1.f,(detailTop-rowTop)/rowHeight));
@@ -1287,6 +1291,8 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 const std::wstring asset=selected->asset_id.empty()?L"Asset ID: unavailable":L"Asset ID: "+std::wstring(selected->asset_id.begin(),selected->asset_id.end());
                 label(asset,box(contentX+34,detailTop+78,contentWidth-68,22),small_font_.Get(),p.muted);
                 label(selected->description,box(contentX+34,detailTop+100,contentWidth-68,22),small_font_.Get(),p.muted);
+                const inventory::Item sort_item{selected->name,std::wstring(selected->creator_id.begin(),selected->creator_id.end()),false};
+                label(L"Smart Sort suggestion: "+inventory::folder_for(sort_item),box(contentX+34,detailTop+122,contentWidth-68,22),small_font_.Get(),p.accent);
             }
         }else label(L"Select an item to inspect metadata, or select a folder to open it.",box(contentX+34,detailTop+12,contentWidth-68,28),small_font_.Get(),p.muted);
         label(inventory_status_+L" / Smart Sort preview only; no server items moved or deleted.",box(contentX+24,height-35,contentWidth-48,22),small_font_.Get(),p.accent);
