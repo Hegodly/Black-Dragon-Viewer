@@ -161,7 +161,7 @@ class PatchEquivalenceTests(unittest.TestCase):
     def test_git_cherry_equivalent_commits_are_parsed(self):
         a = "a" * 40
         b = "b" * 40
-        output = f"- {a}\\n+ {b}\\n"
+        output = f"- {a}\n+ {b}\n"
         self.assertEqual(parse_patch_equivalent_commits(output), {a})
 
 
