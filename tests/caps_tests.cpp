@@ -248,6 +248,26 @@ int exercise(){
     // An empty or syntactically invalid seed never grants a service.
     if(parse_seed_llsd("<llsd><map/></llsd>",cap,&mesh_cap,&parse_report)||
        !parse_report.xml_map)return 31;
+    // Inventory CAPS are negotiated separately from mesh/EventQueue and
+    // remain bearer URLs; only Linden-owned simulator HTTPS endpoints pass.
+    const auto inventory_seed=
+        "<llsd><map><key>FetchInventoryDescendents2</key>"
+        "<uri>https://simhost-123.agni.secondlife.io/cap/inventory-folders</uri>"
+        "<key>FetchInventory2</key>"
+        "<string>https://simhost-123.agni.secondlife.io/cap/inventory-items</string>"
+        "<key>EventQueueGet</key><undef/></map></llsd>";
+    std::wstring inv_event,inv_mesh,inv_desc,inv_items;
+    if(!parse_seed_llsd(inventory_seed,inv_event,&inv_mesh,nullptr,nullptr,
+                        &inv_desc,&inv_items)||!inv_event.empty()||
+       !inv_mesh.empty()||
+       inv_desc!=L"https://simhost-123.agni.secondlife.io/cap/inventory-folders"||
+       inv_items!=L"https://simhost-123.agni.secondlife.io/cap/inventory-items")
+        return 44;
+    const auto unsafe_inventory_seed=
+        "<llsd><map><key>FetchInventoryDescendents2</key>"
+        "<uri>https://127.0.0.1/cap/inventory</uri></map></llsd>";
+    if(parse_seed_llsd(unsafe_inventory_seed,inv_event,&inv_mesh,nullptr,nullptr,
+                       &inv_desc,&inv_items)||!inv_desc.empty())return 45;
     // The failure category is URL-free and remains safe to share.
     // EventQueue may still be granted even when the mesh URL is bad.
     const auto bad_scheme=

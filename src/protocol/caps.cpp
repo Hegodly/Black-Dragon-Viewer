@@ -318,10 +318,14 @@ bool trusted_mesh_caps_url(std::wstring_view url) noexcept {
 bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
                      std::wstring* mesh_capability_url,
                      SeedParseReport* report,
-                     std::wstring* texture_capability_url) {
+                     std::wstring* texture_capability_url,
+                     std::wstring* inventory_descendents_url,
+                     std::wstring* inventory_items_url) {
     event_queue_url.clear();
     if(mesh_capability_url)mesh_capability_url->clear();
     if(texture_capability_url)texture_capability_url->clear();
+    if(inventory_descendents_url)inventory_descendents_url->clear();
+    if(inventory_items_url)inventory_items_url->clear();
     if(report)*report={};
     ComPtr<IXMLDOMDocument2> dom;
     if(!parse_dom(xml,dom))return false;
@@ -332,7 +336,7 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
         return false;
     if(report)report->xml_map=true;
     std::wstring viewer_asset,getmesh2,getmesh;
-    bool event_seen=false;
+    bool event_seen=false,descendents_seen=false,items_seen=false;
     for(long i=0;i<count;i+=2){
         ComPtr<IXMLDOMNode> key,value;
         if(FAILED(nodes->get_item(i,key.GetAddressOf()))||!key||
@@ -343,10 +347,12 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
         const bool event=(name==L"EventQueueGet");
         const bool mesh=(name==L"ViewerAsset"||
                          name==L"GetMesh2"||name==L"GetMesh");
-        if(!event&&!mesh)continue;
+        const bool inventory_descendents=(name==L"FetchInventoryDescendents2");
+        const bool inventory_items=(name==L"FetchInventory2");
+        if(!event&&!mesh&&!inventory_descendents&&!inventory_items)continue;
         if(report){
             if(event)report->event_named=true;
-            else report->mesh_named=true;
+            else if(mesh)report->mesh_named=true;
         }
         // LLSD can legally grant <undef/> for unsupported capabilities.
         // An invalid or absent optional mesh grant must not destroy a
@@ -354,8 +360,8 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
         const auto type=node_name(value.Get());
         const auto url=node_text(value.Get());
         const bool valid=(type==L"string"||type==L"uri")&&
-                         (event?trusted_caps_url(url):
-                                trusted_mesh_caps_url(url));
+                         (mesh?trusted_mesh_caps_url(url):
+                               trusted_caps_url(url));
         if(event){
             if(event_seen){ // reject ambiguous duplicate EventQueueGet
                 event_queue_url.clear();
@@ -365,11 +371,19 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
             event_seen=true;
             if(valid)event_queue_url=url;
             else if(report)report->event_rejected=true;
-        }else if(valid){
+        }else if(mesh&&valid){
             if(name==L"ViewerAsset")viewer_asset=url;
             else if(name==L"GetMesh2")getmesh2=url;
             else getmesh=url;
-        }else if(report){
+        }else if(inventory_descendents){
+            if(descendents_seen){if(inventory_descendents_url)inventory_descendents_url->clear();}
+            else if(inventory_descendents_url&&valid)*inventory_descendents_url=url;
+            descendents_seen=true;
+        }else if(inventory_items){
+            if(items_seen){if(inventory_items_url)inventory_items_url->clear();}
+            else if(inventory_items_url&&valid)*inventory_items_url=url;
+            items_seen=true;
+        }else if(mesh&&report){
             report->mesh_rejected=true;
             if(report->mesh_issue.empty())
                 report->mesh_issue=mesh_url_problem(url,type);
@@ -384,7 +398,9 @@ bool parse_seed_llsd(std::string_view xml,std::wstring& event_queue_url,
     }
     return !event_queue_url.empty()||
            (mesh_capability_url&&!mesh_capability_url->empty())||
-           (texture_capability_url&&!texture_capability_url->empty());
+           (texture_capability_url&&!texture_capability_url->empty())||
+           (inventory_descendents_url&&!inventory_descendents_url->empty())||
+           (inventory_items_url&&!inventory_items_url->empty());
 }
 bool parse_event_queue_llsd(std::string_view xml,unsigned& event_count) {
     event_count=0;
@@ -782,7 +798,9 @@ SeedResponse request_seed(std::wstring seed_url) {
     SeedParseReport report{};
     const bool parsed=parse_seed_llsd(reply.body,result.event_queue_url,
                                      &result.mesh_capability_url,&report,
-                                     &result.texture_capability_url);
+                                     &result.texture_capability_url,
+                                     &result.inventory_descendents_url,
+                                     &result.inventory_items_url);
     result.mesh_named=report.mesh_named;
     result.mesh_rejected=report.mesh_rejected;
     if(!parsed){
@@ -796,9 +814,20 @@ SeedResponse request_seed(std::wstring seed_url) {
     result.event_queue_granted=!result.event_queue_url.empty();
     result.mesh_granted=!result.mesh_capability_url.empty();
     result.texture_granted=!result.texture_capability_url.empty();
+    result.inventory_descendents_granted=!result.inventory_descendents_url.empty();
+    result.inventory_items_granted=!result.inventory_items_url.empty();
     result.granted=result.event_queue_granted||result.mesh_granted||
-                   result.texture_granted;
-    if(result.event_queue_granted&&result.mesh_granted)
+                   result.texture_granted||result.inventory_descendents_granted||
+                   result.inventory_items_granted;
+    if(result.inventory_descendents_granted||result.inventory_items_granted){
+        result.diagnostic=result.event_queue_granted&&result.mesh_granted?
+            L"CAPS seed OK: EventQueue, mesh and inventory granted":
+            result.event_queue_granted?
+                L"CAPS seed OK: EventQueue and inventory granted":
+                result.mesh_granted?
+                    L"CAPS seed OK: mesh and inventory granted":
+                    L"CAPS seed OK: inventory capabilities granted";
+    }else if(result.event_queue_granted&&result.mesh_granted)
         result.diagnostic=L"CAPS seed OK: EventQueue + mesh granted";
     else if(result.event_queue_granted)
         result.diagnostic=report.mesh_rejected?

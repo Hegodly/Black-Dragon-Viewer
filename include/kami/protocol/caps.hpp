@@ -22,12 +22,16 @@ struct SeedResponse {
     bool event_queue_granted=false;
     bool mesh_granted=false;
     bool texture_granted=false;
+    bool inventory_descendents_granted=false;
+    bool inventory_items_granted=false;
     bool mesh_named=false;  // grant mentioned but absent or invalid
     bool mesh_rejected=false; // grant violates URL allowlist
     unsigned http_status=0;
     std::wstring event_queue_url; // secret bearer capability; do not log
     std::wstring mesh_capability_url; // ViewerAsset or GetMesh, never logged
     std::wstring texture_capability_url; // ViewerAsset only, never logged
+    std::wstring inventory_descendents_url; // FetchInventoryDescendents2 bearer URL
+    std::wstring inventory_items_url; // FetchInventory2 bearer URL
     std::wstring diagnostic;      // contains no URLs or response content
 };
 struct QueueCursor {
@@ -77,7 +81,9 @@ struct SeedParseReport {
                                    std::wstring& event_queue_url,
     std::wstring* mesh_capability_url=nullptr,
     SeedParseReport* report=nullptr,
-    std::wstring* texture_capability_url=nullptr);
+    std::wstring* texture_capability_url=nullptr,
+    std::wstring* inventory_descendents_url=nullptr,
+    std::wstring* inventory_items_url=nullptr);
 [[nodiscard]] bool parse_event_queue_llsd(std::string_view xml,
                                           unsigned& event_count);
 // Full bounded event queue: parses a sanitized TeleportFailed reason only.
