@@ -24,6 +24,7 @@ struct LoginResult {
     std::wstring message;
     LoginHandoff handoff{};
     std::uint32_t circuit_code=0;
+    std::string inventory_root_id; // authenticated UUID from inventory skeleton
     [[nodiscard]] bool accepted() const noexcept {
         return status==LoginStatus::Accepted;
     }

@@ -422,6 +422,44 @@ LoginResult parse_login_xmlrpc(std::string_view xml){
     VARIANT_BOOL success=VARIANT_FALSE;
     if(FAILED(dom->loadXML(source.value,&success))||success!=VARIANT_TRUE)
         return result;
+    // Extract the actual root category from the login inventory skeleton.
+    // Do not flatten or retain the complete optional skeleton payload.
+    Bstr skeleton_xpath(
+        L"/methodResponse/params/param/value/struct/member"
+        L"[name='inventory-skeleton']/value/array/data/value/struct");
+    ComPtr<IXMLDOMNodeList> skeleton;
+    if(SUCCEEDED(dom->selectNodes(skeleton_xpath.value,&skeleton))&&skeleton){
+        long folders=0;
+        if(SUCCEEDED(skeleton->get_length(&folders))&&folders>0&&folders<=4096){
+            constexpr std::wstring_view null_uuid=
+                L"00000000-0000-0000-0000-000000000000";
+            for(long i=0;i<folders;++i){
+                ComPtr<IXMLDOMNode> folder;
+                if(FAILED(skeleton->get_item(i,&folder))||!folder)continue;
+                auto id_node=child(folder.Get(),
+                    L"member[name='folder_id']/value/*");
+                auto parent_node=child(folder.Get(),
+                    L"member[name='parent_id']/value/*");
+                const auto id=get_text(id_node.Get());
+                const auto parent=get_text(parent_node.Get());
+                if(parent!=null_uuid||id.size()!=36)continue;
+                std::string candidate;
+                candidate.reserve(id.size());
+                bool ascii=true;
+                for(wchar_t ch:id){
+                    if(ch>0x7f){ascii=false;break;}
+                    candidate.push_back(static_cast<char>(ch));
+                }
+                if(ascii&&valid_uuid(candidate)){
+                    if(!result.inventory_root_id.empty()){
+                        result.inventory_root_id.clear(); // ambiguous root
+                        break;
+                    }
+                    result.inventory_root_id=std::move(candidate);
+                }
+            }
+        }
+    }
     Bstr xpath(L"/methodResponse/params/param/value/struct/member");
     ComPtr<IXMLDOMNodeList> members;
     if(FAILED(dom->selectNodes(xpath.value,&members))||!members)return result;
