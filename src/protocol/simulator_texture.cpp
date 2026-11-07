@@ -237,22 +237,30 @@ void Circuit::maybe_fetch_texture() noexcept {
     try {
         texture_worker_=std::async(std::launch::async,
             [url=std::move(url),id=next->id]()mutable {
-                TextureResult result{};
-                result.id=id;
-                const auto reply=caps::fetch_texture_asset(url,id);
-                if(!url.empty())
-                    SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
-                result.http_status=reply.status;
-                result.fetched=reply.fetched;
-                result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
-                if(reply.fetched){
-                    result.decoded=texture::decode_jpeg2000(
-                        reply.bytes,result.image);
-                    if(result.decoded)
-                        result.decoded=texture::downscale_preview(
-                            result.image,texture::kPreviewExtent);
-                }
-                return result;
+                return load::capture_worker_result<TextureResult>(
+                    std::move(id),[&](TextureResult& result){
+                        struct CapabilityWiper {
+                            std::wstring& value;
+                            ~CapabilityWiper() noexcept {
+                                if(!value.empty())
+                                    SecureZeroMemory(value.data(),
+                                        value.size()*sizeof(wchar_t));
+                            }
+                        } wipe{url};
+                        const auto reply=caps::fetch_texture_asset(
+                            url,result.id);
+                        result.http_status=reply.status;
+                        result.fetched=reply.fetched;
+                        result.bytes=static_cast<std::uint32_t>(
+                            reply.bytes.size());
+                        if(reply.fetched){
+                            result.decoded=texture::decode_jpeg2000(
+                                reply.bytes,result.image);
+                            if(result.decoded)
+                                result.decoded=texture::downscale_preview(
+                                    result.image,texture::kPreviewExtent);
+                        }
+                    });
             });
     }catch(...){
         // std::async may fail under thread or memory pressure. Treat that
