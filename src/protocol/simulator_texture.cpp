@@ -1,6 +1,7 @@
 #include "kami/protocol/simulator_transport.hpp"
 #include "kami/protocol/caps.hpp"
 #include "kami/protocol/texture_decode.hpp"
+#include "kami/protocol/texture_entry.hpp"
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
@@ -106,6 +107,22 @@ void Circuit::schedule_visible_textures() noexcept {
         };
         scan(spatial_objects_);
         scan(linked_objects_);
+        // The authenticated agent's own AvatarAppearance TextureEntry is
+        // a separate texture source from primitive faces. Decode its real
+        // per-face UUIDs and feed them through the same bounded, nearest-
+        // first JPEG2000 scheduler. This downloads outfit textures; it does
+        // not yet claim avatar skin/material binding or Bento mesh rendering.
+        if(own_avatar_appearance_valid_&&
+           own_avatar_appearance_.texture_entry_size>=47U){
+            texture::Base appearance_entry{};
+            const auto bytes=std::span<const std::uint8_t>(
+                own_avatar_appearance_.texture_entry.data(),
+                own_avatar_appearance_.texture_entry_size);
+            if(texture::decode_base(bytes,appearance_entry)){
+                for(unsigned face=0U;face<45U;++face)
+                    record(texture::face_image_uuid(appearance_entry,face),0.f);
+            }
+        }
         if(region_metadata_.terrain_metadata)for(const auto& id:region_metadata_.terrain_assets){
             pbr::Material material;
             if(pbr::effective(id,0U,0U,loaded_materials_,{},material)){

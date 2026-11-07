@@ -578,6 +578,10 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                 own_avatar_visual_params_=avatar.visual_parameter_count;
                 own_avatar_appearance_=avatar;
                 own_avatar_appearance_valid_=true;
+                // Appearance texture UUIDs are part of the live texture
+                // interest set. Force a rescan when a new outfit arrives.
+                ++spatial_object_revision_;
+                texture_scan_revision_=~std::uint64_t{0};
             }
         }
     }
