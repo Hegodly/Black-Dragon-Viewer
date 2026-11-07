@@ -781,7 +781,9 @@ SeedResponse request_seed(std::wstring seed_url) {
     static constexpr char body[]=
         "<llsd><array><string>EventQueueGet</string>"
         "<string>ViewerAsset</string><string>GetMesh2</string>"
-        "<string>GetMesh</string></array></llsd>";
+        "<string>GetMesh</string>"
+        "<string>FetchInventoryDescendents2</string>"
+        "<string>FetchInventory2</string></array></llsd>";
     auto reply=send_signed_post(seed_url,body,20000,1024U*1024U);
     // Clear credential-like bearer URL; do not log.
     if(!seed_url.empty())
