@@ -221,9 +221,9 @@ class PromotionPolicyTests(unittest.TestCase):
 
 
 class PullRequestEventTests(unittest.TestCase):
-    def test_accepts_both_pr_event_variants(self):
-        self.assertTrue(is_pull_request_event("pull_request"))
+    def test_accepts_only_trusted_base_branch_event(self):
         self.assertTrue(is_pull_request_event("pull_request_target"))
+        self.assertFalse(is_pull_request_event("pull_request"))
 
     def test_rejects_non_pr_events(self):
         self.assertFalse(is_pull_request_event("workflow_call"))

@@ -427,7 +427,10 @@ def summary(markdown: str) -> None:
 
 
 def is_pull_request_event(event_name: str) -> bool:
-    return event_name in {"pull_request", "pull_request_target"}
+    # Promotion requires the trusted base-branch workflow definition. A second
+    # pull_request trigger duplicates privileged runs and can execute a PR's
+    # workflow definition; pull_request_target is the sole promotion event.
+    return event_name == "pull_request_target"
 
 
 def event_context() -> tuple[str, str, int, bool] | None:

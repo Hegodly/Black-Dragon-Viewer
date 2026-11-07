@@ -1,12 +1,10 @@
 name: KAMI Unified Viewer Integration
 on:
   workflow_call:
-  pull_request:
-    types: [opened, edited, reopened, synchronize, ready_for_review]
-    branches:
-      - feature/kami-live-viewer-integration
+  # Use only the base-branch workflow for privileged promotion.
+  # The worker verifies same-repository heads and checks out this destination explicitly.
   pull_request_target:
-    types: [opened, edited, reopened, synchronize, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - feature/kami-live-viewer-integration
 
