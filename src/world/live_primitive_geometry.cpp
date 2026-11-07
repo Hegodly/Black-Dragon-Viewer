@@ -116,8 +116,8 @@ struct Emitter {
         V a=render(transform(x)),b=render(transform(y)),c=render(transform(z));
         V normal=cross(sub(b,a),sub(c,a));
         const V expected=render(add(pose.pos,rotate(pose.rot,
-            {local_center.x*half.x*2.f,
-             local_center.y*half.y*2.f,
+            {local_center.x*half.x*2.f*profile_scale.x,
+             local_center.y*half.y*2.f*profile_scale.y,
              local_center.z*half.z*2.f})));
         const V center=render(pose.pos);
         if(dot(normal,sub(expected,center))<0.f){
