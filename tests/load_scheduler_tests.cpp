@@ -129,5 +129,16 @@ int main(){
     if(!queue.request("12345678-90ab-4cde-8fab-ffffffffffff",
                       Kind::VisibleMesh,1.f,true,64U)||
        queue.find(full_first->id)!=nullptr)return 39;
+    // Explicit retry classification: a successful HTTP response with an
+    // empty body is terminal, whereas a failed transfer is retryable.
+    queue.clear();
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(a,0U,true)||
+       queue.find(a)->retryable_fetch_failure||queue.retry_failed(a))
+        return 40;
+    if(!queue.request(b,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.next_download()||!queue.download_finished(b,0U,false)||
+       !queue.find(b)->retryable_fetch_failure||!queue.retry_failed(b))
+        return 41;
     return 0;
 }
