@@ -288,12 +288,19 @@ void build_linear_circle_volume(Emitter& e,
             const float a0=begin+sweep*float(col)/profile_steps;
             const float a1=begin+sweep*float(col+1U)/profile_steps;
             const V o0=point(u,a0,.5f),o1=point(u,a1,.5f);
+            const auto cap_uv=[](V v)->UV{
+                return {v.x+.5f,.5f-v.y};
+            };
             if(hollow){
                 const V i0=point(u,a0,inner_radius),i1=point(u,a1,inner_radius);
-                if(reverse)e.quad(o1,o0,i0,i1,face);
-                else e.quad(o0,o1,i1,i0,face);
-            }else if(reverse)e.tri(center,o1,o0,face,{.5f,.5f},{1.f,0.f},{0.f,0.f});
-            else e.tri(center,o0,o1,face,{.5f,.5f},{0.f,0.f},{1.f,0.f});
+                if(reverse)e.quad(o1,o0,i0,i1,face,
+                    cap_uv(o1),cap_uv(o0),cap_uv(i0),cap_uv(i1));
+                else e.quad(o0,o1,i1,i0,face,
+                    cap_uv(o0),cap_uv(o1),cap_uv(i1),cap_uv(i0));
+            }else if(reverse)e.tri(center,o1,o0,face,
+                {.5f,.5f},cap_uv(o1),cap_uv(o0));
+            else e.tri(center,o0,o1,face,
+                {.5f,.5f},cap_uv(o0),cap_uv(o1));
         }
     };
     cap(p.path_begin,0U,true);
