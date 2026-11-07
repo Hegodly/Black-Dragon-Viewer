@@ -430,5 +430,30 @@ bool decode_killed_ids(const lludp::Packet& packet,
     out=std::move(tmp);
     return true;
 }
+std::vector<std::uint32_t> expand_killed_linkset_ids(
+    std::span<const std::uint32_t> killed_ids,
+    const std::map<std::uint32_t,Transform>& linked_objects) {
+    std::vector<std::uint32_t> expanded;
+    std::set<std::uint32_t> seen;
+    expanded.reserve(killed_ids.size()+linked_objects.size());
+    for(const auto id:killed_ids)
+        if(id!=0U&&seen.insert(id).second)expanded.push_back(id);
+    // KillObject can name a linkset root while the retained child updates
+    // remain in a separate map. Expand transitively so no descendant keeps
+    // a dangling parent transform (including nested linked children).
+    bool changed=true;
+    while(changed){
+        changed=false;
+        for(const auto& [id,child]:linked_objects){
+            if(id==0U||child.local_id!=id||child.parent_id==0U||
+               id==child.parent_id||!seen.contains(child.parent_id))continue;
+            if(seen.insert(id).second){
+                expanded.push_back(id);
+                changed=true;
+            }
+        }
+    }
+    return expanded;
+}
 } // namespace kami::protocol::objectspatial
 
