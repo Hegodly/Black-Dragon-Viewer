@@ -117,6 +117,15 @@ int run_primitive_tests(){
             {{79U,volume}},{},128.f,140.f,35.f);
         if(solid_cut.root_shapes!=1U||solid_cut.scene.vertices.size()<144U||
            solid_cut.scene.vertices.size()>=cut.scene.vertices.size())return 82;
+        // A path cut trims the sweep along its length while retaining both
+        // generated end caps; it must not silently revert to a full cylinder.
+        volume.volume_params[1U]=0x10U;volume.volume_params[2U]=0x27U;
+        volume.volume_params[3U]=0x40U;volume.volume_params[4U]=0x9cU;
+        const auto path_cut=world::build_live_primitive_geometry(
+            {{79U,volume}},{},128.f,140.f,35.f);
+        if(path_cut.root_shapes!=1U||path_cut.scene.vertices.empty()||
+           path_cut.scene.vertices.size()>=solid_cut.scene.vertices.size())
+            return 84;
         // High 12 full ObjectUpdate uses a distinct 23-byte field layout.
         Transform full_volume{80U,128.f,140.f,35.f,2.f,2.f,2.f};
         full_volume.primitive=Kind::Cylinder;
