@@ -3727,7 +3727,7 @@ void LLFloaterPreference::onChangePBRFolder()
 {
     if (gInventory.isInventoryUsable())
     {
-        getChild<LLTextBox>("upload_pbr")->setText(get_category_path(LLFolderType::FT_MATERIAL));
+        getChild<LLLineEditor>("upload_pbr")->setText(get_category_path(LLFolderType::FT_MATERIAL));
     }
 }
 
