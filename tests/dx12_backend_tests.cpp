@@ -155,7 +155,8 @@ int main() {
         if(Cache::potentially_visible({3,0,0,.5f,true},cube))return 52;
         if(!Cache::potentially_visible({1.5f,0,0,.5f,true},cube))return 53;
         if(!Cache::potentially_visible({3,0,0,.5f,false},cube))return 54;
-        if(!Cache::potentially_visible({3,0,0,.5f,true},{}))return 55;
+        if(!Cache::potentially_visible({3,0,0,.5f,true},
+            std::vector<Cache::VisibilityPlane>{}))return 55;
         if(!Cache::potentially_visible({3,0,0,-1.f,true},cube))return 56;
         // Large but finite region/frustum coordinates must be evaluated
         // without float dot-product overflow or accidental mesh loss.
