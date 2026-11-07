@@ -12,6 +12,7 @@ from tools.kami_unified_integration import (
     manifest_errors,
     parse_patch_equivalent_commits,
     promotion_decision,
+    source_commit_validation_run,
 )
 
 

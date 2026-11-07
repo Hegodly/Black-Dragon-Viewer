@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace kami::protocol::sim {
 void Circuit::maybe_fetch_material() noexcept {
