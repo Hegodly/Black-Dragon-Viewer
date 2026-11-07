@@ -48,6 +48,24 @@ struct Transform {
 [[nodiscard]] bool same_spatial_transform(const Transform&,const Transform&) noexcept;
 [[nodiscard]] Transform merge_compressed_transform(
     const Transform& incoming,const Transform& previous);
+// Resolve prior metadata across a root/linked-child reparenting transition.
+// The incoming parent_id selects the preferred map; the other map is a
+// fallback so terse compressed updates do not erase verified mesh/PBR/TE data.
+[[nodiscard]] Transform merge_compressed_transform(
+    const Transform& incoming,
+    const std::map<std::uint32_t,Transform>& roots,
+    const std::map<std::uint32_t,Transform>& children);
+// Remove a stale opposite-classification entry before inserting an update.
+// A local ID must never be resident as both a region root and linked child.
+[[nodiscard]] bool erase_conflicting_classification(
+    std::uint32_t local_id,bool incoming_is_linked,
+    std::map<std::uint32_t,Transform>& roots,
+    std::map<std::uint32_t,Transform>& children) noexcept;
+// Avatar identity transitions remove any previously retained object geometry.
+[[nodiscard]] bool erase_object_identity(
+    std::uint32_t local_id,
+    std::map<std::uint32_t,Transform>& roots,
+    std::map<std::uint32_t,Transform>& children) noexcept;
 // Resolve an authenticated linked child's actual region-space position,
 // composing each verified parent rotation and translation. Do not use
 // the remote linkset root position as a substitute for the child when

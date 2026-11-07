@@ -671,7 +671,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.reflection_probe_records+=frame.reflection_probe_records;
                     for(const auto id:avatar_ids){
                         if(avatar_root_ids_.size()<2048U){
-                            if(avatar_root_ids_.insert(id).second)
+                            const bool stale_geometry=
+                                objectspatial::erase_object_identity(
+                                    id,spatial_objects_,linked_objects_);
+                            const bool newly_known=avatar_root_ids_.insert(id).second;
+                            if(stale_geometry||newly_known)
                                 ++spatial_object_revision_;
                             missing_objects_.erase(id);
                         }
@@ -679,29 +683,37 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     for(auto id:parent_ids)
                         remember_missing_object(id,true,true);
                     for(const auto& child:linked){
+                        const bool known_as_root=spatial_objects_.contains(child.local_id);
                         if(linked_objects_.size()>=kMaxLinkedObjects&&
-                            !linked_objects_.contains(child.local_id)){
+                            !linked_objects_.contains(child.local_id)&&!known_as_root){
                             ++dropped_linked_updates_;continue;
                         }
+                        const bool reclassified=
+                            objectspatial::erase_conflicting_classification(
+                                child.local_id,true,spatial_objects_,linked_objects_);
                         const auto prior=linked_objects_.find(child.local_id);
                         if(prior==linked_objects_.end()||
                            !objectspatial::same_spatial_transform(prior->second,child)){
                             linked_objects_.insert_or_assign(child.local_id,child);
                             ++spatial_object_revision_;
-                        }
+                        }else if(reclassified)++spatial_object_revision_;
                         missing_objects_.erase(child.local_id);
                     }
                     for(const auto& obj:objects){
+                        const bool known_as_child=linked_objects_.contains(obj.local_id);
                         if(spatial_objects_.size()>=kMaxRootObjects &&
-                            !spatial_objects_.contains(obj.local_id)){
+                            !spatial_objects_.contains(obj.local_id)&&!known_as_child){
                             ++dropped_root_updates_;continue;
                         }
+                        const bool reclassified=
+                            objectspatial::erase_conflicting_classification(
+                                obj.local_id,false,spatial_objects_,linked_objects_);
                         const auto prior=spatial_objects_.find(obj.local_id);
                         if(prior==spatial_objects_.end()||
                            !objectspatial::same_spatial_transform(prior->second,obj)){
                             spatial_objects_.insert_or_assign(obj.local_id,obj);
                             ++spatial_object_revision_;
-                        }
+                        }else if(reclassified)++spatial_object_revision_;
                         missing_objects_.erase(obj.local_id);
                     }
                 }else ++rejected_spatial_frames_;
@@ -730,41 +742,47 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     ++spatial_object_frames_;
                     for(const auto& child:linked){
                         remember_missing_object(child.parent_id,true,true);
+                        const bool known_as_root=spatial_objects_.contains(child.local_id);
                         if(linked_objects_.size()>=kMaxLinkedObjects&&
-                            !linked_objects_.contains(child.local_id)){
+                            !linked_objects_.contains(child.local_id)&&!known_as_root){
                             ++dropped_linked_updates_;continue;
                         }
-                        // Compressed child topology is not decoded yet;
-                        // preserve an earlier verified full-update shape.
-                        auto updated=child;
+                        // Preserve full-update mesh/PBR/TextureEntry metadata
+                        // even when a compressed update reparents a root as
+                        // a child. The target map is preferred, the other is
+                        // a fallback until the stale membership is removed.
+                        auto updated=objectspatial::merge_compressed_transform(
+                            child,spatial_objects_,linked_objects_);
+                        const bool reclassified=
+                            objectspatial::erase_conflicting_classification(
+                                child.local_id,true,spatial_objects_,linked_objects_);
                         const auto previous=linked_objects_.find(child.local_id);
-                        if(previous!=linked_objects_.end())
-                            updated=objectspatial::merge_compressed_transform(
-                                child,previous->second);
                         if(previous==linked_objects_.end()||
                            !objectspatial::same_spatial_transform(
                                 previous->second,updated)){
                             linked_objects_.insert_or_assign(child.local_id,updated);
                             ++spatial_object_revision_;
-                        }
+                        }else if(reclassified)++spatial_object_revision_;
                         missing_objects_.erase(child.local_id);
                     }
                     for(const auto& obj:objects){
+                        const bool known_as_child=linked_objects_.contains(obj.local_id);
                         if(spatial_objects_.size()>=kMaxRootObjects &&
-                            !spatial_objects_.contains(obj.local_id)){
+                            !spatial_objects_.contains(obj.local_id)&&!known_as_child){
                             ++dropped_root_updates_;continue;
                         }
-                        auto updated=obj;
+                        auto updated=objectspatial::merge_compressed_transform(
+                            obj,spatial_objects_,linked_objects_);
+                        const bool reclassified=
+                            objectspatial::erase_conflicting_classification(
+                                obj.local_id,false,spatial_objects_,linked_objects_);
                         const auto previous=spatial_objects_.find(obj.local_id);
-                        if(previous!=spatial_objects_.end())
-                            updated=objectspatial::merge_compressed_transform(
-                                obj,previous->second);
                         if(previous==spatial_objects_.end()||
                            !objectspatial::same_spatial_transform(
                                 previous->second,updated)){
                             spatial_objects_.insert_or_assign(obj.local_id,updated);
                             ++spatial_object_revision_;
-                        }
+                        }else if(reclassified)++spatial_object_revision_;
                         missing_objects_.erase(obj.local_id);
                     }
                 }else ++rejected_spatial_frames_;

@@ -398,6 +398,46 @@ Transform merge_compressed_transform(
         merged.primitive=PrimitiveKind::Unknown;
     return merged;
 }
+Transform merge_compressed_transform(
+    const Transform& incoming,
+    const std::map<std::uint32_t,Transform>& roots,
+    const std::map<std::uint32_t,Transform>& children){
+    if(incoming.local_id==0U)return incoming;
+    const Transform* previous=nullptr;
+    if(incoming.parent_id==0U){
+        const auto root=roots.find(incoming.local_id);
+        if(root!=roots.end())previous=&root->second;
+        else{
+            const auto child=children.find(incoming.local_id);
+            if(child!=children.end())previous=&child->second;
+        }
+    }else{
+        const auto child=children.find(incoming.local_id);
+        if(child!=children.end())previous=&child->second;
+        else{
+            const auto root=roots.find(incoming.local_id);
+            if(root!=roots.end())previous=&root->second;
+        }
+    }
+    return previous?merge_compressed_transform(incoming,*previous):incoming;
+}
+bool erase_conflicting_classification(
+    std::uint32_t local_id,bool incoming_is_linked,
+    std::map<std::uint32_t,Transform>& roots,
+    std::map<std::uint32_t,Transform>& children) noexcept {
+    if(local_id==0U)return false;
+    return incoming_is_linked?roots.erase(local_id)>0U:
+                               children.erase(local_id)>0U;
+}
+bool erase_object_identity(
+    std::uint32_t local_id,
+    std::map<std::uint32_t,Transform>& roots,
+    std::map<std::uint32_t,Transform>& children) noexcept {
+    if(local_id==0U)return false;
+    bool removed=roots.erase(local_id)>0U;
+    removed=(children.erase(local_id)>0U)||removed;
+    return removed;
+}
 bool decode_cached_ids(const lludp::Packet& packet,
                        std::vector<std::uint32_t>& out) noexcept {
     const auto info=worldwire::inspect(packet);
