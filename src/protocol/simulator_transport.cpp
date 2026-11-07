@@ -116,6 +116,17 @@ bool Circuit::set_mesh_capability(std::wstring capability) noexcept {
     mesh_last_scan_x_=mesh_last_scan_y_=mesh_last_scan_z_=0.f;
     return true;
 }
+bool Circuit::set_inventory_capabilities(
+    std::wstring descendents,std::wstring items) noexcept {
+    if(state_!=CircuitState::MovementConfirmed||
+       !caps::trusted_caps_url(descendents)||
+       !caps::trusted_caps_url(items)||
+       !inventory_descendents_url_.empty()||!inventory_items_url_.empty())
+        return false;
+    inventory_descendents_url_=std::move(descendents);
+    inventory_items_url_=std::move(items);
+    return true;
+}
 void Circuit::prune_unreferenced_meshes() noexcept {
     if(loaded_meshes_.empty())return;
     // Hysteresis (176m vs 144m load radius) avoids thrashing across a
@@ -1004,6 +1015,12 @@ void Circuit::stop() noexcept {
         SecureZeroMemory(mesh_capability_url_.data(),
                          mesh_capability_url_.size()*sizeof(wchar_t));
         mesh_capability_url_.clear();
+    }
+    for(auto* url:{&inventory_descendents_url_,&inventory_items_url_}){
+        if(!url->empty()){
+            SecureZeroMemory(url->data(),url->size()*sizeof(wchar_t));
+            url->clear();
+        }
     }
     reliable_window_.clear();
     loaded_meshes_.clear();

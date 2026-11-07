@@ -2209,6 +2209,11 @@ void Window::update_sl_connection() {
             if(result.texture_granted)
                 (void)sl_circuit_.set_texture_capability(
                     std::move(result.texture_capability_url));
+            if(result.inventory_descendents_granted&&
+               result.inventory_items_granted)
+                (void)sl_circuit_.set_inventory_capabilities(
+                    std::move(result.inventory_descendents_url),
+                    std::move(result.inventory_items_url));
             if(result.event_queue_granted){
                 caps_poll_started_=true;
                 caps_event_queue_url_=std::move(result.event_queue_url);

@@ -171,6 +171,13 @@ public:
     [[nodiscard]] bool texture_capability_ready() const noexcept {
         return !texture_capability_url_.empty();
     }
+    // Inventory capabilities are authenticated region-scoped bearer URLs.
+    // Retain them only while this simulator circuit is active.
+    [[nodiscard]] bool set_inventory_capabilities(
+        std::wstring descendents,std::wstring items) noexcept;
+    [[nodiscard]] bool inventory_capabilities_ready() const noexcept {
+        return !inventory_descendents_url_.empty()&&!inventory_items_url_.empty();
+    }
     [[nodiscard]] const pbr::Materials& decoded_materials() const noexcept {return loaded_materials_;}
     [[nodiscard]] const pbr::Overrides& material_overrides() const noexcept {return material_overrides_;}
     [[nodiscard]] std::size_t material_failures() const noexcept {return material_failures_;}
@@ -379,6 +386,8 @@ private:
           texture_last_scan_z_=0.f;
     bool texture_last_scan_position_valid_=false;
     std::wstring mesh_capability_url_; // in-memory bearer only
+    std::wstring inventory_descendents_url_; // region-scoped bearer only
+    std::wstring inventory_items_url_; // region-scoped bearer only
     struct MeshResult {
         std::string id;
         std::uint32_t bytes=0;
