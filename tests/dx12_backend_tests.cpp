@@ -217,6 +217,22 @@ int main() {
            indirect_count!=0U||
            indirect_commands[0].draw.VertexCountPerInstance!=0xdeadbeefU)
             return 104;
+        const std::array<std::uint32_t,1> unknown_low{{16U}};
+        if(cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            unknown_low.data(),unknown_low.size(),indirect_commands.data(),
+            indirect_commands.size(),indirect_count)||
+           indirect_count!=0U||
+           indirect_commands[0].draw.VertexCountPerInstance!=0xdeadbeefU)
+            return 125;
+        const std::array<std::uint32_t,2> duplicate_indirect_ids{{17U,17U}};
+        if(cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            duplicate_indirect_ids.data(),duplicate_indirect_ids.size(),
+            indirect_commands.data(),indirect_commands.size(),indirect_count)||
+           indirect_count!=0U||
+           indirect_commands[0].draw.VertexCountPerInstance!=0xdeadbeefU)
+            return 126;
         if(cache.build_visible_instance_indirect_commands(
             "region",1,{Requirement{17,3},Requirement{18,3}},
             both_visible.data(),both_visible.size(),indirect_commands.data(),
@@ -245,6 +261,11 @@ int main() {
             only_nearby.data(),0U,indirect_commands.data(),
             indirect_commands.size(),indirect_count)||indirect_count!=0U)
             return 106;
+        // An empty visibility set may omit its ID pointer entirely.
+        if(!cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            nullptr,0U,indirect_commands.data(),indirect_commands.size(),
+            indirect_count)||indirect_count!=0U)return 124;
         const std::uint64_t indirect_stride=
             sizeof(Cache::IndirectDrawCommand);
         const std::uint64_t indirect_bytes=
@@ -369,6 +390,15 @@ int main() {
             {17,{0,0,5.f,.1f,true}},
             {18,{20,0,5.f,.1f,true}},
             {19,{20,0,5.f,.1f,false}}};
+        const std::vector<Requirement> sorted_visibility_requirements{
+            {17,3},{18,3},{19,3},{20,3}};
+        std::array<std::uint32_t,4> sorted_visible_ids{};
+        std::size_t sorted_visible_count=0U;
+        if(!Cache::select_visible_instance_ids(
+            sorted_visibility_requirements,visibility_bounds,extracted,
+            sorted_visible_ids.data(),sorted_visible_ids.size(),sorted_visible_count)||
+           sorted_visible_count!=3U||sorted_visible_ids[0]!=17U||
+           sorted_visible_ids[1]!=19U||sorted_visible_ids[2]!=20U)return 123;
         std::array<std::uint32_t,4> visible_ids{};
         std::size_t visible_count=0U;
         if(!Cache::select_visible_instance_ids(
@@ -431,6 +461,15 @@ int main() {
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();
         if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,3}}))return 41;
+        indirect_commands[0].draw.VertexCountPerInstance=0xdeadbeefU;
+        indirect_count=99U;
+        if(cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            both_visible.data(),both_visible.size(),indirect_commands.data(),
+            indirect_commands.size(),indirect_count)||
+           indirect_count!=0U||
+           indirect_commands[0].draw.VertexCountPerInstance!=0xdeadbeefU)
+            return 127;
         cache.touch("region:17");
         if(!cache.can_draw_exact_instance_batch("region",1,{Requirement{17,3}}))return 42;
         if(cache.can_draw_exact_instance_batch("region",1,

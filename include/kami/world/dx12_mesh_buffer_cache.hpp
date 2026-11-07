@@ -348,30 +348,42 @@ public:
         std::size_t capacity,
         std::size_t& command_count) const noexcept {
         command_count=0U;
-        if(!output||!visible_ids||
-           !can_draw_exact_instance_batch(region_key,revision,required)||
+        if(!output||(!visible_ids&&visible_count!=0U)||region_key.empty()||
+           !within_resident_batch_draw_budget(required.size())||
            visible_count>required.size()||capacity<visible_count)return false;
-        const auto visible_end=visible_ids+visible_count;
-        if(!std::is_sorted(visible_ids,visible_end)||
-           std::adjacent_find(visible_ids,visible_end)!=visible_end)return false;
-        // Both lists are sorted and unique. Validate subset membership with
-        // a monotonic merge walk rather than sorting a second ID array and
-        // binary-searching every candidate on every frame.
-        if(!visible_ids_are_subset(required,visible_ids,visible_count))return false;
-        // No validation below this point can fail: all resources were checked
-        // by the all-or-nothing preflight and all IDs are members of required.
-        std::size_t visible_index=0U;
+        if(visible_count!=0U){
+            const auto visible_end=visible_ids+visible_count;
+            if(!std::is_sorted(visible_ids,visible_end)||
+               std::adjacent_find(visible_ids,visible_end)!=visible_end)return false;
+        }
+        // Preflight the complete resident set and stage commands locally. The
+        // mapped ExecuteIndirect buffer is updated only after every requirement
+        // and visible ID passes, so failure cannot publish a partial batch.
+        std::array<IndirectDrawCommand,kMaxResidentBatchDraws> staged{};
+        std::size_t visible_index=0U,staged_count=0U;
+        std::uint32_t previous_id=0U;
         for(const auto& item:required){
-            while(visible_index<visible_count&&
-                  visible_ids[visible_index]<item.local_id)++visible_index;
-            if(visible_index<visible_count&&
-               visible_ids[visible_index]==item.local_id){
-                const auto* resident=find_instance(region_key,item.local_id);
-                output[command_count++]={resident->view,
-                    D3D12_DRAW_ARGUMENTS{item.vertex_count,1U,0U,0U}};
-                ++visible_index;
+            if(!item.local_id||!item.vertex_count||item.local_id<=previous_id)
+                return false;
+            previous_id=item.local_id;
+            const auto* resident=find_instance(region_key,item.local_id);
+            if(!resident||!resident->resource||
+               resident->generation!=generation_||resident->revision!=revision||
+               !valid_instance_vertex_view(resident->view,item.vertex_count))
+                return false;
+            if(visible_index<visible_count){
+                const auto id=visible_ids[visible_index];
+                if(id<item.local_id)return false;
+                if(id==item.local_id){
+                    staged[staged_count++]={resident->view,
+                        D3D12_DRAW_ARGUMENTS{item.vertex_count,1U,0U,0U}};
+                    ++visible_index;
+                }
             }
         }
+        if(visible_index!=visible_count)return false;
+        std::copy_n(staged.begin(),staged_count,output);
+        command_count=staged_count;
         return true;
     }
 
@@ -664,35 +676,45 @@ public:
             return a.local_id<b.local_id;
         };
         if(!std::is_sorted(bounds.begin(),bounds.end(),by_id))return false;
-        // Validate requirement IDs in O(n log n) without changing their draw order.
+        // Renderer requirements are normally already sorted by local ID. Keep
+        // that hot path linear; sort only the bounded scratch copy for defensive
+        // callers that supply a different order.
         std::array<std::uint32_t,kMaxResidentBatchDraws> required_ids{};
+        bool requirements_sorted=true;
         for(std::size_t i=0;i<required.size();++i){
             const auto& item=required[i];
             if(!item.local_id||!item.vertex_count)return false;
             required_ids[i]=item.local_id;
+            if(i!=0U&&required_ids[i]<=required_ids[i-1U])
+                requirements_sorted=false;
         }
         auto required_end=required_ids.begin()+required.size();
-        std::sort(required_ids.begin(),required_end);
+        if(!requirements_sorted)std::sort(required_ids.begin(),required_end);
         if(std::adjacent_find(required_ids.begin(),required_end)!=required_end)
             return false;
-        for(const auto& item:required){
-            const auto found=std::lower_bound(bounds.begin(),bounds.end(),
-                item.local_id,[](const InstanceVisibility& candidate,
-                                 std::uint32_t id) noexcept {
-                    return candidate.local_id<id;
-                });
-            const bool missing=found==bounds.end()||found->local_id!=item.local_id;
-            const bool ambiguous=!missing&&found+1!=bounds.end()&&
-                (found+1)->local_id==item.local_id;
-            const bool visible=missing||ambiguous||
-                (found->aabb.valid?
-                    potentially_visible_aabb(found->aabb,planes):
-                    potentially_visible(found->bounds,planes));
-            if(visible)visible_ids[visible_count++]=item.local_id;
+        // Both ID streams are now sorted. A single merge walk replaces one
+        // lower_bound per object. Missing or duplicate bounds stay visible.
+        std::size_t bounds_index=0U;
+        for(std::size_t i=0U;i<required.size();++i){
+            const auto id=required_ids[i];
+            while(bounds_index<bounds.size()&&bounds[bounds_index].local_id<id)
+                ++bounds_index;
+            bool visible=true;
+            if(bounds_index<bounds.size()&&bounds[bounds_index].local_id==id){
+                const auto& found=bounds[bounds_index++];
+                if(bounds_index<bounds.size()&&bounds[bounds_index].local_id==id){
+                    // Ambiguous duplicate bounds must never hide an object.
+                    do{++bounds_index;}
+                    while(bounds_index<bounds.size()&&bounds[bounds_index].local_id==id);
+                }else{
+                    visible=found.aabb.valid?
+                        potentially_visible_aabb(found.aabb,planes):
+                        potentially_visible(found.bounds,planes);
+                }
+            }
+            if(visible)visible_ids[visible_count++]=id;
         }
-        // Stable output makes the record path's membership checks logarithmic;
-        // actual draw order remains the original requirements order.
-        std::sort(visible_ids,visible_ids+visible_count);
+        // required_ids is sorted, so the output is canonical without a second sort.
         return true;
     }
 
