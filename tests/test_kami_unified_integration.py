@@ -110,15 +110,28 @@ class PromotionPolicyTests(unittest.TestCase):
     def test_known_r72_fixes_are_recorded_as_already_ported(self):
         self.assertTrue(ALREADY_PORTED_SOURCE_PREFIXES)
         self.assertTrue(is_already_ported_source("cfb1071f96" + "0" * 30))
-        for prefix in (
-            "611953eabb1f", "b45229c509c5", "c9af8c4c9c8f",
-            "b8bd9a404da0", "09bde30d7467", "b8f155ec60da",
-            "207723ab7700", "4e0f4ccadbd9", "df149710be03",
-            "8f8feff8c040", "3465e6daa844", "1c2baca100de",
-            "4bb04eba922e", "cd9fb7c9abd5", "e2d030c34315",
-            "24f86786663e", "56d19c09417b", "028a0feb7b35",
-        ):
-            self.assertTrue(is_already_ported_source(prefix + "0" * (40-len(prefix))))
+        already_ported = (
+            "611953eabb1f49841da417cf3ad8040eab1a8237",
+            "b45229c509c59884eb77ff8c4dfde1d4ae749308",
+            "c9af8c4c9c8f6a35129cc78e399e8c446934bb84",
+            "b8bd9a404da0bca53f753c03aa8d33f132504b6c",
+            "09bde30d7467814945f0c128e9e1b1690a71e7fe",
+            "b8f155ec60da5ea87e27f9f3a0535782a40b8613",
+            "207723ab770040d2f7d06bbc9831c04e9f0eed76",
+            "4e0f4ccadbd9046666c46ff5eadea0298c7ab12e",
+            "df149710be03208014f0aa741157fe5e08388b19",
+            "8f8feff8c040afead5ef54b58bd274f72f77a933",
+            "3465e6daa84487cfcbc85ad226ad31cd897ec7b8",
+            "1c2baca100dde790843d398d9c1d84bc273c9e67",
+            "4bb04eba922e36bb1dace7ffca09fc8d53122b8e",
+            "cd9fb7c9abd573808069155b2e49cc2bb6594ed9",
+            "e2d030c34315c6090c0b5aba87779cff6f547784",
+            "24f86786663e4cb67370584f60c1c5c5d155bf4",
+            "56d19c09417b91b788dd58f9724d0bb91b508ba6",
+            "028a0feb7b3588e8d1320a501e1025c59c325c91",
+        )
+        for sha in already_ported:
+            self.assertTrue(is_already_ported_source(sha), sha)
 
 
 
