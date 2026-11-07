@@ -1225,32 +1225,44 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 break;
             }
         }
-        // Smart Sort is an actual local planning feature, not a server mutation.
-        // The demonstration item is explicitly synthetic until inventory sync exists.
-        const std::vector<inventory::Item> sample_items{
-            {L"[HAYABUSA] Reed FATPACK UNPACKER",L"",false},
-            {L"Sample DEMO Jacket",L"",false}
-        };
-        const auto moves=inventory::preview_smart_sort(sample_items);
-        const auto demos=inventory::preview_demo_deletions(sample_items);
-        if(!moves.empty()) {
+        // Smart Sort previews use only entries returned by the authenticated
+        // Second Life inventory fetch. They never move or delete server items.
+        std::vector<inventory::Item> live_items;
+        live_items.reserve(inventory_root_snapshot_.entries.size());
+        for(const auto& entry:inventory_root_snapshot_.entries){
+            if(entry.folder)continue;
+            live_items.push_back({entry.name,
+                std::wstring(entry.creator_id.begin(),entry.creator_id.end()),false});
+        }
+        const auto moves=inventory::preview_smart_sort(live_items);
+        const auto demos=inventory::preview_demo_deletions(live_items);
+        if(!moves.empty()){
             const auto& plan=moves.front();
-            const std::wstring preview=L"Smart Sort sample: "+
-                sample_items[plan.item_index].name+L"  ->  "+plan.destination;
+            const std::wstring preview=L"Live Smart Sort preview: "+
+                live_items[plan.item_index].name+L"  ->  "+plan.destination;
             label(preview,box(contentX+28,height-150,contentWidth-48,27),
                   small_font_.Get(),p.accent);
+        }else{
+            label(L"Smart Sort will preview real items after inventory sync.",
+                  box(contentX+28,height-150,contentWidth-48,27),
+                  small_font_.Get(),p.muted);
         }
-        const std::wstring demo_label=L"Demo cleanup preview: "+
-            std::to_wstring(demos.size())+L" sample item(s), nothing deleted";
-        label(demo_label,box(contentX+28,height-123,contentWidth-48,25),
+        label(L"Demo cleanup preview: "+std::to_wstring(demos.size())+
+              L" matching server item(s); nothing deleted",
+              box(contentX+28,height-123,contentWidth-48,25),
               small_font_.Get(),p.muted);
         label(inventory_status_,box(contentX+28,height-95,contentWidth-48,25),
               small_font_.Get(),p.accent);
         if(!inventory_root_snapshot_.entries.empty()){
-            const auto& first=inventory_root_snapshot_.entries.front();
-            label(L"Server inventory sample: "+first.name+
-                  (first.folder?L"  / folder":L"  / item"),
-                  box(contentX+28,height-68,contentWidth-48,25),
+            std::wstring sample=L"Inventory: ";
+            const auto count=(std::min)(std::size_t{3},inventory_root_snapshot_.entries.size());
+            for(std::size_t i=0;i<count;++i){
+                if(i)sample+=L"  |  ";
+                const auto& entry=inventory_root_snapshot_.entries[i];
+                sample+=entry.folder?L"[Folder] ":L"[Item] ";
+                sample+=entry.name;
+            }
+            label(sample,box(contentX+28,height-68,contentWidth-48,25),
                   small_font_.Get(),p.text);
         }
         return;
