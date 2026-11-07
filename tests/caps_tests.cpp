@@ -252,6 +252,7 @@ int exercise(){
     const std::string inventory_reply=
         "<llsd><map><key>folders</key><array><map>"
         "<key>folder_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
+        "<key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"
         "<key>version</key><integer>7</integer>"
         "<key>categories</key><array><map>"
         "<key>category_id</key><uuid>bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb</uuid>"
@@ -265,7 +266,8 @@ int exercise(){
         "</map></array></map></llsd>";
     InventoryFolderReply decoded_inventory{};
     if(!parse_inventory_folder_llsd(inventory_reply,
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",decoded_inventory)||
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",decoded_inventory,
+        "12345678-90ab-4cde-8fab-000000000001")||
        !decoded_inventory.valid||decoded_inventory.version!=7||
        decoded_inventory.entries.size()!=2||
        !decoded_inventory.entries[0].folder||
@@ -274,6 +276,9 @@ int exercise(){
        decoded_inventory.entries[1].name!=L"Jacket")return 47;
     if(parse_inventory_folder_llsd(inventory_reply,
         "dddddddd-dddd-4ddd-8ddd-dddddddddddd",decoded_inventory))return 48;
+    if(parse_inventory_folder_llsd(inventory_reply,
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",decoded_inventory,
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))return 57;
     const auto inventory_request=build_inventory_folder_post(
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "12345678-90ab-4cde-8fab-000000000001",true,true);
