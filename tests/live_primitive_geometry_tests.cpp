@@ -85,7 +85,7 @@ int run_primitive_tests(){
         volume.volume_params[16U]=0x00U; // circular profile, no hole
         volume.volume_params[3U]=0x50U;volume.volume_params[4U]=0xc3U;
         volume.volume_params[19U]=0x50U;volume.volume_params[20U]=0xc3U;
-        for(unsigned i=7U;i<=15U;++i)volume.volume_params[i]=128U;
+        for(unsigned i=7U;i<=15U;++i)volume.volume_params[i]=0U;
         const auto plain=world::build_live_primitive_geometry(
             {{79U,volume}},{},128.f,140.f,35.f);
         if(plain.root_shapes!=1U||plain.scene.vertices.size()<=240U)
@@ -137,7 +137,7 @@ int run_primitive_tests(){
         full_volume.volume_params[5U]=0xc3U;
         full_volume.volume_params[6U]=100U;
         full_volume.volume_params[7U]=100U;
-        for(unsigned i=8U;i<=16U;++i)full_volume.volume_params[i]=128U;
+        for(unsigned i=8U;i<=16U;++i)full_volume.volume_params[i]=0U;
         full_volume.volume_params[19U]=0x50U;
         full_volume.volume_params[20U]=0xc3U;
         full_volume.volume_params[21U]=0x20U;
