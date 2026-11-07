@@ -221,6 +221,27 @@ int run_primitive_tests(){
         if(hollow.root_shapes!=1U||
            hollow.scene.vertices.size()<=plain.scene.vertices.size())
             return 77;
+        // The inner cylindrical wall must face toward the hollow,
+        // while the exterior wall faces away from the volume center.
+        std::size_t inner_inward=0U,outer_outward=0U;
+        for(const auto& vertex:hollow.scene.vertices){
+            const float radius=std::hypot(vertex.px,vertex.pz);
+            const float radial_normal=vertex.px*vertex.nx+
+                vertex.pz*vertex.nz;
+            if(radius>.35f&&radius<.45f&&radial_normal<-.01f)
+                ++inner_inward;
+            if(radius>.95f&&radial_normal>.01f)
+                ++outer_outward;
+        }
+        if(inner_inward==0U||outer_outward==0U)return 98;
+        // Annular path caps must not be filled across the hollow opening.
+        float cap_min_radius=std::numeric_limits<float>::max();
+        for(const auto& vertex:hollow.scene.vertices){
+            if(std::abs(std::abs(vertex.py)-1.f)<.001f)
+                cap_min_radius=std::min(cap_min_radius,
+                    std::hypot(vertex.px,vertex.pz));
+        }
+        if(cap_min_radius<.39f||cap_min_radius>.41f)return 99;
         // Profile cut must reduce emitted side surface, not silently fall
         // back to the old uncut 20-sided cylinder.
         volume.volume_params[17U]=0x00U;volume.volume_params[18U]=0x00U;
