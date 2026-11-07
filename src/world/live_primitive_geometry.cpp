@@ -203,6 +203,78 @@ void build_cylinder(Emitter& e){
               {lo.x+.5f,1.f-(lo.y+.5f)});
     }
 }
+// Dependency-light subset of LLVolume's linear-path/circular-profile
+// sweep. It preserves real cut, hollow, taper, twist and shear parameters;
+// unsupported curve/profile families remain on the conservative legacy path.
+float signed_wire(std::uint8_t value) noexcept {
+    return (static_cast<float>(value)-128.f)/127.f;
+}
+void build_linear_circle_volume(Emitter& e,
+        const protocol::volume::Parameters& p){
+    constexpr float pi=3.14159265358979323846f;
+    constexpr unsigned around=32U,along=12U;
+    const float begin=p.profile_begin*2.f*pi;
+    const float end=p.profile_end*2.f*pi;
+    const float sweep=end-begin;
+    if(!(sweep>0.0001f))return;
+    const bool hollow=p.hollow>0.0001f;
+    const float inner_radius=std::clamp(p.hollow,0.f,.95f)*.5f;
+    const float shear_x=signed_wire(p.shear_x)*.01f;
+    const float shear_y=signed_wire(p.shear_y)*.01f;
+    const float twist0=signed_wire(p.twist_begin)*.01f*pi*2.f;
+    const float twist1=signed_wire(p.twist_end)*.01f*pi*2.f;
+    const float taper_x=signed_wire(p.taper_x)*.01f;
+    const float taper_y=signed_wire(p.taper_y)*.01f;
+    const auto point=[&](float u,float angle,float radius)->V{
+        const float twist=twist0+(twist1-twist0)*u;
+        const float a=angle+twist;
+        const float taperX=std::max(.05f,1.f-taper_x*u);
+        const float taperY=std::max(.05f,1.f-taper_y*u);
+        const float x=std::cos(a)*radius*taperX+shear_x*(u-.5f);
+        const float y=std::sin(a)*radius*taperY+shear_y*(u-.5f);
+        return {x,y,u-.5f};
+    };
+    const unsigned profile_steps=std::max(2U,
+        static_cast<unsigned>(std::ceil(static_cast<float>(around)*sweep/(2.f*pi))));
+    for(unsigned row=0U;row<along;++row){
+        const float u0=p.path_begin+(p.path_end-p.path_begin)*float(row)/along;
+        const float u1=p.path_begin+(p.path_end-p.path_begin)*float(row+1U)/along;
+        for(unsigned col=0U;col<profile_steps;++col){
+            const float a0=begin+sweep*float(col)/profile_steps;
+            const float a1=begin+sweep*float(col+1U)/profile_steps;
+            const float v0=float(col)/profile_steps;
+            const float v1=float(col+1U)/profile_steps;
+            e.quad(point(u0,a0,.5f),point(u0,a1,.5f),
+                   point(u1,a1,.5f),point(u1,a0,.5f),5U,
+                   {v0,float(row)/along},{v1,float(row)/along},
+                   {v1,float(row+1U)/along},{v0,float(row+1U)/along});
+            if(hollow){
+                e.quad(point(u0,a1,inner_radius),point(u0,a0,inner_radius),
+                       point(u1,a0,inner_radius),point(u1,a1,inner_radius),2U,
+                       {v1,float(row)/along},{v0,float(row)/along},
+                       {v0,float(row+1U)/along},{v1,float(row+1U)/along});
+            }
+        }
+    }
+    // End caps are annular when hollow; fan triangles otherwise.
+    const auto cap=[&](float u,unsigned face,bool reverse){
+        const float z=u-.5f;
+        const V center{shear_x*(u-.5f),shear_y*(u-.5f),z};
+        for(unsigned col=0U;col<profile_steps;++col){
+            const float a0=begin+sweep*float(col)/profile_steps;
+            const float a1=begin+sweep*float(col+1U)/profile_steps;
+            const V o0=point(u,a0,.5f),o1=point(u,a1,.5f);
+            if(hollow){
+                const V i0=point(u,a0,inner_radius),i1=point(u,a1,inner_radius);
+                if(reverse)e.quad(o1,o0,i0,i1,face);
+                else e.quad(o0,o1,i1,i0,face);
+            }else if(reverse)e.tri(center,o1,o0,face,{.5f,.5f},{1.f,0.f},{0.f,0.f});
+            else e.tri(center,o0,o1,face,{.5f,.5f},{0.f,0.f},{1.f,0.f});
+        }
+    };
+    cap(p.path_begin,0U,true);
+    cap(p.path_end,1U,false);
+}
 void build_prism(Emitter& e){
     constexpr float y=-0.2886751346f;
     const V a{-.5f,y,-.5f}, b{.5f,y,-.5f},c{0.f,-2.f*y,-.5f};
@@ -256,7 +328,18 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
         e.green=std::clamp(t.base_g,0.f,1.f);
         e.blue=std::clamp(t.base_b,0.f,1.f);
     }
-    switch(t.primitive){
+    bool swept=false;
+    if(t.volume_params_seen&&t.primitive==Kind::Cylinder){
+        protocol::volume::Parameters decoded{};
+        if(protocol::volume::decode(t.volume_params,
+                                    t.volume_params_full_layout,decoded)&&
+           decoded.path_curve==0x10U&&
+           (decoded.profile_curve&0x0fU)==0U){
+            build_linear_circle_volume(e,decoded);
+            swept=true;
+        }
+    }
+    if(!swept)switch(t.primitive){
         case Kind::Box:build_box(e);break;
         case Kind::Cylinder:build_cylinder(e);break;
         case Kind::Sphere:build_sphere(e);break;
