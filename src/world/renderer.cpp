@@ -479,14 +479,63 @@ bool Renderer::make_geometry() {
         error_=L"DX12 geometry section counts invalid";
         return false;
     }
+    // A resident batch is authoritative only while every instance still
+    // matches the accepted region revision. Otherwise the complete combined
+    // scene remains the fallback.
+    if(!preview_mesh_&&region_mesh_&&resident_mesh_batch_candidate_&&
+       (!resident_mesh_batch_ready_||
+        !mesh_instance_cache_.can_draw_exact_instance_batch(
+            "__kami_live_region__",resident_mesh_revision_,
+            resident_mesh_requirements_))){
+        Dx12MeshBufferCache staged;
+        staged.begin_generation();
+        bool staged_ok=!resident_mesh_spans_.empty()&&
+            resident_mesh_spans_.size()==resident_mesh_requirements_.size();
+        for(const auto& span:resident_mesh_spans_){
+            if(!staged.upload_instance(device_.native_device(),
+                "__kami_live_region__",span.local_id,resident_mesh_revision_,
+                scene.vertices.data(),scene.vertices.size(),
+                span.first_vertex,span.vertex_count)){
+                staged_ok=false;
+                break;
+            }
+        }
+        if(staged_ok&&staged.can_draw_exact_instance_batch(
+            "__kami_live_region__",resident_mesh_revision_,
+            resident_mesh_requirements_)){
+            mesh_instance_cache_=std::move(staged);
+            resident_mesh_batch_ready_=true;
+        }else{
+            resident_mesh_batch_ready_=false;
+        }
+    }
+    bool use_resident_mesh_batch=!preview_mesh_&&region_mesh_&&
+        resident_mesh_batch_candidate_&&resident_mesh_batch_ready_&&
+        mesh_instance_cache_.can_draw_exact_instance_batch(
+            "__kami_live_region__",resident_mesh_revision_,
+            resident_mesh_requirements_);
+
     std::vector<Vertex> upload,transparent;
     upload.reserve(scene.vertices.size());
     for(std::size_t at=0U;at<scene.terrain_count;at+=3U){
+        if(use_resident_mesh_batch&&
+           Dx12MeshBufferCache::triangle_is_in_instance_spans(
+               at,resident_mesh_spans_))continue;
         const auto index=scene.vertices[at].pbr_material;
         const auto row=std::size_t(index)*protocol::pbr::kRows+4U;
         const bool blend=index!=0U&&row<pbr_rows_.size()&&pbr_rows_[row][0]>1.5f;
         auto& target=blend?transparent:upload;
         target.insert(target.end(),scene.vertices.begin()+at,scene.vertices.begin()+at+3U);
+    }
+    // A scene consisting exclusively of resident meshes still needs a
+    // non-empty combined resource for the established fallback path.
+    if(use_resident_mesh_batch&&upload.empty()&&transparent.empty()&&
+       scene.avatar_count==0U){
+        upload.insert(upload.end(),scene.vertices.begin(),
+                      scene.vertices.begin()+scene.terrain_count);
+        resident_mesh_batch_candidate_=false;
+        resident_mesh_batch_ready_=false;
+        use_resident_mesh_batch=false;
     }
     const auto opaque_count=upload.size();
     upload.insert(upload.end(),scene.vertices.begin()+scene.terrain_count,scene.vertices.end());
@@ -513,6 +562,7 @@ bool Renderer::make_geometry() {
     vertex_view_.BufferLocation=geometry_->GetGPUVirtualAddress();
     vertex_view_.SizeInBytes=bytes;
     vertex_view_.StrideInBytes=sizeof(Vertex);
+    resident_mesh_batch_active_=use_resident_mesh_batch;
     return true;
 }
 
@@ -977,85 +1027,128 @@ bool Renderer::set_verified_live_terrain(
     // This also preserves the previous known-good resource on failure.
     const bool material_changed=pbr_rows_!=pbr_table.rows;
     const auto previous_rows=pbr_rows_;
+
+    using SourceSpan=Dx12MeshBufferCache::InstanceSourceSpan;
+    using DrawRequirement=Dx12MeshBufferCache::InstanceDrawRequirement;
+    std::vector<SourceSpan> source_spans,candidate_spans;
+    std::vector<DrawRequirement> candidate_requirements;
+    source_spans.reserve(mesh_objects.instance_ranges.size());
+    candidate_spans.reserve(mesh_objects.instance_ranges.size());
+    candidate_requirements.reserve(mesh_objects.instance_ranges.size());
+    bool ranges_valid=true;
+    for(const auto& range:mesh_objects.instance_ranges){
+        if(!range.local_id||!range.vertex_count||
+           range.vertex_count>std::numeric_limits<UINT>::max()||
+           range.first_vertex>new_mesh_vertices||
+           range.vertex_count>new_mesh_vertices-range.first_vertex||
+           mesh_scene_first>std::numeric_limits<std::size_t>::max()-range.first_vertex){
+            ranges_valid=false;
+            break;
+        }
+        const auto absolute_first=mesh_scene_first+range.first_vertex;
+        if(absolute_first>scene.vertices.size()||
+           range.vertex_count>scene.vertices.size()-absolute_first){
+            ranges_valid=false;
+            break;
+        }
+        source_spans.push_back({range.local_id,range.first_vertex,range.vertex_count});
+        candidate_spans.push_back({range.local_id,absolute_first,range.vertex_count});
+        candidate_requirements.push_back(
+            {range.local_id,static_cast<UINT>(range.vertex_count)});
+    }
+    std::sort(candidate_spans.begin(),candidate_spans.end(),
+        [](const SourceSpan& a,const SourceSpan& b){
+            if(a.first_vertex!=b.first_vertex)return a.first_vertex<b.first_vertex;
+            return a.local_id<b.local_id;
+        });
+    std::sort(candidate_requirements.begin(),candidate_requirements.end(),
+        [](const DrawRequirement& a,const DrawRequirement& b){
+            return a.local_id<b.local_id;
+        });
+    const bool complete_source_batch=ranges_valid&&new_mesh_vertices>0U&&
+        Dx12MeshBufferCache::covers_complete_mesh_scene(
+            new_mesh_vertices,source_spans)&&
+        candidate_requirements.size()==mesh_objects.instance_ranges.size();
+
+    std::vector<std::uint32_t> mesh_material_ids;
+    mesh_material_ids.reserve(new_mesh_vertices);
+    for(const auto& vertex:mesh_objects.scene.vertices)
+        mesh_material_ids.push_back(vertex.pbr_material);
+    const auto material_count=pbr_table.rows.size()/protocol::pbr::kRows+1U;
+    std::vector<bool> blended_materials(material_count,false);
+    for(std::size_t material=1;material<material_count;++material){
+        const auto row=material*protocol::pbr::kRows+4U;
+        if(row<pbr_table.rows.size())
+            blended_materials[material]=pbr_table.rows[row][0]>1.5f;
+    }
+    const bool opaque_parity=Dx12MeshBufferCache::opaque_material_parity(
+        mesh_material_ids,blended_materials);
+    const bool candidate_batch=complete_source_batch&&opaque_parity&&
+        Dx12MeshBufferCache::within_resident_batch_draw_budget(
+            candidate_requirements.size());
+
+    const auto same_spans=[](const auto& a,const auto& b){
+        if(a.size()!=b.size())return false;
+        for(std::size_t i=0;i<a.size();++i){
+            if(a[i].local_id!=b[i].local_id||
+               a[i].first_vertex!=b[i].first_vertex||
+               a[i].vertex_count!=b[i].vertex_count)return false;
+        }
+        return true;
+    };
+    const auto same_requirements=[](const auto& a,const auto& b){
+        if(a.size()!=b.size())return false;
+        for(std::size_t i=0;i<a.size();++i){
+            if(a[i].local_id!=b[i].local_id||
+               a[i].vertex_count!=b[i].vertex_count)return false;
+        }
+        return true;
+    };
+    const bool unchanged=!material_changed&&region_mesh_&&
+        same_scene_geometry(*region_mesh_,scene)&&
+        same_spans(candidate_spans,resident_mesh_spans_)&&
+        same_requirements(candidate_requirements,resident_mesh_requirements_)&&
+        candidate_batch==resident_mesh_batch_candidate_&&
+        (!candidate_batch||resident_mesh_batch_ready_);
+
     pbr_rows_=pbr_table.rows;
-    const bool unchanged=!material_changed&&region_mesh_&&same_scene_geometry(*region_mesh_,scene);
     if(!unchanged){
         auto previous=std::move(region_mesh_);
+        auto previous_instance_cache=std::move(mesh_instance_cache_);
+        auto previous_spans=std::move(resident_mesh_spans_);
+        auto previous_requirements=std::move(resident_mesh_requirements_);
+        const auto previous_candidate=resident_mesh_batch_candidate_;
+        const auto previous_ready=resident_mesh_batch_ready_;
+        const auto previous_active=resident_mesh_batch_active_;
+        const auto previous_revision=resident_mesh_revision_;
+
         region_mesh_=std::move(scene);
-        // draw() already synchronizes the previous frame. New buffers are
-        // immutable upload resources: replacing the pointer does not
-        // require waiting for the independent texture-copy queue.
-        if(ready_&&!make_geometry()){
-            region_mesh_=std::move(previous);pbr_rows_=previous_rows;
-            if(error_.empty())error_=L"R72 DX12 land mesh upload failed";
-            return false;
-        }
-    }
-    // R94: stage real per-instance resident DX12 vertex streams after the
-    // combined scene has been accepted. This is deliberately non-authoritative:
-    // the established PBR/shadow draw path remains the visible fallback until
-    // parity and GPU-driven submission tests pass. Scene-relative spans are
-    // preserved through the origin rebase above.
-    if(!unchanged&&ready_&&region_mesh_){
-        wait_for_gpu(); // required before reusing resident upload allocations
-        mesh_gpu_cache_.begin_generation();
-        for(const auto& range:mesh_objects.instance_ranges){
-            if(range.first_vertex>new_mesh_vertices||
-               range.vertex_count>new_mesh_vertices-range.first_vertex)
-                continue;
-            const auto first=mesh_scene_first+range.first_vertex;
-            if(first>region_mesh_->vertices.size()||
-               range.vertex_count>region_mesh_->vertices.size()-first)
-                continue;
-            // Failure leaves the original combined-scene draw untouched.
-            (void)mesh_gpu_cache_.upload_instance(device_.native_device(),
-                "__kami_live_region__",range.local_id,scene_gpu_revision_,
-                region_mesh_->vertices.data(),region_mesh_->vertices.size(),
-                first,range.vertex_count);
-        }
-        // Verify that the entire decoded region mesh batch survived upload.
-        // This is an all-or-nothing preflight for the future authoritative
-        // per-object draw path. Do not switch the current combined-scene PBR
-        // and shadow passes here: opaque/transparent partitioning must first
-        // be matched or those passes would omit or double-draw surfaces.
-        std::vector<Dx12MeshBufferCache::InstanceDrawRequirement> required;
-        required.reserve(mesh_objects.instance_ranges.size());
-        std::vector<Dx12MeshBufferCache::InstanceSourceSpan> source_spans;
-        source_spans.reserve(mesh_objects.instance_ranges.size());
-        for(const auto& range:mesh_objects.instance_ranges)
-            source_spans.push_back({range.local_id,range.first_vertex,range.vertex_count});
-        bool valid_batch=Dx12MeshBufferCache::covers_complete_mesh_scene(
-            new_mesh_vertices,source_spans);
-        for(const auto& range:mesh_objects.instance_ranges){
-            if(!range.local_id||!range.vertex_count||
-               range.vertex_count>std::numeric_limits<UINT>::max()){
-                valid_batch=false;
-                break;
+        resident_mesh_spans_=std::move(candidate_spans);
+        resident_mesh_requirements_=std::move(candidate_requirements);
+        resident_mesh_batch_candidate_=candidate_batch;
+        resident_mesh_batch_ready_=false;
+        resident_mesh_batch_active_=false;
+        if(++resident_mesh_revision_==0U)resident_mesh_revision_=1U;
+
+        // All instance uploads and the combined-scene replacement happen
+        // after the prior graphics fence. If any stage fails, restore the
+        // previous scene/cache as one transaction.
+        if(ready_){
+            wait_for_gpu();
+            if(!make_geometry()){
+                region_mesh_=std::move(previous);
+                pbr_rows_=previous_rows;
+                mesh_instance_cache_=std::move(previous_instance_cache);
+                resident_mesh_spans_=std::move(previous_spans);
+                resident_mesh_requirements_=std::move(previous_requirements);
+                resident_mesh_batch_candidate_=previous_candidate;
+                resident_mesh_batch_ready_=previous_ready;
+                resident_mesh_batch_active_=previous_active;
+                resident_mesh_revision_=previous_revision;
+                if(error_.empty())error_=L"R72 DX12 land mesh upload failed";
+                return false;
             }
-            required.push_back({range.local_id,static_cast<UINT>(range.vertex_count)});
         }
-        // Match the production opaque/alpha partition before any future
-        // resident draw substitution. The combined scene remains the safe
-        // fallback for alpha-blended or malformed material triangles.
-        std::vector<std::uint32_t> mesh_material_ids;
-        mesh_material_ids.reserve(new_mesh_vertices);
-        for(const auto& vertex:mesh_objects.scene.vertices)
-            mesh_material_ids.push_back(vertex.pbr_material);
-        const auto material_count=pbr_table.rows.size()/protocol::pbr::kRows+1U;
-        std::vector<bool> blended_materials(material_count,false);
-        for(std::size_t material=1;material<material_count;++material){
-            const auto row=material*protocol::pbr::kRows+4U;
-            if(row<pbr_table.rows.size())
-                blended_materials[material]=pbr_table.rows[row][0]>1.5f;
-        }
-        const bool opaque_parity=Dx12MeshBufferCache::opaque_material_parity(
-            mesh_material_ids,blended_materials);
-        const bool resident_batch_ready=valid_batch&&opaque_parity&&
-            mesh_gpu_cache_.can_draw_exact_instance_batch(
-                "__kami_live_region__",scene_gpu_revision_,required);
-        (void)resident_batch_ready; // combined-scene fallback remains authoritative
-        // No eviction here: region transitions and memory budgeting require
-        // separate fence-aware lifecycle validation before enabling them.
     }
     if(material_changed&&ready_&&!make_material_records(pbr_rows_)){
         ready_=false;error_=L"DX12 glTF material record upload failed";return false;
@@ -1189,9 +1282,29 @@ bool Renderer::set_decoded_region_geometry(
     }
     if(ready_)wait_for_gpu();
     auto prior=std::move(region_mesh_);
+    auto prior_instance_cache=std::move(mesh_instance_cache_);
+    auto prior_spans=std::move(resident_mesh_spans_);
+    auto prior_requirements=std::move(resident_mesh_requirements_);
+    const auto prior_candidate=resident_mesh_batch_candidate_;
+    const auto prior_ready=resident_mesh_batch_ready_;
+    const auto prior_active=resident_mesh_batch_active_;
+    const auto prior_revision=resident_mesh_revision_;
     region_mesh_=std::move(decoded_static_geometry);
+    resident_mesh_spans_.clear();
+    resident_mesh_requirements_.clear();
+    resident_mesh_batch_candidate_=false;
+    resident_mesh_batch_ready_=false;
+    resident_mesh_batch_active_=false;
+    if(++resident_mesh_revision_==0U)resident_mesh_revision_=1U;
     if(ready_&&!make_geometry()) {
         region_mesh_=std::move(prior);
+        mesh_instance_cache_=std::move(prior_instance_cache);
+        resident_mesh_spans_=std::move(prior_spans);
+        resident_mesh_requirements_=std::move(prior_requirements);
+        resident_mesh_batch_candidate_=prior_candidate;
+        resident_mesh_batch_ready_=prior_ready;
+        resident_mesh_batch_active_=prior_active;
+        resident_mesh_revision_=prior_revision;
         error_=L"DX12 could not allocate decoded region geometry";
         return false;
     }
@@ -1203,6 +1316,13 @@ void Renderer::clear_decoded_region_geometry() {
     // even if no region vertex buffer was successfully uploaded yet.
     mesh_residency_.clear_instances();
     previous_mesh_draw_count_=0;
+    mesh_instance_cache_.clear();
+    resident_mesh_spans_.clear();
+    resident_mesh_requirements_.clear();
+    resident_mesh_batch_candidate_=false;
+    resident_mesh_batch_ready_=false;
+    resident_mesh_batch_active_=false;
+    if(++resident_mesh_revision_==0U)resident_mesh_revision_=1U;
     if(!region_mesh_)return;
     if(ready_)wait_for_gpu();
     // Clear server data immediately on disconnect. If restoring the local
@@ -1273,6 +1393,21 @@ void Renderer::toggle_landscape_view() noexcept {
 }
 void Renderer::draw() {
     if(!ready_ || !width_ || !height_) return;
+    // A failed residency preflight is recoverable: fence old readers and
+    // rebuild the full combined-scene fallback before recording this frame.
+    if(resident_mesh_batch_active_&&
+       !mesh_instance_cache_.can_draw_exact_instance_batch(
+           "__kami_live_region__",resident_mesh_revision_,
+           resident_mesh_requirements_)){
+        wait_for_gpu();
+        resident_mesh_batch_ready_=false;
+        resident_mesh_batch_active_=false;
+        if(!make_geometry()){
+            ready_=false;
+            if(error_.empty())error_=L"DX12 resident mesh fallback rebuild failed";
+            return;
+        }
+    }
     if(FAILED(allocator_->Reset()) ||
        FAILED(commands_->Reset(allocator_.Get(),pipeline_.Get()))) return;
 
@@ -1424,6 +1559,16 @@ void Renderer::draw() {
             commands_->IASetVertexBuffers(0,1,&vertex_view_);
             commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         }
+        if(resident_mesh_batch_active_){
+            if(!mesh_instance_cache_.record_instance_batch(
+                commands_.Get(),"__kami_live_region__",resident_mesh_revision_,
+                resident_mesh_requirements_)){
+                ready_=false;
+                error_=L"DX12 resident shadow batch lost its preflight";
+                return;
+            }
+            commands_->IASetVertexBuffers(0,1,&vertex_view_);
+        }
         if(!preview_mesh_&&!region_mesh_) {
             const auto& a=avatar_.state();
             constants[25]=graphics_.animate_avatar && a.motion==avatar::Motion::Idle?
@@ -1489,6 +1634,16 @@ void Renderer::draw() {
             commands_->IASetVertexBuffers(0,1,&vertex_view_);
             commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         }
+    if(resident_mesh_batch_active_){
+        if(!mesh_instance_cache_.record_instance_batch(
+            commands_.Get(),"__kami_live_region__",resident_mesh_revision_,
+            resident_mesh_requirements_)){
+            ready_=false;
+            error_=L"DX12 resident PBR batch lost its preflight";
+            return;
+        }
+        commands_->IASetVertexBuffers(0,1,&vertex_view_);
+    }
     if(!preview_mesh_&&!region_mesh_) {
         const auto& a=avatar_.state();
         constants[25]=graphics_.animate_avatar && a.motion==avatar::Motion::Idle?

@@ -22,6 +22,19 @@ int main() {
     if(Cache::validate_instance_source_spans(12,{Span{0,0,3}}))return 51;
     if(Cache::validate_instance_source_spans(12,{}))return 52;
     if(!Cache::validate_instance_source_spans(12,{Span{1,9,3},Span{2,0,3}}))return 53;
+    const std::vector<Span> owned_triangles{
+        Span{11,3,6},Span{12,12,3}};
+    if(!Cache::triangle_is_in_instance_spans(3,owned_triangles))return 57;
+    if(!Cache::triangle_is_in_instance_spans(6,owned_triangles))return 58;
+    if(!Cache::triangle_is_in_instance_spans(12,owned_triangles))return 59;
+    if(Cache::triangle_is_in_instance_spans(0,owned_triangles))return 60;
+    if(Cache::triangle_is_in_instance_spans(9,owned_triangles))return 61;
+    if(Cache::triangle_is_in_instance_spans(15,owned_triangles))return 62;
+    if(Cache::triangle_is_in_instance_spans(4,owned_triangles))return 63;
+    if(!Cache::within_resident_batch_draw_budget(1U)||
+       !Cache::within_resident_batch_draw_budget(Cache::kMaxResidentBatchDraws)||
+       Cache::within_resident_batch_draw_budget(Cache::kMaxResidentBatchDraws+1U)||
+       Cache::within_resident_batch_draw_budget(0U))return 64;
 
     // GitHub CI may lack a hardware GPU. This tests safe initialization
     // without claiming that a rendered Second Life world exists.
@@ -83,6 +96,23 @@ int main() {
         if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,0}}))return 38;
         if(cache.can_draw_exact_instance_batch("",1,{Requirement{17,3}}))return 39;
         if(cache.can_draw_exact_instance_batch("region",1,{}))return 40;
+        if(cache.record_instance_batch(nullptr,"region",1,
+             {Requirement{17,3},Requirement{18,3}}))return 73;
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> batch_allocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> batch_commands;
+        if(FAILED(device.native_device()->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(batch_allocator.GetAddressOf()))))return 74;
+        if(FAILED(device.native_device()->CreateCommandList(
+            0,D3D12_COMMAND_LIST_TYPE_DIRECT,batch_allocator.Get(),nullptr,
+            IID_PPV_ARGS(batch_commands.GetAddressOf()))))return 75;
+        if(cache.record_instance_batch(batch_commands.Get(),"region",2,
+             {Requirement{17,3},Requirement{18,3}}))return 76;
+        if(cache.record_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{19,3}}))return 77;
+        if(!cache.record_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{18,3}}))return 78;
+        if(FAILED(batch_commands->Close()))return 79;
         // Coverage is stricter than nonoverlap: a missing triangle must
         // never disappear when the per-object draw path is activated.
         using Span=kami::world::Dx12MeshBufferCache::InstanceSourceSpan;

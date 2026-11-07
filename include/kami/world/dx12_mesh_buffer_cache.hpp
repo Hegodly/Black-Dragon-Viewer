@@ -194,6 +194,14 @@ public:
         return true;
     }
 
+    // Keep CPU draw-call overhead bounded until the ExecuteIndirect path is
+    // implemented. Larger regions stay on the single combined-scene fallback.
+    static constexpr std::size_t kMaxResidentBatchDraws=256U;
+    [[nodiscard]] static bool within_resident_batch_draw_budget(
+        std::size_t count) noexcept {
+        return count>0U&&count<=kMaxResidentBatchDraws;
+    }
+
     // Exact preflight for switching a complete region mesh batch away from
     // the combined-scene draw. Reject stale revisions and mismatched vertex
     // counts: otherwise a successful residency lookup can silently omit
@@ -206,7 +214,8 @@ public:
         const std::string& region_key,
         std::uint64_t revision,
         const std::vector<InstanceDrawRequirement>& required) const noexcept {
-        if(region_key.empty()||required.empty())return false;
+        if(region_key.empty()||
+           !within_resident_batch_draw_budget(required.size()))return false;
         std::set<std::uint32_t> seen;
         for(const auto& item:required){
             if(!item.local_id||!item.vertex_count||
@@ -222,6 +231,23 @@ public:
         return true;
     }
 
+    // Record an entire resident batch only after one all-or-nothing preflight.
+    // No command is emitted for a stale, partial, oversized, or duplicate batch.
+    [[nodiscard]] bool record_instance_batch(
+        ID3D12GraphicsCommandList* commands,
+        const std::string& region_key,
+        std::uint64_t revision,
+        const std::vector<InstanceDrawRequirement>& required) const noexcept {
+        if(!commands||!can_draw_exact_instance_batch(region_key,revision,required))
+            return false;
+        for(const auto& item:required){
+            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            commands->IASetVertexBuffers(0,1,&resident->view);
+            commands->DrawInstanced(item.vertex_count,1,0,0);
+        }
+        return true;
+    }
+
     // Validate that source mesh spans form a non-overlapping subset of the
     // decoded scene. A resident GPU batch alone cannot prove this: duplicate
     // source ranges can produce double-drawn triangles after path switching.
@@ -230,6 +256,21 @@ public:
         std::size_t first_vertex=0;
         std::size_t vertex_count=0;
     };
+    // True only when one complete triangle is wholly owned by a resident
+    // instance span. The subtraction form avoids size_t end-offset overflow.
+    [[nodiscard]] static bool triangle_is_in_instance_spans(
+        std::size_t first_vertex,
+        const std::vector<InstanceSourceSpan>& spans) noexcept {
+        if(first_vertex%3U)return false;
+        for(const auto& span:spans){
+            if(span.first_vertex%3U||span.vertex_count<3U||
+               span.vertex_count%3U||first_vertex<span.first_vertex)continue;
+            const auto offset=first_vertex-span.first_vertex;
+            if(offset<=span.vertex_count-3U)return true;
+        }
+        return false;
+    }
+
     [[nodiscard]] static bool validate_instance_source_spans(
         std::size_t scene_vertex_count,
         const std::vector<InstanceSourceSpan>& spans) noexcept {

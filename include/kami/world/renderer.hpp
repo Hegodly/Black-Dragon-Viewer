@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <string>
+#include <vector>
 #include <windows.h>
 
 namespace kami::protocol::sim { class Circuit; }
@@ -145,10 +146,10 @@ public:
     // R90 diagnostics: report the actual DX12 residency allocation and
     // scene draw-count changes, not a claimed per-asset renderer count.
     [[nodiscard]] std::size_t gpu_mesh_cache_entries() const noexcept {
-        return mesh_gpu_cache_.size();
+        return mesh_gpu_cache_.size()+mesh_instance_cache_.size();
     }
     [[nodiscard]] std::uint64_t gpu_mesh_cache_bytes() const noexcept {
-        return mesh_gpu_cache_.allocated_bytes();
+        return mesh_gpu_cache_.allocated_bytes()+mesh_instance_cache_.allocated_bytes();
     }
     [[nodiscard]] std::size_t previous_mesh_draw_count() const noexcept {
         return previous_mesh_draw_count_;
@@ -415,7 +416,14 @@ private:
     UINT64 texture_copy_submitted_fence_=0U;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     MeshResidencyPlanner mesh_residency_{};
-    Dx12MeshBufferCache mesh_gpu_cache_{};
+    Dx12MeshBufferCache mesh_gpu_cache_{}; // authoritative combined-scene/fallback stream
+    Dx12MeshBufferCache mesh_instance_cache_{}; // independently fenced resident object streams
+    std::vector<Dx12MeshBufferCache::InstanceSourceSpan> resident_mesh_spans_;
+    std::vector<Dx12MeshBufferCache::InstanceDrawRequirement> resident_mesh_requirements_;
+    std::uint64_t resident_mesh_revision_=0;
+    bool resident_mesh_batch_candidate_=false;
+    bool resident_mesh_batch_ready_=false;
+    bool resident_mesh_batch_active_=false;
     std::uint64_t scene_gpu_revision_=0;
     std::size_t previous_mesh_draw_count_=0;
     Microsoft::WRL::ComPtr<ID3D12Resource> geometry_;
