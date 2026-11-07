@@ -586,8 +586,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
                 detail+=L" | AvatarAppearance packets "+
                     std::to_wstring(sl_circuit_.avatar_appearance_packets())+
                     L" | Own visual params "+
-                    std::to_wstring(sl_circuit_.own_avatar_visual_params())+
-                    L" | actual body NOT loaded";
+                    std::to_wstring(sl_circuit_.own_avatar_visual_params());
+                if(const auto* appearance=sl_circuit_.own_avatar_appearance()){
+                    detail+=L" | TE bytes "+
+                        std::to_wstring(appearance->texture_entry_size)+
+                        L" | appearance payload retained";
+                }else{
+                    detail+=L" | waiting for own appearance payload";
+                }
+                detail+=L" | Bento body/rig render still pending";
             }
             label(detail,
                   box(contentX+36,y+25,contentWidth-76,20),

@@ -14,7 +14,9 @@ int main(){
     kami::protocol::appearance::Observation out{};
     if(!kami::protocol::appearance::decode_avatar_appearance(p,out)||
        out.avatar_id[0]!=0x41U||out.visual_parameter_count!=3U||
-       !out.texture_entry_present||out.extra_data_present)return 1;
+       !out.texture_entry_present||out.extra_data_present||
+       out.texture_entry_size!=16U||out.texture_entry[15]!=0x11U||
+       out.visual_parameters[0]!=1U||out.visual_parameters[2]!=3U)return 1;
     auto extra=p;extra.body.push_back(0xFFU);
     if(!kami::protocol::appearance::decode_avatar_appearance(extra,out)||
        !out.extra_data_present)return 2;

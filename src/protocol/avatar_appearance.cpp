@@ -27,11 +27,14 @@ bool decode_avatar_appearance(const lludp::Packet& packet,
         found.texture_entry_present=std::any_of(
             b.begin()+at,b.begin()+at+16U,
             [](std::uint8_t x){return x!=0U;});
+    found.texture_entry_size=static_cast<std::uint16_t>(entry_bytes);
+    std::copy_n(b.begin()+at,entry_bytes,found.texture_entry.begin());
     at+=entry_bytes;
     if(at>=b.size())return false;
     const auto count=b[at++];
     if(static_cast<std::size_t>(count)>b.size()-at)return false;
     found.visual_parameter_count=count;
+    std::copy_n(b.begin()+at,count,found.visual_parameters.begin());
     at+=count;
     // Newer SL templates may append fields; do not pretend to decode them.
     found.extra_data_present=(at!=b.size());

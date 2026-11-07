@@ -574,8 +574,11 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             if(avatar_appearance_packets_<UINT_MAX)++avatar_appearance_packets_;
             std::array<std::uint8_t,16> self_id{};
             if(parse_uuid(login_.handoff.agent_id,self_id)&&
-               avatar.avatar_id==self_id)
+               avatar.avatar_id==self_id){
                 own_avatar_visual_params_=avatar.visual_parameter_count;
+                own_avatar_appearance_=avatar;
+                own_avatar_appearance_valid_=true;
+            }
         }
     }
     if(world.kind==worldwire::Kind::LayerData){
@@ -1012,6 +1015,8 @@ void Circuit::stop() noexcept {
     movement_control_packets_sent_=0;
     nearby_chat_.clear();
     sent_chat_packets_=avatar_appearance_packets_=own_avatar_visual_params_=0;
+    own_avatar_appearance_={};
+    own_avatar_appearance_valid_=false;
     last_chat_sent_={};
     last_controls_at_={};
     layer_packets_=object_update_packets_=invalid_world_packets_=0;

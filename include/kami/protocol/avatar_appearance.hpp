@@ -12,6 +12,9 @@ struct Observation {
     bool texture_entry_present=false;
     bool trial=false;
     bool extra_data_present=false;
+    std::uint16_t texture_entry_size=0;
+    std::array<std::uint8_t,4096> texture_entry{};
+    std::array<std::uint8_t,255> visual_parameters{};
 };
 [[nodiscard]] bool decode_avatar_appearance(const lludp::Packet& packet,
                                              Observation& out) noexcept;

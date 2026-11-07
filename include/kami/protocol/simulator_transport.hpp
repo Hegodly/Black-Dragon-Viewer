@@ -98,6 +98,11 @@ public:
     [[nodiscard]] std::uint32_t avatar_appearance_packets() const noexcept {
         return avatar_appearance_packets_;
     }
+    // Exact bounded appearance payload for our authenticated agent only.
+    // This is decoded source data, not yet a rendered Bento avatar.
+    [[nodiscard]] const appearance::Observation* own_avatar_appearance() const noexcept {
+        return own_avatar_appearance_valid_?&own_avatar_appearance_:nullptr;
+    }
     [[nodiscard]] std::uint32_t last_controls_sent() const noexcept {
         return last_controls_sent_;
     }
@@ -314,6 +319,8 @@ private:
     std::vector<ChatLine> nearby_chat_;
     std::uint32_t sent_chat_packets_=0;
     std::uint32_t avatar_appearance_packets_=0,own_avatar_visual_params_=0;
+    appearance::Observation own_avatar_appearance_{};
+    bool own_avatar_appearance_valid_=false;
     std::chrono::steady_clock::time_point last_chat_sent_{};
     std::chrono::steady_clock::time_point last_controls_at_{};
     std::uint32_t layer_packets_=0;
