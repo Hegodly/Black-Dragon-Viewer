@@ -280,22 +280,21 @@ public:
         const std::vector<InstanceDrawRequirement>& required) const noexcept {
         if(region_key.empty()||
            !within_resident_batch_draw_budget(required.size()))return false;
-        // This preflight runs every frame. The batch is capped at 256, so use
-        // bounded stack storage instead of allocating one tree node per mesh.
-        std::array<std::uint32_t,kMaxResidentBatchDraws> seen_ids{};
-        for(std::size_t i=0U;i<required.size();++i){
-            const auto& item=required[i];
-            if(!item.local_id||!item.vertex_count)return false;
-            seen_ids[i]=item.local_id;
+        // Renderer requirements are sorted once when the decoded scene is
+        // accepted. Enforce that invariant here so this per-frame preflight
+        // validates uniqueness in one linear pass without scratch sorting.
+        std::uint32_t previous_id=0U;
+        for(const auto& item:required){
+            if(!item.local_id||!item.vertex_count||
+               item.local_id<=previous_id)return false;
+            previous_id=item.local_id;
             const auto* resident=find_instance(region_key,item.local_id);
             if(!resident||!resident->resource||resident->generation!=generation_||
                resident->revision!=revision||
                !valid_instance_vertex_view(resident->view,item.vertex_count))
                 return false;
         }
-        auto seen_end=seen_ids.begin()+required.size();
-        std::sort(seen_ids.begin(),seen_end);
-        return std::adjacent_find(seen_ids.begin(),seen_end)==seen_end;
+        return true;
     }
 
     // Record an entire resident batch only after one all-or-nothing preflight.

@@ -137,6 +137,10 @@ int main() {
         if(cache.can_draw_exact_instance_batch("region",1,{Requirement{17,0}}))return 38;
         if(cache.can_draw_exact_instance_batch("",1,{Requirement{17,3}}))return 39;
         if(cache.can_draw_exact_instance_batch("region",1,{}))return 40;
+        const std::vector<Requirement> unsorted_requirements{
+            Requirement{18,3},Requirement{17,3}};
+        if(cache.can_draw_exact_instance_batch(
+            "region",1,unsorted_requirements))return 118;
         std::vector<Requirement> oversized_batch(Cache::kMaxResidentBatchDraws+1U,
                                                    Requirement{17,3});
         if(cache.can_draw_exact_instance_batch("region",1,oversized_batch))return 100;
