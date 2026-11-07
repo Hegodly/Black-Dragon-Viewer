@@ -102,6 +102,16 @@ int run_primitive_tests(){
             {{79U,volume}},{},128.f,140.f,35.f);
         if(cut.root_shapes!=1U||cut.scene.vertices.size()>=hollow.scene.vertices.size())
             return 78;
+        // A partial hollow profile needs two longitudinal radial walls.
+        // Twelve path segments × two cut planes × two quads × six vertices.
+        if(cut.scene.vertices.size()<144U)return 81;
+        // The same partial profile without a hole closes to the centerline.
+        volume.volume_params[16U]=0x00U;
+        volume.volume_params[21U]=0U;volume.volume_params[22U]=0U;
+        const auto solid_cut=world::build_live_primitive_geometry(
+            {{79U,volume}},{},128.f,140.f,35.f);
+        if(solid_cut.root_shapes!=1U||solid_cut.scene.vertices.size()<144U||
+           solid_cut.scene.vertices.size()>=cut.scene.vertices.size())return 82;
         // High 12 full ObjectUpdate uses a distinct 23-byte field layout.
         Transform full_volume{80U,128.f,140.f,35.f,2.f,2.f,2.f};
         full_volume.primitive=Kind::Cylinder;
