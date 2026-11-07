@@ -115,6 +115,21 @@ int main(int argc,char** argv){
     if(!ok.accepted()||ok.circuit_code!=190345234U||
        ok.handoff.simulator_port!=13000||
        ok.handoff.agent_id!="12345678-90ab-4cde-8fab-000000000001")return 4;
+    const auto root_folder=wrap(
+        m("login","true")+m("agent_id","12345678-90ab-4cde-8fab-000000000001")+
+        m("session_id","12345678-90ab-4cde-8fab-000000000002")+
+        m("sim_ip","sim1234.agni.lindenlab.com")+m("sim_port","13000","int")+
+        m("circuit_code","190345234","int")+
+        m("seed_capability","https://sim1234.agni.lindenlab.com:12345/cap/abc")+
+        "<member><name>inventory-skeleton</name><value><array><data><value><struct>"+
+        m("folder_id","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")+
+        m("parent_id","00000000-0000-0000-0000-000000000000")+
+        m("name","My Inventory")+
+        "</struct></value></data></array></value></member>");
+    const auto rooted=parse_login_xmlrpc(root_folder);
+    if(!rooted.accepted()||
+       rooted.inventory_root_id!="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        return 31;
     // HTTP accepts up to 8 MiB, including large optional inventory data.
     const auto large_inventory=wrap(
         m("login","true")+m("agent_id","12345678-90ab-4cde-8fab-000000000001")+
