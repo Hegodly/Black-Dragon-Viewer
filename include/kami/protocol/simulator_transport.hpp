@@ -418,6 +418,9 @@ private:
     static constexpr std::size_t kMaxWorldMeshTriangles=24000000U;
     bool maximum_world_detail_=false;
     std::map<std::string,mesh::LOD> loaded_meshes_;
+    // Current nearby mesh demand. Late worker completions outside this set
+    // are discarded before decode/cache admission.
+    std::set<std::string> mesh_desired_ids_;
     std::size_t loaded_mesh_triangle_count_=0U;
     std::size_t mesh_download_count_=0,mesh_failure_count_=0;
     std::chrono::steady_clock::time_point mesh_last_start_{};
