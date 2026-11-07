@@ -162,5 +162,21 @@ int main(){
         return 45;
     const auto promoted=queue.next_gpu_upload(64U);
     if(!promoted||promoted->id!=a)return 46;
+    // Keep local worker-launch failures on the same bounded retry schedule
+    // as transient HTTP failures; backoff saturates instead of overflowing.
+    if(Scheduler::retry_delay_seconds(0U)!=1U||
+       Scheduler::retry_delay_seconds(1U)!=2U||
+       Scheduler::retry_delay_seconds(2U)!=4U||
+       Scheduler::retry_delay_seconds(3U)!=8U||
+       Scheduler::retry_delay_seconds(99U)!=8U)return 47;
+    queue.clear();
+    if(!queue.request(c,Kind::VisibleMesh,1.f,true,64U))return 48;
+    const auto dispatch=queue.next_download();
+    if(!dispatch||dispatch->id!=c||
+       !queue.download_finished(c,0U,false)||
+       !queue.find(c)->retryable_fetch_failure||
+       !queue.retry_failed(c))return 49;
+    const auto retried=queue.next_download();
+    if(!retried||retried->id!=c)return 50;
     return 0;
 }

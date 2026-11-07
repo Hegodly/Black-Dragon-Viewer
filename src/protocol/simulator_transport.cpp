@@ -265,7 +265,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
                    job->retry_count<load::Scheduler::kMaxTransientRetries&&
                    mesh_retry_after_.size()<128U){
                     const auto delay=std::chrono::seconds(
-                        1U<<std::min(job->retry_count,3U));
+                        load::Scheduler::retry_delay_seconds(job->retry_count));
                     mesh_retry_after_.insert_or_assign(
                         result.id,std::chrono::steady_clock::now()+delay);
                 }
@@ -330,8 +330,20 @@ void Circuit::maybe_fetch_mesh() noexcept {
                 });
             launched=true;
         }catch(...){
+            // A local async-launch/resource failure is transient too. Mark
+            // the scheduler item retryable and use the same bounded backoff
+            // as HTTP transport failures instead of leaving it Failed forever.
             (void)mesh_scheduler_.download_finished(
                 selected->id,0U,false);
+            const auto* failed=mesh_scheduler_.find(selected->id);
+            if(failed&&failed->retryable_fetch_failure&&
+               failed->retry_count<load::Scheduler::kMaxTransientRetries&&
+               mesh_retry_after_.size()<128U){
+                const auto delay=std::chrono::seconds(
+                    load::Scheduler::retry_delay_seconds(failed->retry_count));
+                mesh_retry_after_.insert_or_assign(
+                    selected->id,std::chrono::steady_clock::now()+delay);
+            }
             ++mesh_failure_count_;
         }
     }

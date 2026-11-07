@@ -35,6 +35,12 @@ public:
     static constexpr unsigned kMaxConcurrentDownloads=8U;
     static constexpr unsigned kMaxConcurrentDecodes=4U;
     static constexpr unsigned kMaxTransientRetries=3U;
+    // Exponential quiet period shared by network and local worker-launch retries.
+    [[nodiscard]] static constexpr unsigned retry_delay_seconds(
+        unsigned retry_count) noexcept {
+        return 1U << (retry_count<kMaxTransientRetries?retry_count:
+                      kMaxTransientRetries);
+    }
     static constexpr std::uint32_t kMaxBytesPerAsset=64U*1024U*1024U;
     static constexpr std::uint32_t kDefaultUploadBudget=4U*1024U*1024U;
     // No authenticated network data? Do not schedule any work.
