@@ -46,7 +46,7 @@ std::vector<std::size_t> filter_entries(
     };
     for(std::size_t i=0;i<entries.size();++i)
         if(entries[i].parent_id==parent_folder_id&&
-           (asset_type_filter<0||entries[i].folder||entries[i].asset_type==asset_type_filter)&&
+           (asset_type_filter<0||(!entries[i].folder&&entries[i].asset_type==asset_type_filter))&&
            (matches(entries[i].name)||matches(entries[i].description)))
             result.push_back(i);
     std::stable_sort(result.begin(),result.end(),[&](std::size_t a,std::size_t b){
