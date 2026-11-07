@@ -24,6 +24,10 @@ struct Transform {
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     std::string mesh_asset_id; // authenticated ExtraParams id, NOT downloaded
     bool volume_params_seen=false; // full 23-byte SL path/profile available
+    // Preserve the exact simulator path/profile bytes, including cuts,
+    // taper, twist, hollow and curve settings. Geometry must tessellate
+    // these values rather than guessing from PrimitiveKind alone.
+    std::array<std::uint8_t,23U> volume_params{};
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
     std::string default_texture_asset_id; // UUID from verified server TE
     std::array<std::string,32U> face_texture_asset_ids{}; // face-specific TE UUIDs
