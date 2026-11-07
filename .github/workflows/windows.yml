@@ -217,9 +217,9 @@ jobs:
           # A successful WARP/CTest run does not establish live SL feature parity.
           New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
           @'
-          KAMI LIVE WORLD INTEGRATION TEST BUILD — NOT THE COMPLETE VIEWER
+          KAMI NATIVE VIEWER CANDIDATE — NOT THE COMPLETE VIEWER
 
-          This executable is an incomplete independent KAMI workspace.
+          This archive contains the independent KAMIViewer.exe application candidate.
           DX12 smoke tests and synthetic protocol tests do not verify a
           populated Second Life region, full avatar, inventory or messaging.
           Do not label, announce, or distribute it as a finished KAMI viewer.
@@ -280,33 +280,21 @@ jobs:
           if ($manifest.application -ne 'KAMIViewer.exe') {
             throw 'Release manifest must target the native KAMIViewer.exe'
           }
-          # An actual release can be enabled after the feature evidence is
-          # verified; do not permanently hardcode release_allowed=false.
           if ($manifest.release_allowed -eq $true) {
-            if (@($manifest.release_blockers).Count -ne 0) {
-              throw 'Release cannot be enabled while blockers remain'
-            }
+            if (@($manifest.release_blockers).Count -ne 0) { throw 'Release cannot be enabled while blockers remain' }
             foreach ($entry in $manifest.features.PSObject.Properties) {
-              if ($entry.Value.status -ne 'verified') {
-                throw "Release requires verified feature: $($entry.Name)"
-              }
+              if ($entry.Value.status -ne 'verified') { throw "Release requires verified feature: $($entry.Name)" }
             }
-            if (!(Test-Path 'docs/KAMI_LIVE_SL_ACCEPTANCE.md')) {
-              throw 'Missing documented authenticated Second Life acceptance'
-            }
+            if (!(Test-Path 'docs/KAMI_LIVE_SL_ACCEPTANCE.md')) { throw 'Missing documented authenticated Second Life acceptance' }
             $acceptance = Get-Content 'docs/KAMI_LIVE_SL_ACCEPTANCE.md' -Raw
-            if ($acceptance -notmatch 'LIVE_SL_ACCEPTANCE: PASS') {
-              throw 'Live SL acceptance has not been recorded as passed'
-            }
+            if ($acceptance -notmatch 'LIVE_SL_ACCEPTANCE: PASS') { throw 'Live SL acceptance has not been recorded as passed' }
           } elseif ($manifest.release_allowed -ne $false) {
             throw 'Release permission must be an explicit boolean'
           }
           $required = @('ui','dx12_world','terrain','mesh_residency','sl_login','sl_transport','avatar','inventory','messaging','read_receipts','camera','graphics','creator_studio','photo_studio','smart_sort','accessibility','hotfixes')
           foreach ($feature in $required) {
             if (!$manifest.features.PSObject.Properties[$feature]) { throw "Missing feature gate $feature" }
-            if ($manifest.features.$feature.status -notin @('unverified','partial','verified')) {
-              throw "Invalid feature status $feature"
-            }
+            if ($manifest.features.$feature.status -notin @('unverified','partial','verified')) { throw "Invalid feature status $feature" }
           }
           $zip = 'dist/KAMI-Native-Viewer-Candidate.zip'
           if (!(Test-Path $zip)) { throw 'Native viewer archive missing' }
@@ -314,21 +302,9 @@ jobs:
           $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
           try {
             $names = @($archive.Entries | ForEach-Object FullName)
-            if (!($names | Where-Object { $_.EndsWith('/KAMIViewer.exe') })) {
-              throw 'Native viewer absent from ZIP'
-            }
-            if ($names | Where-Object { $_.EndsWith('/KAMI-DX12-Smoke.exe') }) {
-              throw 'Diagnostic executable found in ZIP'
-            }
-            $executables = @($names | Where-Object { $_ -match '(?i)\.exe
-          } finally { $archive.Dispose() }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: KAMI-Native-Viewer-Candidate
-          path: dist/KAMI-Native-Viewer-Candidate.zip
-          retention-days: 14
-
- })
+            if (!($names | Where-Object { $_.EndsWith('/KAMIViewer.exe') })) { throw 'Native viewer absent from ZIP' }
+            if ($names | Where-Object { $_.EndsWith('/KAMI-DX12-Smoke.exe') }) { throw 'Diagnostic executable found in ZIP' }
+            $executables = @($names | Where-Object { $_ -match '[.]exe$' })
             if ($executables.Count -ne 1 -or !$executables[0].EndsWith('/KAMIViewer.exe')) {
               throw 'Candidate archive must contain only the actual KAMIViewer.exe; test and diagnostic executables are forbidden.'
             }
@@ -338,4 +314,3 @@ jobs:
           name: KAMI-Native-Viewer-Candidate
           path: dist/KAMI-Native-Viewer-Candidate.zip
           retention-days: 14
-

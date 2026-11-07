@@ -8,16 +8,16 @@ The deliverable is the independent Windows `KAMIViewer.exe` with live Second Lif
 
 | Stage | Depends on | Acceptance requirement | Current status |
 | --- | --- | --- | --- |
-| Native shell and workspaces | Original core | Original KAMI window, navigation, input and native UI | Partial |
-| Login and simulator transport | Native shell | Authenticated region handshake, stable LLUDP and CAPS | Partial |
-| World geometry and DX12 residency | Transport | Complete linked meshes, opaque/alpha geometry, textures, terrain and PBR without unexplained omissions | Blocked |
-| Avatar and movement | Transport, world | Server appearance, outfit, attachments and authoritative movement | Blocked |
-| Inventory | Transport | Remote folders, permissions and server-side actions | Blocked |
-| Messaging and read receipts | Transport | Live IM/group/local chat and interoperable delivery/read state | Blocked |
-| Camera and graphics | World, avatar | Controls and graphics settings applied to the live viewport without regressions | Partial |
-| Creator/Photo Studio | World, inventory | Supported upload operations and captured live pixels | Partial |
-| Smart Sort, accessibility and hotfixes | Inventory, shell | User-visible integrated operations and safe updates | Partial |
-| Release packaging | All above | Native viewer acceptance, CTest, forced WARP, artifact inspection and authenticated in-world verification | Blocked |
+| Native shell and workspaces | Original core | Original KAMI window, navigation, input and native UI | Partial / unverified; not live-accepted |
+| Login and simulator transport | Native shell | Authenticated region handshake, stable LLUDP and CAPS | Partial / unverified; not live-accepted |
+| World geometry and DX12 residency | Transport | Complete linked meshes, opaque/alpha geometry, textures, terrain and PBR without unexplained omissions | Blocked; live acceptance missing |
+| Avatar and movement | Transport, world | Server appearance, outfit, attachments and authoritative movement | Blocked; live acceptance missing |
+| Inventory | Transport | Remote folders, permissions and server-side actions | Blocked; live acceptance missing |
+| Messaging and read receipts | Transport | Live IM/group/local chat and interoperable delivery/read state | Blocked; live acceptance missing |
+| Camera and graphics | World, avatar | Controls and graphics settings applied to the live viewport without regressions | Partial / unverified; not live-accepted |
+| Creator/Photo Studio | World, inventory | Supported upload operations and captured live pixels | Partial / unverified; not live-accepted |
+| Smart Sort, accessibility and hotfixes | Inventory, shell | User-visible integrated operations and safe updates | Partial / unverified; not live-accepted |
+| Release packaging | All above | Native viewer acceptance, CTest, forced WARP, artifact inspection and authenticated in-world verification | Blocked; live acceptance missing |
 
 ## Branch inventory and promotion policy
 
