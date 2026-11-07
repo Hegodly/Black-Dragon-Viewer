@@ -151,6 +151,24 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(
           compressed(cbox),out)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Box)return 16;
+    // A supported High 13 circular sweep must survive the object classifier:
+    // cuts + circular hollow + neutral non-emitted path modifiers.
+    auto swept=cbox;
+    auto* shape_data=swept.data()+swept.size()-23U;
+    shape_data[0]=0x10U;
+    shape_data[3]=0x50U;shape_data[4]=0xc3U;
+    shape_data[5]=100U;shape_data[6]=100U;
+    for(unsigned i=7U;i<=15U;++i)shape_data[i]=128U;
+    shape_data[16]=0x10U;
+    shape_data[19]=0x50U;shape_data[20]=0xc3U;
+    shape_data[21]=0x20U;shape_data[22]=0x4eU;
+    if(objectspatial::classify_simple_shape(
+           std::span<const std::uint8_t>(shape_data,23U))!=
+           objectspatial::PrimitiveKind::Cylinder||
+       !objectspatial::decode_compressed_transforms(
+           compressed(swept),out)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Cylinder)
+        return 17;
     auto scaled_shape=cbox;
     scaled_shape[scaled_shape.size()-23U+5U]=50U;
     scaled_shape[scaled_shape.size()-23U+6U]=150U;
