@@ -8,7 +8,7 @@ float cut(std::uint8_t lo,std::uint8_t hi) noexcept {
     const auto wire=static_cast<std::uint16_t>(
         static_cast<std::uint16_t>(lo)|
         (static_cast<std::uint16_t>(hi)<<8U));
-    return std::min(1.f,static_cast<float>(wire)*0.00002f);
+    return static_cast<float>(wire)*0.00002f;
 }
 }
 bool decode(std::span<const std::uint8_t> b,bool full_layout,
@@ -39,7 +39,9 @@ bool decode(std::span<const std::uint8_t> b,bool full_layout,
     p.profile_begin=cut(b[profile_begin],b[profile_begin+1U]);
     p.profile_end=cut(b[profile_begin+2U],b[profile_begin+3U]);
     p.hollow=cut(b[profile_begin+4U],b[profile_begin+5U]);
-    if(p.path_begin>p.path_end||p.profile_begin>p.profile_end||
+    if(p.path_begin>1.f||p.path_end>1.f||p.profile_begin>1.f||
+       p.profile_end>1.f||p.hollow>1.f||
+       p.path_begin>p.path_end||p.profile_begin>p.profile_end||
        p.path_end-p.path_begin<.0002f||
        p.profile_end-p.profile_begin<.0002f||
        !std::isfinite(p.scale_x)||!std::isfinite(p.scale_y))
