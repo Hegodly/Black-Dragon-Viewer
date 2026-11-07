@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "application": "KAMIViewer.exe",
+  "branch": "feature/kami-live-viewer-integration",
+  "release_allowed": false,
+  "release_blockers": [
+    "No authenticated live SL populated-region end-to-end acceptance",
+    "Avatar appearance, inventory, messaging and read receipts lack proven live service integration",
+    "WARP/synthetic CI does not validate live simulator correctness"
+  ],
+  "features": {
+    "ui": {
+      "status": "partial",
+      "dependencies": [],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "dx12_world": {
+      "status": "partial",
+      "dependencies": [
+        "sl_transport"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "terrain": {
+      "status": "partial",
+      "dependencies": [
+        "dx12_world"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "mesh_residency": {
+      "status": "partial",
+      "dependencies": [
+        "dx12_world",
+        "sl_transport"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "sl_login": {
+      "status": "partial",
+      "dependencies": [],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "sl_transport": {
+      "status": "partial",
+      "dependencies": [],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "avatar": {
+      "status": "unverified",
+      "dependencies": [
+        "sl_login",
+        "sl_transport",
+        "mesh_residency"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "inventory": {
+      "status": "unverified",
+      "dependencies": [
+        "sl_login",
+        "sl_transport"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "messaging": {
+      "status": "unverified",
+      "dependencies": [
+        "sl_login",
+        "sl_transport"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "read_receipts": {
+      "status": "unverified",
+      "dependencies": [
+        "messaging"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "camera": {
+      "status": "partial",
+      "dependencies": [],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "graphics": {
+      "status": "partial",
+      "dependencies": [],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "creator_studio": {
+      "status": "unverified",
+      "dependencies": [
+        "ui",
+        "mesh_residency"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "photo_studio": {
+      "status": "unverified",
+      "dependencies": [
+        "ui",
+        "dx12_world"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "smart_sort": {
+      "status": "unverified",
+      "dependencies": [
+        "inventory"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "accessibility": {
+      "status": "unverified",
+      "dependencies": [],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    },
+    "hotfixes": {
+      "status": "unverified",
+      "dependencies": [
+        "ui"
+      ],
+      "acceptance": "Requires native KAMIViewer executable test plus real SL session verification; synthetic tests alone are insufficient"
+    }
+  }
+}
