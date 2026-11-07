@@ -295,7 +295,7 @@ LRESULT Window::handle(UINT message, WPARAM wp, LPARAM lp) {
     case WM_KEYDOWN:
         if(page_==3){
             if(wp=='R'){start_inventory_refresh();return 0;}
-            if(wp=='G'){inventory_group_creators_=!inventory_group_creators_;InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
+            if(wp=='G'){inventory_group_creators_=!inventory_group_creators_;if(inventory_group_creators_)inventory_sort_mode_=1U;InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
             if(wp==VK_ESCAPE){inventory_search_focused_=false;inventory_search_.clear();InvalidateRect(hwnd_,nullptr,FALSE);return 0;}
             if(wp==VK_BACK&&!inventory_search_focused_){
                 const auto root=sl_circuit_.inventory_root_id();
