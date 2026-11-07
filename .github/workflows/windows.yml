@@ -1,0 +1,317 @@
+name: KAMI Original Core Windows
+on:
+  push:
+    branches:
+      - feature/kami-original-core
+      - feature/kami-live-viewer-integration
+      - fix/kami-sl-login-http400-protocol-fields
+      - fix/kami-login-xmlrpc-types-timeouts-response-20261103
+      - fix/kami-official-login-identifier-bridge-20261103
+      - fix/kami-r3-visible-login-response-diagnostics-20261103
+      - fix/kami-r4-official-xmlrpc-wire-20261103
+      - fix/kami-r5-login-transport-stage-diagnostics-20261103
+      - feature/kami-r6-caps-seed-eventqueue-20261103
+      - feature/kami-r7-live-region-metadata-event-poll-20261103
+      - feature/kami-r8-live-event-types-world-wire-20261103
+      - feature/kami-r9-authenticated-water-dx12-20261103
+      - fix/kami-r9-eventqueue-unblock-20261103
+      - feature/kami-r10-live-agentupdate-world-stream-20261103
+      - feature/kami-r11-typed-world-intake-20261103
+      - feature/kami-r12-land-dct-and-dx12-20261103
+      - fix/kami-r12-visible-terrain-camera-20261103
+      - fix/kami-r13-terrain-seam-stitch-20261103
+      - release/kami-r13-unified-20261103
+      - release/kami-r14-seven-in-one-20261103
+      - release/kami-r15-integrated-live-controls-20261103
+      - release/kami-r16-live-avatar-placeholder-20261104
+      - fix/kami-r17-visible-avatar-turning-20261104
+      - release/kami-r18-seven-system-diagnostics-20261104
+      - release/kami-r19-inworld-object-bounds-20261104
+      - release/kami-r20-live-world-graphics-20261104
+      - release/kami-r21-visible-landscape-fix-20261104
+      - release/kami-r22-true-terrain-dct-20261104
+      - release/kami-r23-full-object-world-intake-20261104
+      - release/kami-r24-object-intake-audit-20261104
+      - release/kami-r25-request-missing-roots-20261104
+      - release/kami-r26-linked-primitives-20261104
+      - release/kami-r27-root-recovery-diagnostics-20261104
+      - release/kami-r27-r32-unified-20261104
+      - release/kami-r33-hierarchy-mesh-intake-20261104
+      - release/kami-r34-mesh-download-foundation-20261104
+      - release/kami-r36-consolidated-audit-20261104
+      - release/kami-r37-caps-seed-recovery-20261104
+      - release/kami-r38-mesh-telemetry-20261104
+      - release/kami-r39-cdn-caps-20261104
+      - release/kami-r40-caps-failure-classification-20261104
+      - release/kami-r41-legacy-mesh-cdn-20261104
+      - release/kami-r42-mesh-discovery-20261104
+      - release/kami-r43-full-object-shape-audit-20261104
+      - feature/kami-official-sl-bridge-20261104
+      - feature/kami-official-sl-bridge-20261104
+      - fix/kami-r45-mesh-alias-official-bridge-20261104
+      - fix/kami-r46-object-retention-recovery-20261105
+      - fix/kami-r47-binary-llsd-mesh-20261105
+      - feature/kami-r48-dx12-mesh-texture-preview-20261105
+      - fix/kami-r49-nearest-texture-streaming-20261105
+      - opt/kami-r50-dx12-streaming-cpu-20261105
+      - fix/kami-r51-gpu-synchronization-geometry-coalescing-20261105
+      - fix/kami-r52-cross-system-audit-20261105
+      - test/kami-r52-forced-warp-virtual-gpu-20261105
+      - feature/kami-r53-prim-material-dx12-20261105
+      - feature/kami-r54-official-llprimitive-material-bridge-20261105
+      - fix/kami-r55-mesh-lod-recovery-20261105
+      - fix/kami-r56-texture-coverage-recovery-20261105
+      - fix/kami-r57-texture-alpha-pixel-verification-20261105
+      - feature/kami-r58-live-gltf-pbr-20261105
+      - feature/kami-r59-pbr-environment-terrain-streaming-20261105
+      - fix/kami-r60-standard-material-envelope-20261105
+      - fix/kami-r61-material-envelope-formats-20261105
+      - feature/kami-r62-4080-primitives-20261105
+      - fix/kami-r63-density-pbr-priority-20261105
+      - fix/kami-r64-mesh-priority-loading-20261105
+      - fix/kami-r65-2048-asset-recovery-20261105
+      - diagnostics/kami-r66-mesh-visibility-20261105
+      - fix/kami-r67-mesh-lod-fallback-20261105
+      - fix/kami-r68-priority-parent-recovery-20261105
+      - diagnostics/kami-r69-missing-geometry-breakdown-20261105
+      - feature/kami-sl-login-http-diagnostics
+      - diagnostics/kami-r70-geometry-pipeline-20261105
+      - feature/kami-r71-world-render-overhaul
+      - feature/kami-r72-black-dragon-geometry-port
+      - feature/kami-r77-world-completeness
+      - feature/kami-r78-mesh-budget-optimization
+      - feature/kami-r79-adaptive-mesh-budget
+      - feature/kami-r80-two-pass-mesh-scheduler
+      - feature/kami-r81-landscape-mesh-fairness
+      - feature/kami-r84-r81-stable-base
+      - feature/kami-r85-complex-mesh-coverage
+      - feature/kami-r86-visibility-diagnostics
+      - feature/kami-r87-persistent-world-geometry
+      - feature/kami-r88-dx12-renderer-migration
+      - feature/kami-r89-dx12-renderer-phase2
+      - feature/kami-live-simulator-udp-and-login-ui
+      - feature/kami-dx12-only-live-region-bridge
+      - feature/kami-sl-xmlrpc-login-and-sim-handshake
+      - feature/kami-creator-obj-import-reliability
+      - feature/kami-live-sl-connectivity-foundations
+      - feature/kami-eight-axis-chest-twist-butt-depth
+      - feature/kami-rigged-avatar-physics-foundation
+      - feature/kami-avatar-body-physics-dx12
+      - feature/kami-avatar-locomotion-dx12
+      - feature/kami-native-messenger-offline-preview
+      - feature/kami-original-creator-photo-studios
+      - feature/kami-native-feature-restoration
+      - feature/kami-native-camera-system
+  pull_request:
+    branches:
+      - feature/kami-live-viewer-integration
+      - release/kami-r42-mesh-discovery-20261104
+      - release/kami-r43-full-object-shape-audit-20261104
+  workflow_dispatch:
+
+jobs:
+  source-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify independent source tree
+        run: python3 tests/source_boundary.py
+      - name: Test unified integration policy and feature dependency graph
+        run: |
+          python3 -m unittest discover -s tests -p "test_kami_unified_integration.py" -v
+          python3 tools/kami_unified_integration.py validate-manifest
+  windows:
+    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'kami/promotion-')
+    needs: source-boundary
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure original native KAMI
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Validate KAMI feature dependency graph
+        shell: pwsh
+        run: ./tests/validate_feature_manifest.ps1
+      - name: Build actual KAMI viewer application
+        run: cmake --build build --config Release --target KAMIViewer --parallel
+      - name: Build regression and DX12 smoke test targets
+        # CI requires these executables for the login fixture, CTest and WARP.
+        # Keep the viewer above as the separately verified application target.
+        run: cmake --build build --config Release --parallel
+      - name: Validate synthetic Second Life XML-RPC request
+        shell: pwsh
+        run: |
+          # Synthetic fixture only; never expose real login credentials.
+          $fixture = & "$PWD/build/Release/kami_sl_login_tests.exe" --emit-synthetic-login-xml
+          if ($LASTEXITCODE -ne 0) { throw "Could not generate synthetic XML-RPC request" }
+          $settings = [System.Xml.XmlReaderSettings]::new()
+          $settings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
+          $settings.XmlResolver = $null
+          $reader = [System.Xml.XmlReader]::Create(
+            [System.IO.StringReader]::new($fixture), $settings)
+          $xml = [System.Xml.XmlDocument]::new()
+          $xml.XmlResolver = $null
+          try {
+            $xml.Load($reader)
+            $method = $xml.SelectSingleNode("/methodCall/methodName")
+            $struct = $xml.SelectSingleNode("/methodCall/params/param/value/struct")
+            if ($null -eq $method -or $method.InnerText -ne "login_to_simulator" -or
+                $null -eq $struct) { throw "Malformed XML-RPC method or struct" }
+            $fields = @{}
+            foreach($member in $struct.SelectNodes("member")) {
+              $name = $member.SelectSingleNode("name").InnerText
+              if ($fields.ContainsKey($name)) { throw "Duplicate XML-RPC key" }
+              $fields[$name] = $member
+            }
+            foreach($key in @("first","last","passwd","id0","mac",
+                              "channel","version","platform","options")) {
+              if (!$fields.ContainsKey($key)) { throw "Missing XML-RPC field: $key" }
+            }
+            if ($null -eq $fields["options"].SelectSingleNode("value/array/data")) {
+              throw "Options must be an XML-RPC array"
+            }
+            if ($null -eq $fields["agree_to_tos"].SelectSingleNode("value/boolean")) {
+              throw "ToS flag must be an XML-RPC boolean"
+            }
+          } finally { $reader.Dispose() }
+      - name: Test native core
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Force Microsoft WARP virtual GPU and render KAMI DX12
+        shell: pwsh
+        run: |
+          # This is a mandatory virtual-GPU test, not an ordinary DX12
+          # fallback that might silently choose the host GPU. The test
+          # returns a nonzero exit if WARP is unavailable or rendering fails.
+          $exe = "$PWD/build/Release/KAMI-DX12-Smoke.exe"
+          & $exe --force-warp 2>&1 | Tee-Object -FilePath warp-gpu-result.txt
+          if ($LASTEXITCODE -ne 0) {
+            throw "WARP software GPU render/resize/texture test failed (exit $LASTEXITCODE)"
+          }
+          $output = Get-Content warp-gpu-result.txt -Raw
+          if ($output -notmatch "KAMI PBR ENVIRONMENT TERRAIN PIXELS VERIFIED") {
+            throw "The WARP run did not verify scene capture, IBL and terrain output pixels"
+          }
+          if ($output -notmatch "KAMI MATERIAL ENVELOPE FORMATS PIXELS VERIFIED") {
+            throw "The WARP run did not verify binary/XML/notation material assets produce matching pixels"
+          }
+          if ($output -notmatch "KAMI STANDARD LLSD MATERIAL PIXELS VERIFIED") {
+            throw "The WARP run did not verify standard SL material asset decoding to GPU pixels"
+          }
+          if ($output -notmatch "KAMI PBR PIXELS VERIFIED") {
+            throw "The WARP run did not verify PBR map and alpha output pixels"
+          }
+          if ($output -notmatch "KAMI TEXTURE PIXELS VERIFIED") {
+            throw "The WARP run did not verify sampled texture and shadow pixels"
+          }
+          if ($output -notmatch "KAMI WARP VIRTUAL GPU VERIFIED") {
+            throw "Smoke did not positively identify the forced WARP adapter"
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: KAMI-R69-Forced-WARP-PBR-Pixel-Verification-Result
+          path: warp-gpu-result.txt
+          retention-days: 14
+      - name: Package actual independent KAMI viewer candidate
+        shell: pwsh
+        run: |
+          # Do not distribute this native workspace as the complete SL viewer.
+          # A successful WARP/CTest run does not establish live SL feature parity.
+          New-Item -ItemType Directory -Force -Path dist/KAMI | Out-Null
+          @'
+          KAMI NATIVE VIEWER CANDIDATE — NOT THE COMPLETE VIEWER
+
+          This archive contains the independent KAMIViewer.exe application candidate.
+          DX12 smoke tests and synthetic protocol tests do not verify a
+          populated Second Life region, full avatar, inventory or messaging.
+          Do not label, announce, or distribute it as a finished KAMI viewer.
+          Release remains blocked pending real SL login, populated-world
+          geometry/PBR validation, avatar, inventory and messaging integration.
+          '@ | Set-Content -Path dist/KAMI/NOT_A_COMPLETE_VIEWER.txt -Encoding UTF8
+          Copy-Item build/Release/KAMIViewer.exe dist/KAMI
+          Copy-Item build/Release/KAMI_SL_Login_Identity.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_LLUdpCodec.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_ExtraParams.dll dist/KAMI
+          Copy-Item build/Release/KAMI_SL_TextureEntry.dll dist/KAMI
+          New-Item -ItemType Directory -Force -Path dist/KAMI/Source/lludp | Out-Null
+          Copy-Item src/sl_reference/official_lludp_zerocode.cpp dist/KAMI/Source/lludp
+          Copy-Item include/kami/protocol/official_lludp_zerocode.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/lludp/llzerocode.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/lludp/stdtypes.h dist/KAMI/Source/lludp
+          Copy-Item src/sl_reference/official_extra_params.cpp dist/KAMI/Source/lludp
+          Copy-Item src/sl_reference/official_texture_entry.cpp dist/KAMI/Source/lludp
+          Copy-Item include/kami/protocol/official_texture_entry.h dist/KAMI/Source/lludp
+          Copy-Item include/kami/protocol/official_extra_params.h dist/KAMI/Source/lludp
+          Copy-Item third_party/secondlife-lgpl/LICENSE.LGPL-2.1.txt dist/KAMI
+          Copy-Item build/_deps/openjpeg-src/LICENSE dist/KAMI/LICENSE.OpenJPEG-BSD2.txt
+          Copy-Item third_party/secondlife-lgpl/NOTICE.md dist/KAMI
+          # DX12 smoke is executed in CI above; never ship this test tool in the viewer ZIP.
+          Copy-Item R69_STATUS.md dist/KAMI
+          Copy-Item LICENSE.PicoJSON.txt dist/KAMI
+          Copy-Item LICENSE.TinyXML2.txt dist/KAMI
+          Copy-Item R57_STATUS.md dist/KAMI
+          Copy-Item R56_STATUS.md dist/KAMI
+          Copy-Item README.md dist/KAMI
+          Copy-Item UNIFIED_BUILD_NOTES.md dist/KAMI
+          Copy-Item R27_R32_UNIFIED_STATUS.md dist/KAMI
+          Copy-Item R33_STATUS.md dist/KAMI
+          Copy-Item R34_STATUS.md dist/KAMI
+          Copy-Item R36_STATUS.md dist/KAMI
+          Copy-Item R37_STATUS.md dist/KAMI
+          Copy-Item R38_STATUS.md dist/KAMI
+          Copy-Item R39_STATUS.md dist/KAMI
+          Copy-Item R40_STATUS.md dist/KAMI
+          Copy-Item R41_STATUS.md dist/KAMI
+          Copy-Item R42_STATUS.md dist/KAMI
+          Copy-Item R43_STATUS.md dist/KAMI
+          Copy-Item R43_1_STATUS.md dist/KAMI
+          Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
+          Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Native-Viewer-Candidate.zip
+      - name: Gate native KAMI viewer package and feature acceptance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'dist/KAMI'
+          if (!(Test-Path "$root/KAMIViewer.exe")) { throw 'Native viewer executable missing' }
+          if ((Get-Item "$root/KAMIViewer.exe").Length -lt 65536) { throw 'Native viewer executable unexpectedly small' }
+          if (Test-Path "$root/KAMI-DX12-Smoke.exe") { throw 'Do not package diagnostic executable' }
+          if (!(Test-Path "$root/NOT_A_COMPLETE_VIEWER.txt")) { throw 'Missing incomplete viewer disclosure' }
+          if (!(Test-Path "$root/LICENSE.LGPL-2.1.txt")) { throw 'Missing LGPL license' }
+          $manifest = Get-Content 'docs/KAMI_FEATURE_ACCEPTANCE.json' -Raw | ConvertFrom-Json
+          if ($manifest.application -ne 'KAMIViewer.exe') {
+            throw 'Release manifest must target the native KAMIViewer.exe'
+          }
+          if ($manifest.release_allowed -eq $true) {
+            if (@($manifest.release_blockers).Count -ne 0) { throw 'Release cannot be enabled while blockers remain' }
+            foreach ($entry in $manifest.features.PSObject.Properties) {
+              if ($entry.Value.status -ne 'verified') { throw "Release requires verified feature: $($entry.Name)" }
+            }
+            if (!(Test-Path 'docs/KAMI_LIVE_SL_ACCEPTANCE.md')) { throw 'Missing documented authenticated Second Life acceptance' }
+            $acceptance = Get-Content 'docs/KAMI_LIVE_SL_ACCEPTANCE.md' -Raw
+            if ($acceptance -notmatch 'LIVE_SL_ACCEPTANCE: PASS') { throw 'Live SL acceptance has not been recorded as passed' }
+          } elseif ($manifest.release_allowed -ne $false) {
+            throw 'Release permission must be an explicit boolean'
+          }
+          $required = @('ui','dx12_world','terrain','mesh_residency','sl_login','sl_transport','avatar','inventory','messaging','read_receipts','camera','graphics','creator_studio','photo_studio','smart_sort','accessibility','hotfixes')
+          foreach ($feature in $required) {
+            if (!$manifest.features.PSObject.Properties[$feature]) { throw "Missing feature gate $feature" }
+            if ($manifest.features.$feature.status -notin @('unverified','partial','verified')) { throw "Invalid feature status $feature" }
+          }
+          $zip = 'dist/KAMI-Native-Viewer-Candidate.zip'
+          if (!(Test-Path $zip)) { throw 'Native viewer archive missing' }
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $names = @($archive.Entries | ForEach-Object FullName)
+            if (!($names | Where-Object { $_.EndsWith('/KAMIViewer.exe') })) { throw 'Native viewer absent from ZIP' }
+            if ($names | Where-Object { $_.EndsWith('/KAMI-DX12-Smoke.exe') }) { throw 'Diagnostic executable found in ZIP' }
+            $executables = @($names | Where-Object { $_ -match '[.]exe$' })
+            if ($executables.Count -ne 1 -or !$executables[0].EndsWith('/KAMIViewer.exe')) {
+              throw 'Candidate archive must contain only the actual KAMIViewer.exe; test and diagnostic executables are forbidden.'
+            }
+          } finally { $archive.Dispose() }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KAMI-Native-Viewer-Candidate
+          path: dist/KAMI-Native-Viewer-Candidate.zip
+          retention-days: 14
