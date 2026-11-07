@@ -1265,6 +1265,9 @@ bool Renderer::set_verified_live_terrain(
             }
         }
     }
+    live_terrain_patches_=patches;
+    live_terrain_origin_=stable_origin;
+    live_terrain_valid_=!live_terrain_patches_.empty();
     error_.clear();
     return true;
 }
@@ -1353,6 +1356,7 @@ void Renderer::clear_decoded_region_geometry() {
     // Always invalidate simulator-local instance identities on disconnect,
     // even if no region vertex buffer was successfully uploaded yet.
     mesh_residency_.clear_instances();
+    live_terrain_patches_.clear();live_terrain_origin_={};live_terrain_valid_=false;
     previous_mesh_draw_count_=0;
     mesh_instance_cache_.clear();
     resident_mesh_spans_.clear();
@@ -1389,6 +1393,7 @@ void Renderer::clear_decoded_region_geometry() {
     texture_upload_pending_=false;
     live_region_origin_={};
     live_region_origin_valid_=false;
+    live_terrain_patches_.clear();live_terrain_origin_={};live_terrain_valid_=false;
     primitive_eligible_=0;
     primitive_unresolved_=0;
     primitive_distant_=0;
@@ -1486,12 +1491,18 @@ void Renderer::draw() {
         !landscape_view_&&
         std::fabs(live_preview_controls_.turn)>.01f);
     avatar_spring_.step(std::sin(seconds*2.f),dt);
-    // Live SL terrain must not collide against the procedural offline
-    // scene's unrelated height sampler. A live collision sampler will be
-    // connected after the region height grid is fully assembled.
-    camera_.update(dt,seconds,
-                   region_mesh_?nullptr:sample_test_terrain_height,
-                   graphics_.animate_avatar);
+    if(region_mesh_&&live_terrain_valid_){
+        camera_.update(dt,seconds,[this](float x,float z){
+            float height=0.f;
+            return sample_live_terrain_height(live_terrain_patches_,
+                live_terrain_origin_[0],live_terrain_origin_[1],
+                live_terrain_origin_[2],x,z,height)?height:
+                std::numeric_limits<float>::quiet_NaN();
+        },graphics_.animate_avatar);
+    }else{
+        camera_.update(dt,seconds,region_mesh_?nullptr:sample_test_terrain_height,
+                       graphics_.animate_avatar);
+    }
     const auto camera=camera_.pose();
     if(!sort_blended_geometry(camera.eye.x,camera.eye.y,camera.eye.z)){
         ready_=false;error_=L"DX12 transparent geometry update failed";return;
