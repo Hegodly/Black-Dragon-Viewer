@@ -77,6 +77,11 @@ inline constexpr std::uint32_t kAllowedMovement=
     const LoginResult& authorized_login,
     std::span<const std::uint32_t> local_ids,
     std::uint32_t sequence,lludp::Packet& output) noexcept;
+[[nodiscard]] bool move_inventory_item(const LoginResult& authorized_login,
+                                         std::string_view item_id,
+                                         std::string_view destination_folder_id,
+                                         std::uint32_t sequence,
+                                         lludp::Packet& output) noexcept;
 [[nodiscard]] bool packet_ack(std::span<const std::uint32_t> sequences,
                               std::uint32_t sequence,
                               lludp::Packet& output) noexcept;

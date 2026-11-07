@@ -175,6 +175,31 @@ bool request_missing_objects(const LoginResult& login,
     output=std::move(value);
     return true;
 }
+bool move_inventory_item(const LoginResult& login,std::string_view item_id,
+                         std::string_view folder_id,std::uint32_t seq,
+                         lludp::Packet& output) noexcept {
+    if(!accepted(login)||seq==0U)return false;
+    std::array<std::uint8_t,16> agent{},session{},item{},folder{};
+    if(!parse_uuid(login.handoff.agent_id,agent)||
+       !parse_uuid(login.handoff.session_id,session)||
+       !parse_uuid(item_id,item)||!parse_uuid(folder_id,folder))return false;
+    // Official MoveInventoryItem Low 268. One variable InventoryData block,
+    // Stamp=false (no creation-date rewrite), empty NewName (no rename).
+    lludp::Packet value{};
+    value.flags=lludp::kReliable|lludp::kZerocoded;
+    value.sequence=seq;
+    value.body={0xffU,0xffU,0x01U,0x0cU};
+    push_uuid(value.body,agent);
+    push_uuid(value.body,session);
+    value.body.push_back(0U); // Stamp
+    value.body.push_back(1U); // one InventoryData block
+    push_uuid(value.body,item);
+    push_uuid(value.body,folder);
+    value.body.push_back(0U); // empty NewName
+    if(value.body.size()!=71U)return false;
+    output=std::move(value);
+    return true;
+}
 bool packet_ack(std::span<const std::uint32_t> acks,std::uint32_t seq,
                 lludp::Packet& output) noexcept {
     if(seq==0||acks.empty()||acks.size()>255)return false;

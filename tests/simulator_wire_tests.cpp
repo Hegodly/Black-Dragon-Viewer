@@ -183,6 +183,33 @@ int main(){
        sim::request_missing_objects(login,too_many,12U,packet)||
        sim::request_missing_objects(login,missing,2U,packet))
         return 30;
+    // Official Low 268 MoveInventoryItem serializer: authenticated IDs,
+    // reliable LLUDP, Stamp=false, one item, destination folder, no rename.
+    constexpr std::string_view item_id="12345678-1234-1234-1234-123456789abc";
+    constexpr std::string_view folder_id="abcdefab-cdef-abcd-efab-cdefabcdefab";
+    if(!sim::move_inventory_item(login,item_id,folder_id,31U,packet)||
+       packet.flags!=(lludp::kReliable|lludp::kZerocoded)||
+       packet.sequence!=31U||packet.body.size()!=71U||
+       packet.body[0]!=0xffU||packet.body[1]!=0xffU||
+       packet.body[2]!=0x01U||packet.body[3]!=0x0cU||
+       packet.body[36]!=0U||packet.body[37]!=1U||
+       packet.body[70]!=0U)return 31;
+    if(!lludp::encode(packet,updatedWire)||
+       !lludp::decode(updatedWire,decodedUpdate)||
+       decodedUpdate.body!=packet.body||decodedUpdate.sequence!=31U)
+        return 32;
+    std::array<std::uint8_t,16> encoded_item{},encoded_folder{};
+    if(!sim::parse_uuid(item_id,encoded_item)||
+       !sim::parse_uuid(folder_id,encoded_folder)||
+       !std::equal(encoded_item.begin(),encoded_item.end(),
+                   packet.body.begin()+38)||
+       !std::equal(encoded_folder.begin(),encoded_folder.end(),
+                   packet.body.begin()+54))return 33;
+    if(sim::move_inventory_item(rejected,item_id,folder_id,31U,packet)||
+       sim::move_inventory_item(login,"not-a-uuid",folder_id,31U,packet)||
+       sim::move_inventory_item(login,item_id,"bad",31U,packet)||
+       sim::move_inventory_item(login,item_id,folder_id,0U,packet))
+        return 34;
     return 0;
 }
 
