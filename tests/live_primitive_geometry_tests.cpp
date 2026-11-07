@@ -150,6 +150,10 @@ int run_primitive_tests(){
         }
         if(cut_mesh.root_shapes!=1U||cut_max-cut_min>1.25f||
            cut_max-cut_min<1.15f)return 93;
+        const auto atomic=world::build_live_primitive_geometry(
+            {{86U,square}},{},128.f,140.f,35.f,128U,{},{},{},100U);
+        if(atomic.root_shapes!=0U||atomic.budget_deferred_shapes!=1U||
+           !atomic.scene.vertices.empty())return 94;
         auto prism=square;prism.local_id=87U;prism.primitive=Kind::Prism;
         prism.volume_params[16U]=0x03U;
         const auto prism_sweep=world::build_live_primitive_geometry(
