@@ -207,7 +207,9 @@ void build_cylinder(Emitter& e){
 // sweep. It preserves real cut, hollow, taper, twist and shear parameters;
 // unsupported curve/profile families remain on the conservative legacy path.
 float signed_wire(std::uint8_t value) noexcept {
-    return (static_cast<float>(value)-128.f)/127.f;
+    // LLVolumeParams uses U8_TO_F32: reinterpret the wire byte as S8.
+    // These values are signed fixed-point, not unsigned bytes centered at 128.
+    return static_cast<float>(static_cast<std::int8_t>(value));
 }
 void build_linear_circle_volume(Emitter& e,
         const protocol::volume::Parameters& p){
@@ -221,8 +223,8 @@ void build_linear_circle_volume(Emitter& e,
     const float inner_radius=std::clamp(p.hollow,0.f,.95f)*.5f;
     const float shear_x=signed_wire(p.shear_x)*.01f;
     const float shear_y=signed_wire(p.shear_y)*.01f;
-    const float twist0=signed_wire(p.twist_begin)*.01f*pi*2.f;
-    const float twist1=signed_wire(p.twist_end)*.01f*pi*2.f;
+    const float twist0=signed_wire(p.twist_begin)*.01f;
+    const float twist1=signed_wire(p.twist_end)*.01f;
     const float taper_x=signed_wire(p.taper_x)*.01f;
     const float taper_y=signed_wire(p.taper_y)*.01f;
     const auto point=[&](float u,float angle,float radius)->V{
