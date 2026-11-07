@@ -151,6 +151,12 @@ private:
     std::future<protocol::caps::InventoryTreeFetchResult> inventory_root_future_;
     protocol::caps::InventoryFolderReply inventory_root_snapshot_{};
     std::wstring inventory_status_=L"Waiting for authenticated inventory";
+    std::wstring inventory_search_;
+    std::string inventory_current_folder_;
+    std::string inventory_selected_entry_;
+    unsigned inventory_sort_mode_=0;
+    bool inventory_group_creators_=false;
+    bool inventory_search_focused_=false;
 
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
