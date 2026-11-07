@@ -25,6 +25,7 @@ The deliverable is the independent Windows `KAMIViewer.exe` with live Second Lif
 - `feature/kami-original-viewer-reintegration` currently contributes workflow configuration only; it does not contain a separate original UI source implementation to merge. The original KAMI UI remains in `src/app/main.cpp`, `src/app/window.cpp` and the native `KAMIViewer` target.
 - `feature/kami-live-viewer-integration` is the only promotion destination. Its original KAMI application entry point and UI remain the executable; diagnostics are not a replacement application.
 - `feature/kami-r72-black-dragon-geometry-port` is treated as a source of individually reviewed fixes, not a branch to merge wholesale. R72 mesh-interest recovery and exception-safe mesh/texture worker recovery have already been ported into the destination as real source changes with regression coverage. Linkset descendant removal is present in the destination transport and object-spatial tests.
+  The R73 four-slot texture fetch/decode pool is also ported into the destination's newer cache/retry path with bounded-slot regression coverage; the source's namespace-only test adjustment is already equivalent in destination tests. The R72 source branch is never merged wholesale.
 - DX12 renderer, avatar, camera, creator/photo and SL transport branches are candidates only. Each implementation commit must pass its own source Windows CI and the destination validation before promotion.
 
 ## Automated integration pipeline

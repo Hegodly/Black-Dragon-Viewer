@@ -146,6 +146,8 @@ class PromotionPolicyTests(unittest.TestCase):
             "39d73fe41a6ea76efde60fabece6f81555127b4d",
             "6287d818d3ca6f6a7052176c7486db083f4dd445",
             "9e73a77eb4b3cce3bd1a5e0e7bac7260c0565953",
+            "4de0d5d8f0a124b69eedbe729f6f6eaa4077cb22",
+            "fbf845a18f0a0ccdc3ce26e2cd7d058b7ff9f57e",
         )
         for sha in already_ported:
             self.assertTrue(is_already_ported_source(sha), sha)

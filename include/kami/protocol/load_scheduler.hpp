@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -7,6 +8,8 @@
 #include <vector>
 
 namespace kami::protocol::load {
+// Bounded parallel texture fetch/decode slots; independent of mesh workers.
+inline constexpr std::size_t kMaxConcurrentTextureWorkers=4U;
 // Run asynchronous asset work without letting fetch/decode exceptions strand
 // a scheduler entry in Downloading. The caller still applies bounded per-ID
 // backoff through worker_launch_failed/retry_failed.

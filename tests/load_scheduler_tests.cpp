@@ -2,7 +2,9 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <vector>
 using namespace kami::protocol::load;
+static_assert(kMaxConcurrentTextureWorkers==4U);
 static constexpr auto a="12345678-90ab-4cde-8fab-000000000010";
 static constexpr auto b="12345678-90ab-4cde-8fab-000000000011";
 static constexpr auto c="12345678-90ab-4cde-8fab-000000000012";
@@ -327,5 +329,37 @@ int main(){
        !queue.find(b)->retryable_fetch_failure||
        !queue.retry_failed(b)||queue.find(b)->stage!=Stage::Queued)
         return 86;
+    // Four independent texture workers may be in flight; a fifth UUID
+    // remains queued until one of those bounded slots is drained.
+    queue.clear();
+    constexpr auto e="12345678-90ab-4cde-8fab-000000000014";
+    if(!queue.request(a,Kind::VisibleTexture,4.f,true,64U)||
+       !queue.request(b,Kind::VisibleTexture,3.f,true,64U)||
+       !queue.request(c,Kind::VisibleTexture,2.f,true,64U)||
+       !queue.request(d,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.request(e,Kind::VisibleTexture,5.f,true,64U))return 87;
+    std::vector<std::string> dispatched;
+    for(std::size_t slot=0U;slot<kMaxConcurrentTextureWorkers;++slot){
+        const auto job=queue.next_download();
+        if(!job)return 88;
+        for(const auto& prior:dispatched)
+            if(prior==job->id)return 89;
+        dispatched.push_back(job->id);
+    }
+    if(dispatched.size()!=kMaxConcurrentTextureWorkers||
+       queue.statistics().downloading!=kMaxConcurrentTextureWorkers||
+       queue.find(e)==nullptr||queue.find(e)->stage!=Stage::Queued)
+        return 90;
+    for(auto it=dispatched.rbegin();it!=dispatched.rend();++it){
+        if(!queue.download_finished(*it,64U,true)||
+           !queue.begin_decode(*it)||
+           !queue.decode_finished(*it,true))return 91;
+    }
+    for(const auto& id:dispatched){
+        const auto* asset=queue.find(id);
+        if(!asset||asset->stage!=Stage::ReadyForGPU)return 92;
+    }
+    if(queue.find(e)==nullptr||queue.find(e)->stage!=Stage::Queued)
+        return 93;
     return 0;
 }

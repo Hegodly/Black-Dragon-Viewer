@@ -382,7 +382,7 @@ private:
         bool fetched=false,decoded=false;
         texture::DecodedTexture image{};
     };
-    std::future<TextureResult> texture_worker_;
+    std::array<std::future<TextureResult>,load::kMaxConcurrentTextureWorkers> texture_workers_{};
     std::map<std::string,std::chrono::steady_clock::time_point> texture_retry_after_;
     // CPU preview cache is wider than the DX12 GPU atlas so
     // large decorated regions can stream nearby assets over time.

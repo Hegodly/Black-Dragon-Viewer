@@ -62,6 +62,9 @@ ALREADY_PORTED_SOURCE_PREFIXES = frozenset({
     # R72 reparenting/cap series was combined and regression-tested in
     # destination commit 37d055b8457e0c7c680a370d19992d45fcf5d08c.
     "39d73fe41a6e", "6287d818d3ca", "9e73a77eb4b",
+    # R72 namespace-only test adjustment is equivalent in destination; R73 worker pool
+    # and its regression coverage are faithfully ported into the newer destination path.
+    "4de0d5d8f0a1", "fbf845a18f0a",
 })
 IMPLEMENTATION_PREFIXES = ("src/", "include/", "resources/", "assets/")
 TEST_PREFIX = "tests/"
