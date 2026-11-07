@@ -21,12 +21,14 @@ int main() {
     movable.owner_id="12345678-90ab-4cde-8fab-000000000001";
     movable.base_mask=kPermissionMove;movable.owner_mask=kPermissionMove;
     movable.permissions_valid=true;
-    const std::vector<std::string> protected_ids={"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"};
+    // The protected-folder fixture must be distinct from the current parent:
+    // a protected parent is intentionally not movable out of.
+    const std::vector<std::string> protected_ids={"dddddddd-dddd-4ddd-8ddd-dddddddddddd"};
     const std::string destination="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     if(!can_request_move(movable,movable.owner_id,destination,protected_ids))return 6;
     auto unsafe=movable;unsafe.owner_mask=0U;
     if(can_request_move(unsafe,movable.owner_id,destination,protected_ids))return 7;
-    unsafe=movable;unsafe.owner_id="dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    unsafe=movable;unsafe.owner_id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
     if(can_request_move(unsafe,movable.owner_id,destination,protected_ids))return 8;
     if(can_request_move(movable,movable.owner_id,movable.parent_id,protected_ids))return 9;
     if(can_request_move(movable,movable.owner_id,protected_ids.front(),protected_ids))return 10;
@@ -36,5 +38,8 @@ int main() {
     if(can_request_move(movable,movable.owner_id,"not-a-uuid",protected_ids))return 13;
     auto invalid_protected=protected_ids;invalid_protected.push_back("bad");
     if(can_request_move(movable,movable.owner_id,destination,invalid_protected))return 14;
+    auto protected_parent=movable;
+    const std::vector<std::string> parent_is_protected={movable.parent_id};
+    if(can_request_move(protected_parent,movable.owner_id,destination,parent_is_protected))return 15;
     return 0;
 }
