@@ -426,25 +426,25 @@ PrimitiveBatch build_live_primitive_geometry(
     // worst case multiplied by 4,080. Grow only when actually needed.
     vertices.reserve(std::min(max_vertices,chosen.size()*120U));
     for(const auto& item:chosen){
-        std::size_t max_shape_vertices=0U;
-        switch(item.item->primitive){
-        case Kind::Box:max_shape_vertices=36U;break;
-        case Kind::Cylinder:max_shape_vertices=240U;break;
-        case Kind::Prism:max_shape_vertices=24U;break;
-        case Kind::Sphere:max_shape_vertices=1200U;break;
-        default:continue;
-        }
-        // Keep the previously validated scene alive instead of exceeding
-        // its DX12 vertex ceiling when many high-poly spheres arrive.
-        if(max_shape_vertices>max_vertices-vertices.size()){
+        // Swept LLVolume shapes can be substantially denser than their
+        // primitive family (a hollow linear cylinder can exceed 4,000
+        // vertices). Generate one bounded candidate, then commit it only
+        // when the complete shape fits the remaining scene budget.
+        // Rolling back the candidate also rolls back its texture accounting.
+        const std::size_t shape_start=vertices.size();
+        const std::size_t textured_start=result.textured_triangles;
+        if(!emit(vertices,*item.item,item.pose,origin,
+                texture_layers,result.textured_triangles,pbr_faces))
+            continue;
+        const std::size_t emitted=vertices.size()-shape_start;
+        if(emitted>max_vertices-shape_start){
+            vertices.resize(shape_start);
+            result.textured_triangles=textured_start;
             ++result.budget_deferred_shapes;
             continue;
         }
-        if(emit(vertices,*item.item,item.pose,origin,
-                texture_layers,result.textured_triangles,pbr_faces)){
-            if(item.child)++result.linked_shapes;
-            else ++result.root_shapes;
-        }
+        if(item.child)++result.linked_shapes;
+        else ++result.root_shapes;
     }
     result.scene.terrain_count=vertices.size();
     return result;
