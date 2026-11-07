@@ -293,7 +293,7 @@ void Circuit::maybe_fetch_mesh() noexcept {
                    job->retry_count<load::Scheduler::kMaxTransientRetries&&
                    mesh_retry_after_.size()<128U){
                     const auto delay=std::chrono::seconds(
-                        1U<<std::min(job->retry_count,3U));
+                        load::Scheduler::retry_delay_seconds(job->retry_count));
                     mesh_retry_after_.insert_or_assign(
                         result.id,std::chrono::steady_clock::now()+delay);
                 }
