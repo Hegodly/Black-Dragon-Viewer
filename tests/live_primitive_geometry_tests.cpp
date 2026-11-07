@@ -135,6 +135,21 @@ int run_primitive_tests(){
         for(const auto& v:box_sweep.scene.vertices)plain_center+=v.px;
         for(const auto& v:sheared_mesh.scene.vertices)sheared_center+=v.px;
         if(std::abs(sheared_center-plain_center)<.01f)return 92;
+        auto path_cut=square;
+        path_cut.volume_params[1U]=0x10U;
+        path_cut.volume_params[2U]=0x27U; // 0.20 path begin
+        path_cut.volume_params[3U]=0x40U;
+        path_cut.volume_params[4U]=0x9cU; // 0.80 path end
+        const auto cut_mesh=world::build_live_primitive_geometry(
+            {{86U,path_cut}},{},128.f,140.f,35.f);
+        float cut_min=std::numeric_limits<float>::max();
+        float cut_max=std::numeric_limits<float>::lowest();
+        for(const auto& v:cut_mesh.scene.vertices){
+            cut_min=std::min(cut_min,v.py);
+            cut_max=std::max(cut_max,v.py);
+        }
+        if(cut_mesh.root_shapes!=1U||cut_max-cut_min>1.25f||
+           cut_max-cut_min<1.15f)return 93;
         auto prism=square;prism.local_id=87U;prism.primitive=Kind::Prism;
         prism.volume_params[16U]=0x03U;
         const auto prism_sweep=world::build_live_primitive_geometry(
