@@ -88,7 +88,7 @@ PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s.size()!=23U)return PrimitiveKind::Unknown;
     for(unsigned i=1U;i<=4U;++i)
         if(s[i]!=0U)return PrimitiveKind::Unknown;
-    if(s[5]!=100U||s[6]!=100U)return PrimitiveKind::Unknown;
+    if(s[5]>200U||s[6]>200U)return PrimitiveKind::Unknown;
     for(unsigned i=7U;i<=15U;++i)
         if(s[i]!=0U)return PrimitiveKind::Unknown;
     for(unsigned i=17U;i<23U;++i)
