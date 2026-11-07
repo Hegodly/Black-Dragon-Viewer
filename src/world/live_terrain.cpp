@@ -53,6 +53,40 @@ void triangle(SceneMesh& out,Position a,Position b,Position c,
 }
 } // namespace
 
+bool sample_live_terrain_height(
+    const std::map<std::uint16_t,protocol::terrain::Patch>& decoded,
+    float ox,float oy,float oz,float lx,float lz,float& height) noexcept {
+    if(!std::isfinite(ox)||!std::isfinite(oy)||!std::isfinite(oz)||
+       !std::isfinite(lx)||!std::isfinite(lz))return false;
+    const double wx=static_cast<double>(ox)+lx,wz=static_cast<double>(oy)+lz;
+    if(wx<0.0||wz<0.0||wx>=1024.0||wz>=1024.0)return false;
+    const auto x=static_cast<unsigned>(std::floor(wx));
+    const auto z=static_cast<unsigned>(std::floor(wz));
+    const float fx=static_cast<float>(wx-x),fz=static_cast<float>(wz-z);
+    unsigned size=0U;
+    for(const unsigned candidate:{16U,32U}){
+        const auto px=x/candidate,pz=z/candidate;
+        const auto it=decoded.find(static_cast<std::uint16_t>(pz*32U+px));
+        if(it!=decoded.end()&&it->second.size==candidate&&
+           it->second.x==px&&it->second.y==pz){size=candidate;break;}
+    }
+    if(size==0U||x+1U>=1024U||z+1U>=1024U)return false;
+    const auto read=[&](unsigned gx,unsigned gz,float& out) noexcept {
+        const unsigned px=gx/size,pz=gz/size;
+        if(px>=32U||pz>=32U)return false;
+        const auto it=decoded.find(static_cast<std::uint16_t>(pz*32U+px));
+        if(it==decoded.end()||it->second.size!=size||it->second.x!=px||it->second.y!=pz)return false;
+        out=it->second.elevation[(gz%size)*size+(gx%size)];
+        return std::isfinite(out)&&out>=-4096.f&&out<=8192.f;
+    };
+    float a=0.f,b=0.f,c=0.f,d=0.f;
+    if(!read(x,z,a)||!read(x+1U,z,b)||!read(x,z+1U,c)||!read(x+1U,z+1U,d))return false;
+    const float top=a+(b-a)*fx,bottom=c+(d-c)*fx;
+    const float result=top+(bottom-top)*fz-oz;
+    if(!std::isfinite(result))return false;
+    height=result;return true;
+}
+
 LiveTerrainMesh build_live_terrain_mesh(
     const std::map<std::uint16_t,protocol::terrain::Patch>& decoded,
     const std::vector<const protocol::terrain::Patch*>& selected,
