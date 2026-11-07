@@ -276,9 +276,9 @@ int exercise(){
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "12345678-90ab-4cde-8fab-000000000001",true,true);
     if(inventory_request.find("<key>folder_id</key><string>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</string>")==std::string::npos||
-       inventory_request.find("<key>owner_id</key><string>12345678-90ab-4cde-8fab-000000000001</string>")==std::string::npos||
-       inventory_request.find("<key>fetch_folders</key><boolean>true</boolean>")==std::string::npos||
-       inventory_request.find("<key>fetch_items</key><boolean>true</boolean>")==std::string::npos||
+       inventory_request.find("<key>owner_id</key>")!=std::string::npos||
+       inventory_request.find("<key>fetch_folders</key>")!=std::string::npos||
+       inventory_request.find("<key>fetch_items</key>")!=std::string::npos||
        !build_inventory_folder_post("not-a-uuid","12345678-90ab-4cde-8fab-000000000001").empty())
         return 46;
     // Inventory CAPS are negotiated separately from mesh/EventQueue and

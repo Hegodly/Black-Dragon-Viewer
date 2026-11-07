@@ -733,11 +733,11 @@ std::string build_inventory_folder_post(
     };
     put("folder_id",folder_id);
     put("owner_id",owner_id);
-    body+="<key>sort_order</key><integer>0</integer>";
-    body+="<key>fetch_folders</key>";
-    body+=fetch_folders?"<boolean>true</boolean>":"<boolean>false</boolean>";
-    body+="<key>fetch_items</key>";
-    body+=fetch_items?"<boolean>true</boolean>":"<boolean>false</boolean>";
+    // The Linden Lab v2 contract accepts only folder_id in each folder
+    // request map. The flags and owner_id used by legacy examples are not
+    // part of this LLIDL endpoint; fetch both categories and items by default.
+    (void)fetch_folders;
+    (void)fetch_items;
     body+="</map></array></map></llsd>";
     return body;
 }
