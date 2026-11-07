@@ -153,11 +153,14 @@ void Circuit::schedule_visible_textures() noexcept {
 void Circuit::maybe_fetch_texture() noexcept {
     schedule_visible_textures();
     if(state_!=CircuitState::MovementConfirmed)return;
-    if(texture_worker_.valid()){
-        if(texture_worker_.wait_for(std::chrono::seconds(0))!=
-           std::future_status::ready)return;
+    // Drain every completed UUID independently. A slow CDN response must
+    // never block another ready texture from entering CPU/GPU residency.
+    for(auto& worker:texture_workers_){
+        if(!worker.valid()||
+           worker.wait_for(std::chrono::seconds(0))!=
+               std::future_status::ready)continue;
         try {
-            auto result=texture_worker_.get();
+            auto result=worker.get();
             const bool accepted=texture_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
             // A request may finish after the camera's interest set moved.
@@ -186,8 +189,8 @@ void Circuit::maybe_fetch_texture() noexcept {
                         decoded_texture_bytes_=used+bytes;
                         decoded_textures_.insert_or_assign(
                             result.id,std::move(result.image));
-                        // Notify the 800 ms coalesced DX12 region uploader:
-                        // a new J2C image must also rebuild the texture atlas.
+                        // Notify the coalesced DX12 region uploader: a new
+                        // J2C image must rebuild the atlas and bound face data.
                         ++spatial_object_revision_;
                     }else if(result.decoded&&!fits){
                         // Cache pressure is not corrupt JPEG2000. Release
@@ -207,7 +210,7 @@ void Circuit::maybe_fetch_texture() noexcept {
                    job->retry_count<load::Scheduler::kMaxTransientRetries&&
                    texture_retry_after_.size()<kMaxDecodedTextureAssets){
                     const auto delay=std::chrono::seconds(
-                        1U<<std::min(job->retry_count,3U));
+                        load::Scheduler::retry_delay_seconds(job->retry_count));
                     texture_retry_after_.insert_or_assign(
                         result.id,std::chrono::steady_clock::now()+delay);
                 }
@@ -223,56 +226,64 @@ void Circuit::maybe_fetch_texture() noexcept {
             it=texture_retry_after_.erase(it);
         }else ++it;
     }
-    if(texture_worker_.valid()||texture_capability_url_.empty())return;
+    if(texture_capability_url_.empty())return;
     const auto now=std::chrono::steady_clock::now();
     if(texture_last_start_!=std::chrono::steady_clock::time_point{}&&
-       now-texture_last_start_<std::chrono::milliseconds(maximum_world_detail_?35:250))
-        return;
+       now-texture_last_start_<std::chrono::milliseconds(
+           maximum_world_detail_?35:250))return;
     if(decoded_textures_.size()>=kMaxDecodedTextureAssets||
        decoded_texture_bytes_>=kMaxDecodedTextureBytes)return;
-    auto next=texture_scheduler_.next_download();
-    if(!next)return;
-    texture_last_start_=now;
-    auto url=texture_capability_url_;
-    try {
-        texture_worker_=std::async(std::launch::async,
-            [url=std::move(url),id=next->id]()mutable {
-                return load::capture_worker_result<TextureResult>(
-                    std::move(id),[&](TextureResult& result){
-                        struct CapabilityWiper {
-                            std::wstring& value;
-                            ~CapabilityWiper() noexcept {
-                                if(!value.empty())
-                                    SecureZeroMemory(value.data(),
-                                        value.size()*sizeof(wchar_t));
+    bool launched=false;
+    // Four independent fetch/decode slots match the scheduler's bounded
+    // decode concurrency. Completed slots are refilled without waiting for
+    // the slowest request in the batch.
+    for(auto& worker:texture_workers_){
+        if(worker.valid())continue;
+        auto next=texture_scheduler_.next_download();
+        if(!next)break;
+        auto url=texture_capability_url_;
+        try {
+            worker=std::async(std::launch::async,
+                [url=std::move(url),id=next->id]()mutable {
+                    return load::capture_worker_result<TextureResult>(
+                        std::move(id),[&](TextureResult& result){
+                            struct CapabilityWiper {
+                                std::wstring& value;
+                                ~CapabilityWiper() noexcept {
+                                    if(!value.empty())
+                                        SecureZeroMemory(value.data(),
+                                            value.size()*sizeof(wchar_t));
+                                }
+                            } wipe{url};
+                            const auto reply=caps::fetch_texture_asset(
+                                url,result.id);
+                            result.http_status=reply.status;
+                            result.fetched=reply.fetched;
+                            result.bytes=static_cast<std::uint32_t>(
+                                reply.bytes.size());
+                            if(reply.fetched){
+                                result.decoded=texture::decode_jpeg2000(
+                                    reply.bytes,result.image);
+                                if(result.decoded)
+                                    result.decoded=texture::downscale_preview(
+                                        result.image,texture::kPreviewExtent);
                             }
-                        } wipe{url};
-                        const auto reply=caps::fetch_texture_asset(
-                            url,result.id);
-                        result.http_status=reply.status;
-                        result.fetched=reply.fetched;
-                        result.bytes=static_cast<std::uint32_t>(
-                            reply.bytes.size());
-                        if(reply.fetched){
-                            result.decoded=texture::decode_jpeg2000(
-                                reply.bytes,result.image);
-                            if(result.decoded)
-                                result.decoded=texture::downscale_preview(
-                                    result.image,texture::kPreviewExtent);
-                        }
-                    });
-            });
-    }catch(...){
-        // std::async may fail under thread or memory pressure. Treat that
-        // local launch failure like a transient fetch failure, otherwise
-        // this texture remains Failed forever and cannot re-enter residency.
-        const auto delay=texture_scheduler_.worker_launch_failed(next->id);
-        if(delay&&texture_retry_after_.size()<kMaxDecodedTextureAssets)
-            texture_retry_after_.insert_or_assign(
-                next->id,std::chrono::steady_clock::now()+
-                std::chrono::seconds(*delay));
-        ++texture_failure_count_;
+                        });
+                });
+            launched=true;
+        }catch(...){
+            // std::async may fail under thread or memory pressure. Treat that
+            // local launch failure like a transient fetch failure, otherwise
+            // this texture remains Failed forever and cannot re-enter residency.
+            const auto delay=texture_scheduler_.worker_launch_failed(next->id);
+            if(delay&&texture_retry_after_.size()<kMaxDecodedTextureAssets)
+                texture_retry_after_.insert_or_assign(
+                    next->id,std::chrono::steady_clock::now()+
+                    std::chrono::seconds(*delay));
+            ++texture_failure_count_;
+        }
     }
+    if(launched)texture_last_start_=now;
 }
 } // namespace kami::protocol::sim
 

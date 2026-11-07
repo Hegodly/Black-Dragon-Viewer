@@ -1021,8 +1021,8 @@ void Circuit::stop() noexcept {
     loaded_materials_.clear();material_overrides_.clear();material_attempts_.clear();
     material_failures_=material_http_failures_=material_decode_failures_=0U;
     material_last_format_=pbr::AssetFormat::Unknown;material_last_http_=0U;material_last_bytes_=0U;material_last_decode_error_=pbr::DecodeError::None;material_last_scan_={};
-    if(texture_worker_.valid()){
-        try{(void)texture_worker_.get();}catch(...){}
+    for(auto& worker:texture_workers_)if(worker.valid()){
+        try{(void)worker.get();}catch(...){}
     }
     if(!texture_capability_url_.empty()){
         SecureZeroMemory(texture_capability_url_.data(),

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -7,6 +8,8 @@
 #include <vector>
 
 namespace kami::protocol::load {
+// Texture downloads are independently fetched/decoded off the simulator poll thread.
+inline constexpr std::size_t kMaxConcurrentTextureWorkers=4U;
 // Execute a background asset operation without allowing worker exceptions
 // to strand its scheduler entry in Downloading. A thrown fetch/decode is
 // surfaced as a retryable transport failure; callers still apply bounded

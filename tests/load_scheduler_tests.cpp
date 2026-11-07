@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <limits>
 using namespace kami::protocol::load;
+static_assert(kMaxConcurrentTextureWorkers==4U);
 static constexpr auto a="12345678-90ab-4cde-8fab-000000000010";
 static constexpr auto b="12345678-90ab-4cde-8fab-000000000011";
 static constexpr auto c="12345678-90ab-4cde-8fab-000000000012";
@@ -246,5 +247,32 @@ int main(){
        !queue.find(c)->retryable_fetch_failure||
        !queue.retry_failed(c)||queue.find(c)->stage!=Stage::Queued)
         return 64;
+    // R73: texture fetch/decode workers are independently bounded and may
+    // complete out of priority order without advancing another UUID's state.
+    queue.clear();
+    constexpr auto e="12345678-90ab-4cde-8fab-000000000014";
+    if(!queue.request(a,Kind::VisibleTexture,4.f,true,64U)||
+       !queue.request(b,Kind::VisibleTexture,3.f,true,64U)||
+       !queue.request(c,Kind::VisibleTexture,2.f,true,64U)||
+       !queue.request(d,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.request(e,Kind::VisibleTexture,5.f,true,64U))return 65;
+    std::vector<std::string> dispatched;
+    for(std::size_t slot=0U;slot<kMaxConcurrentTextureWorkers;++slot){
+        const auto job=queue.next_download();
+        if(!job)return 66;
+        for(const auto& prior:dispatched)
+            if(prior==job->id)return 67;
+        dispatched.push_back(job->id);
+    }
+    if(dispatched.size()!=4U||queue.find(e)->stage!=Stage::Queued)
+        return 68; // the fifth asset waits for a free worker slot
+    for(auto it=dispatched.rbegin();it!=dispatched.rend();++it){
+        if(!queue.download_finished(*it,64U,true)||
+           !queue.begin_decode(*it)||
+           !queue.decode_finished(*it,true))return 69;
+    }
+    for(const auto& id:dispatched)
+        if(queue.find(id)->stage!=Stage::ReadyForGPU)return 70;
+    if(queue.find(e)->stage!=Stage::Queued)return 71;
     return 0;
 }
