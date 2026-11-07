@@ -87,6 +87,29 @@ int run_primitive_tests(){
             {{86U,square}},{},128.f,140.f,35.f);
         if(box_sweep.root_shapes!=1U||box_sweep.scene.vertices.size()<=240U)
             return 86;
+        // Distinct TextureEntry images on each LLVolume face must map
+        // to the official path-cap and outer-side face IDs.
+        auto textured_square=square;
+        const std::array<std::string,6U> face_names{{
+            "cap-begin","cap-end","side-0","side-1","side-2","side-3"}};
+        const std::array<unsigned,6U> face_ids{{0U,1U,5U,6U,7U,8U}};
+        std::map<std::string,std::uint16_t> face_layers;
+        for(unsigned i=0U;i<face_ids.size();++i){
+            textured_square.face_texture_override[face_ids[i]]=true;
+            textured_square.face_texture_asset_ids[face_ids[i]]=face_names[i];
+            face_layers.emplace(face_names[i],static_cast<std::uint16_t>(i+1U));
+        }
+        const auto mapped=world::build_live_primitive_geometry(
+            {{86U,textured_square}},{},128.f,140.f,35.f,128U,{},
+            face_layers);
+        std::array<std::size_t,7U> face_vertex_counts{};
+        for(const auto& vertex:mapped.scene.vertices){
+            const auto layer=static_cast<unsigned>(vertex.texture_layer);
+            if(layer<1U||layer>6U)return 88;
+            face_vertex_counts[layer]++;
+        }
+        for(unsigned layer=1U;layer<=6U;++layer)
+            if(face_vertex_counts[layer]==0U)return 89;
         auto prism=square;prism.local_id=87U;prism.primitive=Kind::Prism;
         prism.volume_params[16U]=0x03U;
         const auto prism_sweep=world::build_live_primitive_geometry(
