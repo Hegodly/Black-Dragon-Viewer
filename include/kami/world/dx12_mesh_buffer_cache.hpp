@@ -2,6 +2,7 @@
 #include <d3d12.h>
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <wrl/client.h>
 #include <cstdint>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include <set>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace kami::world {
@@ -25,6 +27,47 @@ public:
         D3D12_VERTEX_BUFFER_VIEW view{};
         std::uint64_t generation=0;
         std::uint64_t revision=0;
+    };
+
+    // Heterogeneous lookup key for the hot per-instance path. It compares
+    // against the existing "region:id" map key without allocating a string.
+    struct InstanceKeyView {
+        std::string_view region;
+        std::uint32_t local_id=0U;
+    };
+    struct AssetKeyLess {
+        using is_transparent=void;
+        [[nodiscard]] bool operator()(const std::string& a,
+                                      const std::string& b) const noexcept {
+            return std::string_view(a).compare(b)<0;
+        }
+        [[nodiscard]] bool operator()(const std::string& a,
+                                      InstanceKeyView b) const noexcept {
+            return compare(a,b)<0;
+        }
+        [[nodiscard]] bool operator()(InstanceKeyView a,
+                                      const std::string& b) const noexcept {
+            return compare(b,a)>0;
+        }
+    private:
+        [[nodiscard]] static int compare(std::string_view stored,
+                                         InstanceKeyView key) noexcept {
+            std::array<char,10U> digits{};
+            const auto converted=std::to_chars(
+                digits.data(),digits.data()+digits.size(),key.local_id);
+            if(converted.ec!=std::errc{})return stored.compare(key.region);
+            const std::string_view suffix(
+                digits.data(),static_cast<std::size_t>(converted.ptr-digits.data()));
+            const auto shared=std::min(stored.size(),key.region.size());
+            const int prefix=stored.substr(0U,shared).compare(
+                key.region.substr(0U,shared));
+            if(prefix!=0)return prefix;
+            if(stored.size()<=key.region.size())return -1;
+            const char separator=stored[key.region.size()];
+            if(separator<':')return -1;
+            if(separator>':')return 1;
+            return stored.substr(key.region.size()+1U).compare(suffix);
+        }
     };
 
     void begin_generation() noexcept { ++generation_; }
@@ -169,11 +212,14 @@ public:
         const std::string& region_key,
         std::uint32_t local_id) const noexcept {
         if(region_key.empty()||!local_id)return false;
-        const auto key=region_key+":"+std::to_string(local_id);
-        const auto* buffer=find(key);
-        if(!buffer||!buffer->view.StrideInBytes)return false;
+        const auto* buffer=find_instance(region_key,local_id);
+        if(!commands||!buffer||!buffer->resource||
+           !buffer->view.StrideInBytes)return false;
         const UINT count=buffer->view.SizeInBytes/buffer->view.StrideInBytes;
-        return record_draw(commands,key,count);
+        if(!valid_instance_vertex_view(buffer->view,count))return false;
+        commands->IASetVertexBuffers(0,1,&buffer->view);
+        commands->DrawInstanced(count,1,0,0);
+        return true;
     }
 
     // Preflight a complete resident instance batch before recording any draw.
@@ -183,11 +229,19 @@ public:
     [[nodiscard]] bool can_draw_instance_batch(
         const std::string& region_key,
         const std::vector<std::uint32_t>& local_ids) const noexcept {
-        if(region_key.empty()||local_ids.empty())return false;
-        std::set<std::uint32_t> unique_ids;
+        if(region_key.empty()||
+           !within_resident_batch_draw_budget(local_ids.size()))return false;
+        std::array<std::uint32_t,kMaxResidentBatchDraws> sorted_ids{};
+        for(std::size_t i=0U;i<local_ids.size();++i){
+            if(!local_ids[i])return false;
+            sorted_ids[i]=local_ids[i];
+        }
+        auto sorted_end=sorted_ids.begin()+local_ids.size();
+        std::sort(sorted_ids.begin(),sorted_end);
+        if(std::adjacent_find(sorted_ids.begin(),sorted_end)!=sorted_end)
+            return false;
         for(const auto id:local_ids){
-            if(!id||!unique_ids.insert(id).second)return false;
-            const auto* buffer=find(region_key+":"+std::to_string(id));
+            const auto* buffer=find_instance(region_key,id);
             if(!buffer||!buffer->resource||!buffer->view.StrideInBytes||
                !buffer->view.SizeInBytes||
                buffer->view.SizeInBytes%buffer->view.StrideInBytes)return false;
@@ -233,7 +287,7 @@ public:
             const auto& item=required[i];
             if(!item.local_id||!item.vertex_count)return false;
             seen_ids[i]=item.local_id;
-            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            const auto* resident=find_instance(region_key,item.local_id);
             if(!resident||!resident->resource||resident->generation!=generation_||
                resident->revision!=revision||
                !valid_instance_vertex_view(resident->view,item.vertex_count))
@@ -254,7 +308,7 @@ public:
         if(!commands||!can_draw_exact_instance_batch(region_key,revision,required))
             return false;
         for(const auto& item:required){
-            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            const auto* resident=find_instance(region_key,item.local_id);
             commands->IASetVertexBuffers(0,1,&resident->view);
             commands->DrawInstanced(item.vertex_count,1,0,0);
         }
@@ -313,7 +367,7 @@ public:
         // by the all-or-nothing preflight and all IDs are members of required.
         for(const auto& item:required){
             if(!std::binary_search(visible_ids,visible_end,item.local_id))continue;
-            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            const auto* resident=find_instance(region_key,item.local_id);
             output[command_count++]={resident->view,
                 D3D12_DRAW_ARGUMENTS{item.vertex_count,1U,0U,0U}};
         }
@@ -347,7 +401,7 @@ public:
             if(!std::binary_search(required_ids.begin(),required_end,*it))return false;
         for(const auto& item:required){
             if(!std::binary_search(visible_ids,visible_end,item.local_id))continue;
-            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            const auto* resident=find_instance(region_key,item.local_id);
             if(!resident||!resident->resource)return false;
             commands->IASetVertexBuffers(0,1,&resident->view);
             commands->DrawInstanced(item.vertex_count,1,0,0);
@@ -675,7 +729,13 @@ public:
         }
     }
 private:
+    [[nodiscard]] const Buffer* find_instance(
+        const std::string& region_key,std::uint32_t local_id) const noexcept {
+        if(region_key.empty()||!local_id)return nullptr;
+        const auto it=buffers_.find(InstanceKeyView{region_key,local_id});
+        return it==buffers_.end()?nullptr:&it->second;
+    }
     std::uint64_t generation_=0;
-    std::map<std::string,Buffer> buffers_;
+    std::map<std::string,Buffer,AssetKeyLess> buffers_;
 };
 } // namespace kami::world

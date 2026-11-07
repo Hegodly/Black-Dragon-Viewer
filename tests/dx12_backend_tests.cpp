@@ -103,6 +103,17 @@ int main() {
                                   scene.data(),scene.size(),0,3))return 31;
         if(!cache.can_draw_instance_batch("region",{17,18}))return 32;
         using Requirement=kami::world::Dx12MeshBufferCache::InstanceDrawRequirement;
+        const auto max_local_id=std::numeric_limits<std::uint32_t>::max();
+        if(!cache.upload_instance(device.native_device(),"region:west",max_local_id,7,
+                                  scene.data(),scene.size(),0,3))return 114;
+        if(!cache.upload_instance(device.native_device(),"region",max_local_id,8,
+                                  scene.data(),scene.size(),0,3))return 115;
+        if(!cache.can_draw_instance_batch("region:west",{max_local_id})||
+           !cache.can_draw_instance_batch("region",{max_local_id})||
+           !cache.can_draw_exact_instance_batch("region:west",7,
+                                                {Requirement{max_local_id,3}})||
+           !cache.can_draw_exact_instance_batch("region",8,
+                                                {Requirement{max_local_id,3}}))return 116;
         if(!cache.can_draw_exact_instance_batch("region",1,
                                                 {Requirement{17,3},Requirement{18,3}}))return 33;
         if(cache.can_draw_exact_instance_batch("region",2,{Requirement{17,3}}))return 34;
@@ -115,6 +126,10 @@ int main() {
         std::vector<Requirement> oversized_batch(Cache::kMaxResidentBatchDraws+1U,
                                                    Requirement{17,3});
         if(cache.can_draw_exact_instance_batch("region",1,oversized_batch))return 100;
+        std::vector<std::uint32_t> oversized_ids(Cache::kMaxResidentBatchDraws+1U);
+        for(std::size_t i=0U;i<oversized_ids.size();++i)
+            oversized_ids[i]=static_cast<std::uint32_t>(i+1U);
+        if(cache.can_draw_instance_batch("region",oversized_ids))return 117;
         if(cache.record_instance_batch(nullptr,"region",1,
              {Requirement{17,3},Requirement{18,3}}))return 73;
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> batch_allocator;
