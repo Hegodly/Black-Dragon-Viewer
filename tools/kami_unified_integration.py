@@ -83,6 +83,23 @@ def latest_successful_workflow_run(
     return None
 
 
+def has_successful_windows_job(jobs: list[dict[str, Any]]) -> bool:
+    return any(
+        job.get("name") == "windows"
+        and job.get("status") == "completed"
+        and job.get("conclusion") == "success"
+        for job in jobs
+    )
+
+
+def windows_job_succeeded(run: dict[str, Any]) -> bool:
+    run_id = run.get("id")
+    if not run_id:
+        return False
+    jobs = api_request(f"actions/runs/{run_id}/jobs?per_page=100").get("jobs", [])
+    return has_successful_windows_job(jobs)
+
+
 def parse_patch_equivalent_commits(output: str) -> set[str]:
     """Return source SHAs that git-cherry marks as already represented upstream."""
     equivalent: set[str] = set()
@@ -274,6 +291,8 @@ def active_destination_runs() -> list[dict[str, Any]]:
             # These runs are either skipped source-branch Windows jobs or the
             # no-op unified workflow on a temporary promotion PR. Neither
             # writes the destination branch.
+            if run.get("name") in {"Pull Request Labeler", "Check CLA"}:
+                continue
             if (
                 run.get("workflow_id") == WINDOWS_WORKFLOW_ID
                 and head_branch in ALLOWED_SOURCE_BRANCHES
@@ -366,19 +385,55 @@ def successful_run_for_sha(
     source_branch: str, source_sha: str
 ) -> dict[str, Any] | None:
     # A prior green run must not mask a newer failed or still-running attempt.
-    return latest_successful_workflow_run(
+    latest = latest_successful_workflow_run(
         source_windows_runs(source_branch, source_sha)
     )
+    return latest if latest is not None and windows_job_succeeded(latest) else None
 
 
-def wait_for_source_head_ci(source_branch: str, source_sha: str) -> dict[str, Any] | None:
+def wait_for_source_head_ci(
+    source_branch: str, source_sha: str, after_run_id: int | None = None
+) -> dict[str, Any] | None:
     deadline = time.monotonic() + 30 * 60
     while time.monotonic() < deadline:
         latest = latest_workflow_run(source_windows_runs(source_branch, source_sha))
-        if latest is not None and latest.get("status") == "completed":
-            return latest if latest.get("conclusion") == "success" else None
+        if latest is not None and (
+            after_run_id is None or int(latest.get("id", 0)) != after_run_id
+        ):
+            if latest.get("status") == "completed":
+                if (
+                    latest.get("conclusion") == "success"
+                    and windows_job_succeeded(latest)
+                ):
+                    return latest
+                return None
         time.sleep(15)
     return None
+
+
+def ensure_source_head_ci(
+    source_branch: str, source_sha: str
+) -> dict[str, Any] | None:
+    latest = latest_workflow_run(source_windows_runs(source_branch, source_sha))
+    if latest is not None and latest.get("status") in {"queued", "in_progress"}:
+        return wait_for_source_head_ci(source_branch, source_sha)
+    if (
+        latest is not None
+        and latest.get("status") == "completed"
+        and latest.get("conclusion") == "success"
+        and windows_job_succeeded(latest)
+    ):
+        return latest
+
+    previous_run_id = int(latest["id"]) if latest and latest.get("id") else None
+    # Feature branches without a current Windows build are tested on their
+    # exact source ref. The destination candidate is built separately later.
+    api_request(
+        f"actions/workflows/{WINDOWS_WORKFLOW_ID}/dispatches",
+        {"ref": source_branch},
+        method="POST",
+    )
+    return wait_for_source_head_ci(source_branch, source_sha, previous_run_id)
 
 
 def is_ancestor(ancestor: str, descendant: str) -> bool:
@@ -422,7 +477,14 @@ def choose_verified_implementations(
         )
         if not eligible:
             continue
-        run = head_run if sha == source_head else successful_run_for_sha(source_branch, sha)
+        if sha == source_head:
+            run = head_run
+        else:
+            run = successful_run_for_sha(source_branch, sha)
+            if run is None and not source_windows_runs(source_branch, sha):
+                # The green source-head build includes this ancestor commit;
+                # the destination candidate build then verifies the cherry-pick.
+                run = head_run
         if run is None:
             continue
         selected.append((details, run))
@@ -481,7 +543,7 @@ def preflight() -> None:
         summary("## KAMI promotion skipped\n\n" + reason)
         return
 
-    head_run = wait_for_source_head_ci(source_branch, source_head)
+    head_run = ensure_source_head_ci(source_branch, source_head)
     if head_run is None:
         reason = "The exact source branch head has no successful KAMI Windows CI run."
         write_output(False, reason)

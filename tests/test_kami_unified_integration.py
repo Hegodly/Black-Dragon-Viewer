@@ -4,6 +4,7 @@ from tools.kami_unified_integration import (
     ALREADY_PORTED_SOURCE_PREFIXES,
     DESTINATION_BRANCH,
     REQUIRED_FEATURES,
+    has_successful_windows_job,
     is_already_ported_source,
     latest_successful_workflow_run,
     manifest_errors,
@@ -163,6 +164,22 @@ class PatchEquivalenceTests(unittest.TestCase):
         b = "b" * 40
         output = f"- {a}\n+ {b}\n"
         self.assertEqual(parse_patch_equivalent_commits(output), {a})
+
+
+
+
+class WindowsJobAcceptanceTests(unittest.TestCase):
+    def test_requires_actual_windows_job_success(self):
+        self.assertTrue(has_successful_windows_job([
+            {"name": "source-boundary", "status": "completed", "conclusion": "success"},
+            {"name": "windows", "status": "completed", "conclusion": "success"},
+        ]))
+
+    def test_skipped_windows_job_does_not_count_as_ci(self):
+        self.assertFalse(has_successful_windows_job([
+            {"name": "source-boundary", "status": "completed", "conclusion": "success"},
+            {"name": "windows", "status": "completed", "conclusion": "skipped"},
+        ]))
 
 
 if __name__ == "__main__":

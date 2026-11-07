@@ -32,7 +32,7 @@ The deliverable is the independent Windows `KAMIViewer.exe` with live Second Lif
 `.github/workflows/kami-unified-integration.yml` runs for ready pull requests targeting `feature/kami-live-viewer-integration`. The source branch must be on the reviewed allowlist and its exact head must have a successful `KAMI Original Core Windows` run. The pipeline then:
 
 1. Checks the feature manifest and dependency graph, source and destination heads, and every queued/running destination workflow.
-2. Selects up to three unported single-parent implementation commits in source ancestry order. Each selected commit must have its own latest successful push Windows CI; a newer failed or running attempt cannot be masked by an older green run. Patch-equivalent commits already present in the destination are skipped. Test-only, documentation-only, workflow-only, binary and mixed-scope commits are rejected, and each batch must carry regression-test coverage.
+2. Selects up to three unported single-parent implementation commits in source ancestry order. Each selected commit uses its own latest successful Windows build when available; otherwise it is covered by the exact source-head Windows build. The workflow dispatches that build on the source ref when no current successful run exists, and requires the actual `windows` job to pass (a skipped job is not CI evidence). A newer failed or running attempt cannot be masked by an older green run. Patch-equivalent commits already present in the destination are skipped. Test-only, documentation-only, workflow-only, binary and mixed-scope commits are rejected, and each batch must carry regression-test coverage.
 3. Cherry-picks the ordered source commits locally with provenance. Related helper/fix commits are applied in dependency order; conflicts or stale source/destination heads stop the run. If more eligible commits remain, the source PR is safely reopened after a successful destination merge to queue the next batch.
 4. Builds the actual `KAMIViewer` target, builds the regression suite, runs CTest, and forces Microsoft WARP to verify DX12 output pixels.
 5. Pushes the validated tree to a unique temporary branch and opens a promotion PR. The destination Windows workflow builds the merge candidate and packages the native viewer. The PR is merged only if that destination-targeted CI succeeds, the artifact exists, and the destination base SHA has not moved.
@@ -43,7 +43,7 @@ A conflict, stale head, active destination run, failed test, failed WARP check, 
 
 ## Automation safety
 
-1. Check branch heads, exact successful CI and queued/running Actions jobs before writes. Serialize promotion jobs and recheck destination head immediately before merge.
+1. Check branch heads and queued/running Actions jobs before writes. If a source branch has no current Windows build, dispatch the existing Windows workflow on that exact ref and require its real `windows` job to pass. Serialize promotion jobs and recheck destination head immediately before merge.
 2. Port compatible implementation commits individually; do not merge divergent branches or replace the original application entry point.
 3. Keep regression tests alongside source changes where appropriate; always run the full suite and WARP against the candidate tree and destination PR merge result.
 4. Preserve independent DX12 architecture, licensing and bounded worker/cache behavior. Synthetic tests and WARP do not prove live SL correctness.
