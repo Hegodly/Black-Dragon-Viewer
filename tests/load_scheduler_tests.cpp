@@ -9,6 +9,19 @@ static constexpr auto c="12345678-90ab-4cde-8fab-000000000012";
 static constexpr auto d="12345678-90ab-4cde-8fab-000000000013";
 int main(){
     Scheduler queue;
+    if(!Scheduler::retryable_http_status(0U)||
+       !Scheduler::retryable_http_status(408U)||
+       !Scheduler::retryable_http_status(429U)||
+       !Scheduler::retryable_http_status(500U)||
+       !Scheduler::retryable_http_status(502U)||
+       !Scheduler::retryable_http_status(503U)||
+       !Scheduler::retryable_http_status(504U)||
+       Scheduler::retryable_http_status(200U)||
+       Scheduler::retryable_http_status(400U)||
+       Scheduler::retryable_http_status(401U)||
+       Scheduler::retryable_http_status(403U)||
+       Scheduler::retryable_http_status(404U)||
+       Scheduler::retryable_http_status(501U))return 40;
     if(queue.request(a,Kind::VisibleTexture,5.f,true,100U))return 1;
     queue.set_online(true);
     if(queue.request("bad",Kind::Other,1.f,true,100U)||
@@ -106,11 +119,18 @@ int main(){
        queue.retry_failed(a)||queue.find(a)->retryable_fetch_failure)return 33;
     if(!queue.request(b,Kind::VisibleTexture,1.f,true,64U)||
        !queue.next_download()||!queue.download_finished(b,0U,true)||
-       queue.retry_failed(b)||queue.find(b)->retryable_fetch_failure)return 34;
+       queue.find(b)->actual_bytes!=0U||queue.retry_failed(b)||
+       queue.find(b)->retryable_fetch_failure)return 34;
+    if(!queue.request(d,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.next_download()||
+       !queue.download_finished(d,Scheduler::kMaxBytesPerAsset+1U,true)||
+       queue.find(d)->actual_bytes!=0U||queue.retry_failed(d)||
+       queue.find(d)->retryable_fetch_failure)return 41;
     if(!queue.request(c,Kind::VisibleTexture,1.f,true,64U)||
        !queue.next_download()||!queue.download_finished(c,0U,false)||
        !queue.find(c)->retryable_fetch_failure||
-       !queue.retry_failed(c)||queue.find(c)->retryable_fetch_failure)return 35;
+       !queue.retry_failed(c)||queue.find(c)->retryable_fetch_failure||
+       queue.find(c)->actual_bytes!=0U)return 35;
     // Dense region: terminal corrupt assets must not permanently block
     // a newly visible mesh when the bounded scheduler reaches capacity.
     queue.clear();

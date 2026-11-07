@@ -23,7 +23,7 @@ struct Asset {
     Stage stage=Stage::Queued;
     std::uint64_t queued_order=0;
     unsigned retry_count=0; // transient fetches only; bounded per asset
-    bool retryable_fetch_failure=false; // only failed network fetches qualify
+    bool retryable_fetch_failure=false; // transport failures only; malformed/decode data is terminal
 };
 struct Stats {
     std::size_t queued=0,downloading=0,decoding=0,ready_gpu=0,resident=0;
@@ -37,6 +37,11 @@ public:
     static constexpr unsigned kMaxTransientRetries=3U;
     static constexpr std::uint32_t kMaxBytesPerAsset=64U*1024U*1024U;
     static constexpr std::uint32_t kDefaultUploadBudget=4U*1024U*1024U;
+    [[nodiscard]] static constexpr bool retryable_http_status(
+        std::uint16_t status) noexcept {
+        return status==0U||status==408U||status==429U||status==500U||
+               status==502U||status==503U||status==504U;
+    }
     // No authenticated network data? Do not schedule any work.
     explicit Scheduler(bool session_online=false) noexcept:online_(session_online){}
     void set_online(bool online) noexcept;

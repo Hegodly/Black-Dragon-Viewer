@@ -94,8 +94,9 @@ bool Scheduler::download_finished(std::string_view id,
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Downloading)return false;
     if(!success||bytes>kMaxBytesPerAsset||bytes==0){
-        // Successful malformed payloads must not be retried as transport errors.
-        asset->actual_bytes=success?1U:0U;
+        // Empty/oversized successful responses are malformed and terminal.
+        // Keep byte accounting truthful; retry eligibility is explicit.
+        asset->actual_bytes=0U;
         asset->retryable_fetch_failure=!success;
         asset->stage=Stage::Failed;return true;
     }
