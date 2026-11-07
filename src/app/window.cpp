@@ -2046,6 +2046,45 @@ void Window::start_caps_poll() {
         caps_status_=L"CAPS: Windows worker unavailable; retrying poll";
     }
 }
+void Window::start_inventory_refresh(){
+    if(sl_circuit_.state()!=protocol::sim::CircuitState::MovementConfirmed||
+       !sl_circuit_.inventory_capabilities_ready()){
+        inventory_status_=L"Log in and complete region handshake before refreshing";
+        InvalidateRect(hwnd_,nullptr,FALSE);return;
+    }
+    if(inventory_root_future_.valid()){
+        if(inventory_root_future_.wait_for(std::chrono::seconds(0))!=std::future_status::ready){
+            inventory_status_=L"Inventory request already running";
+            InvalidateRect(hwnd_,nullptr,FALSE);return;
+        }
+        try{(void)inventory_root_future_.get();}catch(...){}
+    }
+    const auto root=sl_circuit_.inventory_root_id();
+    const auto owner=sl_circuit_.inventory_owner_id();
+    auto url=sl_circuit_.inventory_descendents_capability();
+    if(!protocol::valid_uuid(root)||!protocol::valid_uuid(owner)||url.empty()){
+        inventory_status_=L"Inventory root or capability unavailable";
+        InvalidateRect(hwnd_,nullptr,FALSE);return;
+    }
+    inventory_current_folder_=root;
+    inventory_selected_entry_.clear();
+    inventory_search_.clear();
+    inventory_status_=L"Refreshing full inventory tree...";
+    inventory_root_future_=std::async(std::launch::async,
+        [url=std::move(url),root,owner]() mutable {
+            const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+            protocol::caps::InventoryTreeFetchResult result{};
+            if(SUCCEEDED(init)){
+                result=protocol::caps::fetch_inventory_tree(url,root,owner);
+                CoUninitialize();
+            }else{
+                result.transport_error=static_cast<unsigned>(init);
+                if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+            }
+            return result;
+        });
+    InvalidateRect(hwnd_,nullptr,FALSE);
+}
 void Window::update_sl_connection() {
     if(sl_login_pending_&&sl_login_future_.valid()&&
        sl_login_future_.wait_for(std::chrono::seconds(0))==
