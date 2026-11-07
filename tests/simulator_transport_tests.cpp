@@ -45,6 +45,31 @@ int main() {
     static_assert(sim::Circuit::kMaxConcurrentMeshWorkers==4U);
     static_assert(sim::Circuit::kMaxConcurrentMeshWorkers<=
                   load::Scheduler::kMaxConcurrentDownloads);
+    static_assert(sim::detail::kMaxConcurrentMaterialWorkers==2U);
+    // PBR material work has two bounded slots. UUID reservation is unique,
+    // and out-of-order completion frees only the matching slot for reuse.
+    {
+        constexpr auto material_a="12345678-90ab-4cde-8fab-000000000021";
+        constexpr auto material_b="12345678-90ab-4cde-8fab-000000000022";
+        constexpr auto material_c="12345678-90ab-4cde-8fab-000000000023";
+        sim::detail::MaterialWorkerSlots slots;
+        const auto first=slots.reserve(material_a);
+        const auto second=slots.reserve(material_b);
+        if(!first||*first!=0U||!second||*second!=1U||
+           slots.active()!=2U||!slots.contains(material_a)||
+           !slots.contains(material_b))return 100;
+        if(slots.reserve(material_a)||slots.reserve(material_c)||
+           slots.release(*first,material_b)||
+           slots.id(*first)!=material_a)return 101;
+        if(!slots.release(*second,material_b)||
+           slots.release(*second,material_b))return 102;
+        const auto third=slots.reserve(material_c);
+        if(!third||*third!=*second||slots.active()!=2U||
+           !slots.contains(material_a)||!slots.contains(material_c))return 103;
+        if(!slots.release(*first,material_a)||
+           !slots.release(*third,material_c)||slots.active()!=0U||
+           slots.reserve(""))return 104;
+    }
     const auto now=std::chrono::steady_clock::now();
     const auto recent=now-std::chrono::seconds(30);
     const auto stale=now-std::chrono::seconds(95);
