@@ -160,7 +160,7 @@ void System::update(float delta_seconds, float elapsed_seconds,
     const float desired = smoothed_distance_m_;
     float safe = desired;
     clipped_ = false;
-    if (settings_.collision && terrain_height) {
+    if (settings_.collision && static_cast<bool>(terrain_height)) {
         constexpr int kSamples = 28;
         for (int i = 1; i <= kSamples; ++i) {
             const float d = desired * static_cast<float>(i) / kSamples;
