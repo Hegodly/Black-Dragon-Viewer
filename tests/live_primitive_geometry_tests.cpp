@@ -153,10 +153,24 @@ int run_primitive_tests(){
         sheared.volume_params[7U]=0x20U;
         const auto sheared_mesh=world::build_live_primitive_geometry(
             {{86U,sheared}},{},128.f,140.f,35.f);
-        float plain_center=0.f,sheared_center=0.f;
-        for(const auto& v:box_sweep.scene.vertices)plain_center+=v.px;
-        for(const auto& v:sheared_mesh.scene.vertices)sheared_center+=v.px;
-        if(std::abs(sheared_center-plain_center)<.01f)return 92;
+        // Shear is a path-dependent translation. Its signed offset is
+        // symmetric over the full sweep, so measuring all vertices cancels
+        // it out. Compare the cross-section center at the far path end.
+        float plain_min=std::numeric_limits<float>::max();
+        float plain_max=std::numeric_limits<float>::lowest();
+        float sheared_min=std::numeric_limits<float>::max();
+        float sheared_max=std::numeric_limits<float>::lowest();
+        for(const auto& v:box_sweep.scene.vertices)if(v.py>.49f){
+            plain_min=std::min(plain_min,v.px);
+            plain_max=std::max(plain_max,v.px);
+        }
+        for(const auto& v:sheared_mesh.scene.vertices)if(v.py>.49f){
+            sheared_min=std::min(sheared_min,v.px);
+            sheared_max=std::max(sheared_max,v.px);
+        }
+        if(plain_min>plain_max||sheared_min>sheared_max||
+           std::abs((sheared_min+sheared_max-plain_min-plain_max)*.5f)<.01f)
+            return 92;
         auto path_cut=square;
         path_cut.volume_params[1U]=0x10U;
         path_cut.volume_params[2U]=0x27U; // 0.20 path begin
