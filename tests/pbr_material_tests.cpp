@@ -126,13 +126,13 @@ int run(){
     if(decode_json(remote,m)||m!=prior)return 3;
     if(decode_json(R"({"asset":{"version":"2.0"},"materials":[{"pbrMetallicRoughness":{"roughnessFactor":-1}}]})",m))return 4;
     if(!decode_json(R"({"asset":{"version":"2.0"},"materials":[{}]})",m)||m.metallic!=1.f||m.roughness!=1.f||m.base[3]!=1.f)return 5;
-    std::array<std::string,32> faces;
+    std::array<std::string,45> faces;
     std::vector<std::uint8_t> extras{1U,0x80U,0U,18U,0U,0U,0U,1U,2U};
     extras.insert(extras.end(),{0x12,0x34,0x56,0x78,0x90,0xab,0x4c,0xde,0x8f,0xab,0,0,0,0,0,2});
     if(!decode_face_ids(extras,faces)||faces[2]!=id||!faces[0].empty())return 6;
-    auto malformed=extras;malformed[8]=32U;const auto old_faces=faces;
+    auto malformed=extras;malformed[8]=45U;const auto old_faces=faces;
     if(decode_face_ids(malformed,faces)||faces!=old_faces)return 7;
-    if(!decode_face_ids(std::vector<std::uint8_t>{1,0x80,0,1,0,0,0,0},faces)||faces!=std::array<std::string,32>{})return 8;
+    if(!decode_face_ids(std::vector<std::uint8_t>{1,0x80,0,1,0,0,0,0},faces)||faces!=std::array<std::string,45>{})return 8;
     std::uint32_t object=0U;std::map<unsigned,Override> overrides;
     auto wire=packet("{'id':i77,'te':[i2],'od':[{'bc':[r1,r1,r1,r1],'mf':r0,'rf':r1,'am':i2,'ds':false,'tex':[uffffffff-ffff-ffff-ffff-ffffffffffff],'ti':[{'o':[r0.5,r0.25],'s':[r1,r2],'r':r0.5}]}]}");
     if(!decode_override(wire,object,overrides)||object!=77U||overrides.size()!=1U)return 9;
