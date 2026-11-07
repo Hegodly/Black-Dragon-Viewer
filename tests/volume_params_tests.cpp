@@ -30,8 +30,11 @@ int main(){
     h13[3]=0x20U;h13[4]=0x4eU; // 0.4 path end: reversed interval
     if(kami::protocol::volume::decode(h13,false,p))return 3;
     h13[1]=0U;h13[2]=0U;h13[3]=0U;h13[4]=0U;
-    h13[5]=201U;
+    h13[3]=0xffU;h13[4]=0xffU; // malformed path end > 1.0
     if(kami::protocol::volume::decode(h13,false,p))return 4;
+    h13[3]=0U;h13[4]=0U;
+    h13[5]=201U;
+    if(kami::protocol::volume::decode(h13,false,p))return 6;
     std::array<std::uint8_t,22> short_data{};
     if(kami::protocol::volume::decode(short_data,false,p))return 5;
     return 0;
