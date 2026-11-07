@@ -158,7 +158,7 @@ int main(){
     shape_data[0]=0x10U;
     shape_data[3]=0x50U;shape_data[4]=0xc3U;
     shape_data[5]=100U;shape_data[6]=100U;
-    for(unsigned i=7U;i<=15U;++i)shape_data[i]=128U;
+    for(unsigned i=7U;i<=15U;++i)shape_data[i]=0U;
     shape_data[16]=0x10U;
     shape_data[19]=0x50U;shape_data[20]=0xc3U;
     shape_data[21]=0x20U;shape_data[22]=0x4eU;
