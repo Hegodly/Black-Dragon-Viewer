@@ -2133,6 +2133,9 @@ void Window::update_sl_connection() {
             world_renderer_.clear_live_water_preview();
         live_land_uploaded_revision_=0;
         live_spatial_uploaded_revision_=0;
+        live_uploaded_texture_count_=0;
+        live_uploaded_mesh_count_=0;
+        live_uploaded_material_count_=0;
         live_land_last_upload_={};
         live_scene_uploaded_origin_={};
         live_scene_origin_valid_=false;
