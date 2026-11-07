@@ -1,6 +1,7 @@
 #include "kami/world/live_primitive_geometry.hpp"
 #include "kami/world/texture_uv.hpp"
 #include "kami/protocol/texture_budget.hpp"
+#include "kami/protocol/volume_params.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -240,14 +241,12 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
     const std::size_t start=out.size();
     V profile_scale{1.f,1.f,1.f};
     if(t.volume_params_seen){
-        // LLPathParams maps the wire scale bytes as (200 - value) / 100.
-        // High 12 carries PathScaleX/Y at [6]/[7]; packed High 13 at [5]/[6].
-        const unsigned sx=t.volume_params_full_layout?6U:5U;
-        const unsigned sy=sx+1U;
-        if(t.volume_params[sx]>200U||t.volume_params[sy]>200U)return false;
-        profile_scale.x=static_cast<float>(200U-t.volume_params[sx])*.01f;
-        profile_scale.y=static_cast<float>(200U-t.volume_params[sy])*.01f;
-        if(profile_scale.x<.01f||profile_scale.y<.01f)return false;
+        protocol::volume::Parameters decoded{};
+        if(!protocol::volume::decode(t.volume_params,
+                                     t.volume_params_full_layout,decoded))
+            return false;
+        profile_scale.x=decoded.scale_x;
+        profile_scale.y=decoded.scale_y;
     }
     Emitter e{out,t,layers,p,
               {t.sx*.5f,t.sy*.5f,t.sz*.5f},origin,profile_scale,
