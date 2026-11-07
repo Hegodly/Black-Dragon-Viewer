@@ -253,6 +253,16 @@ int run_primitive_tests(){
         // A partial hollow profile needs two longitudinal radial walls.
         // Twelve path segments × two cut planes × two quads × six vertices.
         if(cut.scene.vertices.size()<144U)return 81;
+        // Profile-cut walls must remain non-degenerate and carry
+        // normalized normals after the hollow wedge is closed.
+        for(const auto& vertex:cut.scene.vertices){
+            const float n=std::sqrt(vertex.nx*vertex.nx+
+                vertex.ny*vertex.ny+vertex.nz*vertex.nz);
+            if(!std::isfinite(n)||std::abs(n-1.f)>.001f)return 100;
+        }
+        // The cut's two radial boundaries must survive the hollow path
+        // and its annular caps as a closed, finite triangle stream.
+        if(!valid(cut)||cut.scene.vertices.size()%3U!=0U)return 101;
         // The same partial profile without a hole closes to the centerline.
         volume.volume_params[16U]=0x00U;
         volume.volume_params[21U]=0U;volume.volume_params[22U]=0U;
