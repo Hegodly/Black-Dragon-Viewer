@@ -109,7 +109,9 @@ struct InventoryEntry {
     std::string id,parent_id;
     std::wstring name;
     std::wstring description;
-    std::string creator_id,asset_id;
+    std::string creator_id,asset_id,owner_id;
+    std::uint32_t base_mask=0U,owner_mask=0U;
+    bool permissions_valid=false;
     int asset_type=-1,inventory_type=-1;
     bool folder=false;
 };

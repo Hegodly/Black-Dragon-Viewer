@@ -305,7 +305,10 @@ int exercise(){
         "<key>asset_id</key><uuid>dddddddd-dddd-4ddd-8ddd-dddddddddddd</uuid>"
         "<key>name</key><string>Jacket</string><key>desc</key><string>Creator jacket</string>"
         "<key>type</key><integer>5</integer><key>inv_type</key><integer>6</integer>"
-        "<key>permissions</key><map><key>creator_id</key><uuid>eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee</uuid></map>"
+        "<key>permissions</key><map><key>creator_id</key><uuid>eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee</uuid>"
+        "<key>owner_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"
+        "<key>base_mask</key><integer>524288</integer>"
+        "<key>owner_mask</key><integer>524288</integer></map>"
         "</map></array></map></llsd>";
     std::vector<InventoryEntry> detailed_items;
     if(!parse_inventory_items_llsd(item_reply,
@@ -314,7 +317,10 @@ int exercise(){
        detailed_items[0].description!=L"Creator jacket"||
        detailed_items[0].creator_id!="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"||
        detailed_items[0].asset_id!="dddddddd-dddd-4ddd-8ddd-dddddddddddd"||
-       detailed_items[0].asset_type!=5||detailed_items[0].inventory_type!=6)
+       detailed_items[0].asset_type!=5||detailed_items[0].inventory_type!=6||
+       !detailed_items[0].permissions_valid||
+       detailed_items[0].owner_id!="12345678-90ab-4cde-8fab-000000000001"||
+       detailed_items[0].base_mask!=0x00080000U||detailed_items[0].owner_mask!=0x00080000U)
         return 50;
     if(parse_inventory_items_llsd(item_reply,
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",requested_item_ids,detailed_items))

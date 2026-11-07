@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cwctype>
 #include <map>
+#include <cstdint>
 
 namespace kami::inventory {
 namespace {
@@ -74,6 +75,24 @@ std::vector<CreatorGroup> group_entries_by_creator(
     std::vector<CreatorGroup> result;
     for(auto& group:groups)result.push_back({group.first,std::move(group.second)});
     return result;
+}
+bool can_request_move(const protocol::caps::InventoryEntry& item,
+                        std::string_view agent_id,
+                        std::string_view destination_folder_id,
+                        const std::vector<std::string>& protected_folder_ids) noexcept {
+    if(item.folder||!item.permissions_valid||
+       !protocol::caps::valid_uuid(agent_id)||
+       !protocol::caps::valid_uuid(destination_folder_id)||
+       !protocol::caps::valid_uuid(item.parent_id)||
+       item.owner_id!=agent_id||!protocol::caps::valid_uuid(item.id)||
+       (item.base_mask&kPermissionMove)==0U||
+       (item.owner_mask&kPermissionMove)==0U||
+       destination_folder_id==item.parent_id)return false;
+    for(const auto& id:protected_folder_ids){
+        if(!protocol::caps::valid_uuid(id))return false;
+        if(id==destination_folder_id||id==item.parent_id)return false;
+    }
+    return true;
 }
 std::wstring folder_for(const Item& item) {
     std::wstring_view name(item.name);

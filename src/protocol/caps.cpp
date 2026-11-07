@@ -17,6 +17,22 @@
 namespace kami::protocol::caps {
 namespace {
 using Microsoft::WRL::ComPtr;
+std::uint32_t parse_permission_mask(std::wstring_view text) noexcept {
+    if(text.empty()||text.size()>10U)return 0U;
+    const unsigned base=text.size()==8U?16U:10U;
+    std::uint32_t value=0U;
+    for(const wchar_t c:text){
+        unsigned digit=0U;
+        if(c>=L'0'&&c<=L'9')digit=static_cast<unsigned>(c-L'0');
+        else if(base==16U&&c>=L'a'&&c<=L'f')digit=10U+static_cast<unsigned>(c-L'a');
+        else if(base==16U&&c>=L'A'&&c<=L'F')digit=10U+static_cast<unsigned>(c-L'A');
+        else return 0U;
+        if(digit>=base||value>(0xffffffffU-digit)/base)return 0U;
+        value=value*base+digit;
+    }
+    return value;
+}
+
 struct HttpHandle {
     HINTERNET value=nullptr;
     explicit HttpHandle(HINTERNET h=nullptr):value(h){}
@@ -712,6 +728,14 @@ bool parse_inventory_folder_llsd(
                         return std::wstring{};
                     return node_text(nested_node.Get());
                 };
+                const auto owner=nested(L"permissions",L"owner_id");
+                for(wchar_t c:owner){if(c>0x7f){entry.owner_id.clear();break;}entry.owner_id.push_back(static_cast<char>(c));}
+                if(!entry.owner_id.empty()&&!valid_uuid(entry.owner_id))entry.owner_id.clear();
+                const auto base_text=nested(L"permissions",L"base_mask");
+                const auto owner_text=nested(L"permissions",L"owner_mask");
+                entry.base_mask=parse_permission_mask(base_text);
+                entry.owner_mask=parse_permission_mask(owner_text);
+                entry.permissions_valid=!entry.owner_id.empty()&&!base_text.empty()&&!owner_text.empty();
                 const auto creator=nested(L"permissions",L"creator_id");
                 if(creator.size()==36){
                     for(wchar_t c:creator){
@@ -815,6 +839,21 @@ bool parse_inventory_items_llsd(
         const auto asset=field(L"asset_id");
         for(wchar_t c:asset){if(c>0x7f){entry.asset_id.clear();break;}entry.asset_id.push_back(static_cast<char>(c));}
         if(!entry.asset_id.empty()&&!valid_uuid(entry.asset_id))entry.asset_id.clear();
+        const auto permission_field=[&](const wchar_t* key){
+            std::wstring xp=L"key[.='permissions']/following-sibling::map[1]/key[.='";
+            xp+=key;xp+=L"']/following-sibling::*[1]";
+            BStr path(xp);ComPtr<IXMLDOMNode> value;
+            if(FAILED(node->selectSingleNode(path.value,&value))||!value)return std::wstring{};
+            return node_text(value.Get());
+        };
+        const auto owner=permission_field(L"owner_id");
+        for(wchar_t c:owner){if(c>0x7f){entry.owner_id.clear();break;}entry.owner_id.push_back(static_cast<char>(c));}
+        if(!entry.owner_id.empty()&&!valid_uuid(entry.owner_id))entry.owner_id.clear();
+        const auto base_text=permission_field(L"base_mask");
+        const auto owner_text=permission_field(L"owner_mask");
+        entry.base_mask=parse_permission_mask(base_text);
+        entry.owner_mask=parse_permission_mask(owner_text);
+        entry.permissions_valid=!entry.owner_id.empty()&&!base_text.empty()&&!owner_text.empty();
         const auto creator_path=L"key[.='permissions']/following-sibling::map[1]/key[.='creator_id']/following-sibling::*[1]";
         BStr cp(creator_path);ComPtr<IXMLDOMNode> creator_node;
         if(SUCCEEDED(node->selectSingleNode(cp.value,&creator_node))&&creator_node){
