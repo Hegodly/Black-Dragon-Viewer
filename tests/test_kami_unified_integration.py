@@ -164,6 +164,15 @@ class PromotionPolicyTests(unittest.TestCase):
             )[0]
         )
 
+    def test_rejects_superseded_native_feature_restoration_branch(self):
+        eligible, reason = promotion_decision(
+            "feature/kami-native-feature-restoration",
+            ["src/features/inventory.cpp", "tests/inventory_tests.cpp"],
+            1,
+        )
+        self.assertFalse(eligible)
+        self.assertIn("superseded", reason.lower())
+
     def test_rejects_unreviewed_source_branch(self):
         self.assertFalse(
             promotion_decision("feature/unknown", ["src/world/renderer.cpp"], 1)[0]

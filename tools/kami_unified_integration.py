@@ -75,6 +75,12 @@ ALREADY_PORTED_SOURCE_PREFIXES = frozenset({
     "76849e6f6647", "4ea64bab9067", "1d43302d818d",
     "a568c0213f39", "67a11ef3b723",
 })
+# This older branch is intentionally excluded until rebased: its inventory
+# preview predates the destination's CAPS entry filtering and move-permission
+# checks; creator/social/navigation/hotfix modules already match the destination.
+SUPERSEDED_SOURCE_BRANCHES = frozenset({
+    "feature/kami-native-feature-restoration",
+})
 IMPLEMENTATION_PREFIXES = ("src/", "include/", "resources/", "assets/")
 TEST_PREFIX = "tests/"
 ROOT_IMPLEMENTATION_FILES = frozenset({"CMakeLists.txt"})
@@ -251,6 +257,11 @@ def promotion_decision(
         return False, "The destination branch is not a promotion source."
     if source_branch not in ALLOWED_SOURCE_BRANCHES:
         return False, "The source branch is not on the reviewed integration allowlist."
+    if source_branch in SUPERSEDED_SOURCE_BRANCHES:
+        return False, (
+            "The source branch is superseded by newer native KAMI inventory "
+            "filtering and permission checks; rebase and re-review before promotion."
+        )
     if parent_count != 1:
         return False, "Merge commits are not auto-promoted; select a single implementation commit."
     if not changed_files:
