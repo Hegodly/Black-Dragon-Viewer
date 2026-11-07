@@ -347,16 +347,18 @@ void Circuit::maybe_fetch_mesh() noexcept {
         try{
             worker=std::async(std::launch::async,
                 [url=std::move(cap),id=selected->id]()mutable{
-                    MeshResult result{};
-                    result.id=id;
-                    const auto reply=caps::fetch_mesh_asset(std::move(url),id);
-                    result.fetched=reply.fetched;
-                    result.http_status=reply.status;
-                    result.bytes=static_cast<std::uint32_t>(reply.bytes.size());
-                    if(reply.fetched)
-                        result.decoded=mesh::decode_mesh_lod(
-                            reply.bytes,result.lod);
-                    return result;
+                    return load::capture_worker_result<MeshResult>(
+                        std::move(id),[&](MeshResult& result){
+                            const auto reply=caps::fetch_mesh_asset(
+                                std::move(url),result.id);
+                            result.fetched=reply.fetched;
+                            result.http_status=reply.status;
+                            result.bytes=static_cast<std::uint32_t>(
+                                reply.bytes.size());
+                            if(reply.fetched)
+                                result.decoded=mesh::decode_mesh_lod(
+                                    reply.bytes,result.lod);
+                        });
                 });
             launched=true;
         }catch(...){
