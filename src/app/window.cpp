@@ -2060,6 +2060,18 @@ void Window::update_sl_connection() {
     if(sl_circuit_.state()!=protocol::sim::CircuitState::Closed &&
        sl_circuit_.state()!=protocol::sim::CircuitState::Failed)
         sl_circuit_.poll();
+    // A login may complete while MESSAGES is already open. Refresh the
+    // nearby-chat composer only on connectivity transitions, not on every
+    // timer tick (which would erase text the resident is typing).
+    const bool nearby_online = sl_circuit_.state()==
+        protocol::sim::CircuitState::MovementConfirmed;
+    if(nearby_online != messenger_nearby_online_) {
+        messenger_nearby_online_ = nearby_online;
+        if(page_ == 4) {
+            update_messenger_composer();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
     // R9 first server-sourced DX12 pixels: only a partial planar
     // water-height preview, never fabricated terrain or avatar meshes.
     if(!live_water_attempted_&&
