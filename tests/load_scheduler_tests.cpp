@@ -267,5 +267,65 @@ int main(){
     if(!queue.request(b,Kind::VisibleMesh,3.f,true,64U))return 79;
     const auto reentered=queue.next_download();
     if(!reentered||reentered->id!=b)return 80;
+    // Mesh-worker result envelopes preserve successful output and convert
+    // thrown fetch/decode work into a UUID-bound retryable failure.
+    struct WorkerResult {
+        std::string id;
+        unsigned http_status=0U;
+        std::uint32_t bytes=0U;
+        bool fetched=false,decoded=false;
+    };
+    const auto mesh_success=capture_worker_result<WorkerResult>(
+        d,[](WorkerResult& result){
+            result.http_status=200U;result.bytes=128U;
+            result.fetched=true;result.decoded=true;
+        });
+    if(mesh_success.id!=d||mesh_success.http_status!=200U||
+       mesh_success.bytes!=128U||!mesh_success.fetched||
+       !mesh_success.decoded)return 81;
+    const auto mesh_exception=capture_worker_result<WorkerResult>(
+        c,[](WorkerResult& result){
+            result.http_status=200U;result.bytes=4096U;
+            result.fetched=true;result.decoded=true;
+            throw 1;
+        });
+    if(mesh_exception.id!=c||mesh_exception.http_status!=0U||
+       mesh_exception.bytes!=0U||mesh_exception.fetched||
+       mesh_exception.decoded)return 82;
+    queue.clear();
+    if(!queue.request(c,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.next_download()||
+       !queue.download_finished(mesh_exception.id,mesh_exception.bytes,
+                                mesh_exception.fetched)||
+       !queue.find(c)->retryable_fetch_failure||
+       !queue.retry_failed(c)||queue.find(c)->stage!=Stage::Queued)
+        return 83;
+    // Texture workers use the same envelope independently; a thrown decoder
+    // must not leave their single-flight scheduler entry stuck Downloading.
+    const auto texture_success=capture_worker_result<WorkerResult>(
+        a,[](WorkerResult& result){
+            result.http_status=200U;result.bytes=256U;
+            result.fetched=true;result.decoded=true;
+        });
+    if(texture_success.id!=a||texture_success.http_status!=200U||
+       texture_success.bytes!=256U||!texture_success.fetched||
+       !texture_success.decoded)return 84;
+    const auto texture_exception=capture_worker_result<WorkerResult>(
+        b,[](WorkerResult& result){
+            result.http_status=200U;result.bytes=8192U;
+            result.fetched=true;result.decoded=true;
+            throw 1;
+        });
+    if(texture_exception.id!=b||texture_exception.http_status!=0U||
+       texture_exception.bytes!=0U||texture_exception.fetched||
+       texture_exception.decoded)return 85;
+    queue.clear();
+    if(!queue.request(b,Kind::VisibleTexture,1.f,true,64U)||
+       !queue.next_download()||
+       !queue.download_finished(texture_exception.id,texture_exception.bytes,
+                                texture_exception.fetched)||
+       !queue.find(b)->retryable_fetch_failure||
+       !queue.retry_failed(b)||queue.find(b)->stage!=Stage::Queued)
+        return 86;
     return 0;
 }
