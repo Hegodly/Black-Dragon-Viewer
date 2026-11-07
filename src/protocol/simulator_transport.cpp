@@ -670,22 +670,34 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     full_decode_audit_.render_material_records+=frame.render_material_records;
                     full_decode_audit_.reflection_probe_records+=frame.reflection_probe_records;
                     for(const auto id:avatar_ids){
-                        if(avatar_root_ids_.size()<2048U){
-                            const bool stale_geometry=
-                                objectspatial::erase_object_identity(
-                                    id,spatial_objects_,linked_objects_);
-                            const bool newly_known=avatar_root_ids_.insert(id).second;
-                            if(stale_geometry||newly_known)
-                                ++spatial_object_revision_;
-                            missing_objects_.erase(id);
-                        }
+                        // Even when the bounded avatar-ID set is full, a
+                        // verified avatar packet must not leave old prim
+                        // geometry for the same local ID in the scene.
+                        const bool stale_geometry=
+                            objectspatial::erase_object_identity(
+                                id,spatial_objects_,linked_objects_);
+                        const bool newly_known=avatar_root_ids_.size()<2048U&&
+                            avatar_root_ids_.insert(id).second;
+                        if(stale_geometry||newly_known)
+                            ++spatial_object_revision_;
+                        missing_objects_.erase(id);
                     }
                     for(auto id:parent_ids)
                         remember_missing_object(id,true,true);
                     for(const auto& child:linked){
                         const bool known_as_root=spatial_objects_.contains(child.local_id);
                         if(linked_objects_.size()>=kMaxLinkedObjects&&
-                            !linked_objects_.contains(child.local_id)&&!known_as_root){
+                            !linked_objects_.contains(child.local_id)){
+                            // Never exceed the linked-object memory cap. If
+                            // this ID was a root, remove its now-wrong
+                            // region-space representation and request a fresh
+                            // full update once capacity becomes available.
+                            if(known_as_root&&
+                               objectspatial::erase_conflicting_classification(
+                                   child.local_id,true,spatial_objects_,linked_objects_)){
+                                ++spatial_object_revision_;
+                                remember_missing_object(child.local_id,true,false);
+                            }
                             ++dropped_linked_updates_;continue;
                         }
                         const bool reclassified=
@@ -702,7 +714,16 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                     for(const auto& obj:objects){
                         const bool known_as_child=linked_objects_.contains(obj.local_id);
                         if(spatial_objects_.size()>=kMaxRootObjects &&
-                            !spatial_objects_.contains(obj.local_id)&&!known_as_child){
+                            !spatial_objects_.contains(obj.local_id)){
+                            // Root and child caps remain hard memory bounds.
+                            // Discard a stale child classification rather
+                            // than keep drawing it under the old parent.
+                            if(known_as_child&&
+                               objectspatial::erase_conflicting_classification(
+                                   obj.local_id,false,spatial_objects_,linked_objects_)){
+                                ++spatial_object_revision_;
+                                remember_missing_object(obj.local_id,true,false);
+                            }
                             ++dropped_root_updates_;continue;
                         }
                         const bool reclassified=
