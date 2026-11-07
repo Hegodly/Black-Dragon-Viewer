@@ -56,7 +56,7 @@ bool sane_child(const Transform& p) noexcept {
 // This conservative reader declines unknown variable-sized particle fields
 // rather than scanning for a UUID pattern (which could invent a mesh).
 struct CompressedVolume {
-    std::array<std::string,32U> face_material_ids{};
+    std::array<std::string,45U> face_material_ids{};
     bool material_params_seen=false;
     bool reflection_probe=false;float probe_ambiance=1.f,probe_clip=.1f;std::uint8_t probe_flags=0U;
     std::string mesh;
@@ -65,10 +65,10 @@ struct CompressedVolume {
     bool extras=false,shape=false,unsupported=false;
     bool base_tint_present=false,default_texture_present=false;
     std::string default_texture_asset_id;
-    std::array<std::string,32U> face_texture_asset_ids{};
-    std::array<bool,32U> face_texture_override{};
-    std::array<texture::UVTransform,32U> face_uv{};
-    std::array<std::array<float,4U>,32U> face_rgba{};
+    std::array<std::string,45U> face_texture_asset_ids{};
+    std::array<bool,45U> face_texture_override{};
+    std::array<texture::UVTransform,45U> face_uv{};
+    std::array<std::array<float,4U>,45U> face_rgba{};
     bool face_rgba_present=false;
     float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
     std::uint32_t extra_records=0,sculpt_records=0;
@@ -177,7 +177,7 @@ CompressedVolume decode_volume_tail(std::span<const std::uint8_t> data,
                 }
                 out.base_r=tint.red;out.base_g=tint.green;
                 out.base_b=tint.blue;out.base_a=tint.alpha;
-                for(unsigned f=0U;f<32U;++f){
+                for(unsigned f=0U;f<45U;++f){
                     out.face_uv[f]=tint.uv[f];
                     out.face_rgba[f]=tint.rgba[f];
                 }
