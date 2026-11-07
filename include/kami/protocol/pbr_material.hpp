@@ -31,7 +31,7 @@ using Materials=std::map<std::string,Material>;
 using Overrides=std::map<std::uint32_t,std::map<unsigned,Override>>;
 inline constexpr unsigned kMaxMaterials=256U,kMaxGPURecords=1024U,kRows=15U;
 // SL PARAMS_RENDER_MATERIAL (0x80), count + face/U8 + material/UUID.
-bool decode_face_ids(std::span<const std::uint8_t>,std::array<std::string,32>&) noexcept;
+bool decode_face_ids(std::span<const std::uint8_t>,std::array<std::string,45>&) noexcept;
 enum class AssetFormat { Unknown, Binary, XML, Notation, Gzip, Zlib };
 AssetFormat asset_format(std::span<const std::uint8_t>) noexcept;
 inline const wchar_t* asset_format_label(AssetFormat format) noexcept {
