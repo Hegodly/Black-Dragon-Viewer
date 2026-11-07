@@ -195,5 +195,43 @@ int main(){
        !queue.retry_failed(c))return 51;
     const auto retried=queue.next_download();
     if(!retried||retried->id!=c)return 52;
+    // Local worker-launch failures share the bounded retry schedule with
+    // transient transport errors and cannot leave jobs stuck in Downloading.
+    if(Scheduler::retry_delay_seconds(0U)!=1U||
+       Scheduler::retry_delay_seconds(1U)!=2U||
+       Scheduler::retry_delay_seconds(2U)!=4U||
+       Scheduler::retry_delay_seconds(3U)!=8U||
+       Scheduler::retry_delay_seconds(99U)!=8U)return 62;
+    queue.clear();
+    if(!queue.request(d,Kind::VisibleMesh,1.f,true,64U))return 63;
+    for(unsigned failure=0U;failure<=Scheduler::kMaxTransientRetries;++failure){
+        const auto job=queue.next_download();
+        if(!job||job->id!=d)return 64;
+        const auto delay=queue.worker_launch_failed(d);
+        const auto* failed=queue.find(d);
+        if(!failed||failed->stage!=Stage::Failed||
+           !failed->retryable_fetch_failure)return 65;
+        if(failure<Scheduler::kMaxTransientRetries){
+            if(!delay||*delay!=Scheduler::retry_delay_seconds(failure)||
+               !queue.retry_failed(d))return 66;
+        }else if(delay||queue.retry_failed(d)||
+                 failed->retry_count!=Scheduler::kMaxTransientRetries)
+            return 67;
+    }
+    // HTTP status classification keeps authentication/permission failures
+    // terminal while permitting only transient server/timeout responses.
+    if(!Scheduler::retryable_http_status(0U)||
+       !Scheduler::retryable_http_status(408U)||
+       !Scheduler::retryable_http_status(429U)||
+       !Scheduler::retryable_http_status(500U)||
+       !Scheduler::retryable_http_status(502U)||
+       !Scheduler::retryable_http_status(503U)||
+       !Scheduler::retryable_http_status(504U)||
+       Scheduler::retryable_http_status(200U)||
+       Scheduler::retryable_http_status(400U)||
+       Scheduler::retryable_http_status(401U)||
+       Scheduler::retryable_http_status(403U)||
+       Scheduler::retryable_http_status(404U)||
+       Scheduler::retryable_http_status(501U))return 68;
     return 0;
 }
