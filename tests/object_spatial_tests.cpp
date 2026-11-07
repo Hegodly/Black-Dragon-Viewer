@@ -344,5 +344,33 @@ int main(){
                 near_child,roots,links,{1001U},world_position))
             return 48;
     }
+    // A KillObject for a linkset root must also remove retained nested
+    // children. Killing one child must not remove its parent's siblings.
+    {
+        using Transform=objectspatial::Transform;
+        Transform child{1002U,1.f,0.f,0.f,1.f,1.f,1.f};
+        child.parent_id=1001U;
+        Transform grandchild{1003U,0.f,2.f,0.f,1.f,1.f,1.f};
+        grandchild.parent_id=1002U;
+        Transform sibling{1004U,0.f,3.f,0.f,1.f,1.f,1.f};
+        sibling.parent_id=1001U;
+        Transform unrelated{1005U,0.f,4.f,0.f,1.f,1.f,1.f};
+        unrelated.parent_id=1999U;
+        const std::map<std::uint32_t,Transform> links{
+            {1002U,child},{1003U,grandchild},
+            {1004U,sibling},{1005U,unrelated}};
+        const std::vector<std::uint32_t> root_kill{1001U,1001U};
+        const auto whole=objectspatial::expand_killed_linkset_ids(
+            root_kill,links);
+        const std::set<std::uint32_t> whole_set(whole.begin(),whole.end());
+        if(whole_set!=std::set<std::uint32_t>{1001U,1002U,1003U,1004U}||
+           whole.size()!=4U)return 49;
+        const std::vector<std::uint32_t> child_kill{1002U};
+        const auto subtree=objectspatial::expand_killed_linkset_ids(
+            child_kill,links);
+        const std::set<std::uint32_t> subtree_set(subtree.begin(),subtree.end());
+        if(subtree_set!=std::set<std::uint32_t>{1002U,1003U}||
+           subtree.size()!=2U)return 50;
+    }
     return 0;
 }
