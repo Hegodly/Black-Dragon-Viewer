@@ -66,7 +66,7 @@ void Circuit::schedule_visible_textures() noexcept {
                         position)|| 
                    std::abs(position[0]-movement_position_.x)>144.f||
                    std::abs(position[1]-movement_position_.y)>144.f||
-                   std::abs(position[2]-movement_position_.z)>96.f)continue;
+                   std::abs(position[2]-movement_position_.z)>128.f)continue;
                 const float distance=std::hypot(std::hypot(
                     position[0]-movement_position_.x,
                     position[1]-movement_position_.y),
