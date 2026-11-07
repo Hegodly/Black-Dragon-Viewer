@@ -75,6 +75,26 @@ int run_primitive_tests(){
         if(high13.root_shapes!=1U||std::abs(max_x-1.5f)>.001f||
            std::abs(max_z-.75f)>.001f)return 74;
     }
+    // Linear square and triangular profiles must produce their own
+    // polygonal silhouettes, not the legacy cylinder fallback.
+    {
+        Transform square{86U,128.f,140.f,35.f,2.f,2.f,2.f};
+        square.primitive=Kind::Box;square.volume_params_seen=true;
+        square.volume_params[0U]=0x10U;square.volume_params[16U]=0x01U;
+        square.volume_params[3U]=0x50U;square.volume_params[4U]=0xc3U;
+        square.volume_params[19U]=0x50U;square.volume_params[20U]=0xc3U;
+        const auto box_sweep=world::build_live_primitive_geometry(
+            {{86U,square}},{},128.f,140.f,35.f);
+        if(box_sweep.root_shapes!=1U||box_sweep.scene.vertices.size()<=240U)
+            return 86;
+        auto prism=square;prism.local_id=87U;prism.primitive=Kind::Prism;
+        prism.volume_params[16U]=0x03U;
+        const auto prism_sweep=world::build_live_primitive_geometry(
+            {{87U,prism}},{},128.f,140.f,35.f);
+        if(prism_sweep.root_shapes!=1U||prism_sweep.scene.vertices.size()<=180U||
+           prism_sweep.scene.vertices.size()>=box_sweep.scene.vertices.size())
+            return 87;
+    }
     // A real High 13 linear/circular LLVolume now follows profile and
     // path cuts, hollow radius, taper, twist and shear through tessellation.
     {
