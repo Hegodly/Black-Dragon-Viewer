@@ -1036,9 +1036,11 @@ bool Renderer::set_verified_live_terrain(
     using DrawRequirement=Dx12MeshBufferCache::InstanceDrawRequirement;
     std::vector<SourceSpan> source_spans,candidate_spans;
     std::vector<DrawRequirement> candidate_requirements;
+    std::vector<Dx12MeshBufferCache::InstanceVisibility> candidate_visibility;
     source_spans.reserve(mesh_objects.instance_ranges.size());
     candidate_spans.reserve(mesh_objects.instance_ranges.size());
     candidate_requirements.reserve(mesh_objects.instance_ranges.size());
+    candidate_visibility.reserve(mesh_objects.instance_ranges.size());
     bool ranges_valid=true;
     for(const auto& range:mesh_objects.instance_ranges){
         if(!range.local_id||!range.vertex_count||
@@ -1059,7 +1061,13 @@ bool Renderer::set_verified_live_terrain(
         candidate_spans.push_back({range.local_id,absolute_first,range.vertex_count});
         candidate_requirements.push_back(
             {range.local_id,static_cast<UINT>(range.vertex_count)});
+        candidate_visibility.push_back({range.local_id,
+            Dx12MeshBufferCache::bounds_for_vertices(
+                mesh_objects.scene.vertices.data()+range.first_vertex,
+                range.vertex_count)});
     }
+    std::sort(candidate_visibility.begin(),candidate_visibility.end(),
+        [](const auto& a,const auto& b){return a.local_id<b.local_id;});
     std::sort(candidate_spans.begin(),candidate_spans.end(),
         [](const SourceSpan& a,const SourceSpan& b){
             if(a.first_vertex!=b.first_vertex)return a.first_vertex<b.first_vertex;
@@ -1108,10 +1116,21 @@ bool Renderer::set_verified_live_terrain(
         }
         return true;
     };
+    const auto same_visibility=[](const auto& a,const auto& b){
+        if(a.size()!=b.size())return false;
+        for(std::size_t i=0;i<a.size();++i){
+            const auto& x=a[i];const auto& y=b[i];
+            if(x.local_id!=y.local_id||x.bounds.valid!=y.bounds.valid||
+               x.bounds.x!=y.bounds.x||x.bounds.y!=y.bounds.y||
+               x.bounds.z!=y.bounds.z||x.bounds.radius!=y.bounds.radius)return false;
+        }
+        return true;
+    };
     const bool unchanged=!material_changed&&region_mesh_&&
         same_scene_geometry(*region_mesh_,scene)&&
         same_spans(candidate_spans,resident_mesh_spans_)&&
         same_requirements(candidate_requirements,resident_mesh_requirements_)&&
+        same_visibility(candidate_visibility,resident_mesh_visibility_)&&
         candidate_batch==resident_mesh_batch_candidate_&&
         (!candidate_batch||resident_mesh_batch_ready_);
 
@@ -1121,6 +1140,7 @@ bool Renderer::set_verified_live_terrain(
         auto previous_instance_cache=std::move(mesh_instance_cache_);
         auto previous_spans=std::move(resident_mesh_spans_);
         auto previous_requirements=std::move(resident_mesh_requirements_);
+        auto previous_visibility=std::move(resident_mesh_visibility_);
         const auto previous_candidate=resident_mesh_batch_candidate_;
         const auto previous_ready=resident_mesh_batch_ready_;
         const auto previous_active=resident_mesh_batch_active_;
@@ -1129,6 +1149,7 @@ bool Renderer::set_verified_live_terrain(
         region_mesh_=std::move(scene);
         resident_mesh_spans_=std::move(candidate_spans);
         resident_mesh_requirements_=std::move(candidate_requirements);
+        resident_mesh_visibility_=std::move(candidate_visibility);
         resident_mesh_batch_candidate_=candidate_batch;
         resident_mesh_batch_ready_=false;
         resident_mesh_batch_active_=false;
@@ -1145,6 +1166,7 @@ bool Renderer::set_verified_live_terrain(
                 mesh_instance_cache_=std::move(previous_instance_cache);
                 resident_mesh_spans_=std::move(previous_spans);
                 resident_mesh_requirements_=std::move(previous_requirements);
+                resident_mesh_visibility_=std::move(previous_visibility);
                 resident_mesh_batch_candidate_=previous_candidate;
                 resident_mesh_batch_ready_=previous_ready;
                 resident_mesh_batch_active_=previous_active;
@@ -1298,6 +1320,7 @@ bool Renderer::set_decoded_region_geometry(
     auto prior_instance_cache=std::move(mesh_instance_cache_);
     auto prior_spans=std::move(resident_mesh_spans_);
     auto prior_requirements=std::move(resident_mesh_requirements_);
+    auto prior_visibility=std::move(resident_mesh_visibility_);
     const auto prior_candidate=resident_mesh_batch_candidate_;
     const auto prior_ready=resident_mesh_batch_ready_;
     const auto prior_active=resident_mesh_batch_active_;
@@ -1305,6 +1328,7 @@ bool Renderer::set_decoded_region_geometry(
     region_mesh_=std::move(decoded_static_geometry);
     resident_mesh_spans_.clear();
     resident_mesh_requirements_.clear();
+    resident_mesh_visibility_.clear();
     resident_mesh_batch_candidate_=false;
     resident_mesh_batch_ready_=false;
     resident_mesh_batch_active_=false;
@@ -1314,6 +1338,7 @@ bool Renderer::set_decoded_region_geometry(
         mesh_instance_cache_=std::move(prior_instance_cache);
         resident_mesh_spans_=std::move(prior_spans);
         resident_mesh_requirements_=std::move(prior_requirements);
+        resident_mesh_visibility_=std::move(prior_visibility);
         resident_mesh_batch_candidate_=prior_candidate;
         resident_mesh_batch_ready_=prior_ready;
         resident_mesh_batch_active_=prior_active;
@@ -1332,6 +1357,7 @@ void Renderer::clear_decoded_region_geometry() {
     mesh_instance_cache_.clear();
     resident_mesh_spans_.clear();
     resident_mesh_requirements_.clear();
+    resident_mesh_visibility_.clear();
     resident_mesh_batch_candidate_=false;
     resident_mesh_batch_ready_=false;
     resident_mesh_batch_active_=false;
@@ -1487,6 +1513,37 @@ void Renderer::draw() {
     XMFLOAT4X4 viewproj{},lightproj{};
     XMStoreFloat4x4(&viewproj,view*projection);
     XMStoreFloat4x4(&lightproj,lightView*lightProjection);
+    using VisibilityCache=Dx12MeshBufferCache;
+    std::array<float,16> camera_matrix{},shadow_matrix{};
+    std::memcpy(camera_matrix.data(),&viewproj,sizeof(viewproj));
+    std::memcpy(shadow_matrix.data(),&lightproj,sizeof(lightproj));
+    std::array<VisibilityCache::VisibilityPlane,6> camera_frustum{},shadow_frustum{};
+    const bool camera_frustum_valid=
+        VisibilityCache::extract_frustum_planes(camera_matrix,camera_frustum);
+    const bool shadow_frustum_valid=
+        VisibilityCache::extract_frustum_planes(shadow_matrix,shadow_frustum);
+    std::array<std::uint32_t,VisibilityCache::kMaxResidentBatchDraws>
+        camera_visible_ids{},shadow_visible_ids{};
+    std::size_t camera_visible_count=0U,shadow_visible_count=0U;
+    if(resident_mesh_batch_active_){
+        const auto all_visible=[&](auto& ids,std::size_t& count){
+            count=0U;
+            for(const auto& item:resident_mesh_requirements_)
+                ids[count++]=item.local_id;
+        };
+        if(!camera_frustum_valid||
+           !VisibilityCache::select_visible_instance_ids(
+               resident_mesh_requirements_,resident_mesh_visibility_,camera_frustum,
+               camera_visible_ids.data(),camera_visible_ids.size(),
+               camera_visible_count))
+            all_visible(camera_visible_ids,camera_visible_count);
+        if(!graphics_.shadows||!shadow_frustum_valid||
+           !VisibilityCache::select_visible_instance_ids(
+               resident_mesh_requirements_,resident_mesh_visibility_,shadow_frustum,
+               shadow_visible_ids.data(),shadow_visible_ids.size(),
+               shadow_visible_count))
+            all_visible(shadow_visible_ids,shadow_visible_count);
+    }
     std::array<float,63> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
@@ -1573,11 +1630,12 @@ void Renderer::draw() {
             commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         }
         if(resident_mesh_batch_active_){
-            if(!mesh_instance_cache_.record_instance_batch(
+            if(!mesh_instance_cache_.record_visible_instance_batch(
                 commands_.Get(),"__kami_live_region__",resident_mesh_revision_,
-                resident_mesh_requirements_)){
+                resident_mesh_requirements_,shadow_visible_ids.data(),
+                shadow_visible_count)){
                 ready_=false;
-                error_=L"DX12 resident shadow batch lost its preflight";
+                error_=L"DX12 resident shadow visibility batch lost its preflight";
                 return;
             }
             commands_->IASetVertexBuffers(0,1,&vertex_view_);
@@ -1648,11 +1706,12 @@ void Renderer::draw() {
             commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         }
     if(resident_mesh_batch_active_){
-        if(!mesh_instance_cache_.record_instance_batch(
+        if(!mesh_instance_cache_.record_visible_instance_batch(
             commands_.Get(),"__kami_live_region__",resident_mesh_revision_,
-            resident_mesh_requirements_)){
+            resident_mesh_requirements_,camera_visible_ids.data(),
+            camera_visible_count)){
             ready_=false;
-            error_=L"DX12 resident PBR batch lost its preflight";
+            error_=L"DX12 resident PBR visibility batch lost its preflight";
             return;
         }
         commands_->IASetVertexBuffers(0,1,&vertex_view_);

@@ -1,6 +1,7 @@
 #pragma once
 #include <d3d12.h>
 #include <algorithm>
+#include <array>
 #include <wrl/client.h>
 #include <cstdint>
 #include <cmath>
@@ -248,6 +249,36 @@ public:
         return true;
     }
 
+    // Record only instances proven visible in the current pass. The full
+    // resident batch is preflighted first, so culling never changes the
+    // combined-scene exclusion decision; unknown bounds remain in the draw list.
+    [[nodiscard]] bool record_visible_instance_batch(
+        ID3D12GraphicsCommandList* commands,
+        const std::string& region_key,
+        std::uint64_t revision,
+        const std::vector<InstanceDrawRequirement>& required,
+        const std::uint32_t* visible_ids,
+        std::size_t visible_count) const noexcept {
+        if(!commands||!visible_ids||
+           !can_draw_exact_instance_batch(region_key,revision,required)||
+           visible_count>required.size())return false;
+        for(std::size_t i=0;i<visible_count;++i){
+            const auto id=visible_ids[i];
+            if(!id||std::find(visible_ids,visible_ids+i,id)!=visible_ids+i||
+               std::none_of(required.begin(),required.end(),
+                   [id](const auto& item){return item.local_id==id;}))return false;
+        }
+        for(const auto& item:required){
+            if(std::find(visible_ids,visible_ids+visible_count,item.local_id)==
+               visible_ids+visible_count)continue;
+            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            if(!resident||!resident->resource)return false;
+            commands->IASetVertexBuffers(0,1,&resident->view);
+            commands->DrawInstanced(item.vertex_count,1,0,0);
+        }
+        return true;
+    }
+
     // Validate that source mesh spans form a non-overlapping subset of the
     // decoded scene. A resident GPU batch alone cannot prove this: duplicate
     // source ranges can produce double-drawn triangles after path switching.
@@ -339,9 +370,73 @@ public:
         bool valid=false;
     };
     struct VisibilityPlane { float x=0.f,y=0.f,z=0.f,d=0.f; };
+    struct InstanceVisibility {
+        std::uint32_t local_id=0;
+        VisibilitySphere bounds{};
+    };
+
+    // Build a conservative sphere from the exact decoded world-space vertices
+    // owned by one simulator instance. Invalid coordinates deliberately yield
+    // unknown bounds; callers keep those objects visible instead of losing geometry.
+    template<class VertexT>
+    [[nodiscard]] static VisibilitySphere bounds_for_vertices(
+        const VertexT* vertices,std::size_t count) noexcept {
+        if(!vertices||!count)return {};
+        double min_x=std::numeric_limits<double>::infinity();
+        double min_y=min_x,min_z=min_x;
+        double max_x=-min_x,max_y=-min_x,max_z=-min_x;
+        for(std::size_t i=0;i<count;++i){
+            const double x=vertices[i].px,y=vertices[i].py,z=vertices[i].pz;
+            if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z))return {};
+            min_x=std::min(min_x,x);min_y=std::min(min_y,y);min_z=std::min(min_z,z);
+            max_x=std::max(max_x,x);max_y=std::max(max_y,y);max_z=std::max(max_z,z);
+        }
+        const double cx=(min_x+max_x)*.5,cy=(min_y+max_y)*.5,cz=(min_z+max_z)*.5;
+        const float fx=static_cast<float>(cx),fy=static_cast<float>(cy),fz=static_cast<float>(cz);
+        if(!std::isfinite(fx)||!std::isfinite(fy)||!std::isfinite(fz))return {};
+        double radius_squared=0.0;
+        for(std::size_t i=0;i<count;++i){
+            const double dx=static_cast<double>(vertices[i].px)-fx;
+            const double dy=static_cast<double>(vertices[i].py)-fy;
+            const double dz=static_cast<double>(vertices[i].pz)-fz;
+            radius_squared=std::max(radius_squared,dx*dx+dy*dy+dz*dz);
+        }
+        const double radius=std::sqrt(radius_squared);
+        if(!std::isfinite(radius)||radius>std::numeric_limits<float>::max())return {};
+        float fr=static_cast<float>(radius);
+        if(static_cast<double>(fr)<radius)
+            fr=std::nextafter(fr,std::numeric_limits<float>::infinity());
+        return {fx,fy,fz,fr,true};
+    }
+
+    // Extract six Direct3D clip planes from a row-major row-vector matrix.
+    // D3D depth is [0,w], not OpenGL's [-w,w].
+    [[nodiscard]] static bool extract_frustum_planes(
+        const std::array<float,16>& m,
+        std::array<VisibilityPlane,6>& out) noexcept {
+        for(const auto value:m)if(!std::isfinite(value))return false;
+        const std::array<VisibilityPlane,6> candidate{{
+            {m[0]+m[3],m[4]+m[7],m[8]+m[11],m[12]+m[15]},
+            {m[3]-m[0],m[7]-m[4],m[11]-m[8],m[15]-m[12]},
+            {m[1]+m[3],m[5]+m[7],m[9]+m[11],m[13]+m[15]},
+            {m[3]-m[1],m[7]-m[5],m[11]-m[9],m[15]-m[13]},
+            {m[2],m[6],m[10],m[14]},
+            {m[3]-m[2],m[7]-m[6],m[11]-m[10],m[15]-m[14]}
+        }};
+        for(const auto& plane:candidate){
+            const double x=plane.x,y=plane.y,z=plane.z;
+            const double length=std::sqrt(x*x+y*y+z*z);
+            if(!std::isfinite(length)||length<=0.0)return false;
+        }
+        out=candidate;
+        return true;
+    }
+
+    // Unknown, invalid or ambiguous bounds remain visible. Never cull an
+    // object simply because mesh metadata or a valid frustum has not arrived.
+    template<class PlaneRange>
     [[nodiscard]] static bool potentially_visible(
-        const VisibilitySphere& sphere,
-        const std::vector<VisibilityPlane>& planes) noexcept {
+        const VisibilitySphere& sphere,const PlaneRange& planes) noexcept {
         if(!sphere.valid||!std::isfinite(sphere.x)||
            !std::isfinite(sphere.y)||!std::isfinite(sphere.z)||
            !std::isfinite(sphere.radius)||sphere.radius<0.f||
@@ -349,8 +444,6 @@ public:
         for(const auto& plane:planes){
             if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
                !std::isfinite(plane.z)||!std::isfinite(plane.d))return true;
-            // Evaluate extreme simulator coordinates in double precision:
-            // float dot products can overflow and make visibility unreliable.
             const double nx=plane.x,ny=plane.y,nz=plane.z;
             const double length=std::sqrt(nx*nx+ny*ny+nz*nz);
             if(!std::isfinite(length)||length<=0.0)return true;
@@ -363,6 +456,34 @@ public:
                 nz*static_cast<double>(sphere.z)+plane.d;
             if(!std::isfinite(distance))return true;
             if(distance < -static_cast<double>(sphere.radius)*length)return false;
+        }
+        return true;
+    }
+
+    // Deterministic per-pass draw selection. Missing, invalid or duplicate
+    // bounds are conservative-visible; invalid requirement sets fail so the
+    // renderer can fall back to the complete resident batch.
+    [[nodiscard]] static bool select_visible_instance_ids(
+        const std::vector<InstanceDrawRequirement>& required,
+        const std::vector<InstanceVisibility>& bounds,
+        const std::array<VisibilityPlane,6>& planes,
+        std::uint32_t* visible_ids,std::size_t capacity,
+        std::size_t& visible_count) noexcept {
+        visible_count=0U;
+        if(required.empty()||!visible_ids||capacity<required.size())return false;
+        for(std::size_t i=0;i<required.size();++i){
+            const auto& item=required[i];
+            if(!item.local_id||!item.vertex_count)return false;
+            for(std::size_t j=0;j<i;++j)
+                if(required[j].local_id==item.local_id)return false;
+            const InstanceVisibility* found=nullptr;
+            bool ambiguous=false;
+            for(const auto& candidate:bounds)if(candidate.local_id==item.local_id){
+                if(found)ambiguous=true;
+                else found=&candidate;
+            }
+            if(!found||ambiguous||potentially_visible(found->bounds,planes))
+                visible_ids[visible_count++]=item.local_id;
         }
         return true;
     }

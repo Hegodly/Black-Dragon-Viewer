@@ -1,6 +1,7 @@
 #include "kami/world/device.hpp"
 #include "kami/world/dx12_mesh_buffer_cache.hpp"
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 
@@ -112,6 +113,14 @@ int main() {
              {Requirement{17,3},Requirement{19,3}}))return 77;
         if(!cache.record_instance_batch(batch_commands.Get(),"region",1,
              {Requirement{17,3},Requirement{18,3}}))return 78;
+        const std::array<std::uint32_t,1> only_nearby{{17U}};
+        if(!cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{18,3}},
+             only_nearby.data(),only_nearby.size()))return 92;
+        const std::array<std::uint32_t,2> duplicate_visible{{17U,17U}};
+        if(cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{18,3}},
+             duplicate_visible.data(),duplicate_visible.size()))return 93;
         if(FAILED(batch_commands->Close()))return 79;
         // Coverage is stricter than nonoverlap: a missing triangle must
         // never disappear when the per-object draw path is activated.
@@ -158,6 +167,58 @@ int main() {
         if(!Cache::potentially_visible({0,0,0,1.f,true},extreme))return 70;
         if(Cache::potentially_visible({3.f,0,0,.5f,true},extreme))return 71;
         if(!Cache::potentially_visible({1.5f,0,0,.5f,true},extreme))return 72;
+        // Direct3D LH perspective frustum: near=1, far=10, FOV=90 degrees.
+        const std::array<float,16> perspective{{
+            1,0,0,0, 0,1,0,0, 0,0,1.1111111f,1, 0,0,-1.1111111f,0}};
+        std::array<Cache::VisibilityPlane,6> extracted{};
+        if(!Cache::extract_frustum_planes(perspective,extracted))return 80;
+        if(!Cache::potentially_visible({0,0,5.f,.1f,true},extracted))return 81;
+        if(Cache::potentially_visible({20,0,5.f,.1f,true},extracted))return 82;
+        if(Cache::potentially_visible({0,0,.5f,.1f,true},extracted))return 83;
+        if(Cache::potentially_visible({0,0,12.f,.1f,true},extracted))return 84;
+        std::array<float,16> invalid_matrix{};
+        if(Cache::extract_frustum_planes(invalid_matrix,extracted))return 85;
+        struct PositionVertex {float px,py,pz;};
+        const std::array<PositionVertex,3> triangle{{
+            {-1.f,0.f,0.f},{1.f,0.f,0.f},{0.f,2.f,0.f}}};
+        const auto triangle_bounds=Cache::bounds_for_vertices(
+            triangle.data(),triangle.size());
+        if(!triangle_bounds.valid||std::fabs(triangle_bounds.x)>1e-6f||
+           std::fabs(triangle_bounds.y-1.f)>1e-6f||
+           std::fabs(triangle_bounds.radius-std::sqrt(2.f))>1e-5f)return 86;
+        auto corrupt_triangle=triangle;
+        corrupt_triangle[1].px=std::numeric_limits<float>::quiet_NaN();
+        const auto corrupt_bounds=Cache::bounds_for_vertices(
+            corrupt_triangle.data(),corrupt_triangle.size());
+        if(corrupt_bounds.valid||
+           !Cache::potentially_visible(corrupt_bounds,extracted))return 87;
+        using Requirement=Cache::InstanceDrawRequirement;
+        using Visibility=Cache::InstanceVisibility;
+        const std::vector<Requirement> visibility_requirements{
+            {17,3},{18,3},{19,3},{20,3}};
+        const std::vector<Visibility> visibility_bounds{
+            {17,{0,0,5.f,.1f,true}},
+            {18,{20,0,5.f,.1f,true}},
+            {19,{20,0,5.f,.1f,false}}};
+        std::array<std::uint32_t,4> visible_ids{};
+        std::size_t visible_count=0U;
+        if(!Cache::select_visible_instance_ids(
+            visibility_requirements,visibility_bounds,extracted,
+            visible_ids.data(),visible_ids.size(),visible_count)||
+           visible_count!=3U||visible_ids[0]!=17U||
+           visible_ids[1]!=19U||visible_ids[2]!=20U)return 88;
+        auto ambiguous_bounds=visibility_bounds;
+        ambiguous_bounds.push_back({18,{20,0,5.f,.1f,true}});
+        if(!Cache::select_visible_instance_ids(
+            visibility_requirements,ambiguous_bounds,extracted,
+            visible_ids.data(),visible_ids.size(),visible_count)||
+           visible_count!=4U)return 89;
+        if(Cache::select_visible_instance_ids(
+            {{17,3},{17,3}},visibility_bounds,extracted,
+            visible_ids.data(),visible_ids.size(),visible_count))return 90;
+        if(Cache::select_visible_instance_ids(
+            visibility_requirements,visibility_bounds,extracted,
+            visible_ids.data(),1U,visible_count))return 91;
         // A region generation change must invalidate old mesh residency until
         // the new scene explicitly reuploads or touches its visible assets.
         cache.begin_generation();

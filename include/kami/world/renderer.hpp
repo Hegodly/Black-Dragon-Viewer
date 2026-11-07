@@ -420,6 +420,7 @@ private:
     Dx12MeshBufferCache mesh_instance_cache_{}; // independently fenced resident object streams
     std::vector<Dx12MeshBufferCache::InstanceSourceSpan> resident_mesh_spans_;
     std::vector<Dx12MeshBufferCache::InstanceDrawRequirement> resident_mesh_requirements_;
+    std::vector<Dx12MeshBufferCache::InstanceVisibility> resident_mesh_visibility_;
     std::uint64_t resident_mesh_revision_=0;
     bool resident_mesh_batch_candidate_=false;
     bool resident_mesh_batch_ready_=false;
