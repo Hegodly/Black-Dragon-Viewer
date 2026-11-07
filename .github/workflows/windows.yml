@@ -122,6 +122,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Configure original native KAMI
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Validate KAMI feature dependency graph
+        shell: pwsh
+        run: ./tests/validate_feature_manifest.ps1
       - name: Build actual KAMI viewer application
         run: cmake --build build --config Release --target KAMIViewer --parallel
       - name: Build regression and DX12 smoke test targets
