@@ -177,6 +177,25 @@ int main(){
        out[0].primitive!=objectspatial::PrimitiveKind::Box||
        !out[0].volume_params_seen||out[0].volume_params_full_layout||
        out[0].volume_params[5U]!=50U||out[0].volume_params[6U]!=150U)return 17;
+    // Square and triangular linear profiles are admitted only when
+    // the full profile interval is valid and no unsupported hollow is set.
+    auto polygon_shape=shape;
+    polygon_shape[0U]=0x10U;
+    polygon_shape[3U]=0x50U;polygon_shape[4U]=0xc3U;
+    polygon_shape[19U]=0x50U;polygon_shape[20U]=0xc3U;
+    auto square_profile=polygon_shape;
+    square_profile[16U]=0x01U;
+    if(objectspatial::classify_simple_shape(square_profile)!=
+       objectspatial::PrimitiveKind::Box)return 30;
+    auto triangle_profile=polygon_shape;
+    triangle_profile[16U]=0x03U;
+    if(objectspatial::classify_simple_shape(triangle_profile)!=
+       objectspatial::PrimitiveKind::Prism)return 31;
+    auto hollow_polygon=polygon_shape;
+    hollow_polygon[16U]=0x11U;hollow_polygon[21U]=0x20U;
+    hollow_polygon[22U]=0x4eU;
+    if(objectspatial::classify_simple_shape(hollow_polygon)!=
+       objectspatial::PrimitiveKind::Unknown)return 32;
     auto cut=cbox;
     cut[cut.size()-23U+7U]=1U; // unsupported shear/path modifier
     if(!objectspatial::decode_compressed_transforms(
