@@ -121,6 +121,17 @@ int main() {
         if(cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
              {Requirement{17,3},Requirement{18,3}},
              duplicate_visible.data(),duplicate_visible.size()))return 93;
+        const std::array<std::uint32_t,2> unsorted_visible{{18U,17U}};
+        if(cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{18,3}},
+             unsorted_visible.data(),unsorted_visible.size()))return 95;
+        const std::array<std::uint32_t,1> unknown_visible{{99U}};
+        if(cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{18,3}},
+             unknown_visible.data(),unknown_visible.size()))return 96;
+        if(!cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
+             {Requirement{17,3},Requirement{18,3}},only_nearby.data(),0U))
+            return 97;
         if(FAILED(batch_commands->Close()))return 79;
         // Coverage is stricter than nonoverlap: a missing triangle must
         // never disappear when the per-object draw path is activated.
@@ -195,8 +206,11 @@ int main() {
            !Cache::potentially_visible(corrupt_bounds,extracted))return 87;
         using Requirement=Cache::InstanceDrawRequirement;
         using Visibility=Cache::InstanceVisibility;
+        // Requirements intentionally arrive in a different order from the
+        // sorted bounds cache; output IDs are canonical while draw order stays
+        // governed by the original requirement list.
         const std::vector<Requirement> visibility_requirements{
-            {17,3},{18,3},{19,3},{20,3}};
+            {20,3},{18,3},{17,3},{19,3}};
         const std::vector<Visibility> visibility_bounds{
             {17,{0,0,5.f,.1f,true}},
             {18,{20,0,5.f,.1f,true}},
@@ -209,11 +223,18 @@ int main() {
            visible_count!=3U||visible_ids[0]!=17U||
            visible_ids[1]!=19U||visible_ids[2]!=20U)return 88;
         auto ambiguous_bounds=visibility_bounds;
-        ambiguous_bounds.push_back({18,{20,0,5.f,.1f,true}});
+        ambiguous_bounds.insert(ambiguous_bounds.begin()+2,
+            {18,{20,0,5.f,.1f,true}});
         if(!Cache::select_visible_instance_ids(
             visibility_requirements,ambiguous_bounds,extracted,
             visible_ids.data(),visible_ids.size(),visible_count)||
            visible_count!=4U)return 89;
+        auto unsorted_bounds=visibility_bounds;
+        std::swap(unsorted_bounds[0],unsorted_bounds[2]);
+        if(Cache::select_visible_instance_ids(
+            visibility_requirements,unsorted_bounds,extracted,
+            visible_ids.data(),visible_ids.size(),visible_count)||
+           visible_count!=0U)return 94;
         if(Cache::select_visible_instance_ids(
             {{17,3},{17,3}},visibility_bounds,extracted,
             visible_ids.data(),visible_ids.size(),visible_count))return 90;

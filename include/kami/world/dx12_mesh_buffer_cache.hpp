@@ -262,15 +262,20 @@ public:
         if(!commands||!visible_ids||
            !can_draw_exact_instance_batch(region_key,revision,required)||
            visible_count>required.size())return false;
-        for(std::size_t i=0;i<visible_count;++i){
-            const auto id=visible_ids[i];
-            if(!id||std::find(visible_ids,visible_ids+i,id)!=visible_ids+i||
-               std::none_of(required.begin(),required.end(),
-                   [id](const auto& item){return item.local_id==id;}))return false;
-        }
+        // The selector emits a sorted, unique ID list. Validate that contract
+        // before using binary search so malformed callers cannot skip draws.
+        const auto visible_end=visible_ids+visible_count;
+        if(!std::is_sorted(visible_ids,visible_end)||
+           std::adjacent_find(visible_ids,visible_end)!=visible_end)return false;
+        std::array<std::uint32_t,kMaxResidentBatchDraws> required_ids{};
+        for(std::size_t i=0;i<required.size();++i)
+            required_ids[i]=required[i].local_id;
+        auto required_end=required_ids.begin()+required.size();
+        std::sort(required_ids.begin(),required_end);
+        for(auto it=visible_ids;it!=visible_end;++it)
+            if(!std::binary_search(required_ids.begin(),required_end,*it))return false;
         for(const auto& item:required){
-            if(std::find(visible_ids,visible_ids+visible_count,item.local_id)==
-               visible_ids+visible_count)continue;
+            if(!std::binary_search(visible_ids,visible_end,item.local_id))continue;
             const auto* resident=find(region_key+":"+std::to_string(item.local_id));
             if(!resident||!resident->resource)return false;
             commands->IASetVertexBuffers(0,1,&resident->view);
@@ -471,20 +476,40 @@ public:
         std::size_t& visible_count) noexcept {
         visible_count=0U;
         if(required.empty()||!visible_ids||capacity<required.size())return false;
+        // Bounds are sorted once when the decoded scene is accepted. Refuse an
+        // unsorted cache rather than risk a false-negative lookup; the caller
+        // responds by drawing every resident object for this pass.
+        const auto by_id=[](const InstanceVisibility& a,
+                            const InstanceVisibility& b) noexcept {
+            return a.local_id<b.local_id;
+        };
+        if(!std::is_sorted(bounds.begin(),bounds.end(),by_id))return false;
+        // Validate requirement IDs in O(n log n) without changing their draw order.
+        std::array<std::uint32_t,kMaxResidentBatchDraws> required_ids{};
         for(std::size_t i=0;i<required.size();++i){
             const auto& item=required[i];
             if(!item.local_id||!item.vertex_count)return false;
-            for(std::size_t j=0;j<i;++j)
-                if(required[j].local_id==item.local_id)return false;
-            const InstanceVisibility* found=nullptr;
-            bool ambiguous=false;
-            for(const auto& candidate:bounds)if(candidate.local_id==item.local_id){
-                if(found)ambiguous=true;
-                else found=&candidate;
-            }
-            if(!found||ambiguous||potentially_visible(found->bounds,planes))
+            required_ids[i]=item.local_id;
+        }
+        auto required_end=required_ids.begin()+required.size();
+        std::sort(required_ids.begin(),required_end);
+        if(std::adjacent_find(required_ids.begin(),required_end)!=required_end)
+            return false;
+        for(const auto& item:required){
+            const auto found=std::lower_bound(bounds.begin(),bounds.end(),
+                item.local_id,[](const InstanceVisibility& candidate,
+                                 std::uint32_t id) noexcept {
+                    return candidate.local_id<id;
+                });
+            const bool missing=found==bounds.end()||found->local_id!=item.local_id;
+            const bool ambiguous=!missing&&found+1!=bounds.end()&&
+                (found+1)->local_id==item.local_id;
+            if(missing||ambiguous||potentially_visible(found->bounds,planes))
                 visible_ids[visible_count++]=item.local_id;
         }
+        // Stable output makes the record path's membership checks logarithmic;
+        // actual draw order remains the original requirements order.
+        std::sort(visible_ids,visible_ids+visible_count);
         return true;
     }
 
