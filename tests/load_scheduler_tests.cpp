@@ -214,5 +214,37 @@ int main(){
                  failed->retry_count!=Scheduler::kMaxTransientRetries)
             return 61;
     }
+    // Exceptions thrown inside asynchronous fetch/decode code must return a
+    // UUID-bound transient failure instead of leaving the scheduler stuck in
+    // Downloading. A successful worker result must remain unchanged.
+    struct WorkerResult {
+        std::string id;
+        unsigned http_status=0U;
+        std::uint32_t bytes=0U;
+        bool fetched=false,decoded=false;
+    };
+    const auto completed=load::capture_worker_result<WorkerResult>(
+        d,[](WorkerResult& result){
+            result.http_status=200U;result.bytes=128U;
+            result.fetched=true;result.decoded=true;
+        });
+    if(completed.id!=d||completed.http_status!=200U||
+       completed.bytes!=128U||!completed.fetched||!completed.decoded)
+        return 62;
+    const auto thrown=load::capture_worker_result<WorkerResult>(
+        c,[](WorkerResult& result){
+            result.http_status=200U;result.bytes=4096U;
+            result.fetched=true;result.decoded=true;
+            throw 1;
+        });
+    if(thrown.id!=c||thrown.http_status!=0U||thrown.bytes!=0U||
+       thrown.fetched||thrown.decoded)return 63;
+    queue.clear();
+    if(!queue.request(c,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.next_download()||
+       !queue.download_finished(thrown.id,thrown.bytes,thrown.fetched)||
+       !queue.find(c)->retryable_fetch_failure||
+       !queue.retry_failed(c)||queue.find(c)->stage!=Stage::Queued)
+        return 64;
     return 0;
 }
