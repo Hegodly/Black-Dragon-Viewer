@@ -112,6 +112,17 @@ bool Scheduler::download_finished(std::string_view id,
     asset->stage=Stage::DecodeQueued;
     return true;
 }
+std::optional<unsigned> Scheduler::worker_launch_failed(
+    std::string_view id) noexcept {
+    // Only a job already claimed for download can fail to launch. Reuse the
+    // transport-failure state so HTTP and local worker failures share the
+    // same bounded retry policy and malformed payloads remain terminal.
+    if(!download_finished(id,0U,false))return std::nullopt;
+    const auto* asset=find(id);
+    if(!asset||!asset->retryable_fetch_failure||
+       asset->retry_count>=kMaxTransientRetries)return std::nullopt;
+    return retry_delay_seconds(asset->retry_count);
+}
 bool Scheduler::retry_failed(std::string_view id) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Failed||
