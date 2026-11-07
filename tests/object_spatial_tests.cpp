@@ -172,6 +172,8 @@ int main(){
     // Circle profile cuts are emitted as closed radial wedges; both
     // hollow and solid circular variants must reach that geometry path.
     auto circle_shape=shape;circle_shape[16U]=0U;
+    circle_shape[3U]=0x50U;circle_shape[4U]=0xc3U;
+    circle_shape[19U]=0x50U;circle_shape[20U]=0xc3U;
     auto circle_cut=circle_shape;
     circle_cut[17U]=0x50U;circle_cut[18U]=0xc3U; // begin .2
     circle_cut[19U]=0x50U;circle_cut[20U]=0x9cU; // end .8
