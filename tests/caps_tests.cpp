@@ -1,4 +1,5 @@
 #include "kami/protocol/caps.hpp"
+#include "kami/features/inventory.hpp"
 #include <objbase.h>
 #include <winhttp.h>
 #include <string>
@@ -434,6 +435,27 @@ int exercise(){
        retry_seed_response(403U,0U)||
        retry_seed_response(404U,0U)||
        retry_seed_response(200U,0U))return 48;
+    std::vector<kami::protocol::caps::InventoryEntry> browser_entries(4);
+    browser_entries[0].id="folder";browser_entries[0].parent_id="root";
+    browser_entries[0].name=L"Clothing";browser_entries[0].folder=true;
+    browser_entries[1].id="item-a";browser_entries[1].parent_id="root";
+    browser_entries[1].name=L"Alpha Jacket";browser_entries[1].creator_id="creator-a";
+    browser_entries[1].asset_type=5;
+    browser_entries[2].id="item-b";browser_entries[2].parent_id="root";
+    browser_entries[2].name=L"Beta Shirt";browser_entries[2].creator_id="creator-b";
+    browser_entries[2].asset_type=6;
+    browser_entries[3].id="nested";browser_entries[3].parent_id="folder";
+    browser_entries[3].name=L"Inside";
+    const auto root_view=kami::inventory::filter_entries(browser_entries,"root",L"",kami::inventory::SortMode::Name);
+    if(root_view.size()!=3||!browser_entries[root_view[0]].folder)return 52;
+    const auto search_view=kami::inventory::filter_entries(browser_entries,"root",L"jAcKeT",kami::inventory::SortMode::Name);
+    if(search_view.size()!=1||browser_entries[search_view[0]].id!="item-a")return 53;
+    const auto nested_view=kami::inventory::filter_entries(browser_entries,"folder",L"",kami::inventory::SortMode::Name);
+    if(nested_view.size()!=1||browser_entries[nested_view[0]].id!="nested")return 54;
+    const auto creator_view=kami::inventory::group_entries_by_creator(browser_entries,root_view);
+    if(creator_view.size()!=2)return 55;
+    const auto type_view=kami::inventory::filter_entries(browser_entries,"root",L"",kami::inventory::SortMode::Type);
+    if(type_view.size()!=3||browser_entries[type_view[1]].asset_type!=5)return 56;
     return 0;
 }
 }
