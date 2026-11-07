@@ -20,6 +20,14 @@ kami::protocol::terrain::Patch patch(unsigned x,unsigned z){
 } // namespace
 int main(){
     using namespace kami;
+    // Object updates can precede the first land layer. The terrain builder
+    // must safely produce an empty terrain batch so the renderer can still
+    // upload independently verified spatial geometry in the same scene.
+    std::map<std::uint16_t,protocol::terrain::Patch> no_patches;
+    std::vector<const protocol::terrain::Patch*> no_selected;
+    const auto no_land=world::build_live_terrain_mesh(
+        no_patches,no_selected,0.f,0.f,0.f);
+    if(no_land.quads!=0U||!no_land.scene.vertices.empty())return 10;
     std::map<std::uint16_t,protocol::terrain::Patch> patches;
     patches.emplace(0U,patch(0,0));
     const auto* a=&patches.find(0U)->second;
