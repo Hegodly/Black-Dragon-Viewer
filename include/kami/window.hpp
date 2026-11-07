@@ -116,6 +116,10 @@ private:
     std::wstring live_water_status_;
     std::uint64_t live_land_uploaded_revision_=0;
     std::uint64_t live_spatial_uploaded_revision_=0;
+    // Asset completion can occur without a simulator spatial packet.
+    std::size_t live_uploaded_texture_count_=0;
+    std::size_t live_uploaded_mesh_count_=0;
+    std::size_t live_uploaded_material_count_=0;
     std::chrono::steady_clock::time_point live_land_last_upload_{};
     // Last verified scene origin. Local avatar movement must not force
     // a full terrain/mesh rebase every 800 ms; 12m travel still does.
