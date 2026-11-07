@@ -3,9 +3,28 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace kami::protocol::load {
+// Execute a background asset operation without allowing worker exceptions
+// to strand its scheduler entry in Downloading. A thrown fetch/decode is
+// surfaced as a retryable transport failure; callers still apply bounded
+// per-UUID backoff through Scheduler::worker_launch_failed/retry_failed.
+template<class Result,class Work>
+[[nodiscard]] Result capture_worker_result(std::string id,Work&& work) noexcept {
+    Result result{};
+    result.id=std::move(id);
+    try{
+        std::forward<Work>(work)(result);
+    }catch(...){
+        result.http_status=0U;
+        result.bytes=0U;
+        result.fetched=false;
+        result.decoded=false;
+    }
+    return result;
+}
 enum class Kind : std::uint8_t {
     OwnAvatar, VisibleMesh, VisibleTexture, Animation,
     Attachment, NearbyMesh, DistantTexture, Other
