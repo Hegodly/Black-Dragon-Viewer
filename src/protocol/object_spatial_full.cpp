@@ -90,11 +90,17 @@ PrimitiveKind classify_supported_sweep(std::span<const std::uint8_t> s,
     // cuts, circular hollow, shear, twist and taper. Do not classify paths
     // requiring radius offset, revolutions or skew until those are emitted.
     const unsigned extras=full_layout?8U:7U;
-    if(p.path_curve!=0x10U||(p.profile_curve&0x0fU)!=0U||
-       (p.profile_curve&0xf0U)>0x10U||
-       s[extras+4U]!=0U||s[extras+7U]!=0U||s[extras+8U]!=0U)
+    const auto profile=p.profile_curve&0x0fU;
+    const auto hole=p.profile_curve&0xf0U;
+    if(p.path_curve!=0x10U||(profile!=0U&&profile!=1U&&profile!=3U)||
+       hole>0x10U||s[extras+4U]!=0U||
+       s[extras+7U]!=0U||s[extras+8U]!=0U||
+       p.profile_begin>0.0001f||p.profile_end<0.9999f||
+       p.hollow>0.0001f||hole!=0U)
         return PrimitiveKind::Unknown;
-    return PrimitiveKind::Cylinder;
+    if(profile==0U)return PrimitiveKind::Cylinder;
+    if(profile==1U)return PrimitiveKind::Box;
+    return PrimitiveKind::Prism;
 }
 PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s.size()!=23U)return PrimitiveKind::Unknown;
