@@ -24,6 +24,7 @@ struct Transform {
     PrimitiveKind primitive=PrimitiveKind::Unknown;
     std::string mesh_asset_id; // authenticated ExtraParams id, NOT downloaded
     bool volume_params_seen=false; // full 23-byte SL path/profile available
+    bool volume_params_full_layout=false; // High 12 fields; false = packed High 13
     // Preserve the exact simulator path/profile bytes, including cuts,
     // taper, twist, hollow and curve settings. Geometry must tessellate
     // these values rather than guessing from PrimitiveKind alone.
