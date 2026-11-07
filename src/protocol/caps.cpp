@@ -695,6 +695,33 @@ bool parse_inventory_folder_llsd(
     out.valid=true;
     return true;
 }
+InventoryFetchResult fetch_inventory_folder(
+    std::wstring capability_url,std::string_view folder_id,
+    std::string_view owner_id) {
+    InventoryFetchResult result{};
+    if(!trusted_caps_url(capability_url)){
+        result.transport_error=ERROR_INVALID_PARAMETER;
+    }else{
+        const auto body=build_inventory_folder_post(folder_id,owner_id,true,true);
+        if(body.empty()){
+            result.transport_error=ERROR_INVALID_PARAMETER;
+        }else{
+            auto reply=send_signed_post(capability_url,body,25000,
+                                        2U*1024U*1024U);
+            result.http_status=reply.status;
+            result.transport_error=reply.error;
+            if(!reply.error&&reply.status==200)
+                result.fetched=parse_inventory_folder_llsd(
+                    reply.body,folder_id,result.folder);
+            if(!reply.body.empty())
+                SecureZeroMemory(reply.body.data(),reply.body.size());
+        }
+    }
+    if(!capability_url.empty())
+        SecureZeroMemory(capability_url.data(),
+                         capability_url.size()*sizeof(wchar_t));
+    return result;
+}
 std::string build_inventory_folder_post(
     std::string_view folder_id,std::string_view owner_id,
     bool fetch_folders,bool fetch_items) {

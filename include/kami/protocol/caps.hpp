@@ -121,6 +121,16 @@ struct InventoryFolderReply {
 [[nodiscard]] bool parse_inventory_folder_llsd(
     std::string_view xml,std::string_view expected_folder_id,
     InventoryFolderReply& out);
+struct InventoryFetchResult {
+    bool fetched=false;
+    unsigned http_status=0;
+    unsigned transport_error=0;
+    InventoryFolderReply folder;
+};
+// Authenticated HTTPS fetch; bearer URL is consumed and securely erased.
+[[nodiscard]] InventoryFetchResult fetch_inventory_folder(
+    std::wstring capability_url,std::string_view folder_id,
+    std::string_view owner_id);
 struct MeshReply {
     unsigned status=0;
     bool fetched=false; // only HTTP 200 with bounded, nonempty bytes
