@@ -4,6 +4,7 @@
 #include "kami/protocol/mesh_reference.hpp"
 #include "kami/protocol/texture_entry.hpp"
 #include "kami/protocol/official_extra_params.h"
+#include "kami/protocol/volume_params.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -80,12 +81,25 @@ bool valid(const Transform& p) noexcept {
 // Raw fields from official message_template.msg ObjectUpdate ObjectData.
 // Only simple, uncut, unhollowed primitive path/profile combinations
 // have a matching renderer; complex SL volumes must stay unsupported.
-PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
-    // Official 23-byte SL path/profile layout:
-    // PathCurve[0], PathBegin[1..2], PathEnd[3..4],
-    // ScaleX[5], ScaleY[6], other path settings[7..15],
-    // ProfileCurve[16], ProfileBegin/End/Hollow[17..22].
+PrimitiveKind classify_supported_sweep(std::span<const std::uint8_t> s,
+                                           bool full_layout) noexcept {
     if(s.size()!=23U)return PrimitiveKind::Unknown;
+    volume::Parameters p{};
+    if(!volume::decode(s,full_layout,p))return PrimitiveKind::Unknown;
+    // This renderer path currently implements linear circular sweeps with
+    // cuts, circular hollow, shear, twist and taper. Do not classify paths
+    // requiring radius offset, revolutions or skew until those are emitted.
+    const unsigned extras=full_layout?8U:7U;
+    if(p.path_curve!=0x10U||(p.profile_curve&0x0fU)!=0U||
+       (p.profile_curve&0xf0U)>0x10U||
+       s[extras+4U]!=128U||s[extras+7U]!=128U||s[extras+8U]!=128U)
+        return PrimitiveKind::Unknown;
+    return PrimitiveKind::Cylinder;
+}
+PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
+    if(s.size()!=23U)return PrimitiveKind::Unknown;
+    const auto sweep=classify_supported_sweep(s,false);
+    if(sweep!=PrimitiveKind::Unknown)return sweep;
     for(unsigned i=1U;i<=4U;++i)
         if(s[i]!=0U)return PrimitiveKind::Unknown;
     if(s[5]>200U||s[6]>200U)return PrimitiveKind::Unknown;
@@ -101,10 +115,10 @@ PrimitiveKind simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s[0]==0x20U&&profile==0x05U)return PrimitiveKind::Sphere;
     return PrimitiveKind::Unknown;
 }
-// High 12 uses individual message_template fields: ProfileCurve[1],
-// PathScaleX[6], PathScaleY[7]. High 13's packed format differs.
 PrimitiveKind full_simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s.size()!=23U)return PrimitiveKind::Unknown;
+    const auto sweep=classify_supported_sweep(s,true);
+    if(sweep!=PrimitiveKind::Unknown)return sweep;
     for(unsigned i=2U;i<=5U;++i)
         if(s[i]!=0U)return PrimitiveKind::Unknown;
     if(s[6]>200U||s[7]>200U)return PrimitiveKind::Unknown;
