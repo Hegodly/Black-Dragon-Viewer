@@ -111,7 +111,8 @@ struct Emitter {
     V render(V v) const noexcept {
         return {v.x-origin.x,v.z-origin.z,v.y-origin.y};
     }
-    void tri(V x,V y,V z,unsigned face,UV uvx,UV uvy,UV uvz){
+    void tri(V x,V y,V z,unsigned face,UV uvx,UV uvy,UV uvz,
+             bool inward=false){
         const V local_center=scale(add(add(x,y),z),1.f/3.f);
         V a=render(transform(x)),b=render(transform(y)),c=render(transform(z));
         V normal=cross(sub(b,a),sub(c,a));
@@ -120,7 +121,9 @@ struct Emitter {
              local_center.y*half.y*2.f*profile_scale.y,
              local_center.z*half.z*2.f})));
         const V center=render(pose.pos);
-        if(dot(normal,sub(expected,center))<0.f){
+        const V facing=inward?scale(sub(expected,center),-1.f):
+                               sub(expected,center);
+        if(dot(normal,facing)<0.f){
             std::swap(b,c);
             std::swap(uvy,uvz);
             normal=scale(normal,-1.f);
@@ -162,9 +165,9 @@ struct Emitter {
     }
     void quad(V a,V b,V c,V d,unsigned face,
               UV ua={0.f,1.f},UV ub={1.f,1.f},
-              UV uc={1.f,0.f},UV ud={0.f,0.f}){
-        tri(a,b,c,face,ua,ub,uc);
-        tri(a,c,d,face,ua,uc,ud);
+              UV uc={1.f,0.f},UV ud={0.f,0.f},bool inward=false){
+        tri(a,b,c,face,ua,ub,uc,inward);
+        tri(a,c,d,face,ua,uc,ud,inward);
     }
 };
 void build_box(Emitter& e) {
@@ -258,7 +261,7 @@ void build_linear_circle_volume(Emitter& e,
                 e.quad(point(u0,a1,inner_radius),point(u0,a0,inner_radius),
                        point(u1,a0,inner_radius),point(u1,a1,inner_radius),2U,
                        {v1,float(row)/along},{v0,float(row)/along},
-                       {v0,float(row+1U)/along},{v1,float(row+1U)/along});
+                       {v0,float(row+1U)/along},{v1,float(row+1U)/along},true);
             }
         }
     }
