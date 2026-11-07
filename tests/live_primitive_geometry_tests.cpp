@@ -272,7 +272,7 @@ int run_primitive_tests(){
         // Cap UVs follow the actual scaled profile coordinates,
         // rather than stretching one rectangular UV quad over a ring.
         for(const auto& vertex:hollow.scene.vertices){
-            if(std::abs(std::abs(vertex.py)-1.f)<.001f){
+            if(std::abs(std::abs(vertex.py)-1.f)<.001f&&std::abs(vertex.ny)>.99f){
                 if(std::abs(vertex.u-(vertex.px/4.f+.5f))>.001f||
                    std::abs(vertex.v-(.5f-vertex.pz/4.f))>.001f)
                     return 104;
