@@ -6,6 +6,17 @@
 
 namespace kami::inventory {
 namespace {
+bool valid_inventory_uuid(std::string_view value) noexcept {
+    if(value.size()!=36U)return false;
+    for(std::size_t i=0;i<value.size();++i){
+        const char c=value[i];
+        if(i==8U||i==13U||i==18U||i==23U){
+            if(c!='-')return false;
+        }else if(!((c>='0'&&c<='9')||(c>='a'&&c<='f')||
+                   (c>='A'&&c<='F')))return false;
+    }
+    return true;
+}
 std::wstring trim(std::wstring_view s) {
     while(!s.empty() && std::iswspace(s.front())) s.remove_prefix(1);
     while(!s.empty() && std::iswspace(s.back())) s.remove_suffix(1);
@@ -81,15 +92,15 @@ bool can_request_move(const protocol::caps::InventoryEntry& item,
                         std::string_view destination_folder_id,
                         const std::vector<std::string>& protected_folder_ids) noexcept {
     if(item.folder||!item.permissions_valid||
-       !protocol::caps::valid_uuid(agent_id)||
-       !protocol::caps::valid_uuid(destination_folder_id)||
-       !protocol::caps::valid_uuid(item.parent_id)||
-       item.owner_id!=agent_id||!protocol::caps::valid_uuid(item.id)||
+       !valid_inventory_uuid(agent_id)||
+       !valid_inventory_uuid(destination_folder_id)||
+       !valid_inventory_uuid(item.parent_id)||
+       item.owner_id!=agent_id||!valid_inventory_uuid(item.id)||
        (item.base_mask&kPermissionMove)==0U||
        (item.owner_mask&kPermissionMove)==0U||
        destination_folder_id==item.parent_id)return false;
     for(const auto& id:protected_folder_ids){
-        if(!protocol::caps::valid_uuid(id))return false;
+        if(!valid_inventory_uuid(id))return false;
         if(id==destination_folder_id||id==item.parent_id)return false;
     }
     return true;

@@ -17,20 +17,21 @@
 namespace kami::protocol::caps {
 namespace {
 using Microsoft::WRL::ComPtr;
-std::uint32_t parse_permission_mask(std::wstring_view text) noexcept {
-    if(text.empty()||text.size()>10U)return 0U;
-    const unsigned base=text.size()==8U?16U:10U;
+bool parse_permission_mask(std::wstring_view text,
+                           std::uint32_t& output) noexcept {
+    output=0U;
+    // LLSD <integer> values are decimal. Do not guess hexadecimal from
+    // an eight-character decimal string: that silently changes masks.
+    if(text.empty()||text.size()>10U)return false;
     std::uint32_t value=0U;
     for(const wchar_t c:text){
-        unsigned digit=0U;
-        if(c>=L'0'&&c<=L'9')digit=static_cast<unsigned>(c-L'0');
-        else if(base==16U&&c>=L'a'&&c<=L'f')digit=10U+static_cast<unsigned>(c-L'a');
-        else if(base==16U&&c>=L'A'&&c<=L'F')digit=10U+static_cast<unsigned>(c-L'A');
-        else return 0U;
-        if(digit>=base||value>(0xffffffffU-digit)/base)return 0U;
-        value=value*base+digit;
+        if(c<L'0'||c>L'9')return false;
+        const auto digit=static_cast<std::uint32_t>(c-L'0');
+        if(value>(0xffffffffU-digit)/10U)return false;
+        value=value*10U+digit;
     }
-    return value;
+    output=value;
+    return true;
 }
 
 struct HttpHandle {
@@ -733,9 +734,9 @@ bool parse_inventory_folder_llsd(
                 if(!entry.owner_id.empty()&&!valid_uuid(entry.owner_id))entry.owner_id.clear();
                 const auto base_text=nested(L"permissions",L"base_mask");
                 const auto owner_text=nested(L"permissions",L"owner_mask");
-                entry.base_mask=parse_permission_mask(base_text);
-                entry.owner_mask=parse_permission_mask(owner_text);
-                entry.permissions_valid=!entry.owner_id.empty()&&!base_text.empty()&&!owner_text.empty();
+                const bool base_valid=parse_permission_mask(base_text,entry.base_mask);
+                const bool owner_valid=parse_permission_mask(owner_text,entry.owner_mask);
+                entry.permissions_valid=!entry.owner_id.empty()&&base_valid&&owner_valid;
                 const auto creator=nested(L"permissions",L"creator_id");
                 if(creator.size()==36){
                     for(wchar_t c:creator){
@@ -851,9 +852,9 @@ bool parse_inventory_items_llsd(
         if(!entry.owner_id.empty()&&!valid_uuid(entry.owner_id))entry.owner_id.clear();
         const auto base_text=permission_field(L"base_mask");
         const auto owner_text=permission_field(L"owner_mask");
-        entry.base_mask=parse_permission_mask(base_text);
-        entry.owner_mask=parse_permission_mask(owner_text);
-        entry.permissions_valid=!entry.owner_id.empty()&&!base_text.empty()&&!owner_text.empty();
+        const bool base_valid=parse_permission_mask(base_text,entry.base_mask);
+        const bool owner_valid=parse_permission_mask(owner_text,entry.owner_mask);
+        entry.permissions_valid=!entry.owner_id.empty()&&base_valid&&owner_valid;
         const auto creator_path=L"key[.='permissions']/following-sibling::map[1]/key[.='creator_id']/following-sibling::*[1]";
         BStr cp(creator_path);ComPtr<IXMLDOMNode> creator_node;
         if(SUCCEEDED(node->selectSingleNode(cp.value,&creator_node))&&creator_node){

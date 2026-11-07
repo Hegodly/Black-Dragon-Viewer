@@ -32,5 +32,9 @@ int main() {
     if(can_request_move(movable,movable.owner_id,protected_ids.front(),protected_ids))return 10;
     unsafe=movable;unsafe.permissions_valid=false;
     if(can_request_move(unsafe,movable.owner_id,destination,protected_ids))return 11;
+    if(can_request_move(movable,"not-a-uuid",destination,protected_ids))return 12;
+    if(can_request_move(movable,movable.owner_id,"not-a-uuid",protected_ids))return 13;
+    auto invalid_protected=protected_ids;invalid_protected.push_back("bad");
+    if(can_request_move(movable,movable.owner_id,destination,invalid_protected))return 14;
     return 0;
 }
