@@ -131,6 +131,19 @@ struct InventoryFetchResult {
 [[nodiscard]] InventoryFetchResult fetch_inventory_folder(
     std::wstring capability_url,std::string_view folder_id,
     std::string_view owner_id);
+struct InventoryTreeFetchResult {
+    bool fetched=false;
+    bool limit_reached=false;
+    unsigned folders_fetched=0;
+    unsigned http_status=0;
+    unsigned transport_error=0;
+    std::vector<InventoryEntry> entries;
+};
+// Bounded breadth-first folder descent. The capability URL is copied per
+// request and never exposed in diagnostics.
+[[nodiscard]] InventoryTreeFetchResult fetch_inventory_tree(
+    const std::wstring& capability_url,std::string_view root_folder_id,
+    std::string_view owner_id);
 struct MeshReply {
     unsigned status=0;
     bool fetched=false; // only HTTP 200 with bounded, nonempty bytes

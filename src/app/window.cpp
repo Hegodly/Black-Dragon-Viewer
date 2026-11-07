@@ -2229,10 +2229,10 @@ void Window::update_sl_connection() {
                     inventory_root_future_=std::async(std::launch::async,
                     [url=std::move(url),root,owner]() mutable {
                         const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
-                        protocol::caps::InventoryFetchResult fetched{};
+                        protocol::caps::InventoryTreeFetchResult fetched{};
                         if(SUCCEEDED(init)){
-                            fetched=protocol::caps::fetch_inventory_folder(
-                                std::move(url),root,owner);
+                            fetched=protocol::caps::fetch_inventory_tree(
+                                url,root,owner);
                             CoUninitialize();
                         }else{
                             fetched.transport_error=static_cast<unsigned>(GetLastError());
@@ -2285,14 +2285,19 @@ void Window::update_sl_connection() {
            std::future_status::ready){
         try{
             auto fetched=inventory_root_future_.get();
-            if(fetched.fetched&&fetched.folder.valid){
-                inventory_root_snapshot_=std::move(fetched.folder);
+            if(fetched.fetched){
+                inventory_root_snapshot_.valid=true;
+                inventory_root_snapshot_.entries=std::move(fetched.entries);
                 inventory_status_=L"Loaded "+
                     std::to_wstring(inventory_root_snapshot_.entries.size())+
-                    L" root entries from Second Life";
+                    L" inventory entries across "+
+                    std::to_wstring(fetched.folders_fetched)+L" folders";
             }else{
-                inventory_status_=L"Inventory fetch failed / HTTP "+
+                inventory_status_=fetched.limit_reached?
+                    L"Inventory safety limit reached; partial data not marked complete":
+                    L"Inventory fetch failed / HTTP "+
                     std::to_wstring(fetched.http_status);
+                inventory_root_snapshot_.entries=std::move(fetched.entries);
             }
         }catch(...){
             inventory_status_=L"Inventory response worker failed";

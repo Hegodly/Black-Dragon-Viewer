@@ -722,6 +722,67 @@ InventoryFetchResult fetch_inventory_folder(
                          capability_url.size()*sizeof(wchar_t));
     return result;
 }
+InventoryTreeFetchResult fetch_inventory_tree(
+    const std::wstring& capability_url,std::string_view root_folder_id,
+    std::string_view owner_id) {
+    InventoryTreeFetchResult result{};
+    if(!trusted_caps_url(capability_url)||!valid_uuid(root_folder_id)||
+       !valid_uuid(owner_id)) {
+        result.transport_error=ERROR_INVALID_PARAMETER;
+        return result;
+    }
+    struct Pending {std::string id;unsigned depth;};
+    std::vector<Pending> queue;
+    queue.push_back({std::string(root_folder_id),0U});
+    std::set<std::string> visited_folders;
+    std::set<std::string> seen_entries;
+    constexpr std::size_t max_folders=512;
+    constexpr std::size_t max_entries=10000;
+    constexpr unsigned max_depth=32;
+    for(std::size_t cursor=0;cursor<queue.size();++cursor) {
+        if(result.folders_fetched>=max_folders||
+           result.entries.size()>=max_entries) {
+            result.limit_reached=true;
+            break;
+        }
+        const auto current=queue[cursor];
+        if(current.depth>max_depth||
+           !visited_folders.insert(current.id).second) {
+            result.limit_reached=true;
+            continue;
+        }
+        auto fetched=fetch_inventory_folder(
+            capability_url,current.id,owner_id);
+        result.http_status=fetched.http_status;
+        result.transport_error=fetched.transport_error;
+        if(!fetched.fetched||!fetched.folder.valid)
+            return result;
+        ++result.folders_fetched;
+        for(auto& entry:fetched.folder.entries) {
+            if(!seen_entries.insert(entry.id).second) {
+                result.limit_reached=true;
+                continue;
+            }
+            if(result.entries.size()>=max_entries) {
+                result.limit_reached=true;
+                break;
+            }
+            if(entry.folder) {
+                if(current.depth>=max_depth) {
+                    result.limit_reached=true;
+                } else if(queue.size()<max_folders) {
+                    queue.push_back({entry.id,current.depth+1U});
+                } else {
+                    result.limit_reached=true;
+                }
+            }
+            result.entries.push_back(std::move(entry));
+        }
+    }
+    result.fetched=!result.limit_reached&&
+                   result.folders_fetched==queue.size();
+    return result;
+}
 std::string build_inventory_folder_post(
     std::string_view folder_id,std::string_view owner_id,
     bool fetch_folders,bool fetch_items) {
