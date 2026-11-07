@@ -37,6 +37,35 @@ int run_primitive_tests(){
     if(std::abs(solids.scene.vertices[0].r-.25f)>.001f||
        std::abs(solids.scene.vertices[0].g-.5f)>.001f||
        std::abs(solids.scene.vertices[0].b-.75f)>.001f)return 18;
+    // SL path profile scale is part of the shape, not object dimensions.
+    // High 12 and High 13 encode the same scale at different byte offsets.
+    {
+        Transform scaled{78U,128.f,140.f,35.f,2.f,3.f,4.f};
+        scaled.primitive=Kind::Box;scaled.volume_params_seen=true;
+        scaled.volume_params_full_layout=true;
+        scaled.volume_params[6U]=50U;  // 1.5x profile X
+        scaled.volume_params[7U]=150U; // 0.5x profile Y
+        const auto high12=world::build_live_primitive_geometry(
+            {{78U,scaled}},{},128.f,140.f,35.f);
+        float max_x=0.f,max_z=0.f;
+        for(const auto& v:high12.scene.vertices){
+            max_x=std::max(max_x,std::abs(v.px));
+            max_z=std::max(max_z,std::abs(v.pz));
+        }
+        if(high12.root_shapes!=1U||std::abs(max_x-1.5f)>.001f||
+           std::abs(max_z-.75f)>.001f)return 73;
+        scaled.volume_params_full_layout=false;
+        scaled.volume_params[5U]=50U;scaled.volume_params[6U]=150U;
+        const auto high13=world::build_live_primitive_geometry(
+            {{78U,scaled}},{},128.f,140.f,35.f);
+        max_x=0.f;max_z=0.f;
+        for(const auto& v:high13.scene.vertices){
+            max_x=std::max(max_x,std::abs(v.px));
+            max_z=std::max(max_z,std::abs(v.pz));
+        }
+        if(high13.root_shapes!=1U||std::abs(max_x-1.5f)>.001f||
+           std::abs(max_z-.75f)>.001f)return 74;
+    }
     roots[77U].primitive=Kind::Cylinder;
     auto cylinder=world::build_live_primitive_geometry(
         roots,children,128.f,140.f,35.f);
