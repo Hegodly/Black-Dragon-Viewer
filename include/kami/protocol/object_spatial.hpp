@@ -122,5 +122,10 @@ struct TersePose {
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
 [[nodiscard]] bool decode_killed_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
+// Expand simulator KillObject IDs through the retained linkset hierarchy.
+// A killed root must not leave linked prims rendered with a missing parent.
+[[nodiscard]] std::vector<std::uint32_t> expand_killed_linkset_ids(
+    std::span<const std::uint32_t> killed_ids,
+    const std::map<std::uint32_t,Transform>& linked_objects);
 } // namespace kami::protocol::objectspatial
 
