@@ -148,6 +148,10 @@ private:
     bool caps_poll_started_=false;
     std::future<protocol::caps::SeedResponse> caps_seed_future_;
     std::future<protocol::caps::PollResponse> caps_poll_future_;
+    std::future<protocol::caps::InventoryFetchResult> inventory_root_future_;
+    protocol::caps::InventoryFolderReply inventory_root_snapshot_{};
+    std::wstring inventory_status_=L"Waiting for authenticated inventory";
+
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
     Microsoft::WRL::ComPtr<IDWriteFactory> text_factory_;

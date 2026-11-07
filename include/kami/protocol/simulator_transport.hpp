@@ -178,6 +178,15 @@ public:
     [[nodiscard]] bool inventory_capabilities_ready() const noexcept {
         return !inventory_descendents_url_.empty()&&!inventory_items_url_.empty();
     }
+    [[nodiscard]] const std::string& inventory_root_id() const noexcept {
+        return login_.inventory_root_id;
+    }
+    [[nodiscard]] const std::string& inventory_owner_id() const noexcept {
+        return login_.handoff.agent_id;
+    }
+    [[nodiscard]] std::wstring inventory_descendents_capability() const {
+        return inventory_descendents_url_;
+    }
     [[nodiscard]] const pbr::Materials& decoded_materials() const noexcept {return loaded_materials_;}
     [[nodiscard]] const pbr::Overrides& material_overrides() const noexcept {return material_overrides_;}
     [[nodiscard]] std::size_t material_failures() const noexcept {return material_failures_;}

@@ -1244,9 +1244,15 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
             std::to_wstring(demos.size())+L" sample item(s), nothing deleted";
         label(demo_label,box(contentX+28,height-123,contentWidth-48,25),
               small_font_.Get(),p.muted);
-        label(L"Live inventory sync and server-side moves/deletions are not connected.",
-              box(contentX+28,height-95,contentWidth-48,31),
-              small_font_.Get(),p.muted);
+        label(inventory_status_,box(contentX+28,height-95,contentWidth-48,25),
+              small_font_.Get(),p.accent);
+        if(!inventory_root_snapshot_.entries.empty()){
+            const auto& first=inventory_root_snapshot_.entries.front();
+            label(L"Server inventory sample: "+first.name+
+                  (first.folder?L"  / folder":L"  / item"),
+                  box(contentX+28,height-68,contentWidth-48,25),
+                  small_font_.Get(),p.text);
+        }
         return;
     }
 
@@ -2210,10 +2216,36 @@ void Window::update_sl_connection() {
                 (void)sl_circuit_.set_texture_capability(
                     std::move(result.texture_capability_url));
             if(result.inventory_descendents_granted&&
-               result.inventory_items_granted)
-                (void)sl_circuit_.set_inventory_capabilities(
+               result.inventory_items_granted&&
+               sl_circuit_.set_inventory_capabilities(
                     std::move(result.inventory_descendents_url),
-                    std::move(result.inventory_items_url));
+                    std::move(result.inventory_items_url))){
+                const auto root=sl_circuit_.inventory_root_id();
+                const auto owner=sl_circuit_.inventory_owner_id();
+                auto url=sl_circuit_.inventory_descendents_capability();
+                if(protocol::valid_uuid(root)&&protocol::valid_uuid(owner)&&
+                   !inventory_root_future_.valid()){
+                    inventory_status_=L"Fetching inventory root...";
+                    inventory_root_future_=std::async(std::launch::async,
+                    [url=std::move(url),root,owner]() mutable {
+                        const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+                        protocol::caps::InventoryFetchResult fetched{};
+                        if(SUCCEEDED(init)){
+                            fetched=protocol::caps::fetch_inventory_folder(
+                                std::move(url),root,owner);
+                            CoUninitialize();
+                        }else{
+                            fetched.transport_error=static_cast<unsigned>(GetLastError());
+                            if(!url.empty())
+                                SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+                        }
+                        return fetched;
+                    });
+                }else{
+                    inventory_status_=L"Inventory root unavailable in login reply";
+                    if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
+                }
+            }
             if(result.event_queue_granted){
                 caps_poll_started_=true;
                 caps_event_queue_url_=std::move(result.event_queue_url);
@@ -2246,6 +2278,24 @@ void Window::update_sl_connection() {
                 SecureZeroMemory(caps_seed_url_.data(),
                     caps_seed_url_.size()*sizeof(wchar_t));
             caps_seed_url_.clear();
+        }
+    }
+    if(inventory_root_future_.valid()&&
+       inventory_root_future_.wait_for(std::chrono::seconds(0))==
+           std::future_status::ready){
+        try{
+            auto fetched=inventory_root_future_.get();
+            if(fetched.fetched&&fetched.folder.valid){
+                inventory_root_snapshot_=std::move(fetched.folder);
+                inventory_status_=L"Loaded "+
+                    std::to_wstring(inventory_root_snapshot_.entries.size())+
+                    L" root entries from Second Life";
+            }else{
+                inventory_status_=L"Inventory fetch failed / HTTP "+
+                    std::to_wstring(fetched.http_status);
+            }
+        }catch(...){
+            inventory_status_=L"Inventory response worker failed";
         }
     }
     if(caps_poll_started_&&caps_poll_future_.valid()&&
