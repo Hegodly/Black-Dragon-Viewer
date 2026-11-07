@@ -123,9 +123,29 @@ int run_primitive_tests(){
         volume.volume_params[3U]=0x40U;volume.volume_params[4U]=0x9cU;
         const auto path_cut=world::build_live_primitive_geometry(
             {{79U,volume}},{},128.f,140.f,35.f);
+        float full_min=std::numeric_limits<float>::max();
+        float full_max=std::numeric_limits<float>::lowest();
+        float path_min=std::numeric_limits<float>::max();
+        float path_max=std::numeric_limits<float>::lowest();
+        for(const auto& v:solid_cut.scene.vertices){
+            if(v.py<full_min)full_min=v.py;
+            if(v.py>full_max)full_max=v.py;
+        }
+        bool low_cap=false,high_cap=false;
+        for(const auto& v:path_cut.scene.vertices){
+            if(v.py<path_min)path_min=v.py;
+            if(v.py>path_max)path_max=v.py;
+            if(std::abs(v.ny)>.99f){
+                if(std::abs(v.py-path_min)<.0001f)low_cap=true;
+                if(std::abs(v.py-path_max)<.0001f)high_cap=true;
+            }
+        }
+        const float full_extent=full_max-full_min;
+        const float path_extent=path_max-path_min;
         if(path_cut.root_shapes!=1U||path_cut.scene.vertices.empty()||
-           path_cut.scene.vertices.size()>=solid_cut.scene.vertices.size())
-            return 84;
+           full_extent<=0.f||path_min<=full_min+.1f||
+           path_max>=full_max-.1f||path_extent>=full_extent*.75f||
+           !low_cap||!high_cap)return 84;
         // High 12 full ObjectUpdate uses a distinct 23-byte field layout.
         Transform full_volume{80U,128.f,140.f,35.f,2.f,2.f,2.f};
         full_volume.primitive=Kind::Cylinder;
