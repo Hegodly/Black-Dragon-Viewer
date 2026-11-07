@@ -55,6 +55,20 @@ namespace detail {
     return prefer_missing_request(important_a,attempts_a,sent_a,
                                   important_b,attempts_b,sent_b);
 }
+// A speculative terse/cache miss can later be confirmed as a required
+// linkset parent. Promotion must bypass its old exhausted backoff so the
+// newly critical parent is requested promptly, without duplicating the ID.
+inline void promote_missing_request(
+    bool& important,bool& parent,unsigned& attempts,
+    std::chrono::steady_clock::time_point& sent_at,
+    bool new_important,bool new_parent) noexcept {
+    if((new_important&&!important)||(new_parent&&!parent)){
+        attempts=0U;
+        sent_at={};
+    }
+    important=important||new_important;
+    parent=parent||new_parent;
+}
 [[nodiscard]] inline bool reclaim_missing_request(
     unsigned attempts,std::chrono::steady_clock::time_point sent_at,
     std::chrono::steady_clock::time_point now) noexcept {

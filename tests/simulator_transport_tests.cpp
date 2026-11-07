@@ -146,6 +146,24 @@ int main() {
        !sim::detail::prefer_parent_missing_request(
             true,true,0U,recent,true,true,2U,stale))
         return 56;
+    // R72: when an already-retried speculative ID becomes a verified
+    // missing linkset parent, promotion resets its stale backoff so the
+    // parent can be requested immediately. Repeated promotion is idempotent.
+    bool promoted_important=false,promoted_parent=false;
+    unsigned promoted_attempts=5U;
+    auto promoted_sent=stale;
+    sim::detail::promote_missing_request(
+        promoted_important,promoted_parent,promoted_attempts,promoted_sent,
+        true,true);
+    if(!promoted_important||!promoted_parent||promoted_attempts!=0U||
+       promoted_sent!=std::chrono::steady_clock::time_point{})
+        return 57;
+    promoted_attempts=2U;
+    promoted_sent=recent;
+    sim::detail::promote_missing_request(
+        promoted_important,promoted_parent,promoted_attempts,promoted_sent,
+        true,true);
+    if(promoted_attempts!=2U||promoted_sent!=recent)return 58;
     WSADATA wsa{};
     if(WSAStartup(MAKEWORD(2,2),&wsa)!=0)return 1;
     const SOCKET server=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
