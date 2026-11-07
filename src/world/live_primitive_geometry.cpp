@@ -256,6 +256,24 @@ void build_linear_circle_volume(Emitter& e,
             }
         }
     }
+    // A profile cut is a real open wedge in LLVolume, not a paper-thin
+    // shell. Close both radial cut planes along the path so partial-circle
+    // profiles have watertight side boundaries (including hollow profiles).
+    if(sweep<2.f*pi-0.0001f){
+        for(unsigned row=0U;row<along;++row){
+            const float u0=p.path_begin+(p.path_end-p.path_begin)*float(row)/along;
+            const float u1=p.path_begin+(p.path_end-p.path_begin)*float(row+1U)/along;
+            for(unsigned edge=0U;edge<2U;++edge){
+                const float angle=edge==0U?begin:end;
+                const V outer0=point(u0,angle,.5f);
+                const V outer1=point(u1,angle,.5f);
+                const V inner0=hollow?point(u0,angle,inner_radius):point(u0,angle,0.f);
+                const V inner1=hollow?point(u1,angle,inner_radius):point(u1,angle,0.f);
+                if(edge==0U)e.quad(inner0,outer0,outer1,inner1,3U);
+                else e.quad(outer0,inner0,inner1,outer1,4U);
+            }
+        }
+    }
     // End caps are annular when hollow; fan triangles otherwise.
     const auto cap=[&](float u,unsigned face,bool reverse){
         const float z=u-.5f;
