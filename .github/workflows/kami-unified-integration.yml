@@ -1,0 +1,102 @@
+name: KAMI Unified Viewer Integration
+on:
+  pull_request:
+    branches:
+      - feature/kami-live-viewer-integration
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+concurrency:
+  group: kami-unified-viewer-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'feature/kami-live-viewer-integration'
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - name: Check out the independent KAMI destination
+        uses: actions/checkout@v4
+        with:
+          ref: feature/kami-live-viewer-integration
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test promotion policy and feature dependency graph
+        run: |
+          python -m unittest discover -s tests -p "test_kami_unified_integration.py" -v
+          python tools/kami_unified_integration.py validate-manifest
+
+      - name: Verify source CI, branch heads, manifest and promotion scope
+        id: preflight
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/kami_unified_integration.py preflight
+
+      - name: Cherry-pick ordered verified implementation batch locally
+        if: steps.preflight.outputs.eligible == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/kami_unified_integration.py cherry-pick
+
+      - name: Verify independent source boundary and feature graph
+        if: steps.preflight.outputs.eligible == 'true'
+        run: |
+          python tests/source_boundary.py
+          ./tests/validate_feature_manifest.ps1
+
+      - name: Configure the native Windows KAMI application
+        if: steps.preflight.outputs.eligible == 'true'
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build the actual KAMIViewer application
+        if: steps.preflight.outputs.eligible == 'true'
+        run: cmake --build build --config Release --target KAMIViewer --parallel
+
+      - name: Build regression and DX12 smoke targets
+        if: steps.preflight.outputs.eligible == 'true'
+        run: cmake --build build --config Release --parallel
+
+      - name: Run native unit and integration regression suite
+        if: steps.preflight.outputs.eligible == 'true'
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Force Microsoft WARP and verify actual DX12 output
+        if: steps.preflight.outputs.eligible == 'true'
+        shell: pwsh
+        run: |
+          $exe = "$PWD/build/Release/KAMI-DX12-Smoke.exe"
+          & $exe --force-warp 2>&1 | Tee-Object -FilePath warp-gpu-result.txt
+          if ($LASTEXITCODE -ne 0) { throw "Forced WARP render failed (exit $LASTEXITCODE)" }
+          $output = Get-Content warp-gpu-result.txt -Raw
+          foreach ($marker in @(
+            "KAMI PBR ENVIRONMENT TERRAIN PIXELS VERIFIED",
+            "KAMI MATERIAL ENVELOPE FORMATS PIXELS VERIFIED",
+            "KAMI STANDARD LLSD MATERIAL PIXELS VERIFIED",
+            "KAMI PBR PIXELS VERIFIED",
+            "KAMI TEXTURE PIXELS VERIFIED",
+            "KAMI WARP VIRTUAL GPU VERIFIED"
+          )) {
+            if ($output -notmatch [regex]::Escape($marker)) {
+              throw "Missing required DX12/WARP evidence: $marker"
+            }
+          }
+
+      - name: Open destination validation PR and merge only after destination CI passes
+        if: steps.preflight.outputs.eligible == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/kami_unified_integration.py open-pr-and-verify
