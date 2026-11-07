@@ -349,6 +349,7 @@ bool same_spatial_transform(const Transform& a,const Transform& b) noexcept {
         a.rx==b.rx&&a.ry==b.ry&&a.rz==b.rz&&a.rw==b.rw&&
         a.primitive==b.primitive&&a.mesh_asset_id==b.mesh_asset_id&&
         a.volume_params_seen==b.volume_params_seen&&
+        a.volume_params_full_layout==b.volume_params_full_layout&&
         a.volume_params==b.volume_params&&
         a.default_texture_present==b.default_texture_present&&
         a.default_texture_asset_id==b.default_texture_asset_id&&
@@ -373,6 +374,7 @@ Transform merge_compressed_transform(
         if(merged.mesh_asset_id.empty())
             merged.mesh_asset_id=previous.mesh_asset_id;
         merged.volume_params_seen=previous.volume_params_seen;
+        merged.volume_params_full_layout=previous.volume_params_full_layout;
         merged.volume_params=previous.volume_params;
     }
     if(!incoming.material_params_seen){
