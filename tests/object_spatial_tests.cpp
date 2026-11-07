@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <set>
 #include <vector>
 
 using namespace kami;
@@ -406,6 +407,50 @@ int main(){
                 near_child,{{1001U,nonunit}},links,{},world_position)){std::fprintf(stderr,"spatial regression 47: non-unit parent accepted\n");std::fprintf(stderr,"object spatial test failed at check 47\n");return 47;}
         if(objectspatial::resolve_world_position(
                 near_child,roots,links,{1001U},world_position)){std::fprintf(stderr,"spatial regression 48: avatar parent accepted\n");std::fprintf(stderr,"object spatial test failed at check 48\n");return 48;}
+    }
+    // R72: killing a linkset root removes every nested descendant,
+    // while killing one child leaves its parent's sibling intact.
+    {
+        using Transform=objectspatial::Transform;
+        std::map<std::uint32_t,Transform> links;
+        const auto add=[&](std::uint32_t id,std::uint32_t parent){
+            Transform value{};value.local_id=id;value.parent_id=parent;
+            links.emplace(id,value);
+        };
+        add(1002U,1001U);add(1003U,1002U);add(1004U,1001U);
+        add(1005U,1999U);add(1006U,1006U);
+        const std::vector<std::uint32_t> root_kill{1001U,1001U,0U};
+        const auto whole=objectspatial::expand_killed_linkset_ids(root_kill,links);
+        const std::set<std::uint32_t> whole_set(whole.begin(),whole.end());
+        if(whole_set!=std::set<std::uint32_t>{1001U,1002U,1003U,1004U}||
+           whole.size()!=4U)return 49;
+        const std::vector<std::uint32_t> child_kill{1002U};
+        const auto subtree=objectspatial::expand_killed_linkset_ids(child_kill,links);
+        const std::set<std::uint32_t> subtree_set(subtree.begin(),subtree.end());
+        if(subtree_set!=std::set<std::uint32_t>{1002U,1003U}||
+           subtree.size()!=2U)return 50;
+        const std::map<std::uint32_t,Transform> cycle{
+            {2001U,Transform{.local_id=2001U,.parent_id=2002U}},
+            {2002U,Transform{.local_id=2002U,.parent_id=2001U}}};
+        const std::vector<std::uint32_t> cycle_kill{2001U};
+        const auto cycle_result=objectspatial::expand_killed_linkset_ids(
+            cycle_kill,cycle);
+        if(cycle_result.size()!=2U||cycle_result[0]!=2001U||
+           cycle_result[1]!=2002U)return 51;
+    }
+    // The transport retains up to 8,192 linked objects. A deep chain must
+    // expand completely without the old repeated full-map traversal.
+    {
+        std::map<std::uint32_t,objectspatial::Transform> chain;
+        for(std::uint32_t id=2U;id<=8192U;++id){
+            objectspatial::Transform node{};
+            node.local_id=id;node.parent_id=id-1U;
+            chain.emplace(id,node);
+        }
+        const std::vector<std::uint32_t> root{1U};
+        const auto expanded=objectspatial::expand_killed_linkset_ids(root,chain);
+        if(expanded.size()!=8192U||expanded.front()!=1U||
+           expanded.back()!=8192U)return 52;
     }
     return 0;
 }

@@ -848,8 +848,12 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
             ++object_killed_packets_;
             if(region_seen_&&movement_seen_){
                 std::vector<std::uint32_t> ids;
-                if(objectspatial::decode_killed_ids(incoming,ids))
-                    for(const auto id:ids){
+                if(objectspatial::decode_killed_ids(incoming,ids)){
+                    // Expand against the intact hierarchy before erasing any
+                    // parent. Otherwise a killed root leaves ghost children.
+                    const auto removed=objectspatial::expand_killed_linkset_ids(
+                        ids,linked_objects_);
+                    for(const auto id:removed){
                         missing_objects_.erase(id);
                         material_overrides_.erase(id);
                         if(id==own_avatar_local_id_)own_avatar_local_id_=0U;
@@ -860,6 +864,7 @@ void Circuit::handle_packet(const lludp::Packet& incoming) noexcept {
                         if(linked_objects_.erase(id)>0U)
                             ++spatial_object_revision_;
                     }
+                }
             }
             break;
         }

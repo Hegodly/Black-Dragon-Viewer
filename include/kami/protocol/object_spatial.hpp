@@ -129,5 +129,10 @@ struct TersePose {
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
 [[nodiscard]] bool decode_killed_ids(
     const lludp::Packet& packet,std::vector<std::uint32_t>& out) noexcept;
+// Expand KillObject roots through retained linked children before erasing them.
+// Ordered adjacency plus a visited set avoids repeated full-map scans on deep linksets.
+[[nodiscard]] std::vector<std::uint32_t> expand_killed_linkset_ids(
+    std::span<const std::uint32_t> killed_ids,
+    const std::map<std::uint32_t,Transform>& linked_objects);
 } // namespace kami::protocol::objectspatial
 

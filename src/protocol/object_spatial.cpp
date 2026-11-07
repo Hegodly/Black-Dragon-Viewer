@@ -438,5 +438,31 @@ bool decode_killed_ids(const lludp::Packet& packet,
     out=std::move(tmp);
     return true;
 }
+std::vector<std::uint32_t> expand_killed_linkset_ids(
+    std::span<const std::uint32_t> killed_ids,
+    const std::map<std::uint32_t,Transform>& linked_objects) {
+    std::vector<std::uint32_t> expanded;
+    std::set<std::uint32_t> seen;
+    std::map<std::uint32_t,std::vector<std::uint32_t>> children_by_parent;
+    expanded.reserve(killed_ids.size()+linked_objects.size());
+    for(const auto id:killed_ids)
+        if(id!=0U&&seen.insert(id).second)expanded.push_back(id);
+    // Build adjacency once. The previous repeated-map-scan approach was
+    // quadratic for a long nested linkset and could stall the packet thread.
+    for(const auto& [id,child]:linked_objects) {
+        if(id==0U||child.local_id!=id||child.parent_id==0U||
+           child.parent_id==id)continue;
+        children_by_parent[child.parent_id].push_back(id);
+    }
+    // Map iteration makes sibling order deterministic; each node is visited
+    // once, including malformed cycles and duplicate KillObject IDs.
+    for(std::size_t cursor=0U;cursor<expanded.size();++cursor) {
+        const auto found=children_by_parent.find(expanded[cursor]);
+        if(found==children_by_parent.end())continue;
+        for(const auto child_id:found->second)
+            if(seen.insert(child_id).second)expanded.push_back(child_id);
+    }
+    return expanded;
+}
 } // namespace kami::protocol::objectspatial
 

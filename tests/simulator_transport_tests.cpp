@@ -32,6 +32,48 @@ bool send_test(SOCKET server,const sockaddr_in& viewer,int viewer_size,
                   reinterpret_cast<const sockaddr*>(&viewer),viewer_size)==
            static_cast<int>(encoded.size());
 }
+void append_u16(std::vector<std::uint8_t>& bytes,std::uint16_t value) {
+    bytes.push_back(static_cast<std::uint8_t>(value));
+    bytes.push_back(static_cast<std::uint8_t>(value>>8U));
+}
+void append_u32(std::vector<std::uint8_t>& bytes,std::uint32_t value) {
+    for(unsigned i=0U;i<4U;++i)
+        bytes.push_back(static_cast<std::uint8_t>(value>>(i*8U)));
+}
+void append_f32(std::vector<std::uint8_t>& bytes,float value) {
+    std::uint32_t bits=0U;std::memcpy(&bits,&value,sizeof(value));
+    append_u32(bytes,bits);
+}
+std::vector<std::uint8_t> packed_object(std::uint32_t id,
+                                        std::uint32_t parent) {
+    std::vector<std::uint8_t> bytes(16U,0U); // object UUID
+    append_u32(bytes,id);
+    bytes.push_back(9U);bytes.push_back(0U); // primitive PCode, State
+    append_u32(bytes,123U);bytes.push_back(0U);bytes.push_back(0U);
+    append_f32(bytes,2.f);append_f32(bytes,3.f);append_f32(bytes,4.f);
+    if(parent==0U){
+        append_f32(bytes,130.f);append_f32(bytes,98.f);append_f32(bytes,25.f);
+    }else{
+        append_f32(bytes,1.f);append_f32(bytes,2.f);append_f32(bytes,3.f);
+    }
+    append_f32(bytes,0.f);append_f32(bytes,0.f);append_f32(bytes,0.f);
+    append_u32(bytes,parent==0U?0U:0x20U);
+    bytes.insert(bytes.end(),16U,0U); // owner UUID
+    if(parent!=0U)append_u32(bytes,parent);
+    return bytes;
+}
+lludp::Packet compressed_object(std::uint32_t sequence,
+                                std::uint32_t id,std::uint32_t parent) {
+    lludp::Packet packet{};packet.sequence=sequence;
+    packet.body.push_back(13U); // ObjectUpdateCompressed
+    packet.body.insert(packet.body.end(),10U,0U); // region handle/time dilation
+    packet.body.push_back(1U); // one block
+    append_u32(packet.body,0U); // UpdateFlags
+    const auto object=packed_object(id,parent);
+    append_u16(packet.body,static_cast<std::uint16_t>(object.size()));
+    packet.body.insert(packet.body.end(),object.begin(),object.end());
+    return packet;
+}
 }
 int main() {
     // Catch regressions to the old 512/1024 object retention limits.
@@ -173,17 +215,28 @@ int main() {
         lludp::Packet layer{};
         layer.sequence=23;
         layer.body={11,0x4c,4,0,1,2,3,4};
+        const auto root=compressed_object(24U,1001U,0U);
+        const auto child=compressed_object(25U,1002U,1001U);
+        const auto grandchild=compressed_object(26U,1003U,1002U);
+        const auto sibling=compressed_object(27U,1004U,1001U);
+        const auto unrelated=compressed_object(28U,1005U,1999U);
         lludp::Packet killed{};
-        killed.sequence=24;
-        killed.body={16,1,9,0,0,0};
+        killed.sequence=29U;
+        killed.body={16U,1U};
+        append_u32(killed.body,1001U);
         // An independently encoded 16x16 constant-height land
         // patch: patch (3,4), 20m DC offset + 2m range midpoint.
         lludp::Packet good_land{};
-        good_land.sequence=25;
+        good_land.sequence=30U;
         good_land.body={
             11,76,14,0,16,0,16,76,64,0,0,160,65,4,0,100,38,16
         };
         if(!send_test(server,viewer,viewer_len,layer)||
+           !send_test(server,viewer,viewer_len,root)||
+           !send_test(server,viewer,viewer_len,child)||
+           !send_test(server,viewer,viewer_len,grandchild)||
+           !send_test(server,viewer,viewer_len,sibling)||
+           !send_test(server,viewer,viewer_len,unrelated)||
            !send_test(server,viewer,viewer_len,killed)||
            !send_test(server,viewer,viewer_len,good_land)){
             server_result=18;return;
@@ -217,7 +270,7 @@ int main() {
               !(circuit.movement_seen()&&
                 circuit.agent_updates_sent()>0U&&
                 circuit.layer_packets()>=2U&&
-                circuit.object_update_packets()>0U&&
+                circuit.object_update_packets()>=6U&&
                 circuit.decoded_land_packets()>0U)){
             circuit.poll();
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
@@ -246,7 +299,11 @@ int main() {
     mock.join();
     const bool sent_nonzero_controls=
         circuit.movement_control_packets_sent()>0U;
-    const bool ok=started&&server_result==0&&circuit.region_seen()&&
+    const auto& remaining_linked=circuit.decoded_linked_objects();
+    const bool linkset_kill_ok=circuit.decoded_spatial_objects().empty()&&
+        remaining_linked.size()==1U&&remaining_linked.find(1005U)!=remaining_linked.end()&&
+        remaining_linked.at(1005U).parent_id==1999U;
+    const bool ok=started&&server_result==0&&circuit.region_seen()&&linkset_kill_ok&&
                   sent_nonzero_controls&&
                   circuit.agent_updates_sent()>=1U&&
                   circuit.layer_packets()==2U&&
@@ -257,7 +314,8 @@ int main() {
                   circuit.land_revision()>0U&&
                   circuit.wind_packets()==0U&&
                   circuit.cloud_packets()==0U&&
-                  circuit.object_update_packets()==1U&&
+                  circuit.object_update_packets()==6U&&
+                  circuit.compressed_object_packets()==5U&&
                   circuit.killed_object_packets()==1U&&
                   circuit.full_object_packets()==0U&&
                   circuit.cached_object_packets()==0U&&
