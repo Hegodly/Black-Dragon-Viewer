@@ -26,8 +26,8 @@ int main(){
        q.path_curve!=0x10U||q.profile_curve!=0x01U||
        std::abs(q.scale_x-1.5f)>.0001f||
        std::abs(q.scale_y-.5f)>.0001f)return 2;
-    h13[1]=0x10U;h13[2]=0x27U; // 1.0 path begin
-    h13[3]=0x20U;h13[4]=0x4eU; // 2.0 -> invalid end clamped to 1
+    h13[1]=0x40U;h13[2]=0x9cU; // 0.8 path begin
+    h13[3]=0x20U;h13[4]=0x4eU; // 0.4 path end: reversed interval
     if(kami::protocol::volume::decode(h13,false,p))return 3;
     h13[1]=0U;h13[2]=0U;h13[3]=0U;h13[4]=0U;
     h13[5]=201U;
