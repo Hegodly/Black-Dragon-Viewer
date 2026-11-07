@@ -107,6 +107,9 @@ int main(){
            packet({box,cyl,round}),out,&audit,&parents,&linked)||
        out.size()!=1U||linked.size()!=2U||
        out[0].primitive!=objectspatial::PrimitiveKind::Box||
+       !out[0].volume_params_seen||out[0].volume_params[0]!=0x10U||
+       out[0].volume_params[1]!=0x01U||
+       out[0].volume_params[5]!=100U||out[0].volume_params[6]!=100U||
        linked[0].primitive!=objectspatial::PrimitiveKind::Cylinder||
        linked[1].primitive!=objectspatial::PrimitiveKind::Sphere||
        linked[0].parent_id!=90U||
@@ -131,6 +134,7 @@ int main(){
            packet({box}),out,&audit,&parents,&linked)||
        out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Unknown||
+       !out[0].volume_params_seen||out[0].volume_params[12U]!=20U||
        audit.unsupported_shapes!=1U)return 10;
     // Mesh id comes from a real 0x30 sculpt ExtraParam, not a fake prim.
     Bytes sculpt{1U,0x30U,0U,17U,0U,0U,0U};
