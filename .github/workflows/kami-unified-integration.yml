@@ -1,6 +1,6 @@
 name: KAMI Unified Viewer Integration
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - feature/kami-live-viewer-integration
     types:
