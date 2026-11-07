@@ -81,6 +81,20 @@ class PromotionPolicyTests(unittest.TestCase):
             [implementation_files, test_files]
         ))
 
+    def test_latest_r72_parent_promotion_fix_remains_eligible(self):
+        source_head = "78267ff76ff32edb948d769dfd50e35b4f7489f6"
+        self.assertFalse(is_already_ported_source(source_head))
+        eligible, reason = promotion_decision(
+            self.branch,
+            [
+                "include/kami/protocol/simulator_transport.hpp",
+                "src/protocol/simulator_transport.cpp",
+                "tests/simulator_transport_tests.cpp",
+            ],
+            1,
+        )
+        self.assertTrue(eligible, reason)
+
     def test_rejects_docs_workflow_and_mixed_scope(self):
         for paths in (
             ["README.md"],
@@ -129,6 +143,9 @@ class PromotionPolicyTests(unittest.TestCase):
             "24f86786663e4cb67370584f60c1c5c5d155bf4",
             "56d19c09417b91b788dd58f9724d0bb91b508ba6",
             "028a0feb7b3588e8d1320a501e1025c59c325c91",
+            "39d73fe41a6ea76efde60fabece6f81555127b4d",
+            "6287d818d3ca6f6a7052176c7486db083f4dd445",
+            "9e73a77eb4b3cce3bd1a5e0e7bac7260c0565953",
         )
         for sha in already_ported:
             self.assertTrue(is_already_ported_source(sha), sha)

@@ -59,6 +59,9 @@ ALREADY_PORTED_SOURCE_PREFIXES = frozenset({
     "cfb1071f96", "7883f98a99", "ea69a77922", "103245bcec",
     "1b34e2ad10", "648581a529", "1929304e0b", "cfbe844b08",
     "111f689833", "dbb7d295ee", "7b71916866",
+    # R72 reparenting/cap series was combined and regression-tested in
+    # destination commit 37d055b8457e0c7c680a370d19992d45fcf5d08c.
+    "39d73fe41a6e", "6287d818d3ca", "9e73a77eb4b",
 })
 IMPLEMENTATION_PREFIXES = ("src/", "include/", "resources/", "assets/")
 TEST_PREFIX = "tests/"
