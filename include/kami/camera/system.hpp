@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 
 namespace kami::camera {
 
@@ -29,7 +30,7 @@ struct Pose {
     Vec3 focus{};
     float fov_y_degrees = kVerticalFovDegrees; // Intentional internal fixed FOV.
 };
-using HeightSampler = float (*)(float x, float z);
+using HeightSampler = std::function<float(float x,float z)>;
 
 class System final {
 public:
