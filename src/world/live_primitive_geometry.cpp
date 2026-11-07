@@ -386,7 +386,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     std::map<std::string,float> nearest;
     // Hundreds of SL objects often instance the same mesh LOD. Decoding
     // its UV-bearing material faces for every instance repeatedly scanned
-    // thousands of triangles. Cache a compact 32-bit face mask per asset
+    // thousands of triangles. Cache a compact 64-bit face mask per asset
     // for this world rebuild, then look up only those material slots.
     std::map<std::string,std::uint64_t> drawable_faces;
     const auto gather=[&](const Transform& t,Pose pose) {
@@ -407,7 +407,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
                 for(const auto& face:mesh->second.triangles){
                     if(face.has_uv&&face.face_index<45U)
                         faces_it->second|=(std::uint64_t{1}<<face.face_index);
-                    if(faces_it->second==0xffffffffU)break;
+                    if(faces_it->second==((std::uint64_t{1}<<45U)-1U))break;
                 }
             }
             mask=faces_it->second;
