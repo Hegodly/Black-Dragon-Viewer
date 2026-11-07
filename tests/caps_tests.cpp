@@ -248,6 +248,30 @@ int exercise(){
     // An empty or syntactically invalid seed never grants a service.
     if(parse_seed_llsd("<llsd><map/></llsd>",cap,&mesh_cap,&parse_report)||
        !parse_report.xml_map)return 31;
+    const std::string inventory_reply=
+        "<llsd><map><key>folders</key><array><map>"
+        "<key>folder_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
+        "<key>version</key><integer>7</integer>"
+        "<key>categories</key><array><map>"
+        "<key>category_id</key><uuid>bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb</uuid>"
+        "<key>parent_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
+        "<key>name</key><string>Clothing</string></map></array>"
+        "<key>items</key><array><map>"
+        "<key>item_id</key><uuid>cccccccc-cccc-4ccc-8ccc-cccccccccccc</uuid>"
+        "<key>parent_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
+        "<key>name</key><string>Jacket</string></map></array>"
+        "</map></array></map></llsd>";
+    InventoryFolderReply decoded_inventory{};
+    if(!parse_inventory_folder_llsd(inventory_reply,
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",decoded_inventory)||
+       !decoded_inventory.valid||decoded_inventory.version!=7||
+       decoded_inventory.entries.size()!=2||
+       !decoded_inventory.entries[0].folder||
+       decoded_inventory.entries[0].name!=L"Clothing"||
+       decoded_inventory.entries[1].folder||
+       decoded_inventory.entries[1].name!=L"Jacket")return 47;
+    if(parse_inventory_folder_llsd(inventory_reply,
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd",decoded_inventory))return 48;
     const auto inventory_request=build_inventory_folder_post(
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "12345678-90ab-4cde-8fab-000000000001",true,true);

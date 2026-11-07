@@ -619,6 +619,81 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
     return found_id&&found_events&&
            (out.event_count==0U||!out.id.token.empty());
 }
+bool parse_inventory_folder_llsd(
+    std::string_view xml,std::string_view expected_folder_id,
+    InventoryFolderReply& out) {
+    out={};
+    if(!valid_uuid(expected_folder_id)||xml.empty()||xml.size()>2U*1024U*1024U)
+        return false;
+    ComPtr<IXMLDOMDocument2> dom;
+    if(!parse_dom(xml,dom))return false;
+    BStr folder_xpath(L"/llsd/map/array/map");
+    ComPtr<IXMLDOMNodeList> folders;
+    if(FAILED(dom->selectNodes(folder_xpath.value,&folders))||!folders)
+        return false;
+    long folder_count=0;
+    if(FAILED(folders->get_length(&folder_count))||folder_count!=1)return false;
+    ComPtr<IXMLDOMNode> folder;
+    if(FAILED(folders->get_item(0,&folder))||!folder)return false;
+    const auto value=[&](IXMLDOMNode* parent,const wchar_t* key)->std::wstring{
+        std::wstring path=L"key[.='";
+        path+=key;
+        path+=L"']/following-sibling::*[1]";
+        BStr xp(path);
+        ComPtr<IXMLDOMNode> node;
+        if(!parent||FAILED(parent->selectSingleNode(xp.value,&node))||!node)
+            return {};
+        return node_text(node.Get());
+    };
+    const auto narrow_uuid=[](std::wstring_view wide,std::string& narrow){
+        if(wide.size()!=36)return false;
+        narrow.clear();narrow.reserve(36);
+        for(wchar_t c:wide){if(c>0x7f)return false;narrow.push_back(static_cast<char>(c));}
+        return valid_uuid(narrow);
+    };
+    if(!narrow_uuid(value(folder.Get(),L"folder_id"),out.folder_id)||
+       out.folder_id!=expected_folder_id)return false;
+    const auto version=value(folder.Get(),L"version");
+    if(version.empty()||version.size()>10)return false;
+    unsigned parsed_version=0;
+    for(wchar_t c:version){
+        if(c<L'0'||c>L'9')return false;
+        parsed_version=parsed_version*10U+static_cast<unsigned>(c-L'0');
+        if(parsed_version>1000000000U)return false;
+    }
+    out.version=parsed_version;
+    std::set<std::string> ids;
+    const auto append=[&](const wchar_t* key,bool is_folder)->bool{
+        std::wstring path=L"key[.='";
+        path+=key;
+        path+=L"']/following-sibling::array[1]/map";
+        BStr xp(path);
+        ComPtr<IXMLDOMNodeList> nodes;
+        if(FAILED(folder->selectNodes(xp.value,&nodes))||!nodes)return false;
+        long count=0;
+        if(FAILED(nodes->get_length(&count))||count<0||count>4096||
+           out.entries.size()+static_cast<std::size_t>(count)>4096)return false;
+        for(long i=0;i<count;++i){
+            ComPtr<IXMLDOMNode> node;
+            if(FAILED(nodes->get_item(i,&node))||!node)return false;
+            const auto id=value(node.Get(),is_folder?L"category_id":L"item_id");
+            const auto parent=value(node.Get(),L"parent_id");
+            const auto name=value(node.Get(),L"name");
+            InventoryEntry entry{};
+            if(!narrow_uuid(id,entry.id)||!narrow_uuid(parent,entry.parent_id)||
+               name.empty()||name.size()>255||!ids.insert(entry.id).second)
+                return false;
+            entry.name=name;entry.folder=is_folder;
+            out.entries.push_back(std::move(entry));
+        }
+        return true;
+    };
+    if(!append(L"categories",true)||!append(L"items",false)){
+        out={};return false;
+    }
+    out.valid=true;
+    return true;
+}
 std::string build_inventory_folder_post(
     std::string_view folder_id,std::string_view owner_id,
     bool fetch_folders,bool fetch_items) {

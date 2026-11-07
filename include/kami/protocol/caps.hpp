@@ -105,6 +105,22 @@ struct SeedParseReport {
 [[nodiscard]] bool retryable_event_queue_http_error(unsigned code) noexcept;
 [[nodiscard]] bool possible_idle_event_queue_http_error(unsigned code,
                                                        bool held_long) noexcept;
+struct InventoryEntry {
+    std::string id,parent_id;
+    std::wstring name;
+    bool folder=false;
+};
+struct InventoryFolderReply {
+    bool valid=false;
+    std::string folder_id;
+    unsigned version=0;
+    std::vector<InventoryEntry> entries;
+};
+// Parse one bounded FetchInventoryDescendents2 LLSD response. Unknown
+// fields are ignored; malformed IDs, duplicate IDs, or wrong folder IDs fail.
+[[nodiscard]] bool parse_inventory_folder_llsd(
+    std::string_view xml,std::string_view expected_folder_id,
+    InventoryFolderReply& out);
 struct MeshReply {
     unsigned status=0;
     bool fetched=false; // only HTTP 200 with bounded, nonempty bytes
