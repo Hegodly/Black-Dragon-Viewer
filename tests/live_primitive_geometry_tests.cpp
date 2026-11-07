@@ -161,6 +161,33 @@ int run_primitive_tests(){
         if(prism_sweep.root_shapes!=1U||prism_sweep.scene.vertices.size()<=180U||
            prism_sweep.scene.vertices.size()>=box_sweep.scene.vertices.size())
             return 87;
+        // High 13 PathScaleX/Y must independently scale polygon
+        // cross-sections, rather than being ignored by the sweep emitter.
+        auto scaled_square=square;
+        scaled_square.volume_params[5U]=50U;  // 1.5x X
+        scaled_square.volume_params[6U]=150U; // 0.5x Y
+        const auto scaled_polygon=world::build_live_primitive_geometry(
+            {{86U,scaled_square}},{},128.f,140.f,35.f);
+        float base_x=0.f,base_y=0.f,scaled_x=0.f,scaled_y=0.f;
+        for(const auto& v:box_sweep.scene.vertices){
+            base_x=std::max(base_x,std::abs(v.px));
+            base_y=std::max(base_y,std::abs(v.pz));
+        }
+        for(const auto& v:scaled_polygon.scene.vertices){
+            scaled_x=std::max(scaled_x,std::abs(v.px));
+            scaled_y=std::max(scaled_y,std::abs(v.pz));
+        }
+        if(std::abs(scaled_x/base_x-.75f)>.01f||
+           std::abs(scaled_y/base_y-.25f)>.01f)return 102;
+        // Strong twist must increase longitudinal tessellation for
+        // square and triangular paths, just as it does for circles.
+        auto twisted_square=square;
+        twisted_square.volume_params[9U]=0x80U;
+        twisted_square.volume_params[10U]=0x7fU;
+        const auto twisted_polygon=world::build_live_primitive_geometry(
+            {{86U,twisted_square}},{},128.f,140.f,35.f);
+        if(twisted_polygon.scene.vertices.size()<=box_sweep.scene.vertices.size())
+            return 103;
         auto textured_prism=prism;
         const std::array<std::string,5U> triangle_faces{{
             "tri-cap-begin","tri-cap-end","tri-side-0","tri-side-1","tri-side-2"}};
