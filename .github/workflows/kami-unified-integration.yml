@@ -45,7 +45,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python tools/kami_unified_integration.py preflight
 
-      - name: Cherry-pick one verified implementation commit locally
+      - name: Cherry-pick ordered verified implementation batch locally
         if: steps.preflight.outputs.eligible == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

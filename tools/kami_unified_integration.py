@@ -17,6 +17,8 @@ from typing import Any
 
 DESTINATION_BRANCH = "feature/kami-live-viewer-integration"
 WINDOWS_WORKFLOW_ID = 405470198
+PROMOTION_BATCH_LIMIT = 3
+SOURCE_CI_EVENTS = frozenset({"push", "workflow_dispatch"})
 VIEWER_ARTIFACT = "KAMI-Native-Viewer-Candidate"
 REQUIRED_FEATURES = (
     "ui", "dx12_world", "terrain", "mesh_residency", "sl_login",
@@ -52,6 +54,43 @@ IMPLEMENTATION_PREFIXES = ("src/", "include/", "resources/", "assets/")
 TEST_PREFIX = "tests/"
 ROOT_IMPLEMENTATION_FILES = frozenset({"CMakeLists.txt"})
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def latest_workflow_run(
+    runs: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    if not runs:
+        return None
+    return max(
+        runs,
+        key=lambda item: (
+            str(item.get("created_at", "")),
+            int(item.get("run_number", 0)),
+        ),
+    )
+
+
+def latest_successful_workflow_run(
+    runs: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    latest = latest_workflow_run(runs)
+    if (
+        latest is not None
+        and latest.get("status") == "completed"
+        and latest.get("conclusion") == "success"
+    ):
+        return latest
+    return None
+
+
+def parse_patch_equivalent_commits(output: str) -> set[str]:
+    """Return source SHAs that git-cherry marks as already represented upstream."""
+    equivalent: set[str] = set()
+    for line in output.splitlines():
+        fields = line.strip().split()
+        if len(fields) == 2 and fields[0] == "-" and SHA_RE.fullmatch(fields[1]):
+            equivalent.add(fields[1])
+    return equivalent
 
 
 def manifest_errors(manifest: dict[str, Any], live_acceptance: str = "") -> list[str]:
@@ -221,13 +260,41 @@ def runs_for_sha(sha: str) -> list[dict[str, Any]]:
 
 def active_destination_runs() -> list[dict[str, Any]]:
     current_id = os.environ.get("GITHUB_RUN_ID", "")
-    active: list[dict[str, Any]] = []
+    active_by_id: dict[str, dict[str, Any]] = {}
     for status in ("queued", "in_progress"):
-        active.extend(
-            run for run in runs_for_branch(DESTINATION_BRANCH, status)
-            if str(run.get("id", "")) != current_id
-        )
-    return active
+        for run in runs_for_branch(DESTINATION_BRANCH, status):
+            active_by_id[str(run.get("id", ""))] = run
+
+        # Destination PR builds have the source branch as head_branch, not
+        # DESTINATION_BRANCH. Inspect PR base refs so competing promotions
+        # and other destination-targeted work are visible before any write.
+        query = urllib.parse.urlencode({"status": status, "per_page": "100"})
+        for run in api_request("actions/runs?" + query).get("workflow_runs", []):
+            head_branch = str(run.get("head_branch", ""))
+            # These runs are either skipped source-branch Windows jobs or the
+            # no-op unified workflow on a temporary promotion PR. Neither
+            # writes the destination branch.
+            if (
+                run.get("workflow_id") == WINDOWS_WORKFLOW_ID
+                and head_branch in ALLOWED_SOURCE_BRANCHES
+            ):
+                continue
+            if (
+                run.get("name") == "KAMI Unified Viewer Integration"
+                and head_branch.startswith("kami/promotion-")
+            ):
+                continue
+            targets_destination = any(
+                (pull.get("base") or {}).get("ref") == DESTINATION_BRANCH
+                for pull in (run.get("pull_requests") or [])
+            )
+            if targets_destination:
+                active_by_id[str(run.get("id", ""))] = run
+
+    return [
+        run for run_id, run in active_by_id.items()
+        if run_id and run_id != current_id
+    ]
 
 
 def state_path() -> Path:
@@ -284,37 +351,32 @@ def event_context() -> tuple[str, str, int, bool] | None:
     return branch, sha, number, True
 
 
-def successful_run_for_sha(
+def source_windows_runs(
     source_branch: str, source_sha: str
-) -> dict[str, Any] | None:
-    candidates = [
+) -> list[dict[str, Any]]:
+    return [
         run for run in runs_for_sha(source_sha)
         if run.get("workflow_id") == WINDOWS_WORKFLOW_ID
         and run.get("head_branch") == source_branch
+        and run.get("event") in SOURCE_CI_EVENTS
     ]
-    successes = [
-        run for run in candidates
-        if run.get("status") == "completed" and run.get("conclusion") == "success"
-    ]
-    return max(successes, key=lambda item: item.get("created_at", "")) if successes else None
+
+
+def successful_run_for_sha(
+    source_branch: str, source_sha: str
+) -> dict[str, Any] | None:
+    # A prior green run must not mask a newer failed or still-running attempt.
+    return latest_successful_workflow_run(
+        source_windows_runs(source_branch, source_sha)
+    )
 
 
 def wait_for_source_head_ci(source_branch: str, source_sha: str) -> dict[str, Any] | None:
     deadline = time.monotonic() + 30 * 60
     while time.monotonic() < deadline:
-        run = successful_run_for_sha(source_branch, source_sha)
-        if run:
-            return run
-        candidates = [
-            item for item in runs_for_sha(source_sha)
-            if item.get("workflow_id") == WINDOWS_WORKFLOW_ID
-            and item.get("head_branch") == source_branch
-            and item.get("status") == "completed"
-        ]
-        if candidates:
-            latest = max(candidates, key=lambda item: item.get("created_at", ""))
-            if latest.get("conclusion") not in {"cancelled", "skipped"}:
-                return None
+        latest = latest_workflow_run(source_windows_runs(source_branch, source_sha))
+        if latest is not None and latest.get("status") == "completed":
+            return latest if latest.get("conclusion") == "success" else None
         time.sleep(15)
     return None
 
@@ -323,15 +385,31 @@ def is_ancestor(ancestor: str, descendant: str) -> bool:
     return git(["merge-base", "--is-ancestor", ancestor, descendant], check=False).returncode == 0
 
 
-def choose_verified_implementation(
+def choose_verified_implementations(
     source_branch: str, source_head: str, destination_sha: str,
     head_run: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]] | None:
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], bool] | None:
     query = urllib.parse.urlencode({"sha": source_branch, "per_page": "100"})
     history = api_request("commits?" + query)
-    for item in history:
+    patch_equivalent = parse_patch_equivalent_commits(
+        git([
+            "cherry",
+            "refs/remotes/origin/kami-destination",
+            "refs/remotes/origin/kami-source",
+        ]).stdout
+    )
+    selected: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    more_candidates = False
+
+    # GitHub returns newest-first. Promote in source ancestry order so a later
+    # caps/reparenting fix cannot be cherry-picked before the helpers it uses.
+    for item in reversed(history):
         sha = item.get("sha", "")
-        if not SHA_RE.fullmatch(sha) or is_already_ported_source(sha):
+        if (
+            not SHA_RE.fullmatch(sha)
+            or is_already_ported_source(sha)
+            or sha in patch_equivalent
+        ):
             continue
         if is_ancestor(sha, destination_sha):
             continue
@@ -347,8 +425,20 @@ def choose_verified_implementation(
         run = head_run if sha == source_head else successful_run_for_sha(source_branch, sha)
         if run is None:
             continue
-        return details, run
-    return None
+        selected.append((details, run))
+        if len(selected) > PROMOTION_BATCH_LIMIT:
+            more_candidates = True
+            selected.pop()
+            break
+
+    has_regression_tests = any(
+        entry.get("filename", "").startswith(TEST_PREFIX)
+        for details, _ in selected
+        for entry in details.get("files", [])
+    )
+    if not selected or not has_regression_tests:
+        return None
+    return selected, more_candidates
 
 
 def preflight() -> None:
@@ -418,42 +508,64 @@ def preflight() -> None:
         summary("## KAMI promotion skipped\n\n" + reason)
         return
 
-    chosen = choose_verified_implementation(
+    chosen = choose_verified_implementations(
         source_branch, source_head, destination_sha, head_run
     )
     if chosen is None:
         reason = (
-            "No unported implementation commit with its own successful Windows CI "
-            "was found in the latest 50 source commits."
+            "No ordered batch of unported implementation commits with exact "
+            "successful push CI and at least one regression test was found."
         )
         write_output(False, reason, destination_sha)
         summary("## KAMI promotion skipped\n\n" + reason)
         return
-    details, source_run = chosen
-    source_sha = details["sha"]
-    files = [entry.get("filename", "") for entry in details.get("files", [])]
+    implementations, more_candidates = chosen
+    source_shas = [details["sha"] for details, _ in implementations]
+    source_sha = source_shas[-1]
+    source_runs = [
+        {
+            "sha": details["sha"],
+            "run_id": run.get("id"),
+            "run_url": run.get("html_url", ""),
+        }
+        for details, run in implementations
+    ]
+    files = sorted({
+        entry.get("filename", "")
+        for details, _ in implementations
+        for entry in details.get("files", [])
+    })
     state = {
         "eligible": True,
         "source_branch": source_branch,
         "source_head": source_head,
         "source_pr": source_pr,
         "source_sha": source_sha,
-        "source_run_id": source_run.get("id"),
-        "source_run_url": source_run.get("html_url", ""),
+        "source_shas": source_shas,
+        "source_runs": source_runs,
+        "more_candidates": more_candidates,
         "source_head_run_url": head_run.get("html_url", ""),
         "destination_sha": destination_sha,
         "files": files,
     }
     save_state(state)
-    write_output(True, "A source implementation commit and the source branch head both have green Windows CI.", destination_sha)
+    write_output(
+        True,
+        f"{len(source_shas)} ordered implementation commits and the source head have green Windows CI.",
+        destination_sha,
+    )
+    commit_lines = "\n".join(
+        f"  - {item['sha']} — {item['run_url']}"
+        for item in source_runs
+    )
     summary(
         "## KAMI promotion preflight passed\n\n"
         f"- Source PR: #{source_pr} from {source_branch}\n"
         f"- Source head: {source_head}\n"
-        f"- Selected implementation commit: {source_sha}\n"
-        f"- Implementation CI: {source_run.get('html_url', '')}\n"
+        f"- Ordered implementation batch:\n{commit_lines}\n"
         f"- Source-head CI: {head_run.get('html_url', '')}\n"
         f"- Destination head lease: {destination_sha}\n"
+        f"- More eligible commits remain: {str(more_candidates).lower()}\n"
         f"- Changed files: {', '.join(files)}"
     )
 
@@ -463,7 +575,6 @@ def cherry_pick() -> None:
     if not state.get("eligible"):
         raise RuntimeError("Preflight did not authorize promotion.")
     expected = state["destination_sha"]
-    source_sha = state["source_sha"]
     source_branch = state["source_branch"]
     if ref_sha(DESTINATION_BRANCH) != expected or active_destination_runs():
         raise RuntimeError("Destination moved or another workflow started after preflight.")
@@ -471,26 +582,33 @@ def cherry_pick() -> None:
         raise RuntimeError("Source branch changed after preflight.")
     git(["fetch", "origin", f"refs/heads/{source_branch}:refs/remotes/origin/kami-source"])
     git(["fetch", "origin", f"refs/heads/{DESTINATION_BRANCH}:refs/remotes/origin/kami-destination"])
-    if not is_ancestor(source_sha, "refs/remotes/origin/kami-source"):
-        raise RuntimeError("Selected source commit is no longer reachable from its branch.")
+    for source_sha in state["source_shas"]:
+        if not is_ancestor(source_sha, "refs/remotes/origin/kami-source"):
+            raise RuntimeError(f"Selected source commit {source_sha} is no longer reachable from its branch.")
     if git(["rev-parse", "refs/remotes/origin/kami-destination"]).stdout.strip() != expected:
         raise RuntimeError("Destination remote ref changed; no cherry-pick was made.")
     git(["checkout", "--detach", expected])
     git(["config", "user.name", "github-actions[bot]"])
     git(["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"])
-    result = git(["cherry-pick", "-x", source_sha], check=False)
-    if result.returncode:
-        git(["cherry-pick", "--abort"], check=False)
-        raise RuntimeError(
-            "The selected source commit does not apply cleanly to the independent KAMI tree:\n"
-            + result.stdout[-5000:]
-        )
+    applied: list[str] = []
+    for source_sha in state["source_shas"]:
+        result = git(["cherry-pick", "-x", source_sha], check=False)
+        if result.returncode:
+            git(["cherry-pick", "--abort"], check=False)
+            raise RuntimeError(
+                "The ordered source implementation batch does not apply cleanly "
+                f"at {source_sha}; no destination branch was changed:\n"
+                + result.stdout[-5000:]
+            )
+        applied.append(git(["rev-parse", "HEAD"]).stdout.strip())
     new_sha = git(["rev-parse", "HEAD"]).stdout.strip()
+    state["new_shas"] = applied
     state["new_sha"] = new_sha
     save_state(state)
     summary(
-        "## KAMI implementation applied to a local validation tree\n\n"
-        f"- Source implementation: {source_sha}\n"
+        "## KAMI implementation batch applied to a local validation tree\n\n"
+        f"- Source implementations: {', '.join(state['source_shas'])}\n"
+        f"- Destination cherry-picks: {', '.join(applied)}\n"
         f"- Local destination candidate: {new_sha}\n"
         "- No destination branch has been changed; full native build, CTest and WARP run next."
     )
@@ -557,12 +675,16 @@ def open_pr_and_verify() -> None:
     state["promotion_branch"] = promotion_branch
     save_state(state)
 
+    source_commit_lines = "\\n".join(
+        f"- {item['sha']} — [source Windows CI]({item['run_url']})"
+        for item in state["source_runs"]
+    )
     body = (
         "Automated KAMI source promotion.\n\n"
         f"- Source branch: {source_branch}\n"
-        f"- Source implementation commit: {state['source_sha']}\n"
-        f"- Source Windows CI: {state['source_run_url']}\n"
+        f"- Ordered source implementation commits:\\n{source_commit_lines}\n"
         f"- Source head: {state['source_head']}\n"
+        f"- Source-head Windows CI: {state['source_head_run_url']}\n"
         f"- Expected destination base: {expected}\n"
         f"- Local build/CTest/WARP candidate: {new_sha}\n\n"
         "This PR exists so the destination branch's own Windows workflow can validate "
@@ -607,7 +729,7 @@ def open_pr_and_verify() -> None:
 
     merged = api_request(
         f"pulls/{pr_number}/merge",
-        {"sha": new_sha, "merge_method": "squash"},
+        {"sha": new_sha, "merge_method": "merge"},
     )
     if not merged.get("merged"):
         raise RuntimeError("GitHub refused the validated promotion PR merge: " + str(merged.get("message", "")))
@@ -630,8 +752,9 @@ def open_pr_and_verify() -> None:
     summary(
         "## KAMI original-viewer source promotion verified\n\n"
         f"- Source branch head: {state['source_head']}\n"
-        f"- Selected source implementation: {state['source_sha']}\n"
-        f"- Source implementation CI: {state['source_run_url']}\n"
+        f"- Ordered source implementations: {', '.join(state['source_shas'])}\n"
+        f"- Source implementation CI: {', '.join(item['run_url'] for item in state['source_runs'])}\n"
+        f"- Destination cherry-picks: {', '.join(state['new_shas'])}\n"
         f"- Promotion PR: {state['promotion_pr_url']}\n"
         f"- Destination merge commit: {merge_sha}\n"
         f"- Destination-targeted Windows CI: {state['destination_ci_url']}\n"
@@ -639,6 +762,31 @@ def open_pr_and_verify() -> None:
         "- The PR CI validated the exact merged tree. The candidate remains explicitly incomplete "
         "until authenticated live SL acceptance passes."
     )
+    if state.get("more_candidates"):
+        try:
+            source_pr = api_request(f"pulls/{state['source_pr']}")
+            if source_pr.get("state") == "open":
+                api_request(
+                    f"pulls/{state['source_pr']}",
+                    {"state": "closed"},
+                    method="PATCH",
+                )
+                api_request(
+                    f"pulls/{state['source_pr']}",
+                    {"state": "open"},
+                    method="PATCH",
+                )
+                summary(
+                    "\\nThe source PR was safely reopened to queue the next ordered "
+                    "batch of independently CI-verified implementation commits."
+                )
+            else:
+                summary(
+                    "\\nAdditional source commits remain, but the source PR was closed "
+                    "manually; it was not reopened."
+                )
+        except Exception as exc:
+            summary("\\nAdditional source commits remain; automatic follow-up could not be queued: " + str(exc))
     try:
         api_request(
             "git/refs/heads/" + urllib.parse.quote(promotion_branch, safe="/"),

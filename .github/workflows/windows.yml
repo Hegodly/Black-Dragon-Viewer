@@ -121,6 +121,7 @@ jobs:
           python3 -m unittest discover -s tests -p "test_kami_unified_integration.py" -v
           python3 tools/kami_unified_integration.py validate-manifest
   windows:
+    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'kami/promotion-')
     needs: source-boundary
     runs-on: windows-2022
     steps:

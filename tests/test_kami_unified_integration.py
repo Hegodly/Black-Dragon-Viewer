@@ -5,7 +5,9 @@ from tools.kami_unified_integration import (
     DESTINATION_BRANCH,
     REQUIRED_FEATURES,
     is_already_ported_source,
+    latest_successful_workflow_run,
     manifest_errors,
+    parse_patch_equivalent_commits,
     promotion_decision,
 )
 
@@ -101,6 +103,66 @@ class PromotionPolicyTests(unittest.TestCase):
     def test_known_r72_fixes_are_recorded_as_already_ported(self):
         self.assertTrue(ALREADY_PORTED_SOURCE_PREFIXES)
         self.assertTrue(is_already_ported_source("cfb1071f96" + "0" * 30))
+
+
+
+
+class SourceCiSelectionTests(unittest.TestCase):
+    def test_newer_failure_overrides_an_older_green_run(self):
+        runs = [
+            {
+                "created_at": "2026-11-07T08:00:00Z",
+                "status": "completed",
+                "conclusion": "success",
+            },
+            {
+                "created_at": "2026-11-07T08:05:00Z",
+                "status": "completed",
+                "conclusion": "failure",
+            },
+        ]
+        self.assertIsNone(latest_successful_workflow_run(runs))
+
+    def test_newer_in_progress_attempt_blocks_an_older_green_run(self):
+        runs = [
+            {
+                "created_at": "2026-11-07T08:00:00Z",
+                "status": "completed",
+                "conclusion": "success",
+            },
+            {
+                "created_at": "2026-11-07T08:05:00Z",
+                "status": "in_progress",
+                "conclusion": None,
+            },
+        ]
+        self.assertIsNone(latest_successful_workflow_run(runs))
+
+    def test_latest_completed_green_attempt_is_accepted(self):
+        latest = {
+            "created_at": "2026-11-07T08:05:00Z",
+            "status": "completed",
+            "conclusion": "success",
+        }
+        self.assertEqual(
+            latest_successful_workflow_run([
+                {
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "status": "completed",
+                    "conclusion": "failure",
+                },
+                latest,
+            ]),
+            latest,
+        )
+
+
+class PatchEquivalenceTests(unittest.TestCase):
+    def test_git_cherry_equivalent_commits_are_parsed(self):
+        a = "a" * 40
+        b = "b" * 40
+        output = f"- {a} already present\\n+ {b} needs promotion\\n"
+        self.assertEqual(parse_patch_equivalent_commits(output), {a})
 
 
 if __name__ == "__main__":
