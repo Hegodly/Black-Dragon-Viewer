@@ -254,56 +254,38 @@ jobs:
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
           Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
-      - name: Gate packaged original viewer and feature claims
+      - name: Gate native KAMI viewer package and feature acceptance
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $root = 'dist/KAMI'
-          $exe = Join-Path $root 'KAMIViewer.exe'
-          if (!(Test-Path $exe)) { throw 'Original independent KAMIViewer.exe missing from package' }
-          if ((Get-Item $exe).Length -lt 65536) { throw 'KAMIViewer.exe is unexpectedly small' }
-          if (Test-Path (Join-Path $root 'KAMI-DX12-Smoke.exe')) {
-            throw 'Diagnostic smoke executable must not be shipped as viewer'
-          }
-          if (!(Test-Path (Join-Path $root 'NOT_A_COMPLETE_VIEWER.txt'))) {
-            throw 'Incomplete viewer disclosure missing; release gate must remain closed'
-          }
-          if (!(Test-Path (Join-Path $root 'LICENSE.LGPL-2.1.txt'))) {
-            throw 'Bundled Second Life LGPL license missing'
-          }
-          if (!(Test-Path 'docs/KAMI_FEATURE_ACCEPTANCE.json')) {
-            throw 'Required machine-readable feature acceptance manifest missing'
-          }
+          if (!(Test-Path "$root/KAMIViewer.exe")) { throw 'Native viewer executable missing' }
+          if ((Get-Item "$root/KAMIViewer.exe").Length -lt 65536) { throw 'Native viewer executable unexpectedly small' }
+          if (Test-Path "$root/KAMI-DX12-Smoke.exe") { throw 'Do not package diagnostic executable' }
+          if (!(Test-Path "$root/NOT_A_COMPLETE_VIEWER.txt")) { throw 'Missing incomplete viewer disclosure' }
+          if (!(Test-Path "$root/LICENSE.LGPL-2.1.txt")) { throw 'Missing LGPL license' }
           $manifest = Get-Content 'docs/KAMI_FEATURE_ACCEPTANCE.json' -Raw | ConvertFrom-Json
           if ($manifest.application -ne 'KAMIViewer.exe' -or $manifest.release_allowed -ne $false) {
-            throw 'Acceptance manifest must target the original executable and block unverified release'
+            throw 'Unverified release must remain blocked'
           }
           $required = @('ui','dx12_world','terrain','mesh_residency','sl_login','sl_transport','avatar','inventory','messaging','read_receipts','camera','graphics','creator_studio','photo_studio','smart_sort','accessibility','hotfixes')
           foreach ($feature in $required) {
-            if (!$manifest.features.PSObject.Properties[$feature]) { throw "Missing feature gate: $feature" }
+            if (!$manifest.features.PSObject.Properties[$feature]) { throw "Missing feature gate $feature" }
             if ($manifest.features.$feature.status -notin @('unverified','partial','verified')) {
-              throw "Invalid feature gate status: $feature"
+              throw "Invalid feature status $feature"
             }
           }
           $zip = 'dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip'
-          if (!(Test-Path $zip)) { throw 'Viewer package missing' }
+          if (!(Test-Path $zip)) { throw 'Native viewer archive missing' }
           Add-Type -AssemblyName System.IO.Compression
           $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
           try {
             $names = @($archive.Entries | ForEach-Object FullName)
-            if (!($names | Where-Object { $_ -match '(^|/)KAMIViewer\.exe
-          path: dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
-          retention-days: 14
-
- })) {
-              throw 'Viewer ZIP lacks KAMIViewer.exe'
+            if (!($names | Where-Object { $_.EndsWith('/KAMIViewer.exe') })) {
+              throw 'Native viewer absent from ZIP'
             }
-            if ($names | Where-Object { $_ -match '(^|/)KAMI-DX12-Smoke\.exe
-          path: dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
-          retention-days: 14
-
- }) {
-              throw 'Viewer ZIP includes diagnostic executable'
+            if ($names | Where-Object { $_.EndsWith('/KAMI-DX12-Smoke.exe') }) {
+              throw 'Diagnostic executable found in ZIP'
             }
           } finally { $archive.Dispose() }
       - uses: actions/upload-artifact@v4
