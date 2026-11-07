@@ -59,17 +59,16 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(valid,out)||
        out.size()!=1U||out[0].local_id!=77U||
        out[0].x!=128.f||out[0].y!=140.f||out[0].z!=35.f||
-       out[0].sx!=2.f||out[0].sy!=3.f||out[0].sz!=4.f)
-        std::fprintf(stderr,"object spatial test failed at check 1\n");return 1;
+       out[0].sx!=2.f||out[0].sy!=3.f||out[0].sz!=4.f){std::fprintf(stderr,"object spatial test failed at check 1\n");return 1;}
     std::map<std::uint32_t,objectspatial::Transform> objects;
     objects.emplace(77U,out[0]);
     const auto mesh=world::build_live_object_spatial_proxies(
         objects,128.f,140.f,35.f);
     if(mesh.terrain_count!=432U||mesh.avatar_count!=0U||
-       mesh.vertices.size()!=432U)std::fprintf(stderr,"object spatial test failed at check 2\n");return 2;
+       mesh.vertices.size()!=432U){std::fprintf(stderr,"object spatial test failed at check 2\n");return 2;}
     for(const auto& v:mesh.vertices){
         if(!std::isfinite(v.px)||!std::isfinite(v.py)||
-           !std::isfinite(v.pz)||v.bone_weights!=0U)std::fprintf(stderr,"object spatial test failed at check 3\n");return 3;
+           !std::isfinite(v.pz)||v.bone_weights!=0U){std::fprintf(stderr,"object spatial test failed at check 3\n");return 3;}
     }
     // Compressed children may anchor nested shapes, but must never
     // masquerade as region-space roots or manufactured prim meshes.
@@ -79,16 +78,14 @@ int main(){
        !out.empty()||children.size()!=1U||
        children[0].parent_id!=77U||children[0].local_id!=78U||
        children[0].x!=1.f||children[0].y!=2.f||children[0].z!=3.f||
-       children[0].primitive!=objectspatial::PrimitiveKind::Unknown)
-        std::fprintf(stderr,"object spatial test failed at check 4\n");return 4;
+       children[0].primitive!=objectspatial::PrimitiveKind::Unknown){std::fprintf(stderr,"object spatial test failed at check 4\n");return 4;}
     // Avatar PCode must never masquerade as object volume.
     if(!objectspatial::decode_compressed_transforms(
-        compressed(packed(78U,47U)),out)||!out.empty())
-        std::fprintf(stderr,"object spatial test failed at check 5\n");return 5;
+        compressed(packed(78U,47U)),out)||!out.empty()){std::fprintf(stderr,"object spatial test failed at check 5\n");return 5;}
     auto broken=valid;
     broken.body.pop_back();
     if(objectspatial::decode_compressed_transforms(
-           broken,out,&children)||children.size()!=1U)std::fprintf(stderr,"object spatial test failed at check 6\n");return 6;
+           broken,out,&children)||children.size()!=1U){std::fprintf(stderr,"object spatial test failed at check 6\n");return 6;}
     auto poisoned=packed(80U);
     const float nan=std::nanf("");
     std::uint32_t bits=0;
@@ -96,16 +93,16 @@ int main(){
     for(unsigned n=0;n<4;++n)
         poisoned[40+n]=static_cast<std::uint8_t>(bits>>(8*n));
     if(!objectspatial::decode_compressed_transforms(
-        compressed(poisoned),out)||!out.empty())std::fprintf(stderr,"object spatial test failed at check 7\n");return 7;
+        compressed(poisoned),out)||!out.empty()){std::fprintf(stderr,"object spatial test failed at check 7\n");return 7;}
     lludp::Packet killed{};
     killed.body={16,2,77,0,0,0,78,0,0,0};
     std::vector<std::uint32_t> ids;
     if(!objectspatial::decode_killed_ids(killed,ids)||
-       ids.size()!=2U||ids[0]!=77U||ids[1]!=78U)std::fprintf(stderr,"object spatial test failed at check 8\n");return 8;
+       ids.size()!=2U||ids[0]!=77U||ids[1]!=78U){std::fprintf(stderr,"object spatial test failed at check 8\n");return 8;}
     killed.body.pop_back();
-    if(objectspatial::decode_killed_ids(killed,ids))std::fprintf(stderr,"object spatial test failed at check 9\n");return 9;
+    if(objectspatial::decode_killed_ids(killed,ids)){std::fprintf(stderr,"object spatial test failed at check 9\n");return 9;}
     if(world::build_live_object_spatial_proxies(
-        objects,0.f,0.f,0.f).terrain_count!=0U)std::fprintf(stderr,"object spatial test failed at check 10\n");return 10;
+        objects,0.f,0.f,0.f).terrain_count!=0U){std::fprintf(stderr,"object spatial test failed at check 10\n");return 10;}
     // One ObjectUpdateCached High 14 frame with two object IDs.
     lludp::Packet cached{};
     cached.body={14U};
@@ -114,9 +111,9 @@ int main(){
     u32(cached.body,77U);u32(cached.body,123U);u32(cached.body,0U);
     u32(cached.body,78U);u32(cached.body,124U);u32(cached.body,0U);
     if(!objectspatial::decode_cached_ids(cached,ids)||
-       ids.size()!=2U||ids[0]!=77U||ids[1]!=78U)std::fprintf(stderr,"object spatial test failed at check 11\n");return 11;
+       ids.size()!=2U||ids[0]!=77U||ids[1]!=78U){std::fprintf(stderr,"object spatial test failed at check 11\n");return 11;}
     cached.body.pop_back();
-    if(objectspatial::decode_cached_ids(cached,ids))std::fprintf(stderr,"object spatial test failed at check 12\n");return 12;
+    if(objectspatial::decode_cached_ids(cached,ids)){std::fprintf(stderr,"object spatial test failed at check 12\n");return 12;}
 
     // Compressed mesh ExtraParams (0x30, SculptType=5) follow parent data.
     // Never mistake a random UUID elsewhere in the compressed packet
@@ -129,17 +126,16 @@ int main(){
     withmesh.push_back(5U);
     if(!objectspatial::decode_compressed_transforms(
          compressed(withmesh),out,&children)||children.size()!=1U||
-       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10")
-       std::fprintf(stderr,"object spatial test failed at check 13\n");return 13;
+       children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"){std::fprintf(stderr,"object spatial test failed at check 13\n");return 13;}
     withmesh.back()=3U; // sculpt, not mesh
     if(!objectspatial::decode_compressed_transforms(
          compressed(withmesh),out,&children)||children.size()!=1U||
-       !children[0].mesh_asset_id.empty())std::fprintf(stderr,"object spatial test failed at check 14\n");return 14;
+       !children[0].mesh_asset_id.empty()){std::fprintf(stderr,"object spatial test failed at check 14\n");return 14;}
     withmesh.back()=5U;
     withmesh[withmesh.size()-21U]=255U; // size field malformed
     if(!objectspatial::decode_compressed_transforms(
          compressed(withmesh),out,&children)||children.size()!=1U||
-       !children[0].mesh_asset_id.empty())std::fprintf(stderr,"object spatial test failed at check 15\n");return 15;
+       !children[0].mesh_asset_id.empty()){std::fprintf(stderr,"object spatial test failed at check 15\n");return 15;}
 
     // A genuine High 13 volume carries ExtraParams followed by the
     // 23-byte profile/path block. R34 discarded all of these shapes.
@@ -151,7 +147,7 @@ int main(){
     cbox.insert(cbox.end(),shape.begin(),shape.end());
     if(!objectspatial::decode_compressed_transforms(
           compressed(cbox),out)||out.size()!=1U||
-       out[0].primitive!=objectspatial::PrimitiveKind::Box)std::fprintf(stderr,"object spatial test failed at check 16\n");return 16;
+       out[0].primitive!=objectspatial::PrimitiveKind::Box){std::fprintf(stderr,"object spatial test failed at check 16\n");return 16;}
     // A supported High 13 circular sweep must survive the object classifier:
     // cuts + circular hollow + neutral non-emitted path modifiers.
     auto swept=cbox;
@@ -168,8 +164,7 @@ int main(){
            objectspatial::PrimitiveKind::Cylinder||
        !objectspatial::decode_compressed_transforms(
            compressed(swept),out)||out.size()!=1U||
-       out[0].primitive!=objectspatial::PrimitiveKind::Cylinder)
-        std::fprintf(stderr,"object spatial test failed at check 17\n");return 17;
+       out[0].primitive!=objectspatial::PrimitiveKind::Cylinder){std::fprintf(stderr,"object spatial test failed at check 17\n");return 17;}
     // Circle profile cuts are emitted as closed radial wedges; both
     // hollow and solid circular variants must reach that geometry path.
     auto circle_shape=shape;circle_shape[16U]=0U;
@@ -179,24 +174,24 @@ int main(){
     circle_cut[17U]=0x50U;circle_cut[18U]=0xc3U; // begin .2
     circle_cut[19U]=0x50U;circle_cut[20U]=0x9cU; // end .8
     if(objectspatial::classify_simple_shape(circle_cut)!=
-       objectspatial::PrimitiveKind::Cylinder)std::fprintf(stderr,"object spatial test failed at check 49\n");return 49;
+       objectspatial::PrimitiveKind::Cylinder){std::fprintf(stderr,"object spatial test failed at check 49\n");return 49;}
     auto hollow_circle=circle_shape;
     hollow_circle[16U]=0x10U;
     hollow_circle[21U]=0x20U;hollow_circle[22U]=0x4eU;
     if(objectspatial::classify_simple_shape(hollow_circle)!=
-       objectspatial::PrimitiveKind::Cylinder)std::fprintf(stderr,"object spatial test failed at check 50\n");return 50;
+       objectspatial::PrimitiveKind::Cylinder){std::fprintf(stderr,"object spatial test failed at check 50\n");return 50;}
     auto hollow_without_hole=circle_shape;
     hollow_without_hole[21U]=0x20U;hollow_without_hole[22U]=0x4eU;
     if(objectspatial::classify_simple_shape(hollow_without_hole)!=
-       objectspatial::PrimitiveKind::Unknown)std::fprintf(stderr,"object spatial test failed at check 51\n");return 51;
+       objectspatial::PrimitiveKind::Unknown){std::fprintf(stderr,"object spatial test failed at check 51\n");return 51;}
     auto hole_without_hollow=circle_shape;
     hole_without_hollow[16U]=0x10U;
     if(objectspatial::classify_simple_shape(hole_without_hollow)!=
-       objectspatial::PrimitiveKind::Unknown)std::fprintf(stderr,"object spatial test failed at check 52\n");return 52;
+       objectspatial::PrimitiveKind::Unknown){std::fprintf(stderr,"object spatial test failed at check 52\n");return 52;}
     auto square_profile_cut=shape;
     square_profile_cut[17U]=0x50U;square_profile_cut[18U]=0xc3U;
     if(objectspatial::classify_simple_shape(square_profile_cut)!=
-       objectspatial::PrimitiveKind::Unknown)std::fprintf(stderr,"object spatial test failed at check 53\n");return 53;
+       objectspatial::PrimitiveKind::Unknown){std::fprintf(stderr,"object spatial test failed at check 53\n");return 53;}
     auto scaled_shape=cbox;
     scaled_shape[scaled_shape.size()-23U+5U]=50U;
     scaled_shape[scaled_shape.size()-23U+6U]=150U;
@@ -204,7 +199,7 @@ int main(){
           compressed(scaled_shape),out)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Box||
        !out[0].volume_params_seen||out[0].volume_params_full_layout||
-       out[0].volume_params[5U]!=50U||out[0].volume_params[6U]!=150U)std::fprintf(stderr,"object spatial test failed at check 17\n");return 17;
+       out[0].volume_params[5U]!=50U||out[0].volume_params[6U]!=150U){std::fprintf(stderr,"object spatial test failed at check 17\n");return 17;}
     // Square and triangular linear profiles are admitted only when
     // the full profile interval is valid and no unsupported hollow is set.
     auto polygon_shape=shape;
@@ -214,27 +209,27 @@ int main(){
     auto square_profile=polygon_shape;
     square_profile[16U]=0x01U;
     if(objectspatial::classify_simple_shape(square_profile)!=
-       objectspatial::PrimitiveKind::Box)std::fprintf(stderr,"object spatial test failed at check 30\n");return 30;
+       objectspatial::PrimitiveKind::Box){std::fprintf(stderr,"object spatial test failed at check 30\n");return 30;}
     auto triangle_profile=polygon_shape;
     triangle_profile[16U]=0x03U;
     if(objectspatial::classify_simple_shape(triangle_profile)!=
-       objectspatial::PrimitiveKind::Prism)std::fprintf(stderr,"object spatial test failed at check 31\n");return 31;
+       objectspatial::PrimitiveKind::Prism){std::fprintf(stderr,"object spatial test failed at check 31\n");return 31;}
     auto hollow_polygon=polygon_shape;
     hollow_polygon[16U]=0x11U;hollow_polygon[21U]=0x20U;
     hollow_polygon[22U]=0x4eU;
     if(objectspatial::classify_simple_shape(hollow_polygon)!=
-       objectspatial::PrimitiveKind::Unknown)std::fprintf(stderr,"object spatial test failed at check 32\n");return 32;
+       objectspatial::PrimitiveKind::Unknown){std::fprintf(stderr,"object spatial test failed at check 32\n");return 32;}
     auto cut=cbox;
     cut[cut.size()-23U+7U]=1U; // unsupported shear/path modifier
     if(!objectspatial::decode_compressed_transforms(
           compressed(cut),out)||out.size()!=1U||
-       out[0].primitive!=objectspatial::PrimitiveKind::Unknown)std::fprintf(stderr,"object spatial test failed at check 29\n");return 29;
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown){std::fprintf(stderr,"object spatial test failed at check 29\n");return 29;}
     auto linkedbox=packed(111U,9U,110U);
     linkedbox.push_back(0U);
     linkedbox.insert(linkedbox.end(),shape.begin(),shape.end());
     if(!objectspatial::decode_compressed_transforms(
           compressed(linkedbox),out,&children)||children.size()!=1U||
-       children[0].primitive!=objectspatial::PrimitiveKind::Box)std::fprintf(stderr,"object spatial test failed at check 18\n");return 18;
+       children[0].primitive!=objectspatial::PrimitiveKind::Box){std::fprintf(stderr,"object spatial test failed at check 18\n");return 18;}
 
     // One fully specified compressed mesh with a true SL volume tail.
     auto meshblock=packed(112U,9U,110U);
@@ -251,7 +246,7 @@ int main(){
        children[0].primitive!=objectspatial::PrimitiveKind::Unknown||
        !children[0].volume_params_seen||
        children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
-       audit.mesh_references!=1U||audit.shape_fields!=1U)std::fprintf(stderr,"object spatial test failed at check 19\n");return 19;
+       audit.mesh_references!=1U||audit.shape_fields!=1U){std::fprintf(stderr,"object spatial test failed at check 19\n");return 19;}
     // Without a sculpt/mesh marker a genuine cylinder can use the
     // same path bytes; no speculative mesh identity is introduced.
     auto cylinder=packed(113U);
@@ -261,17 +256,17 @@ int main(){
     cylinder.insert(cylinder.end(),round_shape.begin(),round_shape.end());
     if(!objectspatial::decode_compressed_transforms(
            compressed(cylinder),out)||out.size()!=1U||
-       out[0].primitive!=objectspatial::PrimitiveKind::Cylinder)std::fprintf(stderr,"object spatial test failed at check 20\n");return 20;
+       out[0].primitive!=objectspatial::PrimitiveKind::Cylinder){std::fprintf(stderr,"object spatial test failed at check 20\n");return 20;}
     // Identical updates must not force redundant CPU/DX12 geometry rebuilds.
     objectspatial::Transform stable{501U,128.f,140.f,35.f,2.f,2.f,2.f};
     auto again=stable;
-    if(!objectspatial::same_spatial_transform(stable,again))std::fprintf(stderr,"object spatial test failed at check 23\n");return 23;
+    if(!objectspatial::same_spatial_transform(stable,again)){std::fprintf(stderr,"object spatial test failed at check 23\n");return 23;}
     again.x+=.1f;
-    if(objectspatial::same_spatial_transform(stable,again))std::fprintf(stderr,"object spatial test failed at check 24\n");return 24;
+    if(objectspatial::same_spatial_transform(stable,again)){std::fprintf(stderr,"object spatial test failed at check 24\n");return 24;}
     again=stable;again.mesh_asset_id="01020304-0506-0708-090a-0b0c0d0e0f10";
-    if(objectspatial::same_spatial_transform(stable,again))std::fprintf(stderr,"object spatial test failed at check 25\n");return 25;
+    if(objectspatial::same_spatial_transform(stable,again)){std::fprintf(stderr,"object spatial test failed at check 25\n");return 25;}
     again=stable;again.primitive=objectspatial::PrimitiveKind::Box;
-    if(objectspatial::same_spatial_transform(stable,again))std::fprintf(stderr,"object spatial test failed at check 26\n");return 26;
+    if(objectspatial::same_spatial_transform(stable,again)){std::fprintf(stderr,"object spatial test failed at check 26\n");return 26;}
     // Official compressed scratch-pad envelope includes two independent
     // little-endian lengths, followed by the payload. Previously KAMI
     // abandoned this entire path and could miss valid following meshes.
@@ -290,12 +285,12 @@ int main(){
        out.size()!=1U||
        out[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
        scratch_audit.extra_records!=1U||
-       scratch_audit.sculpt_records!=1U)std::fprintf(stderr,"object spatial test failed at check 27\n");return 27;
+       scratch_audit.sculpt_records!=1U){std::fprintf(stderr,"object spatial test failed at check 27\n");return 27;}
     scratch[84U+4U]=99U; // malformed ScratchPad embedded size
     if(!objectspatial::decode_compressed_transforms(
          compressed(scratch),out,&children,&scratch_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
-       scratch_audit.extra_records!=0U)std::fprintf(stderr,"object spatial test failed at check 28\n");return 28;
+       scratch_audit.extra_records!=0U){std::fprintf(stderr,"object spatial test failed at check 28\n");return 28;}
     // Legacy particle payload is precisely 86 bytes and precedes
     // ExtraParams in genuine compressed SL object updates.
     auto legacy=packed(901U);
@@ -308,13 +303,13 @@ int main(){
        out.size()!=1U||out[0].mesh_asset_id!=
            "01020304-0506-0708-090a-0b0c0d0e0f10"||
        legacy_audit.legacy_particle_blocks!=1U||
-       legacy_audit.mesh_references!=1U)std::fprintf(stderr,"object spatial test failed at check 29\n");return 29;
+       legacy_audit.mesh_references!=1U){std::fprintf(stderr,"object spatial test failed at check 29\n");return 29;}
     // Truncated particle stream must never yield a fabricated UUID.
     legacy.resize(84U+60U);
     if(!objectspatial::decode_compressed_transforms(
            compressed(legacy),out,&children,&legacy_audit)||
        out.size()!=1U||!out[0].mesh_asset_id.empty()||
-       legacy_audit.mesh_references!=0U)std::fprintf(stderr,"object spatial test failed at check 30\n");return 30;
+       legacy_audit.mesh_references!=0U){std::fprintf(stderr,"object spatial test failed at check 30\n");return 30;}
     // A genuine compressed full volume stores a U32 texture-entry byte
     // length immediately after the 23 shape bytes, then the TE payload.
     auto tinted=cbox;
@@ -327,19 +322,19 @@ int main(){
        out[0].primitive!=objectspatial::PrimitiveKind::Box||
        !out[0].base_tint_present||!out[0].default_texture_present||
        out[0].base_r!=0.f||out[0].base_g!=1.f||
-       std::abs(out[0].base_b-127.f/255.f)>.001f)std::fprintf(stderr,"object spatial test failed at check 31\n");return 31;
+       std::abs(out[0].base_b-127.f/255.f)>.001f){std::fprintf(stderr,"object spatial test failed at check 31\n");return 31;}
     auto previous=out[0];
     auto sparse=objectspatial::Transform{previous.local_id,129.f,140.f,35.f,
                                          2.f,3.f,4.f};
     const auto merged=objectspatial::merge_compressed_transform(sparse,previous);
     if(!merged.base_tint_present||merged.base_r!=0.f||
        merged.base_g!=1.f||merged.primitive!=objectspatial::PrimitiveKind::Box||
-       !merged.default_texture_present)std::fprintf(stderr,"object spatial test failed at check 32\n");return 32;
+       !merged.default_texture_present){std::fprintf(stderr,"object spatial test failed at check 32\n");return 32;}
     auto malformed_tint=tinted;
     malformed_tint.pop_back();
     if(!objectspatial::decode_compressed_transforms(
            compressed(malformed_tint),out)||out.size()!=1U||
-       out[0].base_tint_present)std::fprintf(stderr,"object spatial test failed at check 33\n");return 33;
+       out[0].base_tint_present){std::fprintf(stderr,"object spatial test failed at check 33\n");return 33;}
     // Compressed High 13 mesh alias is decoded via the official
     // extra-param bridge; extended 0x70 is not a mesh UUID.
     auto mesh_alias=meshblock;
@@ -349,14 +344,12 @@ int main(){
           compressed(mesh_alias),out,&children,&alias_audit)||
        children.size()!=1U||
        children[0].mesh_asset_id!="01020304-0506-0708-090a-0b0c0d0e0f10"||
-       alias_audit.mesh_references!=1U||alias_audit.sculpt_records!=1U)
-        std::fprintf(stderr,"object spatial test failed at check 40\n");return 40;
+       alias_audit.mesh_references!=1U||alias_audit.sculpt_records!=1U){std::fprintf(stderr,"object spatial test failed at check 40\n");return 40;}
     mesh_alias[mesh_alias.size()-23U-17U-6U]=0x70U;
     if(!objectspatial::decode_compressed_transforms(
           compressed(mesh_alias),out,&children,&alias_audit)||
        children.size()!=1U||!children[0].mesh_asset_id.empty()||
-       alias_audit.mesh_references!=0U)
-        std::fprintf(stderr,"object spatial test failed at check 41\n");return 41;
+       alias_audit.mesh_references!=0U){std::fprintf(stderr,"object spatial test failed at check 41\n");return 41;}
 
     // R67: stream by the actual composed child position, not merely
     // the parent root. A building whose root lies outside the 144m
@@ -377,8 +370,7 @@ int main(){
            std::abs(world_position[1]-140.f)>.001f||
            std::abs(world_position[2]-35.f)>.001f||
            std::abs(remote_root.x-50.f)<=144.f||
-           std::abs(world_position[0]-50.f)>144.f)
-            std::fprintf(stderr,"spatial regression 42: composed child position\n");std::fprintf(stderr,"object spatial test failed at check 42\n");return 42;
+           std::abs(world_position[0]-50.f)>144.f){std::fprintf(stderr,"spatial regression 42: composed child position\n");std::fprintf(stderr,"object spatial test failed at check 42\n");return 42;}
         constexpr float half=0.7071067811865476f;
         auto rotated_root=remote_root;
         rotated_root.x=128.f;rotated_root.rz=half;rotated_root.rw=half;
@@ -395,27 +387,25 @@ int main(){
                 rotated_child,rotated_roots,rotated_links,{},
                 world_position)||
            std::abs(world_position[0]-128.f)>.001f||
-           std::abs(world_position[1]-141.f)>.001f)std::fprintf(stderr,"spatial regression 43: rotated child position\n");std::fprintf(stderr,"object spatial test failed at check 43\n");return 43;
+           std::abs(world_position[1]-141.f)>.001f){std::fprintf(stderr,"spatial regression 43: rotated child position\n");std::fprintf(stderr,"object spatial test failed at check 43\n");return 43;}
         if(!objectspatial::resolve_world_position(
                 grandchild,rotated_roots,rotated_links,{},
                 world_position)||
            std::abs(world_position[0]-126.f)>.001f||
-           std::abs(world_position[1]-141.f)>.001f)std::fprintf(stderr,"spatial regression 44: nested grandchild position\n");std::fprintf(stderr,"object spatial test failed at check 44\n");return 44;
+           std::abs(world_position[1]-141.f)>.001f){std::fprintf(stderr,"spatial regression 44: nested grandchild position\n");std::fprintf(stderr,"object spatial test failed at check 44\n");return 44;}
         const auto retained=world_position;
         if(objectspatial::resolve_world_position(
                 near_child,{},links,{},world_position)||
-           world_position!=retained)std::fprintf(stderr,"spatial regression 45: missing parent modified output\n");std::fprintf(stderr,"object spatial test failed at check 45\n");return 45;
+           world_position!=retained){std::fprintf(stderr,"spatial regression 45: missing parent modified output\n");std::fprintf(stderr,"object spatial test failed at check 45\n");return 45;}
         auto cycle=near_child;cycle.parent_id=1002U;
         if(objectspatial::resolve_world_position(
                 cycle,roots,{{1002U,cycle}},{},world_position)||
-           world_position!=retained)std::fprintf(stderr,"spatial regression 46: hierarchy cycle accepted\n");std::fprintf(stderr,"object spatial test failed at check 46\n");return 46;
+           world_position!=retained){std::fprintf(stderr,"spatial regression 46: hierarchy cycle accepted\n");std::fprintf(stderr,"object spatial test failed at check 46\n");return 46;}
         auto nonunit=rotated_root;nonunit.rw=3.f;
         if(objectspatial::resolve_world_position(
-                near_child,{{1001U,nonunit}},links,{},world_position))
-            std::fprintf(stderr,"spatial regression 47: non-unit parent accepted\n");std::fprintf(stderr,"object spatial test failed at check 47\n");return 47;
+                near_child,{{1001U,nonunit}},links,{},world_position)){std::fprintf(stderr,"spatial regression 47: non-unit parent accepted\n");std::fprintf(stderr,"object spatial test failed at check 47\n");return 47;}
         if(objectspatial::resolve_world_position(
-                near_child,roots,links,{1001U},world_position))
-            std::fprintf(stderr,"spatial regression 48: avatar parent accepted\n");std::fprintf(stderr,"object spatial test failed at check 48\n");return 48;
+                near_child,roots,links,{1001U},world_position)){std::fprintf(stderr,"spatial regression 48: avatar parent accepted\n");std::fprintf(stderr,"object spatial test failed at check 48\n");return 48;}
     }
     return 0;
 }
