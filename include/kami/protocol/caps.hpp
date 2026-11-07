@@ -108,6 +108,9 @@ struct SeedParseReport {
 struct InventoryEntry {
     std::string id,parent_id;
     std::wstring name;
+    std::wstring description;
+    std::string creator_id,asset_id;
+    int asset_type=-1,inventory_type=-1;
     bool folder=false;
 };
 struct InventoryFolderReply {
@@ -144,6 +147,21 @@ struct InventoryTreeFetchResult {
 [[nodiscard]] InventoryTreeFetchResult fetch_inventory_tree(
     const std::wstring& capability_url,std::string_view root_folder_id,
     std::string_view owner_id);
+[[nodiscard]] std::string build_inventory_items_post(
+    std::string_view agent_id,std::string_view owner_id,
+    const std::vector<std::string>& item_ids);
+[[nodiscard]] bool parse_inventory_items_llsd(
+    std::string_view xml,std::string_view expected_agent_id,
+    const std::vector<std::string>& requested_item_ids,
+    std::vector<InventoryEntry>& out);
+struct InventoryItemsFetchResult {
+    bool fetched=false;
+    unsigned http_status=0,transport_error=0;
+    std::vector<InventoryEntry> items;
+};
+[[nodiscard]] InventoryItemsFetchResult fetch_inventory_items(
+    std::wstring capability_url,std::string_view agent_id,
+    std::string_view owner_id,const std::vector<std::string>& item_ids);
 struct MeshReply {
     unsigned status=0;
     bool fetched=false; // only HTTP 200 with bounded, nonempty bytes

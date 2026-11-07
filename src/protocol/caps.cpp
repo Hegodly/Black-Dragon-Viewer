@@ -685,6 +685,51 @@ bool parse_inventory_folder_llsd(
                name.empty()||name.size()>255||!ids.insert(entry.id).second)
                 return false;
             entry.name=name;entry.folder=is_folder;
+            if(!is_folder){
+                entry.description=value(node.Get(),L"desc");
+                entry.asset_id.clear();
+                const auto asset=value(node.Get(),L"asset_id");
+                if(asset.size()==36){
+                    for(wchar_t c:asset){
+                        if(c>0x7f){entry.asset_id.clear();break;}
+                        entry.asset_id.push_back(static_cast<char>(c));
+                    }
+                    if(!entry.asset_id.empty()&&!valid_uuid(entry.asset_id))
+                        entry.asset_id.clear();
+                }
+                const auto nested=[&](const wchar_t* parent_key,const wchar_t* child_key){
+                    std::wstring xp=L"key[.='";xp+=parent_key;
+                    xp+=L"']/following-sibling::map[1]/key[.='";
+                    xp+=child_key;xp+=L"']/following-sibling::*[1]";
+                    BStr nested_path(xp);ComPtr<IXMLDOMNode> nested_node;
+                    if(FAILED(node->selectSingleNode(nested_path.value,&nested_node))||!nested_node)
+                        return std::wstring{};
+                    return node_text(nested_node.Get());
+                };
+                const auto creator=nested(L"permissions",L"creator_id");
+                if(creator.size()==36){
+                    for(wchar_t c:creator){
+                        if(c>0x7f){entry.creator_id.clear();break;}
+                        entry.creator_id.push_back(static_cast<char>(c));
+                    }
+                    if(!entry.creator_id.empty()&&!valid_uuid(entry.creator_id))
+                        entry.creator_id.clear();
+                }
+                const auto parse_type=[](std::wstring_view text)->int{
+                    if(text.empty()||text.size()>4)return -1;
+                    int value=0;std::size_t i=0;bool negative=false;
+                    if(text[0]==L'-'){negative=true;i=1;}
+                    if(i==text.size())return -1;
+                    for(;i<text.size();++i){
+                        if(text[i]<L'0'||text[i]>L'9')return -1;
+                        value=value*10+static_cast<int>(text[i]-L'0');
+                        if(value>255)return -1;
+                    }
+                    return negative?-value:value;
+                };
+                entry.asset_type=parse_type(value(node.Get(),L"type"));
+                entry.inventory_type=parse_type(value(node.Get(),L"inv_type"));
+            }
             out.entries.push_back(std::move(entry));
         }
         return true;
@@ -694,6 +739,120 @@ bool parse_inventory_folder_llsd(
     }
     out.valid=true;
     return true;
+}
+std::string build_inventory_items_post(
+    std::string_view agent_id,std::string_view owner_id,
+    const std::vector<std::string>& item_ids) {
+    if(!valid_uuid(agent_id)||!valid_uuid(owner_id)||item_ids.empty()||
+       item_ids.size()>128)return {};
+    std::set<std::string> unique;
+    std::string body="<llsd><map><key>agent_id</key><uuid>";
+    body+=agent_id;
+    body+="</uuid><key>items</key><array>";
+    for(const auto& id:item_ids){
+        if(!valid_uuid(id)||!unique.insert(id).second)return {};
+        body+="<map><key>owner_id</key><uuid>";
+        body+=owner_id;
+        body+="</uuid><key>item_id</key><uuid>";
+        body+=id;
+        body+="</uuid></map>";
+    }
+    body+="</array></map></llsd>";
+    return body;
+}
+bool parse_inventory_items_llsd(
+    std::string_view xml,std::string_view expected_agent_id,
+    const std::vector<std::string>& requested_item_ids,
+    std::vector<InventoryEntry>& out) {
+    out.clear();
+    if(!valid_uuid(expected_agent_id)||xml.empty()||xml.size()>2U*1024U*1024U||
+       requested_item_ids.empty()||requested_item_ids.size()>128)return false;
+    std::set<std::string> requested;
+    for(const auto& id:requested_item_ids)
+        if(!valid_uuid(id)||!requested.insert(id).second)return false;
+    ComPtr<IXMLDOMDocument2> dom;
+    if(!parse_dom(xml,dom))return false;
+    BStr agent_path(L"/llsd/map/key[.='agent_id']/following-sibling::uuid[1]");
+    ComPtr<IXMLDOMNode> agent_node;
+    if(FAILED(dom->selectSingleNode(agent_path.value,&agent_node))||!agent_node)
+        return false;
+    const auto agent_text=node_text(agent_node.Get());
+    std::string agent;
+    for(wchar_t c:agent_text){if(c>0x7f)return false;agent.push_back(static_cast<char>(c));}
+    if(agent!=expected_agent_id)return false;
+    BStr item_path(L"/llsd/map/key[.='items']/following-sibling::array[1]/map");
+    ComPtr<IXMLDOMNodeList> nodes;
+    if(FAILED(dom->selectNodes(item_path.value,&nodes))||!nodes)return false;
+    long count=0;
+    if(FAILED(nodes->get_length(&count))||count<0||
+       static_cast<std::size_t>(count)>requested.size())return false;
+    std::set<std::string> received;
+    for(long i=0;i<count;++i){
+        ComPtr<IXMLDOMNode> node;
+        if(FAILED(nodes->get_item(i,&node))||!node)return false;
+        const auto field=[&](const wchar_t* key){
+            std::wstring xp=L"key[.='";xp+=key;
+            xp+=L"']/following-sibling::*[1]";
+            BStr path(xp);ComPtr<IXMLDOMNode> value;
+            if(FAILED(node->selectSingleNode(path.value,&value))||!value)
+                return std::wstring{};
+            return node_text(value.Get());
+        };
+        const auto idw=field(L"item_id"),parentw=field(L"parent_id");
+        InventoryEntry entry{};entry.folder=false;
+        for(wchar_t c:idw){if(c>0x7f)return false;entry.id.push_back(static_cast<char>(c));}
+        for(wchar_t c:parentw){if(c>0x7f)return false;entry.parent_id.push_back(static_cast<char>(c));}
+        if(!valid_uuid(entry.id)||!valid_uuid(entry.parent_id)||
+           !requested.contains(entry.id)||!received.insert(entry.id).second)
+            return false;
+        const auto name=field(L"name");
+        if(name.empty()||name.size()>255)return false;
+        entry.name=name;entry.description=field(L"desc");
+        const auto asset=field(L"asset_id");
+        for(wchar_t c:asset){if(c>0x7f){entry.asset_id.clear();break;}entry.asset_id.push_back(static_cast<char>(c));}
+        if(!entry.asset_id.empty()&&!valid_uuid(entry.asset_id))entry.asset_id.clear();
+        const auto creator_path=L"key[.='permissions']/following-sibling::map[1]/key[.='creator_id']/following-sibling::*[1]";
+        BStr cp(creator_path);ComPtr<IXMLDOMNode> creator_node;
+        if(SUCCEEDED(node->selectSingleNode(cp.value,&creator_node))&&creator_node){
+            const auto creator=node_text(creator_node.Get());
+            for(wchar_t c:creator){if(c>0x7f){entry.creator_id.clear();break;}entry.creator_id.push_back(static_cast<char>(c));}
+            if(!entry.creator_id.empty()&&!valid_uuid(entry.creator_id))entry.creator_id.clear();
+        }
+        const auto type_value=field(L"type"),inv_value=field(L"inv_type");
+        const auto number=[](std::wstring_view value)->int{
+            if(value.empty()||value.size()>4)return -1;
+            int n=0;std::size_t i=0;bool neg=false;
+            if(value[0]==L'-'){neg=true;i=1;}
+            if(i==value.size())return -1;
+            for(;i<value.size();++i){if(value[i]<L'0'||value[i]>L'9')return -1;n=n*10+static_cast<int>(value[i]-L'0');if(n>255)return -1;}
+            return neg?-n:n;
+        };
+        entry.asset_type=number(type_value);entry.inventory_type=number(inv_value);
+        out.push_back(std::move(entry));
+    }
+    return !out.empty();
+}
+InventoryItemsFetchResult fetch_inventory_items(
+    std::wstring capability_url,std::string_view agent_id,
+    std::string_view owner_id,const std::vector<std::string>& item_ids) {
+    InventoryItemsFetchResult result{};
+    if(!trusted_caps_url(capability_url)){
+        result.transport_error=ERROR_INVALID_PARAMETER;
+    }else{
+        const auto body=build_inventory_items_post(agent_id,owner_id,item_ids);
+        if(body.empty())result.transport_error=ERROR_INVALID_PARAMETER;
+        else{
+            auto reply=send_signed_post(capability_url,body,25000,2U*1024U*1024U);
+            result.http_status=reply.status;result.transport_error=reply.error;
+            if(!reply.error&&reply.status==200)
+                result.fetched=parse_inventory_items_llsd(
+                    reply.body,agent_id,item_ids,result.items);
+            if(!reply.body.empty())SecureZeroMemory(reply.body.data(),reply.body.size());
+        }
+    }
+    if(!capability_url.empty())
+        SecureZeroMemory(capability_url.data(),capability_url.size()*sizeof(wchar_t));
+    return result;
 }
 InventoryFetchResult fetch_inventory_folder(
     std::wstring capability_url,std::string_view folder_id,
