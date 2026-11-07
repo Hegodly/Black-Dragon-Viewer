@@ -121,10 +121,18 @@ void Circuit::prune_unreferenced_meshes() noexcept {
     // Hysteresis (176m vs 144m load radius) avoids thrashing across a
     // visibility boundary. Drop no-longer-needed CPU mesh data and its
     // finished scheduler entry; do not cancel an active fetch.
+    // Under cache pressure, release the 32m horizontal hysteresis band
+    // before denying downloads for objects actually in the visible area.
+    // Keep the larger band during normal operation to avoid edge flicker.
+    const bool cache_full=loaded_meshes_.size()>=kMaxWorldMeshAssets||
+        loaded_mesh_triangle_count_>=kMaxWorldMeshTriangles;
+    const float horizontal_limit=cache_full?144.f:176.f;
     const auto within_retention_radius=[&](
         const std::array<float,3>& p) noexcept {
-        return std::abs(p[0]-movement_position_.x)<=176.f&&
-            std::abs(p[1]-movement_position_.y)<=176.f&&
+        return std::isfinite(p[0])&&std::isfinite(p[1])&&
+            std::isfinite(p[2])&&
+            std::abs(p[0]-movement_position_.x)<=horizontal_limit&&
+            std::abs(p[1]-movement_position_.y)<=horizontal_limit&&
             std::abs(p[2]-movement_position_.z)<=128.f;
     };
     const auto needed=[&](std::string_view asset) noexcept {
