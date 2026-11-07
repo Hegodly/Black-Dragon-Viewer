@@ -2112,6 +2112,9 @@ void Window::update_sl_connection() {
         if(world_renderer_.set_verified_live_terrain(sl_circuit_)){
             live_land_uploaded_revision_=land_revision;
             live_spatial_uploaded_revision_=spatial_revision;
+            live_uploaded_texture_count_=sl_circuit_.decoded_texture_count();
+            live_uploaded_mesh_count_=sl_circuit_.decoded_mesh_assets().size();
+            live_uploaded_material_count_=sl_circuit_.decoded_materials().size();
             live_scene_uploaded_origin_={
                 scene_agent.x,scene_agent.y,scene_agent.z};
             live_scene_origin_valid_=scene_agent.verified;
