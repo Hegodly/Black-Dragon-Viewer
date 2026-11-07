@@ -70,6 +70,31 @@ int main() {
            !slots.release(*third,material_c)||slots.active()!=0U||
            slots.reserve(""))return 104;
     }
+    // An unresolved linked child keeps material data already resident or
+    // in flight, but never creates new work for an unknown material UUID.
+    {
+        constexpr auto resident_id="12345678-90ab-4cde-8fab-000000000031";
+        constexpr auto pending_id="12345678-90ab-4cde-8fab-000000000032";
+        constexpr auto unknown_id="12345678-90ab-4cde-8fab-000000000033";
+        const std::vector<std::string> unresolved_refs={
+            resident_id,pending_id,unknown_id,""};
+        const std::map<std::string,unsigned> resident={{resident_id,1U}};
+        const std::map<std::string,unsigned> pending={{pending_id,1U}};
+        std::set<std::string> retained;
+        sim::detail::retain_unresolved_materials(
+            unresolved_refs,resident,pending,retained);
+        if(retained.size()!=2U||!retained.contains(resident_id)||
+           !retained.contains(pending_id)||retained.contains(unknown_id))
+            return 105;
+        sim::detail::retain_unresolved_materials(
+            unresolved_refs,resident,pending,retained);
+        if(retained.size()!=2U)return 106;
+        const std::vector<std::string> no_references{};
+        std::set<std::string> after_despawn;
+        sim::detail::retain_unresolved_materials(
+            no_references,resident,pending,after_despawn);
+        if(!after_despawn.empty())return 107;
+    }
     const auto now=std::chrono::steady_clock::now();
     const auto recent=now-std::chrono::seconds(30);
     const auto stale=now-std::chrono::seconds(95);

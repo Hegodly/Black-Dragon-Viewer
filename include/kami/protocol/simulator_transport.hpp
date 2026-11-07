@@ -115,6 +115,18 @@ public:
 private:
     std::array<std::string,kMaxConcurrentMaterialWorkers> ids_{};
 };
+// A linked child may temporarily lose its world transform while its parent
+// is being recovered. Keep only material UUIDs that already have CPU data or
+// an active/retryable request; never schedule new fetches without a position.
+template<class MaterialIds,class Loaded,class Pending,class Keep>
+inline void retain_unresolved_materials(
+    const MaterialIds& material_ids,const Loaded& loaded,
+    const Pending& pending,Keep& keep) {
+    for(const auto& id:material_ids){
+        if(id.empty())continue;
+        if(loaded.contains(id)||pending.contains(id))keep.insert(id);
+    }
+}
 }
 class Circuit final {
 public:

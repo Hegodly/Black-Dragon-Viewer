@@ -127,6 +127,22 @@ void Circuit::maybe_fetch_material() noexcept {
             (void)distance;
             keep.insert(id);
         }
+        // Mirror mesh retention for unresolved linksets. A child can keep
+        // referencing a material while its parent transform is recovered;
+        // retain only existing/in-flight data and do not expand fetch demand.
+        const auto retain_unresolved=[&](const auto& objects){
+            for(const auto& [id,t]:objects){
+                (void)id;
+                std::array<float,3> position{};
+                if(objectspatial::resolve_world_position(
+                       t,spatial_objects_,linked_objects_,avatar_root_ids_,
+                       position))continue;
+                detail::retain_unresolved_materials(
+                    t.face_material_ids,loaded_materials_,material_attempts_,keep);
+            }
+        };
+        retain_unresolved(spatial_objects_);
+        retain_unresolved(linked_objects_);
         for(auto it=loaded_materials_.begin();it!=loaded_materials_.end();){
             if(keep.contains(it->first)){++it;continue;}
             it=loaded_materials_.erase(it);
