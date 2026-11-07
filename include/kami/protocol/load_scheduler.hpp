@@ -57,6 +57,12 @@ public:
     static constexpr unsigned kMaxConcurrentDownloads=8U;
     static constexpr unsigned kMaxConcurrentDecodes=4U;
     static constexpr unsigned kMaxTransientRetries=3U;
+    // Network failures, throttling and server-side errors may be retried;
+    // successful and terminal client responses must not be retried.
+    [[nodiscard]] static constexpr bool retryable_http_status(
+        std::uint16_t status) noexcept {
+        return status==0U||status==429U||status>=500U;
+    }
     // Exponential quiet period shared by network and local worker-launch retries.
     [[nodiscard]] static constexpr unsigned retry_delay_seconds(
         unsigned retry_count) noexcept {

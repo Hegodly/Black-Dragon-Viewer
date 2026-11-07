@@ -170,6 +170,14 @@ int main(){
        Scheduler::retry_delay_seconds(2U)!=4U||
        Scheduler::retry_delay_seconds(3U)!=8U||
        Scheduler::retry_delay_seconds(99U)!=8U)return 47;
+    // Keep material, mesh and texture fetch retry classification consistent.
+    if(!Scheduler::retryable_http_status(0U)||
+       !Scheduler::retryable_http_status(429U)||
+       !Scheduler::retryable_http_status(500U)||
+       !Scheduler::retryable_http_status(599U)||
+       Scheduler::retryable_http_status(200U)||
+       Scheduler::retryable_http_status(404U)||
+       Scheduler::retryable_http_status(499U))return 72;
     queue.clear();
     if(!queue.request(c,Kind::VisibleMesh,1.f,true,64U))return 48;
     const auto dispatch=queue.next_download();
