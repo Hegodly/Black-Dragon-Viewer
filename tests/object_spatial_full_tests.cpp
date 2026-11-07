@@ -109,7 +109,7 @@ int main(){
        out[0].primitive!=objectspatial::PrimitiveKind::Box||
        !out[0].volume_params_seen||out[0].volume_params[0]!=0x10U||
        out[0].volume_params[1]!=0x01U||
-       out[0].volume_params[5]!=100U||out[0].volume_params[6]!=100U||
+       out[0].volume_params[6]!=100U||out[0].volume_params[7]!=100U||
        linked[0].primitive!=objectspatial::PrimitiveKind::Cylinder||
        linked[1].primitive!=objectspatial::PrimitiveKind::Sphere||
        linked[0].parent_id!=90U||
