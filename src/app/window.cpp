@@ -2102,6 +2102,9 @@ void Window::update_sl_connection() {
        world_renderer_.ready()&&land_revision>0U&&
        (land_revision!=live_land_uploaded_revision_||
         spatial_revision!=live_spatial_uploaded_revision_||
+        sl_circuit_.decoded_texture_count()!=live_uploaded_texture_count_||
+        sl_circuit_.decoded_mesh_assets().size()!=live_uploaded_mesh_count_||
+        sl_circuit_.decoded_materials().size()!=live_uploaded_material_count_||
         scene_rebase||world_renderer_.texture_upload_pending())&&
        (live_land_last_upload_==std::chrono::steady_clock::time_point{}||
         now-live_land_last_upload_>=std::chrono::milliseconds(800))){
