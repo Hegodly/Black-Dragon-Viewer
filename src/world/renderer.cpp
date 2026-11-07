@@ -776,12 +776,17 @@ bool Renderer::set_verified_live_terrain(
         };
         return d(a)<d(b);
     };
-    // We draw only 64 land patches. On a full region, partial_sort
-    // avoids sorting the many offscreen patches that won't reach DX12.
-    if(nearest.size()>64U){
-        std::partial_sort(nearest.begin(),nearest.begin()+64U,
+    // A standard 256 m region can contain 256 16x16 land patches.
+    // Capping at 64 silently discarded three quarters of the terrain,
+    // leaving distant buildings without a visible ground surface.
+    // Keep a bounded full-region budget; select the closest patches first
+    // when the simulator supplies a larger region or 32x32 variants.
+    constexpr std::size_t kMaxVisibleLandPatches = 256U;
+    if(nearest.size()>kMaxVisibleLandPatches){
+        std::partial_sort(nearest.begin(),
+                          nearest.begin()+kMaxVisibleLandPatches,
                           nearest.end(),patch_nearer);
-        nearest.resize(64U);
+        nearest.resize(kMaxVisibleLandPatches);
     }else std::sort(nearest.begin(),nearest.end(),patch_nearer);
     if(!live_avatar_preview_.active()&&!live_avatar_preview_.reset(agent)){
         error_=L"R16 avatar marker needs verified simulator spawn";
