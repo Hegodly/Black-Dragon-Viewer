@@ -94,11 +94,20 @@ PrimitiveKind classify_supported_sweep(std::span<const std::uint8_t> s,
     const auto hole=p.profile_curve&0xf0U;
     if(p.path_curve!=0x10U||(profile!=0U&&profile!=1U&&profile!=3U)||
        hole>0x10U||s[extras+4U]!=0U||
-       s[extras+7U]!=0U||s[extras+8U]!=0U||
-       p.profile_begin>0.0001f||p.profile_end<0.9999f||
-       p.hollow>0.0001f||hole!=0U)
+       s[extras+7U]!=0U||s[extras+8U]!=0U)
         return PrimitiveKind::Unknown;
-    if(profile==0U)return PrimitiveKind::Cylinder;
+    // The linear-circle emitter closes profile-cut wedges and builds
+    // circular inner walls/annular caps. Polygon hollow/cuts are not yet
+    // emitted faithfully, so keep those variants out of the live scene.
+    if(profile==0U){
+        if(hole!=0U&&hole!=0x10U)return PrimitiveKind::Unknown;
+        if(hole==0U&&p.hollow>0.0001f)return PrimitiveKind::Unknown;
+        if(hole==0x10U&&p.hollow<=0.0001f)return PrimitiveKind::Unknown;
+        return PrimitiveKind::Cylinder;
+    }
+    if(hole!=0U||p.hollow>0.0001f||
+       p.profile_begin>0.0001f||p.profile_end<0.9999f)
+        return PrimitiveKind::Unknown;
     if(profile==1U)return PrimitiveKind::Box;
     return PrimitiveKind::Prism;
 }
