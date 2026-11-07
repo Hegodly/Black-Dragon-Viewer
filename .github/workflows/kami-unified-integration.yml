@@ -1,13 +1,6 @@
 name: KAMI Unified Viewer Integration
 on:
-  pull_request_target:
-    branches:
-      - feature/kami-live-viewer-integration
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
+  workflow_call:
 
 permissions:
   contents: write
