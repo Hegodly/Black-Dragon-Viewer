@@ -411,14 +411,21 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
         if(protocol::volume::decode(t.volume_params,
                                     t.volume_params_full_layout,decoded)&&
            decoded.path_curve==0x10U&&
-           (decoded.profile_curve&0xf0U)<=0x10U){
+           decoded.radius_offset==0U&&decoded.revolutions==0U&&
+           decoded.skew==0U){
             const auto profile=decoded.profile_curve&0x0fU;
-            if(t.primitive==Kind::Cylinder&&profile==0U){
+            const auto hole=decoded.profile_curve&0xf0U;
+            if(t.primitive==Kind::Cylinder&&profile==0U&&
+               (hole==0U||hole==0x10U)){
                 build_linear_circle_volume(e,decoded);swept=true;
-            }else if(t.primitive==Kind::Box&&profile==1U){
-                build_linear_polygon_volume(e,decoded,false);swept=true;
-            }else if(t.primitive==Kind::Prism&&profile==3U){
-                build_linear_polygon_volume(e,decoded,true);swept=true;
+            }else if(hole==0U&&decoded.hollow<=0.0001f&&
+                     decoded.profile_begin<=0.0001f&&
+                     decoded.profile_end>=0.9999f){
+                if(t.primitive==Kind::Box&&profile==1U){
+                    build_linear_polygon_volume(e,decoded,false);swept=true;
+                }else if(t.primitive==Kind::Prism&&profile==3U){
+                    build_linear_polygon_volume(e,decoded,true);swept=true;
+                }
             }
         }
     }
