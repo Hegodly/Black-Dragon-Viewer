@@ -43,6 +43,8 @@ int run_primitive_tests(){
         Transform scaled{78U,128.f,140.f,35.f,2.f,3.f,4.f};
         scaled.primitive=Kind::Box;scaled.volume_params_seen=true;
         scaled.volume_params_full_layout=true;
+        scaled.volume_params[4U]=0x50U;scaled.volume_params[5U]=0xc3U;
+        scaled.volume_params[19U]=0x50U;scaled.volume_params[20U]=0xc3U;
         scaled.volume_params[6U]=50U;  // 1.5x profile X
         scaled.volume_params[7U]=150U; // 0.5x profile Y
         const auto high12=world::build_live_primitive_geometry(
@@ -55,6 +57,8 @@ int run_primitive_tests(){
         if(high12.root_shapes!=1U||std::abs(max_x-1.5f)>.001f||
            std::abs(max_z-.75f)>.001f)return 73;
         scaled.volume_params_full_layout=false;
+        scaled.volume_params[3U]=0x50U;scaled.volume_params[4U]=0xc3U;
+        scaled.volume_params[19U]=0x50U;scaled.volume_params[20U]=0xc3U;
         scaled.volume_params[5U]=50U;scaled.volume_params[6U]=150U;
         const auto high13=world::build_live_primitive_geometry(
             {{78U,scaled}},{},128.f,140.f,35.f);
