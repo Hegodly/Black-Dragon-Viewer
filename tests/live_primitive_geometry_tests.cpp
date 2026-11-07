@@ -161,6 +161,31 @@ int run_primitive_tests(){
         if(prism_sweep.root_shapes!=1U||prism_sweep.scene.vertices.size()<=180U||
            prism_sweep.scene.vertices.size()>=box_sweep.scene.vertices.size())
             return 87;
+        auto textured_prism=prism;
+        const std::array<std::string,5U> triangle_faces{{
+            "tri-cap-begin","tri-cap-end","tri-side-0","tri-side-1","tri-side-2"}};
+        const std::array<unsigned,5U> triangle_ids{{0U,1U,5U,6U,7U}};
+        std::map<std::string,std::uint16_t> triangle_layers;
+        for(unsigned i=0U;i<triangle_ids.size();++i){
+            textured_prism.face_texture_override[triangle_ids[i]]=true;
+            textured_prism.face_texture_asset_ids[triangle_ids[i]]=triangle_faces[i];
+            triangle_layers.emplace(triangle_faces[i],
+                static_cast<std::uint16_t>(i+1U));
+        }
+        const auto mapped_triangle=world::build_live_primitive_geometry(
+            {{87U,textured_prism}},{},128.f,140.f,35.f,128U,{},
+            triangle_layers);
+        std::array<bool,6U> triangle_seen{};
+        for(const auto& vertex:mapped_triangle.scene.vertices){
+            const auto layer=static_cast<unsigned>(vertex.texture_layer);
+            if(layer<1U||layer>5U)return 95;
+            triangle_seen[layer]=true;
+            const float facing=vertex.px*vertex.nx+
+                vertex.py*vertex.ny+vertex.pz*vertex.nz;
+            if(!(facing>0.f))return 96;
+        }
+        for(unsigned layer=1U;layer<=5U;++layer)
+            if(!triangle_seen[layer])return 97;
     }
     // A real High 13 linear/circular LLVolume now follows profile and
     // path cuts, hollow radius, taper, twist and shear through tessellation.
