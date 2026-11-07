@@ -242,6 +242,14 @@ void Circuit::maybe_fetch_mesh() noexcept {
             auto result=worker.get();
             const bool accepted=mesh_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
+            // The avatar may have moved while this worker was fetching.
+            // Drop an obsolete result before spending CPU on decode or
+            // admitting it to the bounded live mesh cache.
+            if(!mesh_desired_ids_.contains(result.id)){
+                if(accepted)(void)mesh_scheduler_.forget_finished(result.id);
+                mesh_retry_after_.erase(result.id);
+                continue;
+            }
             if(result.fetched&&accepted){
                 ++mesh_download_count_;
                 // The async decoder has already completed this exact UUID.
@@ -994,6 +1002,7 @@ void Circuit::stop() noexcept {
     loaded_meshes_.clear();
     loaded_mesh_triangle_count_=0U;
     mesh_retry_after_.clear();
+    mesh_desired_ids_.clear();
     mesh_download_count_=mesh_failure_count_=0U;
     mesh_last_start_={};
     mesh_scan_revision_=~std::uint64_t{0};
