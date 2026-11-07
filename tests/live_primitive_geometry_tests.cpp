@@ -56,6 +56,11 @@ int run_primitive_tests(){
         }
         if(high12.root_shapes!=1U||std::abs(max_x-1.5f)>.001f||
            std::abs(max_z-.75f)>.001f)return 73;
+        // Anisotropic profile scale must not flip side/top normals inward.
+        for(const auto& v:high12.scene.vertices){
+            const float outward=v.px*v.nx+v.py*v.ny+v.pz*v.nz;
+            if(!(outward>0.f))return 83;
+        }
         scaled.volume_params_full_layout=false;
         scaled.volume_params[3U]=0x50U;scaled.volume_params[4U]=0xc3U;
         scaled.volume_params[19U]=0x50U;scaled.volume_params[20U]=0xc3U;
