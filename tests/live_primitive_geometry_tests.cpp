@@ -87,6 +87,26 @@ int run_primitive_tests(){
             {{86U,square}},{},128.f,140.f,35.f);
         if(box_sweep.root_shapes!=1U||box_sweep.scene.vertices.size()<=240U)
             return 86;
+        // Unsupported hollow square volumes must not silently
+        // degrade into a generic solid box.
+        auto hollow_square=square;
+        hollow_square.volume_params[21U]=0x20U;
+        hollow_square.volume_params[22U]=0x4eU;
+        const auto rejected_square=world::build_live_primitive_geometry(
+            {{86U,hollow_square}},{},128.f,140.f,35.f);
+        if(rejected_square.root_shapes!=0U||
+           !rejected_square.scene.vertices.empty())return 105;
+        // A circular profile with a square hole is also rejected until
+        // the renderer has a matching square-inner-contour implementation.
+        auto square_hole_circle=square;
+        square_hole_circle.primitive=Kind::Cylinder;
+        square_hole_circle.volume_params[16U]=0x20U;
+        square_hole_circle.volume_params[21U]=0x20U;
+        square_hole_circle.volume_params[22U]=0x4eU;
+        const auto rejected_hole=world::build_live_primitive_geometry(
+            {{86U,square_hole_circle}},{},128.f,140.f,35.f);
+        if(rejected_hole.root_shapes!=0U||
+           !rejected_hole.scene.vertices.empty())return 106;
         // Distinct TextureEntry images on each LLVolume face must map
         // to the official path-cap and outer-side face IDs.
         auto textured_square=square;
