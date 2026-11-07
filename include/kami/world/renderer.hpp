@@ -315,6 +315,7 @@ private:
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
     [[nodiscard]] bool make_resident_indirect_resources() noexcept;
     [[nodiscard]] bool wait_for_gpu() noexcept;
+    [[nodiscard]] bool wait_for_gpu_before_mutation(const wchar_t* reason) noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle(UINT index) const noexcept;
 
     Device device_;

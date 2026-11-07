@@ -1,4 +1,5 @@
 #include "kami/world/renderer.hpp"
+#include "kami/world/dx12_fence_policy.hpp"
 #include "kami/world/live_terrain.hpp"
 #include "kami/world/live_water.hpp"
 #include "kami/world/object_proxies.hpp"
@@ -718,6 +719,18 @@ bool Renderer::wait_for_gpu() noexcept {
     return complete;
 }
 
+bool Renderer::wait_for_gpu_before_mutation(const wchar_t* reason) noexcept {
+    const bool completed=detail::resource_mutation_fence_ready(
+        device_.graphics_queue()!=nullptr,[this]() noexcept {
+            return wait_for_gpu();
+        });
+    if(completed)return true;
+    ready_=false;
+    error_=(reason&&*reason)?reason:
+        L"DX12 GPU fence did not complete before resource mutation";
+    return false;
+}
+
 bool Renderer::make_resident_indirect_resources() noexcept {
     auto* dev=device_.native_device();
     if(!dev)return false;
@@ -767,7 +780,8 @@ void Renderer::resize(UINT width,UINT height) {
     const UINT target_width=scaled(width,graphics_.render_scale_percent);
     const UINT target_height=scaled(height,graphics_.render_scale_percent);
     if(!ready_ || (target_width==width_ && target_height==height_)) return;
-    wait_for_gpu();
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before resize"))return;
     for(auto& buffer:buffers_) buffer.Reset();
     depth_.Reset();
     if(FAILED(swapchain_->ResizeBuffers(kBuffers,target_width,target_height,
@@ -788,10 +802,15 @@ void Renderer::set_graphics(graphics::Settings settings) {
     settings=graphics::normalize(settings);
     const bool detail_changed=graphics_.preset!=settings.preset;
     const bool scale_changed=graphics_.render_scale_percent!=settings.render_scale_percent;
+    if(!ready_) {
+        graphics_=settings;
+        return;
+    }
+    if(detail_changed&&!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before graphics preset change"))
+        return;
     graphics_=settings;
-    if(!ready_) return;
     if(detail_changed) {
-        wait_for_gpu();
         if(!make_geometry()) {
             ready_=false;
             error_=L"Cannot rebuild terrain for selected graphics preset";
@@ -830,7 +849,9 @@ bool Renderer::set_creator_preview(SceneMesh mesh) {
         error_=L"OBJ contains non-finite geometry or invalid rig data";
         return false;
     }
-    if(ready_)wait_for_gpu();
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before creator preview replacement"))
+        return false;
     auto previous=std::move(preview_mesh_);
     preview_mesh_=std::move(mesh);
     if(ready_ && !make_geometry()) {
@@ -1191,6 +1212,9 @@ bool Renderer::set_verified_live_terrain(
         candidate_batch==resident_mesh_batch_candidate_&&
         (!candidate_batch||resident_mesh_batch_ready_);
 
+    if(!unchanged&&!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before live-region replacement"))
+        return false;
     pbr_rows_=pbr_table.rows;
     if(!unchanged){
         auto previous=std::move(region_mesh_);
@@ -1216,7 +1240,6 @@ bool Renderer::set_verified_live_terrain(
         // after the prior graphics fence. If any stage fails, restore the
         // previous scene/cache as one transaction.
         if(ready_){
-            wait_for_gpu();
             if(!make_geometry()){
                 region_mesh_=std::move(previous);
                 pbr_rows_=previous_rows;
@@ -1346,7 +1369,9 @@ bool Renderer::set_verified_live_water(
         error_=L"Invalid R9 simulator water surface elevation";
         return false;
     }
-    if(ready_)wait_for_gpu();
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before live water replacement"))
+        return false;
     auto old=std::move(live_water_mesh_);
     live_water_mesh_=std::move(surface);
     if(ready_&&!make_geometry()){
@@ -1359,7 +1384,8 @@ bool Renderer::set_verified_live_water(
 }
 void Renderer::clear_live_water_preview() {
     if(!live_water_mesh_)return;
-    if(ready_)wait_for_gpu();
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before live water removal"))return;
     live_water_mesh_.reset();
     if(ready_&&!make_geometry()){
         ready_=false;
@@ -1375,7 +1401,9 @@ bool Renderer::set_decoded_region_geometry(
         error_=region_geometry_error(issue);
         return false;
     }
-    if(ready_)wait_for_gpu();
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before decoded-region replacement"))
+        return false;
     auto prior=std::move(region_mesh_);
     auto prior_instance_cache=std::move(mesh_instance_cache_);
     auto prior_spans=std::move(resident_mesh_spans_);
@@ -1410,6 +1438,8 @@ bool Renderer::set_decoded_region_geometry(
     return true;
 }
 void Renderer::clear_decoded_region_geometry() {
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before decoded-region removal"))return;
     // Always invalidate simulator-local instance identities on disconnect,
     // even if no region vertex buffer was successfully uploaded yet.
     mesh_residency_.clear_instances();
@@ -1424,7 +1454,6 @@ void Renderer::clear_decoded_region_geometry() {
     resident_mesh_batch_active_=false;
     if(++resident_mesh_revision_==0U)resident_mesh_revision_=1U;
     if(!region_mesh_)return;
-    if(ready_)wait_for_gpu();
     // Clear server data immediately on disconnect. If restoring the local
     // scene fails, stop rendering rather than showing stale world geometry.
     region_mesh_.reset();
@@ -1471,7 +1500,8 @@ void Renderer::clear_decoded_region_geometry() {
 }
 void Renderer::clear_creator_preview() {
     if(!preview_mesh_)return;
-    if(ready_)wait_for_gpu();
+    if(!wait_for_gpu_before_mutation(
+           L"DX12 GPU fence did not complete before creator preview removal"))return;
     preview_mesh_.reset();
     if(ready_ && !make_geometry()) {
         ready_=false;error_=L"Could not restore original procedural scene";
@@ -1509,7 +1539,9 @@ void Renderer::draw() {
        !mesh_instance_cache_.can_draw_exact_instance_batch(
            "__kami_live_region__",resident_mesh_revision_,
            resident_mesh_requirements_)){
-        wait_for_gpu();
+        if(!wait_for_gpu_before_mutation(
+               L"DX12 GPU fence did not complete before resident fallback rebuild"))
+            return;
         resident_mesh_batch_ready_=false;
         resident_mesh_batch_active_=false;
         if(!make_geometry()){

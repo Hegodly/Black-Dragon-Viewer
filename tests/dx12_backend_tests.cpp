@@ -1,11 +1,25 @@
 #include "kami/world/device.hpp"
 #include "kami/world/dx12_mesh_buffer_cache.hpp"
+#include "kami/world/dx12_fence_policy.hpp"
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 
 int main() {
+    // Resource replacement is permitted without a queue, but a live queue
+    // must report a completed fence before any GPU-owned resource is mutated.
+    bool fence_wait_called=false;
+    if(!kami::world::detail::resource_mutation_fence_ready(
+           false,[&]() noexcept {fence_wait_called=true;return false;})||
+       fence_wait_called)return 120;
+    if(!kami::world::detail::resource_mutation_fence_ready(
+           true,[&]() noexcept {fence_wait_called=true;return true;})||
+       !fence_wait_called)return 121;
+    fence_wait_called=false;
+    if(kami::world::detail::resource_mutation_fence_ready(
+           true,[&]() noexcept {fence_wait_called=true;return false;})||
+       !fence_wait_called)return 122;
     kami::world::Device device;
     if (device.status() != kami::world::DeviceStatus::NotInitialized) return 1;
     if (device.native_device() != nullptr) return 2;
