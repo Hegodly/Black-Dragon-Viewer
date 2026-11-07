@@ -141,11 +141,13 @@ int run_primitive_tests(){
         tapered.volume_params[13U]=0x50U; // +0.50 X taper
         const auto tapered_mesh=world::build_live_primitive_geometry(
             {{86U,tapered}},{},128.f,140.f,35.f);
+        // SL taper changes the far path end; the near cap remains
+        // full-width. Measure the +path end instead of the global maximum.
         float plain_width=0.f,tapered_width=0.f;
         for(const auto& v:box_sweep.scene.vertices)
-            plain_width=std::max(plain_width,std::abs(v.px));
+            if(v.pz>.49f)plain_width=std::max(plain_width,std::abs(v.px));
         for(const auto& v:tapered_mesh.scene.vertices)
-            tapered_width=std::max(tapered_width,std::abs(v.px));
+            if(v.pz>.49f)tapered_width=std::max(tapered_width,std::abs(v.px));
         if(!(tapered_width<plain_width))return 91;
         auto sheared=square;
         sheared.volume_params[11U]=0x20U;
