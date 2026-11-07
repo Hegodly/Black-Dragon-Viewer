@@ -1441,6 +1441,12 @@ bool LLViewerInput::exportBindingsXML(const std::string& filename)
 	//     We need to rewrite the entire file due to toXML()'s limitations and to prevent
 	//     bad things from happening.
 	file.open(filename.c_str());
+	if (!file.is_open())
+	{
+		LL_WARNS("Settings") << "Cannot open " << filename << " for writing." << LL_ENDL;
+		return false;
+	}
+	LLSD records = LLSD::emptyArray();
 	for (S32 i = 0; i < 5; i++)
 	{
 		for (S32 it = 0, end_it = mBindingCount[i]; it < end_it; it++)
@@ -1455,28 +1461,30 @@ bool LLViewerInput::exportBindingsXML(const std::string& filename)
 			record["mask"] = gKeyboard->stringFromMask(mask);
 			record["slot"] = slot;
 
-			LLSDSerialize::toXML(record, file);
+			records.append(record);
 			slot++;
 		}
 		//BD - Special Case to handle the left-click script trigger.
 		for (S32 it = 0, end_it = mLMouseDefaultHandling[i]; it < end_it; it++)
 		{
-			KEY key;
+			// Mouse-only bindings have no keyboard key. Never serialize an
+			// uninitialized KEY value into resident control settings.
 			MASK mask = MASK_NONE;
 			LLSD record;
 			record["function"] = script_mouse_handler_name;
-			record["key"] = key;
+			record["key"] = std::string();
 			record["mouse"] = CLICK_LEFT;
 			record["mode"] = i;
 			record["mask"] = gKeyboard->stringFromMask(mask);
 			record["slot"] = slot;
 
-			LLSDSerialize::toXML(record, file);
+			records.append(record);
 			slot++;
 		}
 	}
+	LLSDSerialize::toXML(records, file);
 	file.close();
-	return true;
+	return file.good();
 }
 
 //BD - Custom Keyboard Layout
@@ -1492,26 +1500,58 @@ S32 LLViewerInput::loadBindingsSettings(const std::string& filename)
 		return false;
 	}
 
-	//BD - This is used for loading the default bindings from the local Viewer foldler.
-	while (!infile.eof() && LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(settings, infile))
+	// Accept both the single-document LLSD array (current format) and the
+	// legacy multi-document format used by older Black Dragon installations.
+	// Keeping the latter readable protects resident keyboard customizations.
+	S32 loaded_bindings = 0;
+	auto bind_record = [this, &loaded_bindings](const LLSD& record)
 	{
-		KEY key = NULL;
+		if (!record.isMap() || !record["function"].isString()
+			|| record["function"].asString().empty() || !record["mode"].isInteger()
+			|| !record["key"].isDefined() || !record["mask"].isDefined())
+		{
+			LL_WARNS("Settings") << "Skipping incomplete keyboard binding." << LL_ENDL;
+			return;
+		}
+		const S32 mode = record["mode"].asInteger();
+		if (mode < 0 || mode >= 5)
+		{
+			LL_WARNS("Settings") << "Skipping keyboard binding with invalid mode " << mode << LL_ENDL;
+			return;
+		}
+		KEY key = 0;
 		EMouseClickType mouse = CLICK_NONE;
 		MASK mask = MASK_NONE;
-		S32 mode = settings["mode"].asInteger();
-		std::string function = settings["function"].asString();
-
-		LLKeyboard::keyFromString(settings["key"], &key);
-		LLKeyboard::maskFromString(settings["mask"], &mask);
-		if (settings["mouse"].isDefined())
+		LLKeyboard::keyFromString(record["key"], &key);
+		LLKeyboard::maskFromString(record["mask"], &mask);
+		if (record["mouse"].isDefined())
 		{
-			mouse = (EMouseClickType)settings["mouse"].asInteger();
+			mouse = static_cast<EMouseClickType>(record["mouse"].asInteger());
 		}
-		bindControl(mode, key, mouse, mask, function);
-		LL_DEBUGS("Settings") << "Binding key: " << key << " + " << mask << "(" << settings["mask"] << ") and mouse: " << mouse << LL_ENDL;
+		bindControl(mode, key, mouse, mask, record["function"].asString());
+		++loaded_bindings;
+		LL_DEBUGS("Settings") << "Binding key " << key << " + " << mask
+			<< " and mouse " << mouse << LL_ENDL;
+	};
+
+	while (LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(settings, infile))
+	{
+		if (settings.isArray())
+		{
+			for (LLSD::array_const_iterator item = settings.beginArray();
+				 item != settings.endArray(); ++item)
+			{
+				bind_record(*item);
+			}
+		}
+		else
+		{
+			bind_record(settings);
+		}
+		settings.clear();
 	}
 	infile.close();
-	return true;
+	return loaded_bindings > 0;
 }
 
 
@@ -1703,7 +1743,7 @@ bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask,
             {
                 mMouseLevel[clicktype] = MOUSE_STATE_CLICK;
             }
-            else 
+            else
             {
                 mMouseLevel[clicktype] = MOUSE_STATE_UP;
             }
