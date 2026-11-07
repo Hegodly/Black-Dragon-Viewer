@@ -214,7 +214,7 @@ float signed_wire(std::uint8_t value) noexcept {
 void build_linear_circle_volume(Emitter& e,
         const protocol::volume::Parameters& p){
     constexpr float pi=3.14159265358979323846f;
-    constexpr unsigned around=32U,along=12U;
+    constexpr unsigned around=32U,base_along=12U;
     const float begin=p.profile_begin*2.f*pi;
     const float end=p.profile_end*2.f*pi;
     const float sweep=end-begin;
@@ -225,6 +225,10 @@ void build_linear_circle_volume(Emitter& e,
     const float shear_y=signed_wire(p.shear_y)*.01f;
     const float twist0=signed_wire(p.twist_begin)*.01f;
     const float twist1=signed_wire(p.twist_end)*.01f;
+    // Increase longitudinal detail for strongly twisted linear paths while
+    // keeping a strict ceiling on geometry generated from network data.
+    const unsigned along=std::clamp(static_cast<unsigned>(std::ceil(
+        std::abs(twist1-twist0)*24.f/pi)),base_along,64U);
     const float taper_x=signed_wire(p.taper_x)*.01f;
     const float taper_y=signed_wire(p.taper_y)*.01f;
     const auto point=[&](float u,float angle,float radius)->V{
