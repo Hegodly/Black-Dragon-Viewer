@@ -426,8 +426,9 @@ void Circuit::remember_missing_object(std::uint32_t id,bool important,
     if(old!=missing_objects_.end()){
         // A cached object or missing parent can promote a prior low-priority
         // speculative terse request without creating a duplicate request.
-        old->second.important=old->second.important||important;
-        old->second.parent=old->second.parent||parent;
+        detail::promote_missing_request(
+            old->second.important,old->second.parent,
+            old->second.attempts,old->second.sent_at,important,parent);
         return;
     }
     if(missing_objects_.size()>=kMaxMissingObjectRequests){
