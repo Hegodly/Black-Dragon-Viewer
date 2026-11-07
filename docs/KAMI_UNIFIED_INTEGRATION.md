@@ -1,34 +1,58 @@
 # KAMI Unified Viewer Integration Contract
 
-The deliverable is the independent Windows `KAMIViewer.exe` with live Second Life functionality. The seven-in-one diagnostic program and DX12 smoke tool are test utilities, never release deliverables.
+The deliverable is the independent Windows `KAMIViewer.exe` with live Second Life functionality. The seven-in-one diagnostic program and DX12 smoke tool are test utilities, never release deliverables. The Windows candidate archive must contain exactly one executable: `KAMIViewer.exe`.
 
 ## Integration graph and acceptance gates
 
+`docs/KAMI_FEATURE_ACCEPTANCE.json` is the source of truth for the feature dependency graph. The validator checks all required feature nodes, known dependencies, cycles, explicit statuses and acceptance criteria. Release stays disabled until every feature is verified, blockers are empty, and authenticated live SL acceptance is recorded.
+
 | Stage | Depends on | Acceptance requirement | Current status |
 | --- | --- | --- | --- |
-| Native shell and workspaces | Original core | Real KAMI window, navigation and input | Partial |
+| Native shell and workspaces | Original core | Original KAMI window, navigation, input and native UI | Partial |
 | Login and simulator transport | Native shell | Authenticated region handshake, stable LLUDP and CAPS | Partial |
-| World geometry and DX12 residency | Transport | Complete linked meshes, walls, floors and terrain; no unexplained budget exclusions | Blocked |
-| Avatar and movement | Transport, world | Server appearance/outfit and authoritative movement | Blocked |
-| Inventory | Transport, avatar | Real remote folders, permissions and actions | Blocked |
-| Messaging and read receipts | Transport | Live IM/group/local chat; KAMI-only receipts with compatibility fallback | Blocked |
-| Camera and graphics | World, avatar | Controls applied to live viewport without regressions | Partial |
-| Creator/Photo Studio | World, inventory | Real supported uploads and captured live pixels | Partial |
-| Smart Sort, accessibility, hotfix | Inventory, shell | User-visible integrated operations and safe updates | Partial |
-| Release packaging | All above | Full viewer acceptance tests, WARP DX12 smoke, artifact manifest and user in-world verification | Blocked |
+| World geometry and DX12 residency | Transport | Complete linked meshes, opaque/alpha geometry, textures, terrain and PBR without unexplained omissions | Blocked |
+| Avatar and movement | Transport, world | Server appearance, outfit, attachments and authoritative movement | Blocked |
+| Inventory | Transport | Remote folders, permissions and server-side actions | Blocked |
+| Messaging and read receipts | Transport | Live IM/group/local chat and interoperable delivery/read state | Blocked |
+| Camera and graphics | World, avatar | Controls and graphics settings applied to the live viewport without regressions | Partial |
+| Creator/Photo Studio | World, inventory | Supported upload operations and captured live pixels | Partial |
+| Smart Sort, accessibility and hotfixes | Inventory, shell | User-visible integrated operations and safe updates | Partial |
+| Release packaging | All above | Native viewer acceptance, CTest, forced WARP, artifact inspection and authenticated in-world verification | Blocked |
+
+## Branch inventory and promotion policy
+
+- `feature/kami-original-core` is the independent native KAMI baseline and is an ancestor of the live integration branch. It is not wholesale-merged over the newer destination.
+- `feature/kami-original-viewer-reintegration` currently contributes workflow configuration only; it does not contain a separate original UI source implementation to merge. The original KAMI UI remains in `src/app/main.cpp`, `src/app/window.cpp` and the native `KAMIViewer` target.
+- `feature/kami-live-viewer-integration` is the only promotion destination. Its original KAMI application entry point and UI remain the executable; diagnostics are not a replacement application.
+- `feature/kami-r72-black-dragon-geometry-port` is treated as a source of individually reviewed fixes, not a branch to merge wholesale. R72 mesh-interest recovery and exception-safe mesh/texture worker recovery have already been ported into the destination as real source changes with regression coverage. Linkset descendant removal is present in the destination transport and object-spatial tests.
+- DX12 renderer, avatar, camera, creator/photo and SL transport branches are candidates only. Each implementation commit must pass its own source Windows CI and the destination validation before promotion.
+
+## Automated integration pipeline
+
+`.github/workflows/kami-unified-integration.yml` runs for ready pull requests targeting `feature/kami-live-viewer-integration`. The source branch must be on the reviewed allowlist and its exact head must have a successful `KAMI Original Core Windows` run. The pipeline then:
+
+1. Checks the feature manifest and dependency graph, source and destination heads, and every queued/running destination workflow.
+2. Selects one unported single-parent implementation commit with its own successful Windows CI. Test-only, documentation-only, workflow-only, binary and mixed-scope commits are rejected. Already-ported R72 source commits are explicitly recorded to avoid duplicate ports.
+3. Cherry-picks the selected source commit locally with provenance. Conflicts or stale source/destination heads stop the run.
+4. Builds the actual `KAMIViewer` target, builds the regression suite, runs CTest, and forces Microsoft WARP to verify DX12 output pixels.
+5. Pushes the validated tree to a unique temporary branch and opens a promotion PR. The destination Windows workflow builds the merge candidate and packages the native viewer. The PR is merged only if that destination-targeted CI succeeds, the artifact exists, and the destination base SHA has not moved.
+
+The destination Windows workflow is also run for pull requests targeting the live integration branch. The validation archive must contain exactly one executable, `KAMIViewer.exe`; the DX12 smoke tool and all test executables remain outside the package. The candidate includes `NOT_A_COMPLETE_VIEWER.txt` while live acceptance is blocked.
+
+A conflict, stale head, active destination run, failed test, failed WARP check, missing artifact or failed destination PR CI blocks the merge. No destination force-push is used and no diagnostic executable is delivered.
 
 ## Automation safety
 
-1. Check the branch head and active Actions runs before editing. Do not write concurrently with another integration run.
-2. Inventory original feature branches; port compatible implementations into the single live-viewer branch, avoiding wholesale merges of divergent or test-only application entrypoints.
-3. Make coherent changes, compile and run automated tests, inspect failed logs and repair failures before the next change.
-4. Preserve verified live login/world functionality and retain diagnostic tools solely as CI test executables.
-5. Never describe a passing WARP or unit test as proof that a real Second Life region, avatar, inventory or messaging works.
-6. Publish an actual KAMIViewer release candidate only after all required gates pass. Until then name packages development candidates and enumerate unsupported services.
+1. Check branch heads, exact successful CI and queued/running Actions jobs before writes. Serialize promotion jobs and recheck destination head immediately before merge.
+2. Port compatible implementation commits individually; do not merge divergent branches or replace the original application entry point.
+3. Keep regression tests alongside source changes where appropriate; always run the full suite and WARP against the candidate tree and destination PR merge result.
+4. Preserve independent DX12 architecture, licensing and bounded worker/cache behavior. Synthetic tests and WARP do not prove live SL correctness.
+5. The candidate archive is explicitly incomplete and contains only the native KAMI viewer executable plus required runtime/license files. It is not a release.
 
 ## Known blockers
 
-- The combined-scene DX12 draw path remains authoritative while per-instance resident draw coverage is not yet activated.
-- Dense-region diagnostics have reported thousands of meshes excluded by global geometry admission even after download queues drained.
-- Avatar appearance, remote inventory, messaging and several feature screens remain partial or local-only.
-- A green GitHub Actions build does not establish in-world completeness.
+- No authenticated live SL populated-region acceptance has been recorded.
+- Complete mesh/linkset/alpha/PBR residency and terrain coverage still need real-region verification.
+- Avatar appearance, outfit/attachment state, inventory operations, messaging and read receipts are not proven against live SL services.
+- Creator/photo operations and several settings remain local previews or partial integrations.
+- A green Windows build, CTest suite or WARP render does not establish a complete in-world viewer.

@@ -1,0 +1,1 @@
+"""KAMI integration automation package."""

@@ -104,6 +104,7 @@ on:
       - feature/kami-native-camera-system
   pull_request:
     branches:
+      - feature/kami-live-viewer-integration
       - release/kami-r42-mesh-discovery-20261104
       - release/kami-r43-full-object-shape-audit-20261104
   workflow_dispatch:
@@ -115,6 +116,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify independent source tree
         run: python3 tests/source_boundary.py
+      - name: Test unified integration policy and feature dependency graph
+        run: |
+          python3 -m unittest discover -s tests -p "test_kami_unified_integration.py" -v
+          python3 tools/kami_unified_integration.py validate-manifest
   windows:
     needs: source-boundary
     runs-on: windows-2022
@@ -205,7 +210,7 @@ jobs:
           name: KAMI-R69-Forced-WARP-PBR-Pixel-Verification-Result
           path: warp-gpu-result.txt
           retention-days: 14
-      - name: Package explicitly incomplete integration test candidate
+      - name: Package actual independent KAMI viewer candidate
         shell: pwsh
         run: |
           # Do not distribute this native workspace as the complete SL viewer.
@@ -260,7 +265,7 @@ jobs:
           Copy-Item R43_1_STATUS.md dist/KAMI
           Copy-Item docs/OFFICIAL_SL_BACKEND_MIGRATION.md dist/KAMI
           Copy-Item UE5_PROTOTYPE_HANDOFF.md dist/KAMI
-          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
+          Compress-Archive -Path dist/KAMI -DestinationPath dist/KAMI-Native-Viewer-Candidate.zip
       - name: Gate native KAMI viewer package and feature acceptance
         shell: pwsh
         run: |
@@ -303,7 +308,7 @@ jobs:
               throw "Invalid feature status $feature"
             }
           }
-          $zip = 'dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip'
+          $zip = 'dist/KAMI-Native-Viewer-Candidate.zip'
           if (!(Test-Path $zip)) { throw 'Native viewer archive missing' }
           Add-Type -AssemblyName System.IO.Compression
           $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
@@ -315,10 +320,22 @@ jobs:
             if ($names | Where-Object { $_.EndsWith('/KAMI-DX12-Smoke.exe') }) {
               throw 'Diagnostic executable found in ZIP'
             }
+            $executables = @($names | Where-Object { $_ -match '(?i)\.exe
           } finally { $archive.Dispose() }
       - uses: actions/upload-artifact@v4
         with:
-          name: KAMI-INCOMPLETE-Live-Integration-TEST
-          path: dist/KAMI-INCOMPLETE-Live-Integration-TEST.zip
+          name: KAMI-Native-Viewer-Candidate
+          path: dist/KAMI-Native-Viewer-Candidate.zip
+          retention-days: 14
+
+ })
+            if ($executables.Count -ne 1 -or !$executables[0].EndsWith('/KAMIViewer.exe')) {
+              throw 'Candidate archive must contain only the actual KAMIViewer.exe; test and diagnostic executables are forbidden.'
+            }
+          } finally { $archive.Dispose() }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KAMI-Native-Viewer-Candidate
+          path: dist/KAMI-Native-Viewer-Candidate.zip
           retention-days: 14
 
