@@ -169,6 +169,31 @@ int main(){
            compressed(swept),out)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Cylinder)
         return 17;
+    // Circle profile cuts are emitted as closed radial wedges; both
+    // hollow and solid circular variants must reach that geometry path.
+    auto circle_shape=shape;circle_shape[16U]=0U;
+    auto circle_cut=circle_shape;
+    circle_cut[17U]=0x50U;circle_cut[18U]=0xc3U; // begin .2
+    circle_cut[19U]=0x50U;circle_cut[20U]=0x9cU; // end .8
+    if(objectspatial::classify_simple_shape(circle_cut)!=
+       objectspatial::PrimitiveKind::Cylinder)return 49;
+    auto hollow_circle=circle_shape;
+    hollow_circle[16U]=0x10U;
+    hollow_circle[21U]=0x20U;hollow_circle[22U]=0x4eU;
+    if(objectspatial::classify_simple_shape(hollow_circle)!=
+       objectspatial::PrimitiveKind::Cylinder)return 50;
+    auto hollow_without_hole=circle_shape;
+    hollow_without_hole[21U]=0x20U;hollow_without_hole[22U]=0x4eU;
+    if(objectspatial::classify_simple_shape(hollow_without_hole)!=
+       objectspatial::PrimitiveKind::Unknown)return 51;
+    auto hole_without_hollow=circle_shape;
+    hole_without_hollow[16U]=0x10U;
+    if(objectspatial::classify_simple_shape(hole_without_hollow)!=
+       objectspatial::PrimitiveKind::Unknown)return 52;
+    auto square_profile_cut=shape;
+    square_profile_cut[17U]=0x50U;square_profile_cut[18U]=0xc3U;
+    if(objectspatial::classify_simple_shape(square_profile_cut)!=
+       objectspatial::PrimitiveKind::Unknown)return 53;
     auto scaled_shape=cbox;
     scaled_shape[scaled_shape.size()-23U+5U]=50U;
     scaled_shape[scaled_shape.size()-23U+6U]=150U;
