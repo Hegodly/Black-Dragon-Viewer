@@ -21,6 +21,7 @@ def valid_manifest():
             "status": "partial" if name == "ui" else "unverified",
             "dependencies": [],
             "acceptance": f"Verify {name} in the actual KAMIViewer application.",
+            "evidence": [],
         }
         for name in REQUIRED_FEATURES
     }
@@ -59,6 +60,49 @@ class FeatureManifestTests(unittest.TestCase):
         errors = manifest_errors(manifest)
         self.assertTrue(any("verified" in item for item in errors))
         self.assertTrue(any("live SL" in item for item in errors))
+
+
+
+def live_evidence():
+    return {
+        "commit": "a" * 40,
+        "ci_url": "https://github.com/Hegodly/Black-Dragon-Viewer/actions/runs/123",
+        "native_app": True,
+        "live_sl": True,
+        "notes": "Authenticated live region checked in the native KAMIViewer.exe.",
+    }
+
+
+class FeatureEvidenceTests(unittest.TestCase):
+    def test_verified_feature_requires_native_and_live_sl_evidence(self):
+        manifest = valid_manifest()
+        manifest["features"]["ui"]["status"] = "verified"
+        errors = manifest_errors(manifest)
+        self.assertTrue(any("native KAMIViewer.exe CI" in item for item in errors))
+
+    def test_rejects_local_or_warp_only_evidence(self):
+        manifest = valid_manifest()
+        manifest["features"]["ui"]["status"] = "verified"
+        evidence = live_evidence()
+        evidence["live_sl"] = False
+        manifest["features"]["ui"]["evidence"] = [evidence]
+        self.assertTrue(any("authenticated live SL evidence" in item for item in manifest_errors(manifest)))
+
+    def test_verified_feature_cannot_outpace_its_dependencies(self):
+        manifest = valid_manifest()
+        manifest["features"]["dx12_world"]["dependencies"] = ["sl_transport"]
+        manifest["features"]["dx12_world"]["status"] = "verified"
+        manifest["features"]["dx12_world"]["evidence"] = [live_evidence()]
+        self.assertTrue(any("dependency sl_transport is not verified" in item for item in manifest_errors(manifest)))
+
+    def test_verified_feature_passes_with_live_evidence_and_verified_dependencies(self):
+        manifest = valid_manifest()
+        manifest["features"]["sl_transport"]["status"] = "verified"
+        manifest["features"]["sl_transport"]["evidence"] = [live_evidence()]
+        manifest["features"]["dx12_world"]["dependencies"] = ["sl_transport"]
+        manifest["features"]["dx12_world"]["status"] = "verified"
+        manifest["features"]["dx12_world"]["evidence"] = [live_evidence()]
+        self.assertEqual(manifest_errors(manifest), [])
 
 
 class PromotionPolicyTests(unittest.TestCase):
@@ -107,6 +151,16 @@ class PromotionPolicyTests(unittest.TestCase):
     def test_rejects_merge_commits(self):
         self.assertFalse(
             promotion_decision(self.branch, ["src/world/renderer.cpp"], 2)[0]
+        )
+
+
+    def test_rejects_superseded_creator_photo_branch(self):
+        self.assertFalse(
+            promotion_decision(
+                "feature/kami-original-creator-photo-studios",
+                ["src/features/creator_studio.cpp", "tests/creator_studio_tests.cpp"],
+                1,
+            )[0]
         )
 
     def test_rejects_unreviewed_source_branch(self):

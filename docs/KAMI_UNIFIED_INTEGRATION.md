@@ -19,6 +19,10 @@ The deliverable is the independent Windows `KAMIViewer.exe` with live Second Lif
 | Smart Sort, accessibility and hotfixes | Inventory, shell | User-visible integrated operations and safe updates | Partial / unverified; not live-accepted |
 | Release packaging | All above | Native viewer acceptance, CTest, forced WARP, artifact inspection and authenticated in-world verification | Blocked; live acceptance missing |
 
+### Verified status requires evidence
+
+A feature may be marked `verified` only when its manifest `evidence` array contains a record with a full tested commit SHA, a GitHub Actions run URL, `native_app: true`, `live_sl: true`, and non-empty notes. Every declared dependency must also be verified. A compile, CTest fixture, offline preview, or WARP render by itself can never promote a feature to verified.
+
 ## Branch inventory and promotion policy
 
 - `feature/kami-original-core` is the independent native KAMI baseline and is an ancestor of the live integration branch. It is not wholesale-merged over the newer destination.
@@ -26,6 +30,9 @@ The deliverable is the independent Windows `KAMIViewer.exe` with live Second Lif
 - `feature/kami-live-viewer-integration` is the only promotion destination. Its original KAMI application entry point and UI remain the executable; diagnostics are not a replacement application.
 - `feature/kami-r72-black-dragon-geometry-port` is treated as a source of individually reviewed fixes, not a branch to merge wholesale. R72 mesh-interest recovery and exception-safe mesh/texture worker recovery have already been ported into the destination as real source changes with regression coverage. Linkset descendant removal is present in the destination transport and object-spatial tests.
   The R73 four-slot texture fetch/decode pool is also ported into the destination's newer cache/retry path with bounded-slot regression coverage; the source's namespace-only test adjustment is already equivalent in destination tests. The R72 source branch is never merged wholesale.
+- `feature/kami-original-creator-photo-studios` was evaluated as a source candidate but is superseded and removed from the auto-promotion allowlist. Its Photo Studio and viewer-foundation source/tests are byte-identical to the destination; its Creator OBJ importer is older than the destination implementation, and its first candidate commit conflicts add/add on `include/kami/features/creator_studio.hpp`. The destination already has stricter file-size/triangle bounds and degenerate-face recovery. Do not merge this older branch; create future work from the current destination instead.
+- `feature/kami-accessibility-1-0` and `feature/kami-hotfix-home` have no successful exact-head `KAMI Original Core Windows` run; their legacy Build jobs are skipped. They remain outside the allowlist until they are rebased onto the native viewer and pass Windows CI.
+- No dedicated inventory implementation branch was found in the current branch inventory. The existing inventory model/UI is not proof of remote folder, permission or mutation support; server-side inventory remains unverified.
 - DX12 renderer, avatar, camera, creator/photo and SL transport branches are candidates only. Each implementation commit must pass its own source Windows CI and the destination validation before promotion.
 
 ## Automated integration pipeline

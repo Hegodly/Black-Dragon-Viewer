@@ -32,8 +32,7 @@ ALLOWED_SOURCE_BRANCHES = frozenset({
     "feature/kami-r72-black-dragon-geometry-port",
     "feature/kami-r88-dx12-renderer-migration",
     "feature/kami-r89-dx12-renderer-phase2",
-    "feature/kami-original-creator-photo-studios",
-    "feature/kami-native-feature-restoration",
+        "feature/kami-native-feature-restoration",
     "feature/kami-native-camera-system",
     "feature/kami-live-simulator-udp-and-login-ui",
     "feature/kami-dx12-only-live-region-bridge",
@@ -155,6 +154,47 @@ def manifest_errors(manifest: dict[str, Any], live_acceptance: str = "") -> list
             for dep in dependencies:
                 if dep not in features:
                     errors.append(f"Feature {name} depends on unknown feature {dep}.")
+
+
+    # A feature cannot be called verified from a compile, synthetic fixture,
+    # offline preview or WARP render alone. It needs an exact native-app CI
+    # record and authenticated live Second Life acceptance evidence.
+    for name, entry in features.items():
+        if not isinstance(entry, dict):
+            continue
+        evidence = entry.get("evidence")
+        if not isinstance(evidence, list):
+            errors.append(f"Feature {name} must declare an evidence array (use [] until verified).")
+            evidence = []
+        if entry.get("status") == "verified":
+            has_live_native_evidence = any(
+                isinstance(item, dict)
+                and isinstance(item.get("commit"), str)
+                and SHA_RE.fullmatch(item["commit"]) is not None
+                and isinstance(item.get("ci_url"), str)
+                and re.fullmatch(
+                    r"https://github\.com/[^/\s]+/[^/\s]+/actions/runs/\d+",
+                    item["ci_url"],
+                ) is not None
+                and item.get("native_app") is True
+                and item.get("live_sl") is True
+                and isinstance(item.get("notes"), str)
+                and bool(item["notes"].strip())
+                for item in evidence
+            )
+            if not has_live_native_evidence:
+                errors.append(
+                    f"Verified feature {name} requires native KAMIViewer.exe CI "
+                    "and authenticated live SL evidence."
+                )
+            dependencies = entry.get("dependencies", [])
+            if isinstance(dependencies, list):
+                for dep in dependencies:
+                    dependency = features.get(dep)
+                    if not isinstance(dependency, dict) or dependency.get("status") != "verified":
+                        errors.append(
+                            f"Feature {name} cannot be verified while dependency {dep} is not verified."
+                        )
 
     state: dict[str, int] = {}
     stack: list[str] = []
