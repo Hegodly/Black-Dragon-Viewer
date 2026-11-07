@@ -151,11 +151,19 @@ int main(){
     if(!objectspatial::decode_compressed_transforms(
           compressed(cbox),out)||out.size()!=1U||
        out[0].primitive!=objectspatial::PrimitiveKind::Box)return 16;
+    auto scaled_shape=cbox;
+    scaled_shape[scaled_shape.size()-23U+5U]=50U;
+    scaled_shape[scaled_shape.size()-23U+6U]=150U;
+    if(!objectspatial::decode_compressed_transforms(
+          compressed(scaled_shape),out)||out.size()!=1U||
+       out[0].primitive!=objectspatial::PrimitiveKind::Box||
+       !out[0].volume_params_seen||out[0].volume_params_full_layout||
+       out[0].volume_params[5U]!=50U||out[0].volume_params[6U]!=150U)return 17;
     auto cut=cbox;
-    cut[cut.size()-23U+12U]=50U; // nonzero taper/radius: not simple
+    cut[cut.size()-23U+7U]=1U; // unsupported shear/path modifier
     if(!objectspatial::decode_compressed_transforms(
           compressed(cut),out)||out.size()!=1U||
-       out[0].primitive!=objectspatial::PrimitiveKind::Unknown)return 17;
+       out[0].primitive!=objectspatial::PrimitiveKind::Unknown)return 29;
     auto linkedbox=packed(111U,9U,110U);
     linkedbox.push_back(0U);
     linkedbox.insert(linkedbox.end(),shape.begin(),shape.end());
