@@ -519,7 +519,13 @@ public:
         float max_x=0.f,max_y=0.f,max_z=0.f;
         bool valid=false;
     };
-    struct VisibilityPlane { float x=0.f,y=0.f,z=0.f,d=0.f; };
+    // Extracted planes are normalized once per camera/shadow pass. Manually
+    // supplied planes may leave normal_length at zero and use the safe fallback.
+    struct VisibilityPlane {
+        float x=0.f,y=0.f,z=0.f,d=0.f;
+        double normal_length=0.0;
+    };
+    static constexpr double kVisibilityCullEpsilon=1.0e-4;
     struct InstanceVisibility {
         std::uint32_t local_id=0;
         VisibilitySphere bounds{};
@@ -584,7 +590,7 @@ public:
         const std::array<float,16>& m,
         std::array<VisibilityPlane,6>& out) noexcept {
         for(const auto value:m)if(!std::isfinite(value))return false;
-        const std::array<VisibilityPlane,6> candidate{{
+        std::array<VisibilityPlane,6> candidate{{
             {m[0]+m[3],m[4]+m[7],m[8]+m[11],m[12]+m[15]},
             {m[3]-m[0],m[7]-m[4],m[11]-m[8],m[15]-m[12]},
             {m[1]+m[3],m[5]+m[7],m[9]+m[11],m[13]+m[15]},
@@ -592,10 +598,17 @@ public:
             {m[2],m[6],m[10],m[14]},
             {m[3]-m[2],m[7]-m[6],m[11]-m[10],m[15]-m[14]}
         }};
-        for(const auto& plane:candidate){
+        for(auto& plane:candidate){
             const double x=plane.x,y=plane.y,z=plane.z;
             const double length=std::sqrt(x*x+y*y+z*z);
             if(!std::isfinite(length)||length<=0.0)return false;
+            plane.x=static_cast<float>(x/length);
+            plane.y=static_cast<float>(y/length);
+            plane.z=static_cast<float>(z/length);
+            plane.d=static_cast<float>(static_cast<double>(plane.d)/length);
+            if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
+               !std::isfinite(plane.z)||!std::isfinite(plane.d))return false;
+            plane.normal_length=1.0;
         }
         out=candidate;
         return true;
@@ -610,21 +623,28 @@ public:
            !std::isfinite(sphere.y)||!std::isfinite(sphere.z)||
            !std::isfinite(sphere.radius)||sphere.radius<0.f||
            planes.size()!=6U)return true;
-        for(const auto& plane:planes){
+        std::array<double,6> plane_lengths{};
+        for(std::size_t i=0U;i<planes.size();++i){
+            const auto& plane=planes[i];
             if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
                !std::isfinite(plane.z)||!std::isfinite(plane.d))return true;
-            const double nx=plane.x,ny=plane.y,nz=plane.z;
-            const double length=std::sqrt(nx*nx+ny*ny+nz*nz);
+            double length=plane.normal_length;
+            if(!std::isfinite(length)||length<=0.0){
+                const double nx=plane.x,ny=plane.y,nz=plane.z;
+                length=std::sqrt(nx*nx+ny*ny+nz*nz);
+            }
             if(!std::isfinite(length)||length<=0.0)return true;
+            plane_lengths[i]=length;
         }
-        for(const auto& plane:planes){
-            const double nx=plane.x,ny=plane.y,nz=plane.z;
-            const double length=std::sqrt(nx*nx+ny*ny+nz*nz);
-            const double distance=nx*static_cast<double>(sphere.x)+
-                ny*static_cast<double>(sphere.y)+
-                nz*static_cast<double>(sphere.z)+plane.d;
+        for(std::size_t i=0U;i<planes.size();++i){
+            const auto& plane=planes[i];
+            const double distance=static_cast<double>(plane.x)*sphere.x+
+                static_cast<double>(plane.y)*sphere.y+
+                static_cast<double>(plane.z)*sphere.z+plane.d;
             if(!std::isfinite(distance))return true;
-            if(distance < -static_cast<double>(sphere.radius)*length)return false;
+            const double margin=(static_cast<double>(sphere.radius)+
+                kVisibilityCullEpsilon)*plane_lengths[i];
+            if(distance < -margin)return false;
         }
         return true;
     }
@@ -640,18 +660,28 @@ public:
            !std::isfinite(box.max_y)||!std::isfinite(box.max_z)||
            box.min_x>box.max_x||box.min_y>box.max_y||box.min_z>box.max_z||
            planes.size()!=6U)return true;
-        for(const auto& plane:planes){
+        std::array<double,6> plane_lengths{};
+        for(std::size_t i=0U;i<planes.size();++i){
+            const auto& plane=planes[i];
             if(!std::isfinite(plane.x)||!std::isfinite(plane.y)||
                !std::isfinite(plane.z)||!std::isfinite(plane.d))return true;
+            double length=plane.normal_length;
+            if(!std::isfinite(length)||length<=0.0){
+                const double nx=plane.x,ny=plane.y,nz=plane.z;
+                length=std::sqrt(nx*nx+ny*ny+nz*nz);
+            }
+            if(!std::isfinite(length)||length<=0.0)return true;
+            plane_lengths[i]=length;
+        }
+        for(std::size_t i=0U;i<planes.size();++i){
+            const auto& plane=planes[i];
             const double nx=plane.x,ny=plane.y,nz=plane.z;
-            const double length_squared=nx*nx+ny*ny+nz*nz;
-            if(!std::isfinite(length_squared)||length_squared<=0.0)return true;
             const double px=nx>=0.0?box.max_x:box.min_x;
             const double py=ny>=0.0?box.max_y:box.min_y;
             const double pz=nz>=0.0?box.max_z:box.min_z;
             const double distance=nx*px+ny*py+nz*pz+plane.d;
             if(!std::isfinite(distance))return true;
-            if(distance<0.0)return false;
+            if(distance < -kVisibilityCullEpsilon*plane_lengths[i])return false;
         }
         return true;
     }

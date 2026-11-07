@@ -322,6 +322,23 @@ int main() {
         if(!Cache::potentially_visible({0,0,0,.5f,true},cube))return 51;
         if(Cache::potentially_visible({3,0,0,.5f,true},cube))return 52;
         if(!Cache::potentially_visible({1.5f,0,0,.5f,true},cube))return 53;
+        // A small world-space tolerance avoids edge flicker from floating-point
+        // frustum drift; clearly outside objects remain culled.
+        if(!Cache::potentially_visible({-1.50005f,0,0,.5f,true},cube)||
+           Cache::potentially_visible({-1.5002f,0,0,.5f,true},cube))return 129;
+        const Cache::VisibilityAabb edge_box{
+            -2.f,-.1f,-.1f,-1.00005f,.1f,.1f,true};
+        const Cache::VisibilityAabb outside_edge_box{
+            -2.f,-.1f,-.1f,-1.001f,.1f,.1f,true};
+        if(!Cache::potentially_visible_aabb(edge_box,cube)||
+           Cache::potentially_visible_aabb(outside_edge_box,cube))return 130;
+        const std::array<Cache::VisibilityPlane,6> scaled_cube{{
+            {2,0,0,2},{-2,0,0,2},{0,2,0,2},
+            {0,-2,0,2},{0,0,2,2},{0,0,-2,2}}};
+        if(!Cache::potentially_visible_aabb(edge_box,scaled_cube)||
+           Cache::potentially_visible_aabb(outside_edge_box,scaled_cube)||
+           !Cache::potentially_visible({-1.50005f,0,0,.5f,true},scaled_cube)||
+           Cache::potentially_visible({-1.5002f,0,0,.5f,true},scaled_cube))return 131;
         if(!Cache::potentially_visible({3,0,0,.5f,false},cube))return 54;
         if(!Cache::potentially_visible({3,0,0,.5f,true},
             std::vector<Cache::VisibilityPlane>{}))return 55;
@@ -355,6 +372,17 @@ int main() {
         if(Cache::potentially_visible({0,0,12.f,.1f,true},extracted))return 84;
         std::array<float,16> invalid_matrix{};
         if(Cache::extract_frustum_planes(invalid_matrix,extracted))return 85;
+        // Extracted camera planes are normalized once, avoiding repeated
+        // per-object square roots in the hot sphere/AABB visibility loops.
+        for(const auto& plane:extracted){
+            const double length=std::sqrt(
+                static_cast<double>(plane.x)*plane.x+
+                static_cast<double>(plane.y)*plane.y+
+                static_cast<double>(plane.z)*plane.z);
+            if(!std::isfinite(plane.normal_length)||
+               std::fabs(plane.normal_length-1.0)>1e-9||
+               std::fabs(length-1.0)>1e-5)return 128;
+        }
         struct PositionVertex {float px,py,pz;};
         const std::array<PositionVertex,3> triangle{{
             {-1.f,0.f,0.f},{1.f,0.f,0.f},{0.f,2.f,0.f}}};
