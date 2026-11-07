@@ -1627,8 +1627,17 @@ void Renderer::draw() {
     bool resident_indirect_ready=resident_mesh_batch_active_&&
         resident_indirect_signature_&&resident_indirect_arguments_&&
         resident_indirect_mapped_;
+    const std::uint64_t indirect_bytes=resident_indirect_arguments_?
+        resident_indirect_arguments_->GetDesc().Width:0U;
+    const std::uint64_t camera_indirect_offset=
+        static_cast<std::uint64_t>(indirect_capacity)*
+        sizeof(Dx12MeshBufferCache::IndirectDrawCommand);
     if(resident_indirect_ready){
         resident_indirect_ready=
+            Dx12MeshBufferCache::valid_indirect_argument_range(
+                indirect_bytes,0U,0U,indirect_capacity)&&
+            Dx12MeshBufferCache::valid_indirect_argument_range(
+                indirect_bytes,camera_indirect_offset,0U,indirect_capacity)&&
             mesh_instance_cache_.build_visible_instance_indirect_commands(
                 "__kami_live_region__",resident_mesh_revision_,
                 resident_mesh_requirements_,shadow_visible_ids.data(),
@@ -1639,7 +1648,12 @@ void Renderer::draw() {
                 resident_mesh_requirements_,camera_visible_ids.data(),
                 camera_visible_count,
                 resident_indirect_mapped_+indirect_capacity,
-                indirect_capacity,camera_indirect_count);
+                indirect_capacity,camera_indirect_count)&&
+            Dx12MeshBufferCache::valid_indirect_argument_range(
+                indirect_bytes,0U,shadow_indirect_count,indirect_capacity)&&
+            Dx12MeshBufferCache::valid_indirect_argument_range(
+                indirect_bytes,camera_indirect_offset,
+                camera_indirect_count,indirect_capacity);
     }
     bool resident_indirect_commands_recorded=false;
     std::array<float,63> constants{};

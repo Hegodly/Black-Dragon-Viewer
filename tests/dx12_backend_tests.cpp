@@ -36,6 +36,21 @@ int main() {
        !Cache::within_resident_batch_draw_budget(Cache::kMaxResidentBatchDraws)||
        Cache::within_resident_batch_draw_budget(Cache::kMaxResidentBatchDraws+1U)||
        Cache::within_resident_batch_draw_budget(0U))return 64;
+    const D3D12_VERTEX_BUFFER_VIEW valid_view{0x1000U,204U,68U};
+    if(!Cache::valid_instance_vertex_view(valid_view,3U))return 107;
+    auto invalid_view=valid_view;invalid_view.BufferLocation=0U;
+    if(Cache::valid_instance_vertex_view(invalid_view,3U))return 108;
+    invalid_view=valid_view;invalid_view.BufferLocation=0x1001U;
+    if(Cache::valid_instance_vertex_view(invalid_view,3U))return 109;
+    invalid_view=valid_view;invalid_view.StrideInBytes=0U;
+    if(Cache::valid_instance_vertex_view(invalid_view,3U))return 110;
+    invalid_view=valid_view;invalid_view.SizeInBytes=205U;
+    if(Cache::valid_instance_vertex_view(invalid_view,3U))return 111;
+    invalid_view=valid_view;invalid_view.SizeInBytes=272U;
+    if(Cache::valid_instance_vertex_view(invalid_view,3U))return 112;
+    invalid_view=valid_view;invalid_view.BufferLocation=
+        std::numeric_limits<std::uint64_t>::max()-3U;
+    if(Cache::valid_instance_vertex_view(invalid_view,3U))return 113;
 
     // GitHub CI may lack a hardware GPU. This tests safe initialization
     // without claiming that a rendered Second Life world exists.
@@ -171,6 +186,29 @@ int main() {
             only_nearby.data(),0U,indirect_commands.data(),
             indirect_commands.size(),indirect_count)||indirect_count!=0U)
             return 106;
+        const std::uint64_t indirect_stride=
+            sizeof(Cache::IndirectDrawCommand);
+        const std::uint64_t indirect_bytes=
+            2U*Cache::kMaxResidentBatchDraws*indirect_stride;
+        if(!Cache::valid_indirect_argument_range(
+            indirect_bytes,0U,2U,Cache::kMaxResidentBatchDraws)||
+           !Cache::valid_indirect_argument_range(
+            indirect_bytes,Cache::kMaxResidentBatchDraws*indirect_stride,
+            Cache::kMaxResidentBatchDraws,Cache::kMaxResidentBatchDraws))
+            return 114;
+        if(Cache::valid_indirect_argument_range(
+            indirect_bytes,1U,1U,Cache::kMaxResidentBatchDraws)||
+           Cache::valid_indirect_argument_range(
+            indirect_bytes,indirect_bytes-4U,1U,1U)||
+           Cache::valid_indirect_argument_range(
+            indirect_bytes,0U,Cache::kMaxResidentBatchDraws+1U,
+            Cache::kMaxResidentBatchDraws)||
+           Cache::valid_indirect_argument_range(
+            indirect_bytes,std::numeric_limits<std::uint64_t>::max()-3U,
+            1U,1U)||
+           Cache::valid_indirect_argument_range(
+            indirect_bytes,0U,0U,Cache::kMaxResidentBatchDraws+1U))
+            return 115;
         if(FAILED(batch_commands->Close()))return 79;
         // Coverage is stricter than nonoverlap: a missing triangle must
         // never disappear when the per-object draw path is activated.

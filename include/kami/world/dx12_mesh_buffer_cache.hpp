@@ -195,12 +195,21 @@ public:
         return true;
     }
 
-    // Keep CPU draw-call overhead bounded until the ExecuteIndirect path is
-    // implemented. Larger regions stay on the single combined-scene fallback.
+    // Bound resident draw batches so command generation and fallback work
+    // stay predictable on dense regions.
     static constexpr std::size_t kMaxResidentBatchDraws=256U;
     [[nodiscard]] static bool within_resident_batch_draw_budget(
         std::size_t count) noexcept {
         return count>0U&&count<=kMaxResidentBatchDraws;
+    }
+    [[nodiscard]] static bool valid_instance_vertex_view(
+        const D3D12_VERTEX_BUFFER_VIEW& view,UINT expected_vertices) noexcept {
+        if(!view.BufferLocation||view.BufferLocation%4U||
+           !view.StrideInBytes||view.StrideInBytes%4U||
+           !view.SizeInBytes||view.SizeInBytes%view.StrideInBytes||
+           view.SizeInBytes/view.StrideInBytes!=expected_vertices)return false;
+        return view.BufferLocation<=
+            std::numeric_limits<std::uint64_t>::max()-view.SizeInBytes;
     }
 
     // Exact preflight for switching a complete region mesh batch away from
@@ -227,9 +236,7 @@ public:
             const auto* resident=find(region_key+":"+std::to_string(item.local_id));
             if(!resident||!resident->resource||resident->generation!=generation_||
                resident->revision!=revision||
-               !resident->view.StrideInBytes||
-               resident->view.SizeInBytes%resident->view.StrideInBytes||
-               resident->view.SizeInBytes/resident->view.StrideInBytes!=item.vertex_count)
+               !valid_instance_vertex_view(resident->view,item.vertex_count))
                 return false;
         }
         auto seen_end=seen_ids.begin()+required.size();
@@ -260,6 +267,22 @@ public:
     };
     static_assert(sizeof(IndirectDrawCommand)==32U,
                   "DX12 indirect command stride must be 32 bytes");
+    // Validate both the command count and the complete writable segment with
+    // subtraction-based bounds checks before CPU writes or ExecuteIndirect.
+    [[nodiscard]] static bool valid_indirect_argument_range(
+        std::uint64_t total_bytes,std::uint64_t offset,
+        std::size_t command_count,std::size_t command_capacity) noexcept {
+        if(command_capacity>kMaxResidentBatchDraws||
+           command_count>command_capacity||offset%4U)return false;
+        constexpr auto stride=static_cast<std::uint64_t>(
+            sizeof(IndirectDrawCommand));
+        if(command_capacity>
+           std::numeric_limits<std::uint64_t>::max()/stride)return false;
+        const auto capacity_bytes=
+            static_cast<std::uint64_t>(command_capacity)*stride;
+        if(offset>total_bytes||capacity_bytes>total_bytes-offset)return false;
+        return command_count<=command_capacity;
+    }
     // Build a bounded ExecuteIndirect command list only after validating the
     // entire resident set and every visible ID. On failure, output is untouched.
     [[nodiscard]] bool build_visible_instance_indirect_commands(
