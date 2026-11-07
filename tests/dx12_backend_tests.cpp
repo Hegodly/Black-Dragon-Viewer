@@ -135,6 +135,42 @@ int main() {
         if(!cache.record_visible_instance_batch(batch_commands.Get(),"region",1,
              {Requirement{17,3},Requirement{18,3}},only_nearby.data(),0U))
             return 97;
+        std::array<Cache::IndirectDrawCommand,2> indirect_commands{};
+        std::size_t indirect_count=99U;
+        const std::array<std::uint32_t,2> both_visible{{17U,18U}};
+        if(!cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            both_visible.data(),both_visible.size(),indirect_commands.data(),
+            indirect_commands.size(),indirect_count)||
+           indirect_count!=2U||
+           indirect_commands[0].vertex_buffer.BufferLocation!=
+               cache.find("region:17")->view.BufferLocation||
+           indirect_commands[0].draw.VertexCountPerInstance!=3U||
+           indirect_commands[0].draw.InstanceCount!=1U||
+           indirect_commands[1].vertex_buffer.BufferLocation!=
+               cache.find("region:18")->view.BufferLocation||
+           indirect_commands[1].draw.VertexCountPerInstance!=3U)
+            return 103;
+        // Invalid membership and undersized output never publish a partial
+        // command list that ExecuteIndirect could consume.
+        indirect_commands[0].draw.VertexCountPerInstance=0xdeadbeefU;
+        indirect_count=99U;
+        if(cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            unknown_visible.data(),unknown_visible.size(),indirect_commands.data(),
+            indirect_commands.size(),indirect_count)||
+           indirect_count!=0U||
+           indirect_commands[0].draw.VertexCountPerInstance!=0xdeadbeefU)
+            return 104;
+        if(cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            both_visible.data(),both_visible.size(),indirect_commands.data(),
+            1U,indirect_count)||indirect_count!=0U)return 105;
+        if(!cache.build_visible_instance_indirect_commands(
+            "region",1,{Requirement{17,3},Requirement{18,3}},
+            only_nearby.data(),0U,indirect_commands.data(),
+            indirect_commands.size(),indirect_count)||indirect_count!=0U)
+            return 106;
         if(FAILED(batch_commands->Close()))return 79;
         // Coverage is stricter than nonoverlap: a missing triangle must
         // never disappear when the per-object draw path is activated.

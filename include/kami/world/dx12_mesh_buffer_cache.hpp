@@ -254,6 +254,49 @@ public:
         return true;
     }
 
+    struct IndirectDrawCommand {
+        D3D12_VERTEX_BUFFER_VIEW vertex_buffer{};
+        D3D12_DRAW_ARGUMENTS draw{};
+    };
+    static_assert(sizeof(IndirectDrawCommand)==32U,
+                  "DX12 indirect command stride must be 32 bytes");
+    // Build a bounded ExecuteIndirect command list only after validating the
+    // entire resident set and every visible ID. On failure, output is untouched.
+    [[nodiscard]] bool build_visible_instance_indirect_commands(
+        const std::string& region_key,
+        std::uint64_t revision,
+        const std::vector<InstanceDrawRequirement>& required,
+        const std::uint32_t* visible_ids,
+        std::size_t visible_count,
+        IndirectDrawCommand* output,
+        std::size_t capacity,
+        std::size_t& command_count) const noexcept {
+        command_count=0U;
+        if(!output||!visible_ids||
+           !can_draw_exact_instance_batch(region_key,revision,required)||
+           visible_count>required.size()||capacity<visible_count)return false;
+        const auto visible_end=visible_ids+visible_count;
+        if(!std::is_sorted(visible_ids,visible_end)||
+           std::adjacent_find(visible_ids,visible_end)!=visible_end)return false;
+        std::array<std::uint32_t,kMaxResidentBatchDraws> required_ids{};
+        for(std::size_t i=0U;i<required.size();++i)
+            required_ids[i]=required[i].local_id;
+        auto required_end=required_ids.begin()+required.size();
+        std::sort(required_ids.begin(),required_end);
+        for(auto it=visible_ids;it!=visible_end;++it)
+            if(!std::binary_search(required_ids.begin(),required_end,*it))
+                return false;
+        // No validation below this point can fail: all resources were checked
+        // by the all-or-nothing preflight and all IDs are members of required.
+        for(const auto& item:required){
+            if(!std::binary_search(visible_ids,visible_end,item.local_id))continue;
+            const auto* resident=find(region_key+":"+std::to_string(item.local_id));
+            output[command_count++]={resident->view,
+                D3D12_DRAW_ARGUMENTS{item.vertex_count,1U,0U,0U}};
+        }
+        return true;
+    }
+
     // Record only instances proven visible in the current pass. The full
     // resident batch is preflighted first, so culling never changes the
     // combined-scene exclusion decision; unknown bounds remain in the draw list.

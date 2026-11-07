@@ -313,7 +313,8 @@ private:
     [[nodiscard]] bool make_skin_palette();
     [[nodiscard]] bool update_skin_palette() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_dsv() const noexcept;
-    void wait_for_gpu() noexcept;
+    [[nodiscard]] bool make_resident_indirect_resources() noexcept;
+    [[nodiscard]] bool wait_for_gpu() noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle(UINT index) const noexcept;
 
     Device device_;
@@ -412,6 +413,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commands_;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> resident_indirect_signature_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> resident_indirect_arguments_;
+    Dx12MeshBufferCache::IndirectDrawCommand* resident_indirect_mapped_=nullptr;
+    bool resident_indirect_in_flight_=false;
+    std::size_t last_resident_indirect_passes_=0U;
+    std::size_t last_resident_indirect_commands_=0U;
     // R51: texture copy work must not reset the frame's command allocator.
     // One dedicated copy list is submitted to the same ordered DX12 queue.
     // The upload heap stays alive until its own fence has completed.

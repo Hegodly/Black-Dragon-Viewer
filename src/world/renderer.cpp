@@ -687,6 +687,9 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
         error_=L"Could not create GPU event";
         return false;
     }
+    // ExecuteIndirect is optional: if its command signature or upload heap is
+    // unavailable, the validated direct-draw path remains the safe fallback.
+    (void)make_resident_indirect_resources();
     if(make_material_texture()!=TextureUploadStatus::Committed) {
         error_=L"Could not upload DX12 material texture";
         return false;
@@ -701,13 +704,60 @@ bool Renderer::initialize(HWND window,UINT width,UINT height,
     return true;
 }
 
-void Renderer::wait_for_gpu() noexcept {
-    if(!fence_ || !fence_event_ || !device_.graphics_queue()) return;
-    if(FAILED(device_.graphics_queue()->Signal(fence_.Get(),++fence_counter_))) return;
-    if(fence_->GetCompletedValue()<fence_counter_) {
-        if(SUCCEEDED(fence_->SetEventOnCompletion(fence_counter_,fence_event_)))
-            (void)WaitForSingleObject(fence_event_,5000);
+bool Renderer::wait_for_gpu() noexcept {
+    if(!fence_ || !fence_event_ || !device_.graphics_queue())
+        return !resident_indirect_in_flight_;
+    const auto target=++fence_counter_;
+    if(FAILED(device_.graphics_queue()->Signal(fence_.Get(),target)))return false;
+    if(fence_->GetCompletedValue()<target){
+        if(FAILED(fence_->SetEventOnCompletion(target,fence_event_)))return false;
+        if(WaitForSingleObject(fence_event_,5000)!=WAIT_OBJECT_0)return false;
     }
+    const bool complete=fence_->GetCompletedValue()>=target;
+    if(complete)resident_indirect_in_flight_=false;
+    return complete;
+}
+
+bool Renderer::make_resident_indirect_resources() noexcept {
+    auto* dev=device_.native_device();
+    if(!dev)return false;
+    D3D12_INDIRECT_ARGUMENT_DESC arguments[2]{};
+    arguments[0].Type=D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW;
+    arguments[0].VertexBuffer.Slot=0U;
+    arguments[1].Type=D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+    D3D12_COMMAND_SIGNATURE_DESC signature{};
+    signature.ByteStride=static_cast<UINT>(
+        sizeof(Dx12MeshBufferCache::IndirectDrawCommand));
+    signature.NumArgumentDescs=2U;
+    signature.pArgumentDescs=arguments;
+    if(FAILED(dev->CreateCommandSignature(
+        &signature,nullptr,IID_PPV_ARGS(
+            resident_indirect_signature_.ReleaseAndGetAddressOf()))))
+        return false;
+    constexpr UINT64 command_count=
+        2U*Dx12MeshBufferCache::kMaxResidentBatchDraws;
+    constexpr UINT64 bytes=command_count*
+        sizeof(Dx12MeshBufferCache::IndirectDrawCommand);
+    const auto properties=heap(D3D12_HEAP_TYPE_UPLOAD);
+    const auto description=buffer_desc(bytes);
+    if(FAILED(dev->CreateCommittedResource(
+        &properties,D3D12_HEAP_FLAG_NONE,&description,
+        D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+        IID_PPV_ARGS(resident_indirect_arguments_.ReleaseAndGetAddressOf())))){
+        resident_indirect_signature_.Reset();
+        return false;
+    }
+    void* mapped=nullptr;
+    const D3D12_RANGE no_read{0U,0U};
+    if(FAILED(resident_indirect_arguments_->Map(
+        0U,&no_read,&mapped))||!mapped){
+        resident_indirect_arguments_.Reset();
+        resident_indirect_signature_.Reset();
+        return false;
+    }
+    resident_indirect_mapped_=
+        static_cast<Dx12MeshBufferCache::IndirectDrawCommand*>(mapped);
+    return true;
 }
 
 void Renderer::resize(UINT width,UINT height) {
@@ -1444,6 +1494,15 @@ void Renderer::toggle_landscape_view() noexcept {
 }
 void Renderer::draw() {
     if(!ready_ || !width_ || !height_) return;
+    last_resident_indirect_passes_=0U;
+    last_resident_indirect_commands_=0U;
+    // The upload argument heap is reused only after the previous frame's
+    // queue fence confirms the GPU has finished reading it.
+    if(resident_indirect_in_flight_&&!wait_for_gpu()){
+        ready_=false;
+        error_=L"DX12 indirect argument buffer is still in flight";
+        return;
+    }
     // A failed residency preflight is recoverable: fence old readers and
     // rebuild the full combined-scene fallback before recording this frame.
     if(resident_mesh_batch_active_&&
@@ -1562,6 +1621,27 @@ void Renderer::draw() {
                shadow_visible_count))
             all_visible(shadow_visible_ids,shadow_visible_count);
     }
+    const std::size_t indirect_capacity=
+        Dx12MeshBufferCache::kMaxResidentBatchDraws;
+    std::size_t shadow_indirect_count=0U,camera_indirect_count=0U;
+    bool resident_indirect_ready=resident_mesh_batch_active_&&
+        resident_indirect_signature_&&resident_indirect_arguments_&&
+        resident_indirect_mapped_;
+    if(resident_indirect_ready){
+        resident_indirect_ready=
+            mesh_instance_cache_.build_visible_instance_indirect_commands(
+                "__kami_live_region__",resident_mesh_revision_,
+                resident_mesh_requirements_,shadow_visible_ids.data(),
+                shadow_visible_count,resident_indirect_mapped_,
+                indirect_capacity,shadow_indirect_count)&&
+            mesh_instance_cache_.build_visible_instance_indirect_commands(
+                "__kami_live_region__",resident_mesh_revision_,
+                resident_mesh_requirements_,camera_visible_ids.data(),
+                camera_visible_count,
+                resident_indirect_mapped_+indirect_capacity,
+                indirect_capacity,camera_indirect_count);
+    }
+    bool resident_indirect_commands_recorded=false;
     std::array<float,63> constants{};
     std::memcpy(constants.data(),&viewproj,sizeof(viewproj));
     constants[16]=.35f;
@@ -1648,7 +1728,16 @@ void Renderer::draw() {
             commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         }
         if(resident_mesh_batch_active_){
-            if(!mesh_instance_cache_.record_visible_instance_batch(
+            if(resident_indirect_ready){
+                if(shadow_indirect_count!=0U){
+                    commands_->ExecuteIndirect(resident_indirect_signature_.Get(),
+                        static_cast<UINT>(shadow_indirect_count),
+                        resident_indirect_arguments_.Get(),0U,nullptr,0U);
+                    ++last_resident_indirect_passes_;
+                    last_resident_indirect_commands_+=shadow_indirect_count;
+                    resident_indirect_commands_recorded=true;
+                }
+            }else if(!mesh_instance_cache_.record_visible_instance_batch(
                 commands_.Get(),"__kami_live_region__",resident_mesh_revision_,
                 resident_mesh_requirements_,shadow_visible_ids.data(),
                 shadow_visible_count)){
@@ -1724,7 +1813,18 @@ void Renderer::draw() {
             commands_->DrawInstanced(static_cast<UINT>(terrain_count_),1,0,0);
         }
     if(resident_mesh_batch_active_){
-        if(!mesh_instance_cache_.record_visible_instance_batch(
+        if(resident_indirect_ready){
+            if(camera_indirect_count!=0U){
+                const auto offset=static_cast<UINT64>(indirect_capacity)*
+                    sizeof(Dx12MeshBufferCache::IndirectDrawCommand);
+                commands_->ExecuteIndirect(resident_indirect_signature_.Get(),
+                    static_cast<UINT>(camera_indirect_count),
+                    resident_indirect_arguments_.Get(),offset,nullptr,0U);
+                ++last_resident_indirect_passes_;
+                last_resident_indirect_commands_+=camera_indirect_count;
+                resident_indirect_commands_recorded=true;
+            }
+        }else if(!mesh_instance_cache_.record_visible_instance_batch(
             commands_.Get(),"__kami_live_region__",resident_mesh_revision_,
             resident_mesh_requirements_,camera_visible_ids.data(),
             camera_visible_count)){
@@ -1810,6 +1910,7 @@ void Renderer::draw() {
     }
     ID3D12CommandList* list[]={commands_.Get()};
     device_.graphics_queue()->ExecuteCommandLists(1,list);
+    resident_indirect_in_flight_=resident_indirect_commands_recorded;
     const UINT sync=graphics_.vsync?1U:0U;
     const UINT flags=(!graphics_.vsync && allow_tearing_)?
         DXGI_PRESENT_ALLOW_TEARING:0U;
@@ -1822,7 +1923,12 @@ void Renderer::draw() {
     // The usual frame fence also completes any earlier texture copy
     // submitted on the same ordered queue. Safely free its staging heap
     // after completion; never before the GPU reads it.
-    wait_for_gpu();
+    if(!wait_for_gpu()){
+        ready_=false;
+        error_=L"DX12 frame/indirect argument fence did not complete";
+        if(copying_photo)capture_status_=CaptureStatus::Failed;
+        return;
+    }
     if(texture_copy_submitted_fence_!=0U&&fence_&&
        fence_->GetCompletedValue()>=texture_copy_submitted_fence_){
         material_upload_.Reset();
@@ -1866,6 +1972,18 @@ void Renderer::shutdown() noexcept {
     material_upload_.Reset();
     skin_palette_buffer_.Reset();
     material_records_.Reset();transparent_vertices_.clear();
+    if(resident_indirect_arguments_&&resident_indirect_mapped_){
+        constexpr std::size_t written_bytes=
+            2U*Dx12MeshBufferCache::kMaxResidentBatchDraws*
+            sizeof(Dx12MeshBufferCache::IndirectDrawCommand);
+        const D3D12_RANGE written{0U,written_bytes};
+        resident_indirect_arguments_->Unmap(0U,&written);
+    }
+    resident_indirect_mapped_=nullptr;
+    resident_indirect_arguments_.Reset();
+    resident_indirect_signature_.Reset();
+    resident_indirect_in_flight_=false;
+    last_resident_indirect_passes_=last_resident_indirect_commands_=0U;
     environment_raw_.Reset();environment_filtered_.Reset();environment_diffuse_.Reset();environment_brdf_.Reset();
     environment_depth_.Reset();environment_data_.Reset();environment_rtv_.Reset();environment_dsv_.Reset();
     environment_capture_pipeline_.Reset();environment_sky_pipeline_.Reset();environment_filter_pipeline_.Reset();

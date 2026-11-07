@@ -104,6 +104,48 @@ struct RendererPixelTestAccess {
         const std::map<std::string,protocol::texture::DecodedTexture> images{{id,image}};
         return r.make_material_texture(&images,&previous)==TextureUploadStatus::Committed;
     }
+    static bool resident_indirect(Renderer& r) {
+        if(!r.resident_indirect_signature_||!r.resident_indirect_arguments_||
+           !r.resident_indirect_mapped_||!r.wait_for_gpu())return false;
+        auto settings=r.graphics_;
+        settings.pbr=true;settings.shadows=true;settings.vsync=false;
+        r.set_graphics(settings);
+        const auto vertex=[](float x,float y,float z){
+            Vertex value{};
+            value.px=x;value.py=y;value.pz=z;
+            value.nx=0.f;value.ny=1.f;value.nz=0.f;
+            value.r=.75f;value.g=.42f;value.b=.18f;
+            value.roughness=.72f;
+            return value;
+        };
+        SceneMesh scene{};
+        scene.vertices={
+            vertex(-1.f,0.f,5.f),vertex(0.f,0.f,5.f),vertex(-.5f,1.f,5.f),
+            vertex(0.f,0.f,5.f),vertex(1.f,0.f,5.f),vertex(.5f,1.f,5.f),
+            vertex(-2.f,-1.f,6.f),vertex(2.f,-1.f,6.f),vertex(0.f,2.f,6.f)};
+        scene.terrain_count=scene.vertices.size();
+        scene.avatar_count=0U;
+        r.preview_mesh_.reset();
+        r.region_mesh_=std::move(scene);
+        r.resident_mesh_spans_={{17U,0U,3U},{18U,3U,3U}};
+        r.resident_mesh_requirements_={{17U,3U},{18U,3U}};
+        r.resident_mesh_visibility_.clear(); // unknown bounds must draw conservatively
+        r.resident_mesh_revision_=1U;
+        r.resident_mesh_batch_candidate_=true;
+        r.resident_mesh_batch_ready_=false;
+        r.resident_mesh_batch_active_=false;
+        if(!r.make_geometry()||!r.resident_mesh_batch_active_){
+            r.clear_decoded_region_geometry();
+            return false;
+        }
+        r.draw();
+        const bool verified=r.ready()&&
+            r.last_resident_indirect_passes_==2U&&
+            r.last_resident_indirect_commands_==4U&&
+            !r.resident_indirect_in_flight_;
+        r.clear_decoded_region_geometry();
+        return verified&&r.ready();
+    }
 };
 }
 namespace {
@@ -631,6 +673,12 @@ int main(int argc,char** argv) {
                 if(!result&&!check_sampled_pixels(renderer))result=32;
                 if(!result&&!check_pbr_pixels(renderer)){std::wcerr<<L"PBR pixel regression failed\n";result=33;}
                 if(!result&&!check_environment_pixels(renderer)){std::wcerr<<L"Environment/terrain pixel regression failed\n";result=34;}
+                if(!result&&!kami::world::RendererPixelTestAccess::resident_indirect(renderer)){
+                    print_failure(L"resident ExecuteIndirect depth/PBR batch and fence reuse",renderer);
+                    result=35;
+                }else if(!result){
+                    std::wcout<<L"KAMI RESIDENT EXECUTEINDIRECT VERIFIED: shadow/PBR passes, complete two-instance batch, fenced argument reuse\n";
+                }
                 if(!result) std::wcout
                     <<(force_warp?L"KAMI WARP VIRTUAL GPU VERIFIED":L"KAMI DX12 SMOKE PASS")
                     <<L" - adapter: "<<renderer.adapter_name()
