@@ -218,6 +218,24 @@ int main(){
                  failed->retry_count!=Scheduler::kMaxTransientRetries)
             return 67;
     }
+    // JPEG2000 texture workers use the same bounded launch-failure recovery
+    // independently of mesh jobs, including retry exhaustion.
+    queue.clear();
+    if(!queue.request(a,Kind::VisibleTexture,1.f,true,64U))return 69;
+    for(unsigned failure=0U;failure<=Scheduler::kMaxTransientRetries;++failure){
+        const auto job=queue.next_download();
+        if(!job||job->id!=a)return 70;
+        const auto delay=queue.worker_launch_failed(a);
+        const auto* failed=queue.find(a);
+        if(!failed||failed->stage!=Stage::Failed||
+           !failed->retryable_fetch_failure)return 71;
+        if(failure<Scheduler::kMaxTransientRetries){
+            if(!delay||*delay!=Scheduler::retry_delay_seconds(failure)||
+               !queue.retry_failed(a))return 72;
+        }else if(delay||queue.retry_failed(a)||
+                 failed->retry_count!=Scheduler::kMaxTransientRetries)
+            return 73;
+    }
     // HTTP status classification keeps authentication/permission failures
     // terminal while permitting only transient server/timeout responses.
     if(!Scheduler::retryable_http_status(0U)||

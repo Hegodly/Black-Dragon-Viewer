@@ -277,7 +277,14 @@ void Circuit::maybe_fetch_texture() noexcept {
                 return result;
             });
     }catch(...){
-        (void)texture_scheduler_.download_finished(next->id,0U,false);
+        // std::async may fail under thread or memory pressure. Treat that
+        // local launch failure like a transient fetch failure, otherwise
+        // this texture remains Failed forever and cannot re-enter residency.
+        const auto delay=texture_scheduler_.worker_launch_failed(next->id);
+        if(delay&&texture_retry_after_.size()<kMaxDecodedTextureAssets)
+            texture_retry_after_.insert_or_assign(
+                next->id,std::chrono::steady_clock::now()+
+                std::chrono::seconds(*delay));
         ++texture_failure_count_;
     }
 }
