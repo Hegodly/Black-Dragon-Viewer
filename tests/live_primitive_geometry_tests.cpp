@@ -127,6 +127,14 @@ int run_primitive_tests(){
         for(const auto& v:tapered_mesh.scene.vertices)
             tapered_width=std::max(tapered_width,std::abs(v.px));
         if(!(tapered_width<plain_width))return 91;
+        auto sheared=square;
+        sheared.volume_params[11U]=0x20U;
+        const auto sheared_mesh=world::build_live_primitive_geometry(
+            {{86U,sheared}},{},128.f,140.f,35.f);
+        float plain_center=0.f,sheared_center=0.f;
+        for(const auto& v:box_sweep.scene.vertices)plain_center+=v.px;
+        for(const auto& v:sheared_mesh.scene.vertices)sheared_center+=v.px;
+        if(std::abs(sheared_center-plain_center)<.01f)return 92;
         auto prism=square;prism.local_id=87U;prism.primitive=Kind::Prism;
         prism.volume_params[16U]=0x03U;
         const auto prism_sweep=world::build_live_primitive_geometry(
