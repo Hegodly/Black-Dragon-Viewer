@@ -168,9 +168,20 @@ int run_primitive_tests(){
             sheared_min=std::min(sheared_min,v.px);
             sheared_max=std::max(sheared_max,v.px);
         }
+        const float plain_center=(plain_min+plain_max)*.5f;
+        const float sheared_center=(sheared_min+sheared_max)*.5f;
         if(plain_min>plain_max||sheared_min>sheared_max||
-           std::abs((sheared_min+sheared_max-plain_min-plain_max)*.5f)<.01f)
+           std::abs(sheared_center-plain_center)<.01f){
+            std::fprintf(stderr,
+                "KAMI shear diagnostic: plain=[%.6f,%.6f] center=%.6f "
+                "sheared=[%.6f,%.6f] center=%.6f delta=%.6f "
+                "wire=%u full_layout=%u\\n",
+                plain_min,plain_max,plain_center,sheared_min,sheared_max,
+                sheared_center,sheared_center-plain_center,
+                static_cast<unsigned>(sheared.volume_params[7U]),
+                sheared.volume_params_full_layout?1U:0U);
             return 92;
+        }
         auto path_cut=square;
         path_cut.volume_params[1U]=0x10U;
         path_cut.volume_params[2U]=0x27U; // 0.20 path begin
