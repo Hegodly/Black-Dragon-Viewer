@@ -140,5 +140,27 @@ int main(){
        !queue.next_download()||!queue.download_finished(b,0U,false)||
        !queue.find(b)->retryable_fetch_failure||!queue.retry_failed(b))
         return 41;
+    // An asset may become important after its download and decode have
+    // finished. Refreshing demand must promote the ready-for-GPU item so a
+    // newly visible mesh is uploaded ahead of an older distant texture.
+    queue.clear();
+    if(!queue.request(a,Kind::DistantTexture,80.f,false,64U)||
+       !queue.request(b,Kind::VisibleTexture,2.f,true,64U))
+        return 42;
+    const auto download_first=queue.next_download();
+    const auto download_second=queue.next_download();
+    if(!download_first||!download_second||download_first->id!=b||
+       download_second->id!=a)return 43;
+    if(!queue.download_finished(a,64U,true)||
+       !queue.download_finished(b,64U,true)||
+       !queue.begin_decode(a)||!queue.begin_decode(b)||
+       !queue.decode_finished(a,true)||!queue.decode_finished(b,true))
+        return 44;
+    if(!queue.request(a,Kind::VisibleMesh,1.f,true,64U)||
+       !queue.find(a)->visible||
+       queue.find(a)->kind!=Kind::VisibleMesh)
+        return 45;
+    const auto promoted=queue.next_gpu_upload(64U);
+    if(!promoted||promoted->id!=a)return 46;
     return 0;
 }
