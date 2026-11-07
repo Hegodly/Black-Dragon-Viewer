@@ -359,6 +359,16 @@ int run_primitive_tests(){
         visible,{}, {},assets,bitmaps,128.f,140.f,35.f,2U);
     if(invalid_image.contains(close_id)||!invalid_image.contains(far_id))
         return 30;
+    // Official SL mesh faces extend through index 44. The residency scan
+    // must not truncate its per-asset face mask at bit 31.
+    assets[asset_id].triangles[0].face_index=44U;
+    visible[101U].face_texture_override[44U]=true;
+    visible[101U].face_texture_asset_ids[44U]=far_id;
+    const auto high_face=world::select_visible_mesh_texture_layers(
+        visible,{}, {},assets,bitmaps,128.f,140.f,35.f,2U);
+    if(!high_face.contains(far_id))return 75;
+    assets[asset_id].triangles[0].face_index=0U;
+    visible[101U].face_texture_override[44U]=false;
     // LLFace::xform legacy rotation is not a glTF-style KHR texture
     // transform. Verify the exact signs in V-down GPU coordinates.
     protocol::texture::UVTransform rot{};
