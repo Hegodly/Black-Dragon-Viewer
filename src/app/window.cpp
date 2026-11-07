@@ -1238,7 +1238,7 @@ void Window::draw_interface(float width, float height, const ui::Palette& p) {
         for(const auto index:visible)if(!entries[index].folder)
             visible_items.push_back({entries[index].name,std::wstring(entries[index].creator_id.begin(),entries[index].creator_id.end()),false});
         const auto demo_matches=inventory::preview_demo_deletions(visible_items);
-        label(L"BACK [BACKSPACE] / "+std::to_wstring(visible.size())+L" entries / "+std::to_wstring(groups.size())+L" creators / "+std::to_wstring(demo_matches.size())+L" demo-trial matches",box(contentX+24,222,contentWidth-48,25),small_font_.Get(),p.muted);
+        label(L"BACK [BACKSPACE] / FILTER [F]: "+(inventory_type_filter_<0?std::wstring(L"ALL"):std::to_wstring(inventory_type_filter_))+L" / "+std::to_wstring(visible.size())+L" entries / "+std::to_wstring(groups.size())+L" creators / "+std::to_wstring(demo_matches.size())+L" demo matches",box(contentX+24,222,contentWidth-48,25),small_font_.Get(),p.muted);
         const float rowTop=251.f,rowHeight=31.f;
         const float detailTop=std::max(rowTop+80.f,height-188.f);
         const auto maxRows=static_cast<unsigned>(std::max(1.f,(detailTop-rowTop)/rowHeight));
