@@ -57,7 +57,7 @@ void Circuit::maybe_fetch_material() noexcept {
                 const float dz=position[2]-movement_position_.z;
                 if(!std::isfinite(dx)||!std::isfinite(dy)||
                    !std::isfinite(dz)||std::abs(dx)>144.f||
-                   std::abs(dy)>144.f||std::abs(dz)>96.f)continue;
+                   std::abs(dy)>144.f||std::abs(dz)>128.f)continue;
                 const float distance=std::hypot(std::hypot(dx,dy),dz);
                 if(!std::isfinite(distance))continue;
                 for(const auto& material:t.face_material_ids){
