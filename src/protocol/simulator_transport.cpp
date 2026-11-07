@@ -235,7 +235,9 @@ void Circuit::maybe_fetch_mesh() noexcept {
             auto result=worker.get();
             const bool accepted=mesh_scheduler_.download_finished(
                 result.id,result.bytes,result.fetched);
-            if(result.fetched&&accepted){
+            if(result.fetched&&accepted&&
+               mesh_scheduler_.find(result.id)&&
+               mesh_scheduler_.find(result.id)->stage==load::Stage::DecodeQueued){
                 ++mesh_download_count_;
                 // The async decoder has already completed this exact UUID.
                 // Never pop an unrelated decode job by scheduler priority.
@@ -272,11 +274,14 @@ void Circuit::maybe_fetch_mesh() noexcept {
                 // Failed HTTP connections / throttling are recoverable,
                 // unlike 4xx missing assets or a malformed mesh payload.
                 const auto status=result.http_status;
-                const bool transient=status==0U||status==429U||
+                const bool transient=status==0U||status==408U||status==429U||
                     status==500U||status==502U||status==503U||
                     status==504U;
                 const auto* job=mesh_scheduler_.find(result.id);
-                if(transient&&job&&
+                // Only retry a genuine failed network fetch. A malformed
+                // successful response must not churn the mesh request queue.
+                if(accepted&&!result.fetched&&transient&&job&&
+                   job->retryable_fetch_failure&&
                    job->retry_count<load::Scheduler::kMaxTransientRetries&&
                    mesh_retry_after_.size()<128U){
                     const auto delay=std::chrono::seconds(
