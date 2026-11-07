@@ -14,6 +14,8 @@ float cut(std::uint8_t lo,std::uint8_t hi) noexcept {
 bool decode(std::span<const std::uint8_t> b,bool full_layout,
             Parameters& out) noexcept {
     if(b.size()!=23U)return false;
+    const unsigned scale_offset=full_layout?6U:5U;
+    if(b[scale_offset]>200U||b[scale_offset+1U]>200U)return false;
     // Full High 12 has ProfileCurve at byte 1 and PathScaleX/Y at 6/7.
     // Packed High 13 starts the path cut fields at byte 1 and puts its
     // profile curve at byte 16. Keep these layouts explicitly separate.
