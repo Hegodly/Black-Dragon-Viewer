@@ -388,7 +388,7 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
     // its UV-bearing material faces for every instance repeatedly scanned
     // thousands of triangles. Cache a compact 32-bit face mask per asset
     // for this world rebuild, then look up only those material slots.
-    std::map<std::string,std::uint32_t> drawable_faces;
+    std::map<std::string,std::uint64_t> drawable_faces;
     const auto gather=[&](const Transform& t,Pose pose) {
         if(!finite(pose.pos)||!valid_quat(pose.rot))return;
         const bool is_mesh=!t.mesh_asset_id.empty();
@@ -399,14 +399,14 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
         if(std::abs(delta.x)>144.f||std::abs(delta.y)>144.f||
            std::abs(delta.z)>128.f)return;
         const float distance=dot(delta,delta);
-        std::uint32_t mask=0U;
+        std::uint64_t mask=0U;
         if(is_mesh){
             const auto [faces_it,inserted_faces]=
-                drawable_faces.try_emplace(t.mesh_asset_id,0U);
+                drawable_faces.try_emplace(t.mesh_asset_id,std::uint64_t{0});
             if(inserted_faces){
                 for(const auto& face:mesh->second.triangles){
-                    if(face.has_uv&&face.face_index<32U)
-                        faces_it->second|=(std::uint32_t{1}<<face.face_index);
+                    if(face.has_uv&&face.face_index<45U)
+                        faces_it->second|=(std::uint64_t{1}<<face.face_index);
                     if(faces_it->second==0xffffffffU)break;
                 }
             }
@@ -421,8 +421,8 @@ std::map<std::string,std::uint16_t> select_visible_mesh_texture_layers(
             mask=(std::uint32_t{1}<<faces)-1U;
         }
         if(mask==0U)return;
-        for(unsigned f=0U;f<32U;++f){
-            if((mask&(std::uint32_t{1}<<f))==0U)continue;
+        for(unsigned f=0U;f<45U;++f){
+            if((mask&(std::uint64_t{1}<<f))==0U)continue;
             protocol::pbr::Material material;
             const bool gltf=protocol::pbr::effective(t.face_material_ids[f],t.local_id,f,materials,overrides,material);
             std::vector<std::string> demand;
