@@ -10,9 +10,11 @@
 #include <vector>
 
 namespace kami::protocol::objectspatial {
-// The geometry is an opt-in *untextured* subset: original SL profile/path
-// classes. Complex cuts, mesh, sculpt, flexible and hollow profiles
-// remain unsupported until actual asset/volume tessellation exists.
+// PrimitiveKind identifies volume families with a real local tessellator.
+// Current LLVolume coverage includes basic box/sphere/prism/cylinder plus
+// bounded linear circular sweeps (cuts, circular hollow, shear, twist,
+// taper). Other path/profile curves, sculpt, mesh and flexible paths require
+// their own authenticated asset/volume geometry and must not be fabricated.
 enum class PrimitiveKind : std::uint8_t { Unknown, Box, Cylinder, Sphere, Prism };
 struct Transform {
     std::uint32_t local_id=0;
