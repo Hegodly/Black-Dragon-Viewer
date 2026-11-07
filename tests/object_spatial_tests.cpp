@@ -171,8 +171,8 @@ int main(){
     circle_shape[3U]=0x50U;circle_shape[4U]=0xc3U;
     circle_shape[19U]=0x50U;circle_shape[20U]=0xc3U;
     auto circle_cut=circle_shape;
-    circle_cut[17U]=0x50U;circle_cut[18U]=0xc3U; // begin .2
-    circle_cut[19U]=0x50U;circle_cut[20U]=0x9cU; // end .8
+    circle_cut[17U]=0x10U;circle_cut[18U]=0x27U; // begin .2 (10000 * 0.00002)
+    circle_cut[19U]=0x40U;circle_cut[20U]=0x9cU; // end .8 (40000 * 0.00002)
     if(objectspatial::classify_simple_shape(circle_cut)!=
        objectspatial::PrimitiveKind::Cylinder){std::fprintf(stderr,"object spatial test failed at check 49\n");return 49;}
     auto hollow_circle=circle_shape;
