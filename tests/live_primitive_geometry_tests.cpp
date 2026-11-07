@@ -110,6 +110,13 @@ int run_primitive_tests(){
         }
         for(unsigned layer=1U;layer<=6U;++layer)
             if(face_vertex_counts[layer]==0U)return 89;
+        // Every emitted vertex must retain a finite outward-facing normal
+        // on the swept square, including its two path caps.
+        for(const auto& vertex:mapped.scene.vertices){
+            const float facing=vertex.px*vertex.nx+
+                vertex.py*vertex.ny+vertex.pz*vertex.nz;
+            if(!(facing>0.f))return 90;
+        }
         auto prism=square;prism.local_id=87U;prism.primitive=Kind::Prism;
         prism.volume_params[16U]=0x03U;
         const auto prism_sweep=world::build_live_primitive_geometry(
