@@ -179,5 +179,21 @@ int main(){
        queue.find(a)->stage!=Stage::Resident||
        queue.find(a)->kind!=Kind::VisibleMesh||
        !queue.find(a)->visible)return 48;
+    // Local worker-launch failures use the same saturating exponential
+    // backoff as transient HTTP errors and remain bounded to three retries.
+    if(Scheduler::retry_delay_seconds(0U)!=1U||
+       Scheduler::retry_delay_seconds(1U)!=2U||
+       Scheduler::retry_delay_seconds(2U)!=4U||
+       Scheduler::retry_delay_seconds(3U)!=8U||
+       Scheduler::retry_delay_seconds(99U)!=8U)return 49;
+    queue.clear();
+    if(!queue.request(c,Kind::VisibleMesh,1.f,true,64U))return 50;
+    const auto dispatch=queue.next_download();
+    if(!dispatch||dispatch->id!=c||
+       !queue.download_finished(c,0U,false)||
+       !queue.find(c)->retryable_fetch_failure||
+       !queue.retry_failed(c))return 51;
+    const auto retried=queue.next_download();
+    if(!retried||retried->id!=c)return 52;
     return 0;
 }
