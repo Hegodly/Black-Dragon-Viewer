@@ -18,6 +18,7 @@
 #include "kami/protocol/texture_budget.hpp"
 #include "kami/world/region_geometry.hpp"
 #include "kami/world/live_avatar.hpp"
+#include "kami/world/live_terrain.hpp"
 #include <optional>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -335,6 +336,9 @@ private:
     // the camera/locally predicted avatar marker.
     std::array<float,3> live_region_origin_{};
     bool live_region_origin_valid_=false;
+    std::map<std::uint16_t,protocol::terrain::Patch> live_terrain_patches_;
+    std::array<float,3> live_terrain_origin_{};
+    bool live_terrain_valid_=false;
     std::size_t uploaded_root_bounds_=0;
     std::size_t uploaded_root_primitive_shapes_=0;
     std::size_t uploaded_linked_primitive_shapes_=0;
