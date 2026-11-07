@@ -32,7 +32,7 @@ bool token(std::wstring_view text, std::wstring_view needle) noexcept {
 
 std::vector<std::size_t> filter_entries(
     const std::vector<protocol::caps::InventoryEntry>& entries,
-    std::string_view parent_folder_id,std::wstring_view query,SortMode sort) {
+    std::string_view parent_folder_id,std::wstring_view query,SortMode sort,int asset_type_filter) {
     std::vector<std::size_t> result;
     const auto matches=[&](std::wstring_view value){
         if(query.empty())return true;
@@ -45,7 +45,9 @@ std::vector<std::size_t> filter_entries(
         return false;
     };
     for(std::size_t i=0;i<entries.size();++i)
-        if(entries[i].parent_id==parent_folder_id&&matches(entries[i].name))
+        if(entries[i].parent_id==parent_folder_id&&
+           (asset_type_filter<0||entries[i].folder||entries[i].asset_type==asset_type_filter)&&
+           (matches(entries[i].name)||matches(entries[i].description)))
             result.push_back(i);
     std::stable_sort(result.begin(),result.end(),[&](std::size_t a,std::size_t b){
         const auto& x=entries[a];const auto& y=entries[b];
