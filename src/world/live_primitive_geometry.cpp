@@ -436,6 +436,19 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
             }
         }
     }
+    // A linear LLVolume that failed the sweep support checks must
+    // never fall through to a generic box/cylinder stand-in. That would
+    // make hollow, cut, or otherwise unsupported server shapes look valid
+    // while silently discarding their real topology.
+    if(!swept&&t.volume_params_seen&&
+       (t.primitive==Kind::Box||t.primitive==Kind::Cylinder||
+        t.primitive==Kind::Prism)){
+        protocol::volume::Parameters decoded{};
+        if(!protocol::volume::decode(t.volume_params,
+                                     t.volume_params_full_layout,decoded))
+            return false;
+        if(decoded.path_curve==0x10U)return false;
+    }
     if(!swept)switch(t.primitive){
         case Kind::Box:build_box(e);break;
         case Kind::Cylinder:build_cylinder(e);break;
