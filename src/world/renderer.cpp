@@ -802,9 +802,13 @@ bool Renderer::set_verified_live_terrain(
     const auto& region=circuit.region_metadata();
     const auto& agent=circuit.movement_position();
     const auto& patches=circuit.decoded_land_patches();
+    const bool has_spatial_content=
+        !circuit.decoded_spatial_objects().empty()||
+        !circuit.decoded_linked_objects().empty();
     if(circuit.state()!=protocol::sim::CircuitState::MovementConfirmed||
-       !region.verified||!agent.verified||patches.empty()){
-        error_=L"R12 terrain needs verified SL simulator and decoded land";
+       !region.verified||!agent.verified||
+       (patches.empty()&&!has_spatial_content)){
+        error_=L"R12 live scene needs verified simulator data";
         return false;
     }
     // Work in local meters relative to the verified avatar, mapping
@@ -1006,7 +1010,7 @@ bool Renderer::set_verified_live_terrain(
                               marker.vertices.begin(),marker.vertices.end());
     }
     if(scene.vertices.empty()||scene.vertices.size()>4000000U){
-        error_=L"R13 decoded land has no contiguous terrain mesh";
+        error_=L"R13 verified live data produced no drawable DX12 geometry";
         return false;
     }
     // The DX12 camera and local avatar marker use the original simulator
@@ -1206,6 +1210,15 @@ bool Renderer::set_verified_live_terrain(
     primitive_deferred_=primitives.budget_deferred_shapes;
     uploaded_water_vertices_=new_water_count;
     skipped_terrain_discontinuities_=built.skipped_discontinuity_quads;
+    if(nearest.empty()&&first_live_land){
+        // Some simulators deliver object updates before the first terrain
+        // layer. Keep those authenticated objects visible instead of
+        // waiting for land; frame the camera around the verified spawn.
+        landscape_anchor_={0.f,-2.77f,0.f};
+        landscape_anchor_valid_=true;
+        camera_.set_subject({0.f,-1.7f,0.f});
+        camera_.apply_studio_shot(camera::StudioShot::Wide);
+    }
     if(!nearest.empty()){
         const auto& patch=*nearest.front();
         const unsigned middle=patch.size/2U;

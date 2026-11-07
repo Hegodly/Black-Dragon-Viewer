@@ -2095,11 +2095,16 @@ void Window::update_sl_connection() {
             {scene_agent.x,scene_agent.y,scene_agent.z},
             live_scene_uploaded_origin_,live_scene_origin_valid_);
     const auto now=std::chrono::steady_clock::now();
-    // Coalesce bursts of land patches. Upload only verified, finite
-    // decoded elevations and never block the UI on every network packet.
+    // Coalesce bursts of verified live-world updates. Objects may arrive
+    // before the first land layer; do not make terrain a prerequisite for
+    // uploading already-decoded spatial/mesh content to the DX12 scene.
+    const bool has_live_world_data=land_revision>0U||spatial_revision>0U||
+        !sl_circuit_.decoded_mesh_assets().empty()||
+        sl_circuit_.decoded_texture_count()>0U||
+        !sl_circuit_.decoded_materials().empty();
     if(sl_login_status_==protocol::LoginStatus::Accepted&&
        sl_circuit_.state()==protocol::sim::CircuitState::MovementConfirmed&&
-       world_renderer_.ready()&&land_revision>0U&&
+       world_renderer_.ready()&&has_live_world_data&&
        (land_revision!=live_land_uploaded_revision_||
         spatial_revision!=live_spatial_uploaded_revision_||
         sl_circuit_.decoded_texture_count()!=live_uploaded_texture_count_||
@@ -2122,7 +2127,7 @@ void Window::update_sl_connection() {
                 L"R52 DX12 atlas update deferred until GPU copy completes":
                 L"R52 DX12 coalesced land and mesh world";
         }else{
-            live_water_status_=L"R12 land geometry could not be uploaded";
+            live_water_status_=L"R12 verified live-world geometry could not be uploaded";
         }
     }
     if(sl_circuit_.state()==protocol::sim::CircuitState::Closed||
