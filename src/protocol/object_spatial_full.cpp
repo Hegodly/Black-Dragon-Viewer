@@ -107,7 +107,7 @@ PrimitiveKind full_simple_shape(std::span<const std::uint8_t> s) noexcept {
     if(s.size()!=23U)return PrimitiveKind::Unknown;
     for(unsigned i=2U;i<=5U;++i)
         if(s[i]!=0U)return PrimitiveKind::Unknown;
-    if(s[6]!=100U||s[7]!=100U)return PrimitiveKind::Unknown;
+    if(s[6]>200U||s[7]>200U)return PrimitiveKind::Unknown;
     for(unsigned i=8U;i<=16U;++i)
         if(s[i]!=0U)return PrimitiveKind::Unknown;
     for(unsigned i=17U;i<23U;++i)
@@ -171,6 +171,7 @@ bool decode_full_transforms(const lludp::Packet& packet,
         if(!cur.take(23U,shape))return false;
         t.primitive=full_simple_shape(shape);
         t.volume_params_seen=true;
+        t.volume_params_full_layout=true;
         std::copy(shape.begin(),shape.end(),t.volume_params.begin());
         // TextureEntry Var2; TextureAnim Var1; NameValue Var2;
         // Data Var2; Text Var1; TextColor Fixed4;
