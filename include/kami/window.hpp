@@ -61,6 +61,7 @@ private:
     void begin_sl_login();
     void start_caps_poll();
     void update_sl_connection();
+    void start_inventory_refresh();
 
     void round_rect(D2D1_RECT_F bounds, float radius, D2D1_COLOR_F color);
     void label(std::wstring_view text, D2D1_RECT_F bounds, IDWriteTextFormat* font, D2D1_COLOR_F color);
@@ -151,6 +152,12 @@ private:
     std::future<protocol::caps::InventoryTreeFetchResult> inventory_root_future_;
     protocol::caps::InventoryFolderReply inventory_root_snapshot_{};
     std::wstring inventory_status_=L"Waiting for authenticated inventory";
+    std::wstring inventory_search_;
+    std::string inventory_current_folder_;
+    std::string inventory_selected_entry_;
+    unsigned inventory_sort_mode_=0;
+    bool inventory_group_creators_=false;
+    bool inventory_search_focused_=false;
     std::wstring inventory_search_;
     std::string inventory_current_folder_;
     std::string inventory_selected_entry_;
