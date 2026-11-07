@@ -59,13 +59,13 @@ const groups=[
 ];
 const statuses=['Not tested','Pass','Fail','Partial','Local-only','In-testing','Stubbed','Missing backend'];
 function statusTag(s){let cls=s==='Pass'?'good':s==='Fail'?'bad':['Partial','In-testing','Local-only'].includes(s)?'warn':s==='Missing backend'?'bad':'blue';return '<span class="tag '+cls+'">'+esc(s)+'</span>'}
-function api(path){return fetch('https://api.github.com/repos/'+encodeURIComponent(db.repo).replace('%2F','/')+path,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('GitHub API '+r.status+' · '+(await r.text()).slice(0,150));return r.json()})}
+function api(path){return fetch('https://api.github.com/repos/'+encodeURIComponent(db.repo).replace('%2F','/')+path,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('GitHub API '+r.status+' · '+(await r.text()).slice(0,150));return r.json()})}\nasync function apiAll(path){let all=[],page=1,part=[];do{part=await api(path+(path.includes('?')?'&':'?')+'per_page=100&page='+page);if(!Array.isArray(part))return part;all=all.concat(part);page++}while(part.length===100);return all}
 function runLabel(r){let name=r.name||r.display_title||r.workflow_name||'Workflow run';let m=name.match(/\bR\s*[-_]?(\d+)\b/i)||r.head_branch?.match(/\br(\d+)\b/i);return m?'R'+m[1]:name}
 function conclusion(r){return r.status==='in_progress'?'in_progress':r.conclusion||r.status||'unknown'}
 function date(s){return s?new Date(s).toLocaleString():'—'}
 function short(s){return s?String(s).slice(0,7):'—'}
 async function sync(){const b=$('refresh');b.disabled=true;b.textContent='Syncing…';$('connection').textContent='● SYNCING';try{
- const [rr,bb,pp]=await Promise.all([api('/actions/runs?per_page=100'),api('/branches?per_page=100'),api('/pulls?state=open&per_page=100')]);
+ const [rr,bb,pp]=await Promise.all([api('/actions/runs?per_page=100&page=1'),apiAll('/branches'),apiAll('/pulls?state=open')]);
  runs=rr.workflow_runs||[];runPage=1;moreRuns=runs.length===100;branches=bb||[];prs=pp||[];artifacts={};$('runPageLabel').textContent='Page 1 · '+runs.length+' runs loaded';$('loadOlder').disabled=!moreRuns;
  await Promise.all(runs.slice(0,30).map(async r=>{try{let a=await api('/actions/runs/'+r.id+'/artifacts');artifacts[r.id]=a.artifacts||[]}catch{artifacts[r.id]=[]}}));
  $('connection').textContent='● GITHUB CONNECTED';$('connection').className='pill live';$('syncText').textContent='Last sync '+new Date().toLocaleString()+' · '+runs.length+' runs · '+branches.length+' branches · '+prs.length+' open PRs';
