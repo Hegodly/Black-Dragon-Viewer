@@ -15,7 +15,7 @@ int main() {
     if(del.size()!=1||del[0]!=1)return 3;
     if(is_demo_item(L"DEMOGRAPHICS"))return 4;
     if(folder_for({L"[BAD/STORE] Test",L""})!=L"[UNCATEGORIZED]")return 5;
-    protocol::caps::InventoryEntry movable{};
+    kami::protocol::caps::InventoryEntry movable{};
     movable.id="cccccccc-cccc-4ccc-8ccc-cccccccccccc";
     movable.parent_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     movable.owner_id="12345678-90ab-4cde-8fab-000000000001";
