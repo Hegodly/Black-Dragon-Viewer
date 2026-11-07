@@ -8662,7 +8662,7 @@
     <key>Type</key>
     <string>Boolean</string>
     <key>Value</key>
-    <integer>1</integer>
+    <integer>0</integer>
     <key>PresetType</key>
     <integer>1</integer>
   </map>
@@ -8957,7 +8957,7 @@
       <key>Type</key>
       <string>Boolean</string>
       <key>Value</key>
-      <integer>1</integer>
+      <integer>0</integer>
       <key>PresetType</key>
       <integer>1</integer>
     </map>
@@ -9498,7 +9498,7 @@
         <key>Type</key>
         <string>U32</string>
         <key>Value</key>
-        <integer>256</integer>
+        <integer>128</integer>
     </map>
   <key>RenderReflectionProbeResolution</key>
   <map>
@@ -10407,7 +10407,7 @@
         <key>Type</key>
         <string>F32</string>
         <key>Value</key>
-        <real>0.7</real>
+        <real>1.0</real>
     </map>
     <key>RenderTonemapType</key>
     <map>
@@ -10418,7 +10418,7 @@
         <key>Type</key>
         <string>U32</string>
         <key>Value</key>
-        <integer>1</integer>
+        <integer>0</integer>
     </map>
     <key>ReplaySession</key>
     <map>
