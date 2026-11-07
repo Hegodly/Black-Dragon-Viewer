@@ -28,6 +28,13 @@ int main(){
        std::abs(q.path_begin)>.0001f||std::abs(q.path_end-1.f)>.0001f||
        std::abs(q.scale_x-1.5f)>.0001f||
        std::abs(q.scale_y-.5f)>.0001f)return 2;
+    // LLVolumeParams modifiers are signed S8 fixed-point values. Preserve
+    // their exact wire representation: 0 is neutral, 0x80 is -128.
+    h13[7]=0x00U;h13[8]=0x80U;h13[9]=0xffU;
+    if(!kami::protocol::volume::decode(h13,false,p)||
+       p.shear_x!=0x00U||p.shear_y!=0x80U||
+       p.twist_begin!=0xffU)return 7;
+    h13[7]=0U;h13[8]=0U;h13[9]=0U;
     h13[1]=0x40U;h13[2]=0x9cU; // 0.8 path begin
     h13[3]=0x20U;h13[4]=0x4eU; // 0.4 path end: reversed interval
     if(kami::protocol::volume::decode(h13,false,p))return 3;
