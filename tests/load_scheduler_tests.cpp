@@ -178,5 +178,22 @@ int main(){
        !queue.retry_failed(c))return 49;
     const auto retried=queue.next_download();
     if(!retried||retried->id!=c)return 50;
+    // A mesh that leaves the avatar's interest set while still queued can
+    // be forgotten immediately, while an active HTTP worker remains owned
+    // until completion. Its late successful result can then be discarded
+    // in DecodeQueued without starting an unnecessary CPU decode.
+    queue.clear();
+    if(!queue.request(a,Kind::VisibleMesh,8.f,true,64U)||
+       !queue.forget_finished(a)||queue.find(a)!=nullptr)return 51;
+    if(!queue.request(b,Kind::VisibleMesh,9.f,true,64U))return 52;
+    const auto stale_worker=queue.next_download();
+    if(!stale_worker||stale_worker->id!=b||
+       queue.forget_finished(b))return 53;
+    if(!queue.download_finished(b,64U,true)||
+       queue.find(b)->stage!=Stage::DecodeQueued||
+       !queue.forget_finished(b)||queue.find(b)!=nullptr)return 54;
+    if(!queue.request(b,Kind::VisibleMesh,3.f,true,64U))return 55;
+    const auto reentered=queue.next_download();
+    if(!reentered||reentered->id!=b)return 56;
     return 0;
 }
