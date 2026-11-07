@@ -3,6 +3,7 @@
 #include <objbase.h>
 #include <winhttp.h>
 #include <string>
+#include <iostream>
 using namespace kami::protocol::caps;
 namespace {
 int exercise(){
@@ -472,6 +473,7 @@ int main(){
     const auto hr=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(hr))return 40;
     const auto result=exercise();
+    if(result)std::cerr<<"KamiSLSeedCapsAndEventQueueLLSDValidation failed at assertion "<<result<<'\\n';
     CoUninitialize();
     return result;
 }
