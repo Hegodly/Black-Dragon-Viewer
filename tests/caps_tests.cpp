@@ -258,6 +258,7 @@ int exercise(){
         "<key>parent_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
         "<key>name</key><string>Clothing</string></map></array>"
         "<key>items</key><array><map>"
+        "<key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"
         "<key>item_id</key><uuid>cccccccc-cccc-4ccc-8ccc-cccccccccccc</uuid>"
         "<key>parent_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>"
         "<key>name</key><string>Jacket</string></map></array>"
@@ -276,7 +277,7 @@ int exercise(){
     const auto inventory_request=build_inventory_folder_post(
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "12345678-90ab-4cde-8fab-000000000001",true,true);
-    if(inventory_request.find("<key>folder_id</key><string>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</string>")==std::string::npos||
+    if(inventory_request.find("<key>folder_id</key><uuid>aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</uuid>")==std::string::npos||
        inventory_request.find("<key>owner_id</key>")!=std::string::npos||
        inventory_request.find("<key>fetch_folders</key>")!=std::string::npos||
        inventory_request.find("<key>fetch_items</key>")!=std::string::npos||
@@ -284,12 +285,10 @@ int exercise(){
         return 46;
     const std::vector<std::string> requested_item_ids{
         "cccccccc-cccc-4ccc-8ccc-cccccccccccc"};
-    const auto item_post=build_inventory_items_post(
-        "12345678-90ab-4cde-8fab-000000000001",
-        "12345678-90ab-4cde-8fab-000000000001",requested_item_ids);
-    if(item_post.find("<key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>")==std::string::npos||
+    const auto item_post=build_inventory_items_post(requested_item_ids);
+    if(item_post.find("<key>agent_id</key>")!=std::string::npos||
        item_post.find("<key>item_id</key><uuid>cccccccc-cccc-4ccc-8ccc-cccccccccccc</uuid>")==std::string::npos||
-       !build_inventory_items_post("bad","12345678-90ab-4cde-8fab-000000000001",requested_item_ids).empty())
+       !build_inventory_items_post({"bad"}).empty())
         return 49;
     const std::string item_reply=
         "<llsd><map><key>agent_id</key><uuid>12345678-90ab-4cde-8fab-000000000001</uuid>"

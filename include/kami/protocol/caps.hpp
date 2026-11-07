@@ -123,7 +123,7 @@ struct InventoryFolderReply {
 // fields are ignored; malformed IDs, duplicate IDs, or wrong folder IDs fail.
 [[nodiscard]] bool parse_inventory_folder_llsd(
     std::string_view xml,std::string_view expected_folder_id,
-    InventoryFolderReply& out);
+    InventoryFolderReply& out,std::string_view expected_agent_id={});
 struct InventoryFetchResult {
     bool fetched=false;
     unsigned http_status=0;
@@ -148,7 +148,6 @@ struct InventoryTreeFetchResult {
     const std::wstring& capability_url,std::string_view root_folder_id,
     std::string_view owner_id);
 [[nodiscard]] std::string build_inventory_items_post(
-    std::string_view agent_id,std::string_view owner_id,
     const std::vector<std::string>& item_ids);
 [[nodiscard]] bool parse_inventory_items_llsd(
     std::string_view xml,std::string_view expected_agent_id,
@@ -161,7 +160,7 @@ struct InventoryItemsFetchResult {
 };
 [[nodiscard]] InventoryItemsFetchResult fetch_inventory_items(
     std::wstring capability_url,std::string_view agent_id,
-    std::string_view owner_id,const std::vector<std::string>& item_ids);
+    const std::vector<std::string>& item_ids);
 struct MeshReply {
     unsigned status=0;
     bool fetched=false; // only HTTP 200 with bounded, nonempty bytes

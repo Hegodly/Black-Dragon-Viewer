@@ -2101,7 +2101,7 @@ void Window::start_inventory_item_details(std::string item_id){
             const HRESULT init=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
             protocol::caps::InventoryItemsFetchResult result{};
             if(SUCCEEDED(init)){
-                result=protocol::caps::fetch_inventory_items(url,agent,owner,{item_id});
+                result=protocol::caps::fetch_inventory_items(url,agent,{item_id});
                 CoUninitialize();
                 if(!url.empty())SecureZeroMemory(url.data(),url.size()*sizeof(wchar_t));
             }else{

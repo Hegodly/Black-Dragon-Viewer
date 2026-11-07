@@ -622,7 +622,7 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
 }
 bool parse_inventory_folder_llsd(
     std::string_view xml,std::string_view expected_folder_id,
-    InventoryFolderReply& out) {
+    InventoryFolderReply& out,std::string_view expected_agent_id) {
     out={};
     if(!valid_uuid(expected_folder_id)||xml.empty()||xml.size()>2U*1024U*1024U)
         return false;
@@ -654,6 +654,12 @@ bool parse_inventory_folder_llsd(
     };
     if(!narrow_uuid(value(folder.Get(),L"folder_id"),out.folder_id)||
        out.folder_id!=expected_folder_id)return false;
+    if(!expected_agent_id.empty()){
+        std::string returned_agent;
+        if(!valid_uuid(expected_agent_id)||
+           !narrow_uuid(value(folder.Get(),L"agent_id"),returned_agent)||
+           returned_agent!=expected_agent_id)return false;
+    }
     const auto version=value(folder.Get(),L"version");
     if(version.empty()||version.size()>10)return false;
     unsigned parsed_version=0;
@@ -741,19 +747,13 @@ bool parse_inventory_folder_llsd(
     return true;
 }
 std::string build_inventory_items_post(
-    std::string_view agent_id,std::string_view owner_id,
     const std::vector<std::string>& item_ids) {
-    if(!valid_uuid(agent_id)||!valid_uuid(owner_id)||item_ids.empty()||
-       item_ids.size()>128)return {};
+    if(item_ids.empty()||item_ids.size()>128)return {};
     std::set<std::string> unique;
-    std::string body="<llsd><map><key>agent_id</key><uuid>";
-    body+=agent_id;
-    body+="</uuid><key>items</key><array>";
+    std::string body="<llsd><map><key>items</key><array>";
     for(const auto& id:item_ids){
         if(!valid_uuid(id)||!unique.insert(id).second)return {};
-        body+="<map><key>owner_id</key><uuid>";
-        body+=owner_id;
-        body+="</uuid><key>item_id</key><uuid>";
+        body+="<map><key>item_id</key><uuid>";
         body+=id;
         body+="</uuid></map>";
     }
@@ -798,6 +798,10 @@ bool parse_inventory_items_llsd(
                 return std::wstring{};
             return node_text(value.Get());
         };
+        const auto item_agent=field(L"agent_id");
+        std::string item_agent_id;
+        for(wchar_t c:item_agent){if(c>0x7f)return false;item_agent_id.push_back(static_cast<char>(c));}
+        if(item_agent_id!=expected_agent_id)return false;
         const auto idw=field(L"item_id"),parentw=field(L"parent_id");
         InventoryEntry entry{};entry.folder=false;
         for(wchar_t c:idw){if(c>0x7f)return false;entry.id.push_back(static_cast<char>(c));}
@@ -834,12 +838,12 @@ bool parse_inventory_items_llsd(
 }
 InventoryItemsFetchResult fetch_inventory_items(
     std::wstring capability_url,std::string_view agent_id,
-    std::string_view owner_id,const std::vector<std::string>& item_ids) {
+    const std::vector<std::string>& item_ids) {
     InventoryItemsFetchResult result{};
     if(!trusted_caps_url(capability_url)){
         result.transport_error=ERROR_INVALID_PARAMETER;
     }else{
-        const auto body=build_inventory_items_post(agent_id,owner_id,item_ids);
+        const auto body=build_inventory_items_post(item_ids);
         if(body.empty())result.transport_error=ERROR_INVALID_PARAMETER;
         else{
             auto reply=send_signed_post(capability_url,body,25000,2U*1024U*1024U);
@@ -871,7 +875,7 @@ InventoryFetchResult fetch_inventory_folder(
             result.transport_error=reply.error;
             if(!reply.error&&reply.status==200)
                 result.fetched=parse_inventory_folder_llsd(
-                    reply.body,folder_id,result.folder);
+                    reply.body,folder_id,result.folder,owner_id);
             if(!reply.body.empty())
                 SecureZeroMemory(reply.body.data(),reply.body.size());
         }
@@ -947,18 +951,11 @@ std::string build_inventory_folder_post(
     bool fetch_folders,bool fetch_items) {
     if(!valid_uuid(folder_id)||!valid_uuid(owner_id))return {};
     std::string body="<llsd><map><key>folders</key><array><map>";
-    const auto put=[&](std::string_view key,std::string_view value){
-        body+="<key>";body+=key;body+="</key><string>";
-        body+=value;body+="</string>";
-    };
-    put("folder_id",folder_id);
-    put("owner_id",owner_id);
-    // The Linden Lab v2 contract accepts only folder_id in each folder
-    // request map. The flags and owner_id used by legacy examples are not
-    // part of this LLIDL endpoint; fetch both categories and items by default.
+    body+="<key>folder_id</key><uuid>";
+    body+=folder_id;
+    body+="</uuid></map></array></map></llsd>";
     (void)fetch_folders;
     (void)fetch_items;
-    body+="</map></array></map></llsd>";
     return body;
 }
 std::string build_event_queue_post(const QueueCursor& previous) {
