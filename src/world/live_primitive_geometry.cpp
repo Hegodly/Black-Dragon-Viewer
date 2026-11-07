@@ -299,6 +299,55 @@ void build_linear_circle_volume(Emitter& e,
     cap(p.path_begin,0U,true);
     cap(p.path_end,1U,false);
 }
+void build_linear_polygon_volume(Emitter& e,
+        const protocol::volume::Parameters& p,bool triangular){
+    constexpr float pi=3.14159265358979323846f;
+    const std::array<V,4U> square{{
+        {-.5f,-.5f,0.f},{.5f,-.5f,0.f},
+        {.5f,.5f,0.f},{-.5f,.5f,0.f}}};
+    constexpr float tri_y=-0.2886751346f;
+    const std::array<V,3U> triangle{{
+        {-.5f,tri_y,0.f},{.5f,tri_y,0.f},{0.f,-2.f*tri_y,0.f}}};
+    const unsigned sides=triangular?3U:4U;
+    const float twist0=signed_wire(p.twist_begin)*.01f;
+    const float twist1=signed_wire(p.twist_end)*.01f;
+    const float taper_x=signed_wire(p.taper_x)*.01f;
+    const float taper_y=signed_wire(p.taper_y)*.01f;
+    const float shear_x=signed_wire(p.shear_x)*.01f;
+    const float shear_y=signed_wire(p.shear_y)*.01f;
+    const auto point=[&](float u,unsigned i)->V{
+        const V v=triangular?triangle[i]:square[i];
+        const float twist=twist0+(twist1-twist0)*u;
+        const float cs=std::cos(twist),sn=std::sin(twist);
+        const float x=v.x*std::max(.05f,1.f-taper_x*u);
+        const float y=v.y*std::max(.05f,1.f-taper_y*u);
+        return {x*cs-y*sn+shear_x*(u-.5f),
+                x*sn+y*cs+shear_y*(u-.5f),u-.5f};
+    };
+    const unsigned along=std::clamp(static_cast<unsigned>(std::ceil(
+        std::abs(twist1-twist0)*24.f/pi)),12U,64U);
+    for(unsigned row=0U;row<along;++row){
+        const float u0=p.path_begin+(p.path_end-p.path_begin)*float(row)/along;
+        const float u1=p.path_begin+(p.path_end-p.path_begin)*float(row+1U)/along;
+        for(unsigned i=0U;i<sides;++i){
+            const unsigned next=(i+1U)%sides;
+            e.quad(point(u0,i),point(u0,next),point(u1,next),point(u1,i),
+                   i+1U,{0.f,float(row)/along},{1.f,float(row)/along},
+                   {1.f,float(row+1U)/along},{0.f,float(row+1U)/along});
+        }
+    }
+    const auto cap=[&](float u,unsigned face,bool reverse){
+        V center{shear_x*(u-.5f),shear_y*(u-.5f),u-.5f};
+        for(unsigned i=0U;i<sides;++i){
+            const unsigned next=(i+1U)%sides;
+            const V a=point(u,i),b=point(u,next);
+            if(reverse)e.tri(center,b,a,face,{.5f,.5f},{1.f,0.f},{0.f,0.f});
+            else e.tri(center,a,b,face,{.5f,.5f},{0.f,0.f},{1.f,0.f});
+        }
+    };
+    cap(p.path_begin,0U,true);
+    cap(p.path_end,triangular?4U:5U,false);
+}
 void build_prism(Emitter& e){
     constexpr float y=-0.2886751346f;
     const V a{-.5f,y,-.5f}, b{.5f,y,-.5f},c{0.f,-2.f*y,-.5f};
@@ -353,7 +402,25 @@ bool emit(std::vector<Vertex>& out,const Transform& t,Pose p,V origin,
         e.blue=std::clamp(t.base_b,0.f,1.f);
     }
     bool swept=false;
-    if(t.volume_params_seen&&t.primitive==Kind::Cylinder){
+    if(t.volume_params_seen&&
+       (t.primitive==Kind::Cylinder||t.primitive==Kind::Box||
+        t.primitive==Kind::Prism)){
+        protocol::volume::Parameters decoded{};
+        if(protocol::volume::decode(t.volume_params,
+                                    t.volume_params_full_layout,decoded)&&
+           decoded.path_curve==0x10U&&
+           (decoded.profile_curve&0xf0U)<=0x10U){
+            const auto profile=decoded.profile_curve&0x0fU;
+            if(t.primitive==Kind::Cylinder&&profile==0U){
+                build_linear_circle_volume(e,decoded);swept=true;
+            }else if(t.primitive==Kind::Box&&profile==1U){
+                build_linear_polygon_volume(e,decoded,false);swept=true;
+            }else if(t.primitive==Kind::Prism&&profile==3U){
+                build_linear_polygon_volume(e,decoded,true);swept=true;
+            }
+        }
+    }
+    if(!swept)switch(t.primitive){
         protocol::volume::Parameters decoded{};
         if(protocol::volume::decode(t.volume_params,
                                     t.volume_params_full_layout,decoded)&&
