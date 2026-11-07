@@ -619,6 +619,25 @@ bool parse_event_queue_frame(std::string_view xml,EventQueueFrame& out) {
     return found_id&&found_events&&
            (out.event_count==0U||!out.id.token.empty());
 }
+std::string build_inventory_folder_post(
+    std::string_view folder_id,std::string_view owner_id,
+    bool fetch_folders,bool fetch_items) {
+    if(!valid_uuid(folder_id)||!valid_uuid(owner_id))return {};
+    std::string body="<llsd><map><key>folders</key><array><map>";
+    const auto put=[&](std::string_view key,std::string_view value){
+        body+="<key>";body+=key;body+="</key><string>";
+        body+=value;body+="</string>";
+    };
+    put("folder_id",folder_id);
+    put("owner_id",owner_id);
+    body+="<key>sort_order</key><integer>0</integer>";
+    body+="<key>fetch_folders</key>";
+    body+=fetch_folders?"<boolean>true</boolean>":"<boolean>false</boolean>";
+    body+="<key>fetch_items</key>";
+    body+=fetch_items?"<boolean>true</boolean>":"<boolean>false</boolean>";
+    body+="</map></array></map></llsd>";
+    return body;
+}
 std::string build_event_queue_post(const QueueCursor& previous) {
     std::string body="<llsd><map><key>ack</key>";
     if(previous.token.empty()){

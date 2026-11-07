@@ -92,6 +92,11 @@ struct SeedParseReport {
 [[nodiscard]] bool parse_event_queue_frame(
     std::string_view xml,EventQueueFrame& out);
 [[nodiscard]] std::string build_event_queue_post(const QueueCursor& previous);
+// Official FetchInventoryDescendents2 request body. UUIDs are validated
+// before serialization; callers supply only authenticated agent/folder IDs.
+[[nodiscard]] std::string build_inventory_folder_post(
+    std::string_view folder_id,std::string_view owner_id,
+    bool fetch_folders=true,bool fetch_items=true);
 // Deterministic, offline-testable version of the live HTTP envelope observer.
 // Observation can advance a typed cursor but never implies event actions ran.
 [[nodiscard]] PollResponse observe_event_queue_response(std::string_view xml);
