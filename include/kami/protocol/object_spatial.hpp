@@ -31,18 +31,18 @@ struct Transform {
     std::array<std::uint8_t,23U> volume_params{};
     bool default_texture_present=false; // TE reference only, NOT a downloaded texture
     std::string default_texture_asset_id; // UUID from verified server TE
-    std::array<std::string,32U> face_texture_asset_ids{}; // face-specific TE UUIDs
-    std::array<bool,32U> face_texture_override{}; // explicit null distinct from default
+    std::array<std::string,45U> face_texture_asset_ids{}; // face-specific TE UUIDs
+    std::array<bool,45U> face_texture_override{}; // explicit null distinct from default
     // Authentic SL diffuse TextureEntry parameters per numbered face.
-    std::array<texture::UVTransform,32U> face_uv{};
-    std::array<std::array<float,4U>,32U> face_rgba{};
+    std::array<texture::UVTransform,45U> face_uv{};
+    std::array<std::array<float,4U>,45U> face_rgba{};
     bool face_rgba_present=false;
     // Authentic default TextureEntry tint (per-face overrides unavailable).
     // RGB is baked into DX12 untextured preview; alpha retained for future
     // translucent material pass. No texture image is implied to be loaded.
     bool base_tint_present=false;
     float base_r=1.f,base_g=1.f,base_b=1.f,base_a=1.f;
-    std::array<std::string,32U> face_material_ids{};
+    std::array<std::string,45U> face_material_ids{};
     bool material_params_seen=false;
     bool reflection_probe=false;
     float probe_ambiance=1.f,probe_clip=.1f;
