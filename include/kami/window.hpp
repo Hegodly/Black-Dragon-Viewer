@@ -72,6 +72,8 @@ private:
     WNDPROC messenger_edit_original_ = nullptr;
     HBRUSH messenger_edit_brush_ = nullptr;
     bool messenger_edit_sync_ = false;
+    // Track simulator chat availability so the composer follows live connection changes.
+    bool messenger_nearby_online_ = false;
     bool world_initialized_ = false;
     bool world_ready_ = false;
     world::Renderer world_renderer_;
