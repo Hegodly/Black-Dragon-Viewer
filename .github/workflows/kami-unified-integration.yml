@@ -5,6 +5,10 @@ on:
     types: [opened, edited, reopened, synchronize, ready_for_review]
     branches:
       - feature/kami-live-viewer-integration
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+    branches:
+      - feature/kami-live-viewer-integration
 
 permissions:
   contents: write
