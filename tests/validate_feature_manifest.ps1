@@ -61,6 +61,9 @@ function Visit-KamiFeature {
     if ($null -eq $entry.dependencies) {
         throw "Feature '$Name' must declare a dependencies array (use [] when independent)."
     }
+    if ($null -eq $entry.evidence) {
+        throw "Feature '$Name' must declare an evidence array (use [] until verified)."
+    }
 
     $script:visitState[$Name] = 1
     $script:visitPath.Add($Name)
@@ -74,53 +77,10 @@ function Visit-KamiFeature {
         Visit-KamiFeature -Name ([string]$dependency)
     }
 
-    if ($null -eq $entry.evidence) {
-        throw "Feature '$Name' must declare an evidence array (use [] until verified)."
-    }
     if ($entry.status -eq "verified") {
-        $validEvidence = @(@($entry.evidence) | Where-Object {
-            [string]$_.commit -match '^[0-9a-f]{40}    $script:visitPath.RemoveAt($script:visitPath.Count - 1)
-    $script:visitState[$Name] = 2
-}
-
-foreach ($name in $script:featureNames) {
-    Visit-KamiFeature -Name $name
-}
-
-if ($manifest.release_allowed) {
-    if (@($manifest.release_blockers).Count -ne 0) {
-        throw "Release is enabled while release blockers remain."
-    }
-    foreach ($name in $script:featureNames) {
-        if ($script:featureMap.$name.status -ne "verified") {
-            throw "Release is enabled while '$name' is not verified."
-        }
-    }
-}
-
-Write-Host "KAMI feature dependency graph verified: $($script:featureNames.Count) features; $($required.Count) required viewer gates."
- -and
-            [string]$_.ci_url -match '^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/\d+    $script:visitPath.RemoveAt($script:visitPath.Count - 1)
-    $script:visitState[$Name] = 2
-}
-
-foreach ($name in $script:featureNames) {
-    Visit-KamiFeature -Name $name
-}
-
-if ($manifest.release_allowed) {
-    if (@($manifest.release_blockers).Count -ne 0) {
-        throw "Release is enabled while release blockers remain."
-    }
-    foreach ($name in $script:featureNames) {
-        if ($script:featureMap.$name.status -ne "verified") {
-            throw "Release is enabled while '$name' is not verified."
-        }
-    }
-}
-
-Write-Host "KAMI feature dependency graph verified: $($script:featureNames.Count) features; $($required.Count) required viewer gates."
- -and
+        $validEvidence = @($entry.evidence | Where-Object {
+            [string]$_.commit -match '^[0-9a-f]{40}$' -and
+            [string]$_.ci_url -match '^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/\d+$' -and
             $_.native_app -eq $true -and
             $_.live_sl -eq $true -and
             -not [string]::IsNullOrWhiteSpace([string]$_.notes)
@@ -135,6 +95,7 @@ Write-Host "KAMI feature dependency graph verified: $($script:featureNames.Count
             }
         }
     }
+
     $script:visitPath.RemoveAt($script:visitPath.Count - 1)
     $script:visitState[$Name] = 2
 }
