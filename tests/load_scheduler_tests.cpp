@@ -223,7 +223,7 @@ int main(){
         std::uint32_t bytes=0U;
         bool fetched=false,decoded=false;
     };
-    const auto completed=load::capture_worker_result<WorkerResult>(
+    const auto completed=capture_worker_result<WorkerResult>(
         d,[](WorkerResult& result){
             result.http_status=200U;result.bytes=128U;
             result.fetched=true;result.decoded=true;
@@ -231,7 +231,7 @@ int main(){
     if(completed.id!=d||completed.http_status!=200U||
        completed.bytes!=128U||!completed.fetched||!completed.decoded)
         return 62;
-    const auto thrown=load::capture_worker_result<WorkerResult>(
+    const auto thrown=capture_worker_result<WorkerResult>(
         c,[](WorkerResult& result){
             result.http_status=200U;result.bytes=4096U;
             result.fetched=true;result.decoded=true;
