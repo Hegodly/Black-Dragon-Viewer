@@ -67,7 +67,7 @@ bool Scheduler::request(std::string_view id,Kind kind,float distance,
             [](const Asset& asset){
                 return asset.stage==Stage::Failed&&
                     (asset.retry_count>=kMaxTransientRetries||
-                     asset.actual_bytes!=0U);
+                     !asset.retryable_fetch_failure);
             });
         if(stale!=entries_.end())entries_.erase(stale);
     }
@@ -93,20 +93,22 @@ bool Scheduler::download_finished(std::string_view id,
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Downloading)return false;
     if(!success||bytes>kMaxBytesPerAsset||bytes==0){
-        // A successful but empty/oversized response is malformed, not a
-        // transient network failure. Keep a nonzero sentinel so the
-        // retry gate rejects it without scheduling another fetch.
-        asset->actual_bytes=success?1U:0U;
+        // Empty/oversized successful responses are malformed and terminal.
+        // Record retry eligibility explicitly instead of overloading bytes.
+        asset->actual_bytes=0U;
+        asset->retryable_fetch_failure=!success;
         asset->stage=Stage::Failed;return true;
     }
     asset->actual_bytes=bytes;
+    asset->retryable_fetch_failure=false;
     asset->stage=Stage::DecodeQueued;
     return true;
 }
 bool Scheduler::retry_failed(std::string_view id) noexcept {
     auto* asset=online_?mutable_find(id):nullptr;
     if(!asset||asset->stage!=Stage::Failed||
-       asset->retry_count>=kMaxTransientRetries||asset->actual_bytes!=0U)return false;
+       asset->retry_count>=kMaxTransientRetries||
+       !asset->retryable_fetch_failure)return false;
     ++asset->retry_count;
     asset->actual_bytes=0U;
     asset->stage=Stage::Queued;
@@ -156,6 +158,7 @@ bool Scheduler::decode_finished(std::string_view id,bool success) noexcept {
     if(!asset||asset->stage!=Stage::Decoding)return false;
     // A decode failure is terminal; retain its downloaded byte count to
     // distinguish corrupt data from a transient download failure.
+    asset->retryable_fetch_failure=false;
     asset->stage=success?Stage::ReadyForGPU:Stage::Failed;
     return true;
 }
