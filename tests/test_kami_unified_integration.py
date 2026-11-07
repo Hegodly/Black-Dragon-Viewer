@@ -4,7 +4,9 @@ from tools.kami_unified_integration import (
     ALREADY_PORTED_SOURCE_PREFIXES,
     DESTINATION_BRANCH,
     REQUIRED_FEATURES,
+    batch_has_implementation_and_tests,
     has_successful_windows_job,
+    is_pull_request_event,
     is_already_ported_source,
     latest_successful_workflow_run,
     manifest_errors,
@@ -70,10 +72,14 @@ class PromotionPolicyTests(unittest.TestCase):
         )
         self.assertTrue(eligible)
 
-    def test_rejects_test_only_commit(self):
-        self.assertFalse(
-            promotion_decision(self.branch, ["tests/object_spatial_tests.cpp"], 1)[0]
-        )
+    def test_test_only_commit_is_allowed_only_as_batch_companion(self):
+        test_files = ["tests/object_spatial_tests.cpp"]
+        implementation_files = ["src/protocol/object_spatial.cpp"]
+        self.assertTrue(promotion_decision(self.branch, test_files, 1)[0])
+        self.assertFalse(batch_has_implementation_and_tests([test_files]))
+        self.assertTrue(batch_has_implementation_and_tests(
+            [implementation_files, test_files]
+        ))
 
     def test_rejects_docs_workflow_and_mixed_scope(self):
         for paths in (
@@ -104,8 +110,27 @@ class PromotionPolicyTests(unittest.TestCase):
     def test_known_r72_fixes_are_recorded_as_already_ported(self):
         self.assertTrue(ALREADY_PORTED_SOURCE_PREFIXES)
         self.assertTrue(is_already_ported_source("cfb1071f96" + "0" * 30))
+        for prefix in (
+            "611953eabb1f", "b45229c509c5", "c9af8c4c9c8f",
+            "b8bd9a404da0", "09bde30d7467", "b8f155ec60da",
+            "207723ab7700", "4e0f4ccadbd9", "df149710be03",
+            "8f8feff8c040", "3465e6daa844", "1c2baca100de",
+            "4bb04eba922e", "cd9fb7c9abd5", "e2d030c34315",
+            "24f86786663e", "56d19c09417b", "028a0feb7b35",
+        ):
+            self.assertTrue(is_already_ported_source(prefix + "0" * (40-len(prefix))))
 
 
+
+
+class PullRequestEventTests(unittest.TestCase):
+    def test_accepts_both_pr_event_variants(self):
+        self.assertTrue(is_pull_request_event("pull_request"))
+        self.assertTrue(is_pull_request_event("pull_request_target"))
+
+    def test_rejects_non_pr_events(self):
+        self.assertFalse(is_pull_request_event("workflow_call"))
+        self.assertFalse(is_pull_request_event("push"))
 
 
 class SourceCiSelectionTests(unittest.TestCase):

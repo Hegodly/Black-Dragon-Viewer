@@ -46,6 +46,16 @@ ALLOWED_SOURCE_BRANCHES = frozenset({
 # These R72 source commits have already been faithfully ported and tested on
 # the destination under different destination commit IDs.
 ALREADY_PORTED_SOURCE_PREFIXES = frozenset({
+    # Previously reviewed R72 work already exists in the destination as
+    # equivalent or stronger source plus regression coverage. Skip these
+    # intermediate commits so the remaining root/child reparenting fixes
+    # are promoted together rather than replaying obsolete scheduler states.
+    "611953eabb1f", "b45229c509c5", "c9af8c4c9c8f",
+    "b8bd9a404da0", "09bde30d7467", "b8f155ec60da",
+    "207723ab7700", "4e0f4ccadbd9", "df149710be03",
+    "8f8feff8c040", "3465e6daa844", "1c2baca100de",
+    "4bb04eba922e", "cd9fb7c9abd5", "e2d030c34315",
+    "24f86786663e", "56d19c09417b", "028a0feb7b35",
     "cfb1071f96", "7883f98a99", "ea69a77922", "103245bcec",
     "1b34e2ad10", "648581a529", "1929304e0b", "cfbe844b08",
     "111f689833", "dbb7d295ee", "7b71916866",
@@ -202,8 +212,20 @@ def promotion_decision(
         for path in changed_files
     )
     if not has_implementation:
-        return False, "Test-only changes are not viewer implementation."
+        if changed_files and all(path.startswith(TEST_PREFIX) for path in changed_files):
+            return True, "Regression-test commit may accompany implementation in the same promotion batch."
+        return False, "A test-only commit must not include unrelated files."
     return True, "Implementation commit is eligible for isolated destination validation."
+
+
+def batch_has_implementation_and_tests(changed_file_sets: list[list[str]]) -> bool:
+    files = [path for group in changed_file_sets for path in group]
+    has_implementation = any(
+        path.startswith(IMPLEMENTATION_PREFIXES) or path in ROOT_IMPLEMENTATION_FILES
+        for path in files
+    )
+    has_tests = any(path.startswith(TEST_PREFIX) for path in files)
+    return has_implementation and has_tests
 
 
 def is_already_ported_source(sha: str) -> bool:
@@ -348,12 +370,16 @@ def summary(markdown: str) -> None:
             stream.write(markdown.rstrip() + "\n")
 
 
+def is_pull_request_event(event_name: str) -> bool:
+    return event_name in {"pull_request", "pull_request_target"}
+
+
 def event_context() -> tuple[str, str, int, bool] | None:
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if not event_path:
         raise RuntimeError("GITHUB_EVENT_PATH is unavailable.")
     event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-    if os.environ.get("GITHUB_EVENT_NAME") != "pull_request":
+    if not is_pull_request_event(os.environ.get("GITHUB_EVENT_NAME", "")):
         return None
     pr = event.get("pull_request", {})
     if pr.get("draft"):
@@ -493,12 +519,11 @@ def choose_verified_implementations(
             selected.pop()
             break
 
-    has_regression_tests = any(
-        entry.get("filename", "").startswith(TEST_PREFIX)
+    changed_file_sets = [
+        [entry.get("filename", "") for entry in details.get("files", [])]
         for details, _ in selected
-        for entry in details.get("files", [])
-    )
-    if not selected or not has_regression_tests:
+    ]
+    if not selected or not batch_has_implementation_and_tests(changed_file_sets):
         return None
     return selected, more_candidates
 
